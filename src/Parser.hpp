@@ -4,9 +4,19 @@
 #include "Lexer.hpp"
 #include <vector>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/IRBuilder.h>
 
 namespace OpenCL::Parser
 {
+    struct Context
+    {
+        llvm::LLVMContext context;
+        llvm::IRBuilder<> builder{context};
+        std::unique_ptr<llvm::Module> module;
+        std::map<std::string,llvm::AllocaInst*> namedValues;
+        llvm::Function* currentFunction;
+    };
+
     class Node
     {
     public:
@@ -23,10 +33,7 @@ namespace OpenCL::Parser
 
         Node& operator=(Node&&) noexcept = default;
 
-        virtual llvm::Value* codegen()
-        {
-            return nullptr;
-        }
+        virtual llvm::Value* codegen(Context& context) const = 0;
     };
 
     class NonCommaExpression : public Node
@@ -48,6 +55,8 @@ namespace OpenCL::Parser
         const NonCommaExpression& getNonCommaExpression() const;
 
         const NonCommaExpression* getOptionalNonCommaExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class AssignmentExpression final : public NonCommaExpression
@@ -87,6 +96,8 @@ namespace OpenCL::Parser
         const NonCommaExpression& getExpression() const;
 
         AssignOperator getAssignOperator() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class Factor : public Node
@@ -104,6 +115,8 @@ namespace OpenCL::Parser
         explicit ParentheseFactor(Expression&& expression);
 
         const Expression& getExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class UnaryFactor final : public Factor
@@ -129,17 +142,21 @@ namespace OpenCL::Parser
         UnaryOperator getUnaryOperator() const;
 
         const OpenCL::Parser::Factor& getFactor() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ConstantFactor final : public Factor
     {
-        std::string value;
+        std::string m_value;
 
     public:
 
         explicit ConstantFactor(std::string value);
 
         const std::string& getValue() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class VariableFactor final : public Factor
@@ -151,6 +168,8 @@ namespace OpenCL::Parser
         explicit VariableFactor(std::string name);
 
         const std::string& getName() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class PostIncrement final : public Factor
@@ -162,6 +181,8 @@ namespace OpenCL::Parser
         explicit PostIncrement(std::string name);
 
         const std::string& getName() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class PreIncrement final : public Factor
@@ -173,6 +194,8 @@ namespace OpenCL::Parser
         explicit PreIncrement(std::string name);
 
         const std::string& getName() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class PostDecrement final : public Factor
@@ -184,6 +207,8 @@ namespace OpenCL::Parser
         explicit PostDecrement(std::string name);
 
         const std::string& getName() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class PreDecrement final : public Factor
@@ -195,16 +220,24 @@ namespace OpenCL::Parser
         explicit PreDecrement(std::string name);
 
         const std::string& getName() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
-    class FunctionalCall final : public Factor
+    class FunctionCall final : public Factor
     {
         std::string m_name;
         std::vector<std::unique_ptr<NonCommaExpression>> m_expressions;
 
     public:
 
-        FunctionalCall(std::string name, std::vector<std::unique_ptr<NonCommaExpression>> expressions);
+        FunctionCall(std::string name, std::vector<std::unique_ptr<NonCommaExpression>> expressions);
+
+        const std::string& getName() const;
+
+        const std::vector<std::unique_ptr<NonCommaExpression>>& getExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class Term final : public Node
@@ -215,28 +248,25 @@ namespace OpenCL::Parser
 
         enum class BinaryDotOperator
         {
-            NoOperator,
             BinaryMultiply,
             BinaryDivide,
-            BinaryModulo
+            BinaryRemainder
         };
 
     private:
 
-        BinaryDotOperator m_optionalOperator;
-        std::unique_ptr<Factor> m_optionalFactor;
+        std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>> m_optionalFactors;
 
     public:
 
-        explicit Term(std::unique_ptr<Factor>&& factor,
-             BinaryDotOperator optionalOperator = BinaryDotOperator::NoOperator,
-             std::unique_ptr<Factor>&& optionalFactor = nullptr);
+        Term(std::unique_ptr<Factor>&& factor,
+             std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>>&& optionalFactors);
 
         const Factor& getFactor() const;
 
-        BinaryDotOperator getOptionalOperator() const;
+        const std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>>& getOptionalFactors() const;
 
-        const Factor* getOptionalFactor() const;
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class AdditiveExpression final : public Node
@@ -247,27 +277,24 @@ namespace OpenCL::Parser
 
         enum class BinaryDashOperator
         {
-            NoOperator,
             BinaryPlus,
-            BianryMinus
+            BinaryMinus
         };
 
     private:
 
-        BinaryDashOperator m_optionalOperator;
-        std::unique_ptr<Term> m_optionalTerm;
+        std::vector<std::pair<BinaryDashOperator, Term>> m_optionalTerms;
 
     public:
 
         explicit AdditiveExpression(Term&& term,
-                           BinaryDashOperator optionalOperator = BinaryDashOperator::NoOperator,
-                           std::unique_ptr<Term>&& optionalTerm = nullptr);
+                                    std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
 
         const Term& getTerm() const;
 
-        BinaryDashOperator getOptionalOperator() const;
+        const std::vector<std::pair<BinaryDashOperator, Term>>& getOptionalTerms() const;
 
-        const Term* getOptionalTerm() const;
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ShiftExpression final : public Node
@@ -278,27 +305,25 @@ namespace OpenCL::Parser
 
         enum class ShiftOperator
         {
-            NoOperator,
             Right,
             Left
         };
 
     private:
 
-        ShiftOperator m_optionalOperator;
-        std::unique_ptr<AdditiveExpression> m_optionalAdditiveExpression;
+        std::vector<std::pair<ShiftOperator, AdditiveExpression>> m_optionalAdditiveExpressions;
 
     public:
 
         explicit ShiftExpression(AdditiveExpression&& additiveExpression,
-                        ShiftOperator optionalOperator = ShiftOperator::NoOperator,
-                        std::unique_ptr<AdditiveExpression>&& optionalAdditiveExpression = nullptr);
+                                 std::vector<std::pair<ShiftOperator,
+                                                       AdditiveExpression>>&& optionalAdditiveExpressions);
 
         const AdditiveExpression& getAdditiveExpression() const;
 
-        ShiftOperator getOptionalOperator() const;
+        const std::vector<std::pair<ShiftOperator, AdditiveExpression>>& getOptionalAdditiveExpressions() const;
 
-        const AdditiveExpression* getOptionalAdditiveExpression() const;
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class RelationalExpression final : public Node
@@ -309,7 +334,6 @@ namespace OpenCL::Parser
 
         enum class RelationalOperator
         {
-            NoOperator,
             LessThan,
             LessThanOrEqual,
             GreaterThan,
@@ -318,20 +342,19 @@ namespace OpenCL::Parser
 
     private:
 
-        RelationalOperator m_optionalOperator;
-        std::unique_ptr<ShiftExpression> m_optionalExpression;
+        std::vector<std::pair<RelationalOperator,ShiftExpression>> m_optionalRelationalExpressions;
 
     public:
 
         explicit RelationalExpression(ShiftExpression&& shiftExpression,
-                             RelationalOperator optionalOperator = RelationalOperator::NoOperator,
-                             std::unique_ptr<ShiftExpression>&& optionalExpression = nullptr);
+                                              std::vector<std::pair<RelationalOperator,
+                                                                                 ShiftExpression>>&& optionalRelationalExpressions);
 
         const ShiftExpression& getShiftExpression() const;
 
-        RelationalOperator getOptionalOperator() const;
+        const std::vector<std::pair<RelationalOperator, ShiftExpression>>& getOptionalRelationalExpressions() const;
 
-        const ShiftExpression* getOptionalExpression() const;
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class EqualityExpression final : public Node
@@ -342,57 +365,59 @@ namespace OpenCL::Parser
 
         enum class EqualityOperator
         {
-            NoOperator,
             Equal,
             NotEqual
         };
 
     private:
 
-        EqualityOperator m_optionalOperator;
-        std::unique_ptr<RelationalExpression> m_optionalRelationalExpression;
+        std::vector<std::pair<EqualityOperator,RelationalExpression>> m_optionalRelationalExpressions;
 
     public:
 
         explicit EqualityExpression(RelationalExpression&& relationalExpression,
-                           EqualityOperator optionalOperator = EqualityOperator::NoOperator,
-                           std::unique_ptr<RelationalExpression>&& optionalRelationalExpression = nullptr);
+                                            std::vector<std::pair<EqualityOperator,
+                                                                             RelationalExpression>>&& optionalRelationalExpressions);
 
         const RelationalExpression& getRelationalExpression() const;
 
-        EqualityOperator getOptionalOperator() const;
+        const std::vector<std::pair<EqualityOperator, RelationalExpression>>& getOptionalRelationalExpressions() const;
 
-        const RelationalExpression* getOptionalRelationalExpression() const;
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class LogicalAndExpression final : public Node
     {
         EqualityExpression m_equalityExpression;
-        std::unique_ptr<EqualityExpression> m_optionalEqualityExpression;
+        std::vector<EqualityExpression> m_optionalEqualityExpressions;
 
     public:
 
         explicit LogicalAndExpression(EqualityExpression&& equalityExpression,
-                             std::unique_ptr<EqualityExpression>&& optionalEqualityExpression = nullptr);
+                                      std::vector<EqualityExpression>&& optionalEqualityExpressions);
 
         const EqualityExpression& getEqualityExpression() const;
 
-        const EqualityExpression* getOptionalEqualityExpression() const;
+        const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class LogicalOrExpression final : public Node
     {
         LogicalAndExpression m_andExpression;
-        std::unique_ptr<LogicalAndExpression> m_optionalAndExpression;
+        std::vector<LogicalAndExpression> m_optionalAndExpressions;
 
     public:
 
         explicit LogicalOrExpression(LogicalAndExpression&& andExpression,
-                            std::unique_ptr<LogicalAndExpression>&& optionalAndExpression = nullptr);
+                                     std::vector<LogicalAndExpression>&& optionalAndExpressions);
 
         const LogicalAndExpression& getAndExpression() const;
 
-        const LogicalAndExpression* getOptionalAndExpression() const;
+        const std::vector<LogicalAndExpression>& getOptionalAndExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ConditionalExpression final : public NonCommaExpression
@@ -404,14 +429,16 @@ namespace OpenCL::Parser
     public:
 
         explicit ConditionalExpression(LogicalOrExpression&& logicalOrExpression,
-                              std::unique_ptr<Expression>&& optionalExpression = nullptr,
-                              std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
+                                       std::unique_ptr<Expression>&& optionalExpression = nullptr,
+                                       std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
 
         const LogicalOrExpression& getLogicalOrExpression() const;
 
         const Expression* getOptionalExpression() const;
 
         const ConditionalExpression* getOptionalConditionalExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class BlockItem : public Node
@@ -435,6 +462,8 @@ namespace OpenCL::Parser
         explicit ReturnStatement(Expression&& expression);
 
         const Expression& getExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ExpressionStatement final : public Statement
@@ -448,6 +477,8 @@ namespace OpenCL::Parser
         const Expression* getOptionalExpression() const;
 
         std::unique_ptr<Expression> moveOptionalExpression();
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class IfStatement final : public Statement
@@ -467,6 +498,8 @@ namespace OpenCL::Parser
         const Statement& getBranch() const;
 
         const Statement* getElseBranch() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class BlockStatement final : public Statement
@@ -478,6 +511,8 @@ namespace OpenCL::Parser
         explicit BlockStatement(std::vector<std::unique_ptr<BlockItem>> blockItems);
 
         const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ForStatement final : public Statement
@@ -489,14 +524,16 @@ namespace OpenCL::Parser
     public:
 
         explicit ForStatement(std::unique_ptr<Expression>&& initial = nullptr,
-                     std::unique_ptr<Expression>&& controlling = nullptr,
-                     std::unique_ptr<Expression>&& post = nullptr);
+                              std::unique_ptr<Expression>&& controlling = nullptr,
+                              std::unique_ptr<Expression>&& post = nullptr);
 
         const Expression* getInitial() const;
 
         const Expression* getControlling() const;
 
         const Expression* getPost() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class Declaration final : public BlockItem
@@ -513,6 +550,8 @@ namespace OpenCL::Parser
         const std::string& getName() const;
 
         const Expression* getOptionalExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class ForDeclarationStatement final : public Statement
@@ -524,14 +563,16 @@ namespace OpenCL::Parser
     public:
 
         explicit ForDeclarationStatement(Declaration&& initial,
-                                std::unique_ptr<Expression>&& controlling = nullptr,
-                                std::unique_ptr<Expression>&& post = nullptr);
+                                         std::unique_ptr<Expression>&& controlling = nullptr,
+                                         std::unique_ptr<Expression>&& post = nullptr);
 
         const Declaration& getInitial() const;
 
         const Expression* getControlling() const;
 
         const Expression* getPost() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class HeadWhileStatement final : public Statement
@@ -546,6 +587,8 @@ namespace OpenCL::Parser
         const Expression& getExpression() const;
 
         const Statement& getStatement() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class FootWhileStatement final : public Statement
@@ -560,13 +603,21 @@ namespace OpenCL::Parser
         const Statement& getStatement() const;
 
         const Expression& getExpression() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     class BreakStatement final : public Statement
-    {};
+    {
+    public:
+        llvm::Value* codegen(Context& context) const override;
+    };
 
     class ContinueStatement final : public Statement
-    {};
+    {
+    public:
+        llvm::Value* codegen(Context& context) const override;
+    };
 
     class Function final : public Node
     {
@@ -585,6 +636,8 @@ namespace OpenCL::Parser
         const std::vector<std::string>& getArguments() const;
 
         const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
+
+        llvm::Function* codegen(Context& context) const override;
     };
 
     class Program final : public Node
@@ -596,6 +649,8 @@ namespace OpenCL::Parser
         explicit Program(std::vector<Function>&& functions) noexcept;
 
         const std::vector<Function>& getFunctions() const;
+
+        llvm::Value* codegen(Context& context) const override;
     };
 
     Program buildTree(std::vector<Lexer::Token>&& tokens);

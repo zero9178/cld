@@ -231,6 +231,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
 
     for (auto iter : source)
     {
+        if(!iter)
+        {
+            continue;
+        }
         column++;
         switch (iter)
         {
@@ -310,7 +314,9 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             processLastWord();
             break;
         }
-        case '\t':column += 7;
+        case '\t':
+            column += 7;
+            [[fallthrough]];
         case ' ':
         {
             processLastWord();
