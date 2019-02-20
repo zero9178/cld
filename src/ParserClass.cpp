@@ -25,15 +25,15 @@ const std::vector<std::string>& OpenCL::Parser::Function::getArguments() const
     return m_arguments;
 }
 
-const std::vector<std::unique_ptr<OpenCL::Parser::BlockItem>>& OpenCL::Parser::Function::getBlockItems() const
+const OpenCL::Parser::BlockStatement& OpenCL::Parser::Function::getBlockStatement() const
 {
-    return m_blockItems;
+    return m_block;
 }
 
 OpenCL::Parser::Function::Function(std::string name,
                                    std::vector<std::string> arguments,
-                                   std::vector<std::unique_ptr<BlockItem>>&& blockItems) : m_name(std::move(
-    name)), m_arguments(std::move(arguments)), m_blockItems(std::move(blockItems))
+                                   BlockStatement&& blockItems) : m_name(std::move(
+    name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
 {}
 
 const std::string& OpenCL::Parser::Declaration::getName() const
@@ -475,7 +475,20 @@ namespace
 
 llvm::Value* OpenCL::Parser::UnaryFactor::codegen(OpenCL::Parser::Context& context) const
 {
-    return nullptr;
+    auto* factor = getFactor().codegen(context);
+    switch (getUnaryOperator())
+    {
+    case UnaryOperator::UnaryNegation:
+        return context.builder.CreateNeg(factor,"beg");
+    case UnaryOperator::UnaryBitWiseNegation:
+        return context.builder.CreateNot(factor,"bitneg");
+    case UnaryOperator::UnaryLogicalNegation:
+        if(factor->getType()->getIntegerBitWidth() > 1)
+        {
+            factor = context.builder.CreateICmpNE(factor,context.builder.getIntN(factor->getType()->getIntegerBitWidth(),0),"boolconv");
+        }
+        return context.builder.CreateNot(factor,"boolneg");
+    }
 }
 
 llvm::Value* OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
@@ -509,13 +522,18 @@ llvm::Function* OpenCL::Parser::Function::codegen(OpenCL::Parser::Context& conte
         context.namedValues[iter.getName()] = alloca;
     }
 
-    for(auto& iter : getBlockItems())
+    getBlockStatement().codegen(context);
+    auto& block = context.currentFunction->back();
+    if(block.empty() || !block.back().isTerminator())
     {
-        iter->codegen(context);
+        context.builder.CreateRet(context.builder.getInt32(0));
     }
-    context.builder.CreateRet(context.builder.getInt32(0));
 
-    llvm::verifyFunction(*context.currentFunction);
+    if(llvm::verifyFunction(*context.currentFunction,&llvm::errs()))
+    {
+        context.currentFunction->print(llvm::outs());
+        std::terminate();
+    }
 
     return context.currentFunction;
 }
@@ -534,7 +552,12 @@ llvm::Value* OpenCL::Parser::Declaration::codegen(OpenCL::Parser::Context& conte
 
 llvm::Value* OpenCL::Parser::ReturnStatement::codegen(OpenCL::Parser::Context& context) const
 {
-    return context.builder.CreateRet(getExpression().codegen(context));
+    auto* value = getExpression().codegen(context);
+    if(value->getType()->getIntegerBitWidth() != 32)
+    {
+        value = context.builder.CreateIntCast(value,llvm::Type::getInt32Ty(context.context),true);
+    }
+    return context.builder.CreateRet(value);
 }
 
 llvm::Value* OpenCL::Parser::ExpressionStatement::codegen(OpenCL::Parser::Context& context) const
@@ -549,26 +572,35 @@ llvm::Value* OpenCL::Parser::ExpressionStatement::codegen(OpenCL::Parser::Contex
 llvm::Value* OpenCL::Parser::IfStatement::codegen(OpenCL::Parser::Context& context) const
 {
     auto* value = getExpression().codegen(context);
-    value = context.builder.CreateICmpNE(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),0));
+    if(value->getType()->getIntegerBitWidth() > 1)
+    {
+        value = context.builder.CreateICmpNE(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),0));
+    }
     auto* function = context.builder.GetInsertBlock()->getParent();
 
     auto* thenBB = llvm::BasicBlock::Create(context.context,"then",function);
     auto* elseBB = getElseBranch() ? llvm::BasicBlock::Create(context.context,"else") : nullptr;
     auto* mergeBB = llvm::BasicBlock::Create(context.context,"ifcont");
 
-    context.builder.CreateCondBr(value,thenBB,mergeBB);
+    context.builder.CreateCondBr(value,thenBB,elseBB ? elseBB : mergeBB);
 
     context.builder.SetInsertPoint(thenBB);
     getBranch().codegen(context);
 
-    context.builder.CreateBr(mergeBB);
+    if(!thenBB->back().isTerminator())
+    {
+        context.builder.CreateBr(mergeBB);
+    }
 
     if(elseBB)
     {
         function->getBasicBlockList().push_back(elseBB);
         context.builder.SetInsertPoint(elseBB);
         getElseBranch()->codegen(context);
-        context.builder.CreateBr(mergeBB);
+        if(!elseBB->back().isTerminator())
+        {
+            context.builder.CreateBr(mergeBB);
+        }
     }
 
     function->getBasicBlockList().push_back(mergeBB);
@@ -582,27 +614,90 @@ llvm::Value* OpenCL::Parser::BlockStatement::codegen(OpenCL::Parser::Context& co
     for(auto& iter : getBlockItems())
     {
         iter->codegen(context);
+        if(dynamic_cast<ReturnStatement*>(iter.get()))
+        {
+            break;
+        }
     }
     return nullptr;
 }
 
+namespace
+{
+    void doForLoop(const OpenCL::Parser::Expression* controlling,const OpenCL::Parser::Expression* post,OpenCL::Parser::Context& context)
+    {
+        auto* function = context.builder.GetInsertBlock()->getParent();
+
+        auto* blockBB = llvm::BasicBlock::Create(context.context,"block",function);
+        context.builder.CreateBr(blockBB);
+    }
+}
+
 llvm::Value* OpenCL::Parser::ForStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    getInitial()->codegen(context);
+    doForLoop(getControlling(),getPost(),context);
     return nullptr;
 }
 
 llvm::Value* OpenCL::Parser::ForDeclarationStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    getInitial().codegen(context);
+    doForLoop(getControlling(),getPost(),context);
     return nullptr;
 }
 
 llvm::Value* OpenCL::Parser::HeadWhileStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    auto* function = context.builder.GetInsertBlock()->getParent();
+
+    auto* condBB = llvm::BasicBlock::Create(context.context,"cond",function);
+    context.builder.CreateBr(condBB);
+    auto* blockBB = llvm::BasicBlock::Create(context.context,"block");
+    auto* endBB = llvm::BasicBlock::Create(context.context,"end");
+
+    context.builder.SetInsertPoint(condBB);
+    auto* value = getExpression().codegen(context);
+    if(value->getType()->getIntegerBitWidth() > 1)
+    {
+        value = context.builder.CreateICmpNE(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),0));
+    }
+    context.builder.CreateCondBr(value,blockBB,endBB);
+
+    function->getBasicBlockList().push_back(blockBB);
+    context.builder.SetInsertPoint(blockBB);
+    getStatement().codegen(context);
+    context.builder.CreateBr(condBB);
+
+    function->getBasicBlockList().push_back(endBB);
+    context.builder.SetInsertPoint(endBB);
     return nullptr;
 }
 
 llvm::Value* OpenCL::Parser::FootWhileStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    auto* function = context.builder.GetInsertBlock()->getParent();
+
+    auto* blockBB = llvm::BasicBlock::Create(context.context,"block",function);
+    context.builder.CreateBr(blockBB);
+    auto* condBB = llvm::BasicBlock::Create(context.context,"cond");
+    auto* endBB = llvm::BasicBlock::Create(context.context,"end");
+
+    context.builder.SetInsertPoint(blockBB);
+    getStatement().codegen(context);
+    context.builder.CreateBr(condBB);
+
+    function->getBasicBlockList().push_back(condBB);
+    context.builder.SetInsertPoint(condBB);
+    auto* value = getExpression().codegen(context);
+    if(value->getType()->getIntegerBitWidth() > 1)
+    {
+        value = context.builder.CreateICmpNE(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),0));
+    }
+    context.builder.CreateCondBr(value,blockBB,endBB);
+
+    function->getBasicBlockList().push_back(endBB);
+    context.builder.SetInsertPoint(endBB);
     return nullptr;
 }
 
@@ -751,7 +846,20 @@ llvm::Value* OpenCL::Parser::ShiftExpression::codegen(OpenCL::Parser::Context& c
     auto* left = getAdditiveExpression().codegen(context);
     for(auto& [op,rel] : getOptionalAdditiveExpressions())
     {
+        auto* right = rel.codegen(context);
+        if(!right || !left)
+        {
+            return nullptr;
+        }
 
+        switch(op)
+        {
+        case ShiftOperator::Right:
+            left = context.builder.CreateAShr(left,right);
+            break;
+        case ShiftOperator::Left:
+            left = context.builder.CreateShl(left,right);
+        }
     }
     return left;
 }
@@ -761,7 +869,27 @@ llvm::Value* OpenCL::Parser::RelationalExpression::codegen(OpenCL::Parser::Conte
     auto* left = getShiftExpression().codegen(context);
     for(auto& [op,rel] : getOptionalRelationalExpressions())
     {
+        auto* right = rel.codegen(context);
+        if(!right || !left)
+        {
+            return nullptr;
+        }
 
+        switch(op)
+        {
+        case RelationalOperator::LessThan:
+            left = context.builder.CreateICmpSLT(left,right);
+            break;
+        case RelationalOperator::LessThanOrEqual:
+            left = context.builder.CreateICmpSLE(left,right);
+            break;
+        case RelationalOperator::GreaterThan:
+            left = context.builder.CreateICmpSGT(left,right);
+            break;
+        case RelationalOperator::GreaterThanOrEqual:
+            left = context.builder.CreateICmpSGE(left,right);
+            break;
+        }
     }
     return left;
 }
@@ -799,7 +927,11 @@ llvm::Value* OpenCL::Parser::LogicalAndExpression::codegen(OpenCL::Parser::Conte
         {
             left = context.builder.CreateICmpNE(left,context.builder.getInt32(0),"leftbooltmp");
         }
-        auto* right = context.builder.CreateICmpNE(factor.codegen(context),context.builder.getInt32(0),"rightbooltmp");
+        auto* right = factor.codegen(context);
+        if(right->getType()->getIntegerBitWidth() > 1)
+        {
+            right = context.builder.CreateICmpNE(right,context.builder.getInt32(0),"rightbooltmp");
+        }
         if(!right || !left)
         {
             return nullptr;

@@ -623,19 +623,19 @@ namespace OpenCL::Parser
     {
         std::string m_name;
         std::vector<std::string> m_arguments;
-        std::vector<std::unique_ptr<BlockItem>> m_blockItems;
+        BlockStatement m_block;
 
     public:
 
         Function(std::string name,
                  std::vector<std::string> arguments,
-                 std::vector<std::unique_ptr<BlockItem>>&& blockItems);
+                 BlockStatement&& blockItems);
 
         const std::string& getName() const;
 
         const std::vector<std::string>& getArguments() const;
 
-        const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
+        const BlockStatement& getBlockStatement() const;
 
         llvm::Function* codegen(Context& context) const override;
     };

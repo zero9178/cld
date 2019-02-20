@@ -5,6 +5,8 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/IR/Verifier.h>
 #include <fstream>
 
 int main()
@@ -26,13 +28,14 @@ int main()
     auto result = OpenCL::Lexer::tokenize(source);
     auto node = OpenCL::Parser::buildTree(std::move(result));
     node.codegen(context);
-    context.module->print(llvm::errs(), nullptr);
+
+    context.module->print(llvm::outs(), nullptr);
+
+    llvm::verifyModule(*context.module,&llvm::errs());
 
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     LLVMLinkInMCJIT();
-
-    int res;
 
     {
         llvm::EngineBuilder builder(std::move(context.module));
@@ -44,10 +47,10 @@ int main()
                                                          .setOptLevel(llvm::CodeGenOpt::Level::None).setSymbolResolver(std::move(ptr)).create());
         ref->finalizeMemory(&error);
         void* address = (void*)ee->getFunctionAddress("main");
-        res = ((int(*)())address)();
+        std::cout<<((int(*)())address)();
     }
 
     llvm::llvm_shutdown();
 
-    return res;
+    return 0;
 }

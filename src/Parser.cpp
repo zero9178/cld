@@ -128,26 +128,14 @@ namespace
             throw std::runtime_error("Expected Close Parantheses after Argument List");
         }
 
-        currToken = tokens.back();
-        tokens.pop_back();
-        std::vector<std::unique_ptr<BlockItem>> result;
-        if (currToken.getTokenType() == TokenType::OpenBrace)
+        auto statement = parseStatement(tokens);
+        auto pointer = dynamic_cast<BlockStatement*>(statement.get());
+        if(!pointer)
         {
-            while (tokens.back().getTokenType() != TokenType::CloseBrace)
-            {
-                result.push_back(parseBlockItem(tokens));
-            }
-            if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseBrace)
-            {
-                throw std::runtime_error("Expected Closing Brace at the end of Block");
-            }
-            else
-            {
-                tokens.pop_back();
-            }
+            throw std::runtime_error("Expected Block statement after function");
         }
 
-        return Function(std::move(name), std::move(arguments), std::move(result));
+        return Function(std::move(name), std::move(arguments),std::move(*pointer));
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)
@@ -242,7 +230,7 @@ namespace
                 {
                     blockItems.push_back(parseBlockItem(tokens));
                 }
-                if (tokens.empty())
+                if (tokens.empty()  || tokens.back().getTokenType() != TokenType::CloseBrace)
                 {
                     throw std::runtime_error("Expected } to close Block");
                 }
@@ -721,11 +709,13 @@ namespace
             }
         }();
 
-        if (dynamic_cast<ParentheseFactor*>(result.get())
-            && (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseParanthese))
+        if (dynamic_cast<ParentheseFactor*>(result.get()))
         {
+            if(tokens.empty() || tokens.back().getTokenType() != TokenType::CloseParanthese)
+            {
+                throw std::runtime_error("Expected )");
+            }
             tokens.pop_back();
-            throw std::runtime_error("Expected )");
         }
 
         return result;
