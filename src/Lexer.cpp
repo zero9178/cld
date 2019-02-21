@@ -5,7 +5,9 @@
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& source)
 {
+    bool isStringLiteral = false;
     bool isComment = false;
+    bool isBlockComment = false;
     std::regex identifierMatch("[a-zA-Z_]\\w*");
     std::regex integerLiteralMatch("(0x)?[0-9a-fA-F]+");
     std::vector<Token> result;
@@ -18,9 +20,65 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             return;
         }
-        if (lastText == "int")
+        if (lastText == "void")
+        {
+           result.emplace_back(line,column,TokenType::VoidKeyword);
+        }
+        else if (lastText == "void")
+        {
+            result.emplace_back(line,column,TokenType::VoidKeyword);
+        }
+        else if (lastText == "char")
+        {
+            result.emplace_back(line,column,TokenType::CharKeyword);
+        }
+        else if (lastText == "short")
+        {
+            result.emplace_back(line,column,TokenType::ShortKeyword);
+        }
+        else if (lastText == "int")
         {
             result.emplace_back(line,column,TokenType::IntKeyword);
+        }
+        else if (lastText == "long")
+        {
+            result.emplace_back(line,column,TokenType::LongKeyword);
+        }
+        else if (lastText == "float")
+        {
+            result.emplace_back(line,column,TokenType::FloatKeyword);
+        }
+        else if (lastText == "double")
+        {
+            result.emplace_back(line,column,TokenType::DoubleKeyword);
+        }
+        else if (lastText == "signed")
+        {
+            result.emplace_back(line,column,TokenType::SignedKeyword);
+        }
+        else if (lastText == "unsigned")
+        {
+            result.emplace_back(line,column,TokenType::UnsignedKeyword);
+        }
+        else if (lastText == "typedef")
+        {
+            result.emplace_back(line,column,TokenType::TypedefKeyword);
+        }
+        else if (lastText == "extern")
+        {
+            result.emplace_back(line,column,TokenType::ExternKeyword);
+        }
+        else if (lastText == "static")
+        {
+            result.emplace_back(line,column,TokenType::StaticKeyword);
+        }
+        else if (lastText == "auto")
+        {
+            result.emplace_back(line,column,TokenType::AutoKeyword);
+        }
+        else if (lastText == "register")
+        {
+            result.emplace_back(line,column,TokenType::RegisterKeyword);
         }
         else if (lastText == "return")
         {
@@ -190,6 +248,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             isComment = true;
         }
+        else if(lastText == "/*")
+        {
+            isBlockComment = true;
+        }
         else if (std::regex_match(lastText, identifierMatch))
         {
             result.emplace_back(line,column,TokenType::Identifier,std::move(lastText));
@@ -242,11 +304,46 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             {
                 isComment = false;
                 lastText.clear();
+                continue;
             }
             else
             {
                 continue;
             }
+        }
+        if(isBlockComment)
+        {
+            lastText += iter;
+            if(lastText.size() >= 2 && lastText.substr(lastText.size()-2) == "*/")
+            {
+                isBlockComment = false;
+                lastText.clear();
+                continue;
+            }
+            else
+            {
+                continue;
+            }
+        }
+        if(isStringLiteral)
+        {
+            if(iter == '"')
+            {
+                if(!lastText.empty() && lastText.back() != '\\')
+                {
+                    isStringLiteral = false;
+                    result.emplace_back(line,column,TokenType::StringLiteral,lastText);
+                    continue;
+                }
+                else if(lastText.empty())
+                {
+                    isStringLiteral = false;
+                    result.emplace_back(line,column,TokenType::StringLiteral,lastText);
+                    continue;
+                }
+            }
+            lastText += iter;
+            continue;
         }
         if(!iter)
         {
@@ -258,13 +355,13 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         case '(':
         {
             processLastWord();
-            result.emplace_back(line,column,TokenType::OpenParanthese);
+            result.emplace_back(line,column,TokenType::OpenParenthese);
             break;
         }
         case ')':
         {
             processLastWord();
-            result.emplace_back(line,column,TokenType::CloseParanthese);
+            result.emplace_back(line,column,TokenType::CloseParenthese);
             break;
         }
         case '{':
@@ -301,6 +398,12 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             processLastWord();
             result.emplace_back(line,column,TokenType::Colon);
+            break;
+        }
+        case '"':
+        {
+            processLastWord();
+            isStringLiteral = true;
             break;
         }
         case '+':

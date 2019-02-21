@@ -74,12 +74,18 @@ namespace OpenCL::Parser
         virtual llvm::Value* codegen(Context& context) const = 0;
     };
 
+    /**
+     * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
+     */
     class NonCommaExpression : public Node
     {
     protected:
         NonCommaExpression() = default;
     };
 
+    /**
+     * <Expression> ::= <NonCommaExpression> [ <TokenType::Comma> <NonCommaExpression>]
+     */
     class Expression final : public Node
     {
         std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
@@ -97,6 +103,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <AssignmentExpression> ::= <TokenType::Identifier> <AssignmentExpression::AssignOperator> <Expression>
+     */
     class AssignmentExpression final : public NonCommaExpression
     {
         std::string m_identifier;
@@ -104,19 +113,22 @@ namespace OpenCL::Parser
 
     public:
 
+        /**
+         * <AssignmentExpression::AssignOperator>
+         */
         enum class AssignOperator
         {
-            NoOperator,
-            PlusAssign,
-            MinusAssign,
-            DivideAssign,
-            MultiplyAssign,
-            ModuloAssign,
-            LeftShiftAssign,
-            RightShiftAssign,
-            BitAndAssign,
-            BitOrAssign,
-            BitXorAssign
+            NoOperator,///<<TokenType::Assignment>
+            PlusAssign,///<<TokenType::PlusAssign>
+            MinusAssign,///<<TokenType::MinusAssign>
+            DivideAssign,///<TokenType::DiviceAssign>
+            MultiplyAssign,///<<TokenType::MultiplyAssign>
+            ModuloAssign,///<<TokenType::ModuloAssign>
+            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
+            RightShiftAssign,///<<TokenType::RightShiftAssign>
+            BitAndAssign,///<<TokenType::BitAndAssign>
+            BitOrAssign,///<<TokenType::BitOrAssign>
+            BitXorAssign///<<TokenType::BitXorAssign>
         };
 
     private:
@@ -138,12 +150,27 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <Factor>
+     * ::=  <FunctionCall>
+     * |    <ParentheseFactor>
+     * |    <UnaryFactor>
+     * |    <ConstantFactor>
+     * |    <VariableFactor>
+     * |    <PostIncrement>
+     * |    <PreIncrement>
+     * |    <PreDecrement>
+     * |    <PostDecrement>
+     */
     class Factor : public Node
     {
     protected:
         Factor() = default;
     };
 
+    /**
+     * <ParentheseFactor> ::= <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+     */
     class ParentheseFactor final : public Factor
     {
         Expression m_expression;
@@ -157,6 +184,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <UnaryFactor> ::= <UnaryFactor::UnaryOperator> <Factor>
+     */
     class UnaryFactor final : public Factor
     {
     public:
@@ -184,6 +214,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ConstantFactor> ::= <TokenType::IntegerLiteral>
+     */
     class ConstantFactor final : public Factor
     {
         std::string m_value;
@@ -197,6 +230,9 @@ namespace OpenCL::Parser
         llvm::Constant* codegen(Context& context) const override;
     };
 
+    /**
+     * <VariableFactor> ::= <TokenType::Identifier>
+     */
     class VariableFactor final : public Factor
     {
         std::string m_name;
@@ -210,6 +246,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <PostIncrement> ::= <TokenType::Identifier> <TokenType::Increment>
+     */
     class PostIncrement final : public Factor
     {
         std::string m_name;
@@ -223,6 +262,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <PreIncrement> ::= <TokenType::Increment> <TokenType::Identifier>
+     */
     class PreIncrement final : public Factor
     {
         std::string m_name;
@@ -236,6 +278,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <PostDecrement> ::= <TokenType::Identifier> <TokenType::Decrement>
+     */
     class PostDecrement final : public Factor
     {
         std::string m_name;
@@ -249,6 +294,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <PreDecrement> ::= <TokenType::Decrement> <TokenType::Identifier>
+     */
     class PreDecrement final : public Factor
     {
         std::string m_name;
@@ -262,6 +310,10 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <FunctionCall> ::= <TokenType::Identifier> <TokenType::OpenParenthese>
+     *                    [ <NonCommaExpression> { <TokenType::Colon> <NonCommaExpression> } ] <TokenType::CloseParenthese>
+     */
     class FunctionCall final : public Factor
     {
         std::string m_name;
@@ -278,17 +330,23 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <Term> ::= <Factor> { <Term::BinaryDotOperator> <Factor> }
+     */
     class Term final : public Node
     {
         std::unique_ptr<Factor> m_factor;
 
     public:
 
+        /**
+         * <Term::BinaryDotOperator>
+         */
         enum class BinaryDotOperator
         {
-            BinaryMultiply,
-            BinaryDivide,
-            BinaryRemainder
+            BinaryMultiply,///<<TokenType::Multiplication>
+            BinaryDivide,///<<TokenType::Division>
+            BinaryRemainder///<<TokenType::Modulo>
         };
 
     private:
@@ -307,16 +365,22 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <AdditiveExpression> ::= <Term> { <AdditiveExpression::BinaryDashOperator> <Term> }
+     */
     class AdditiveExpression final : public Node
     {
         Term m_term;
 
     public:
 
+        /**
+         * <AdditiveExpression::BinaryDashOperator>
+         */
         enum class BinaryDashOperator
         {
-            BinaryPlus,
-            BinaryMinus
+            BinaryPlus,///<<TokenType::Addition>
+            BinaryMinus///<<TokenType::Negation>
         };
 
     private:
@@ -335,16 +399,22 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ShiftExpression> ::= <AdditiveExpression> { <ShiftExpression::ShiftOperator> <AdditiveExpression> }
+     */
     class ShiftExpression final : public Node
     {
         AdditiveExpression m_additiveExpression;
 
     public:
 
+        /**
+         * <ShiftExpression::ShiftOperator>
+         */
         enum class ShiftOperator
         {
-            Right,
-            Left
+            Right,///<<TokenType::ShiftRight>
+            Left///<<TokenType::ShiftLeft>
         };
 
     private:
@@ -364,18 +434,24 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <RelationalExpression> ::= <ShiftExpression> { <RelationalExpression::RelationalOperator> <ShiftExpression> }
+     */
     class RelationalExpression final : public Node
     {
         ShiftExpression m_shiftExpression;
 
     public:
 
+        /**
+         * <RelationalExpression::RelationalOperator>
+         */
         enum class RelationalOperator
         {
-            LessThan,
-            LessThanOrEqual,
-            GreaterThan,
-            GreaterThanOrEqual
+            LessThan,///<<TokenType::LessThan>
+            LessThanOrEqual,///<TokenType::LessThanOrEqual>
+            GreaterThan,///<TokenType::GreaterThan>
+            GreaterThanOrEqual///<TokenType::GreaterThanOrEqual>
         };
 
     private:
@@ -395,16 +471,22 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <EqualityExpression> ::= <RelationalExpression> { <EqualityExpression::EqualityOperator> <RelationalExpression> }
+     */
     class EqualityExpression final : public Node
     {
         RelationalExpression m_relationalExpression;
 
     public:
 
+        /**
+         * <EqualityExpression::EqualityOperator>
+         */
         enum class EqualityOperator
         {
-            Equal,
-            NotEqual
+            Equal,///<<TokenType::Equal>
+            NotEqual///<TokenType::NotEqual>
         };
 
     private:
@@ -424,6 +506,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BitAndExpression> ::= <EqualityExpression> { <TokenType::BitAnd> <EqualityExpression> }
+     */
     class BitAndExpression final : public Node
     {
         EqualityExpression m_equalityExpression;
@@ -441,6 +526,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BitXorExpression> ::= <BitAndExpression> { <TokenType::BitXor> <BitAndExpression> }
+     */
     class BitXorExpression final : public Node
     {
         BitAndExpression m_bitAndExpression;
@@ -458,6 +546,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BitOrExpression> ::= <BitXorExpression> { <TokenType::BitOr> <BitXorExpression> }
+     */
     class BitOrExpression final : public Node
     {
         BitXorExpression m_bitXorExpression;
@@ -475,10 +566,13 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <LogicalAndExpression> ::= <BitOrExpression> { <TokenType::LogicAnd> <BitOrExpression> }
+     */
     class LogicalAndExpression final : public Node
     {
-        BitOrExpression m_equalityExpression;
-        std::vector<BitOrExpression> m_optionalEqualityExpressions;
+        BitOrExpression m_bitOrExpression;
+        std::vector<BitOrExpression> m_optionalBitOrExpressions;
 
     public:
 
@@ -492,6 +586,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <LogicalOrExpression> ::= <LogicalAndExpression> { <TokenType::LogicOr> <LogicalAndExpression> }
+     */
     class LogicalOrExpression final : public Node
     {
         LogicalAndExpression m_andExpression;
@@ -509,6 +606,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ConditionalExpression> ::= <LogicalOrExpression> [ <TokenType::QuestionMark> <Expression> <TokenType::Colon> <ConditionalExpression> ]
+     */
     class ConditionalExpression final : public NonCommaExpression
     {
         LogicalOrExpression m_logicalOrExpression;
@@ -530,18 +630,37 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BlockItem> ::= <Statement> | <Declaration>
+     */
     class BlockItem : public Node
     {
     protected:
         BlockItem() = default;
     };
 
+    /**
+     * <Statement>
+     * ::=  <ReturnStatement>
+     * |    <ExpressionStatement>
+     * |    <IfStatement>
+     * |    <BlockStatement>
+     * |    <ForStatement>
+     * |    <ForDeclarationStatement>
+     * |    <HeadWhileStatement>
+     * |    <FootWhileStatement>
+     * |    <BreakStatement>
+     * |    <ContinueStatement>
+     */
     class Statement : public BlockItem
     {
     protected:
         Statement() = default;
     };
 
+    /**
+     * <ReturnStatement> ::= <TokenType::ReturnKeyword> <Expression> <TokenType::SemiColon>
+     */
     class ReturnStatement final : public Statement
     {
         Expression m_expression;
@@ -555,6 +674,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ExpressionStatement> ::= [<Expression>] <TokenType::SemiColon>
+     */
     class ExpressionStatement final : public Statement
     {
         std::unique_ptr<Expression> m_optionalExpression;
@@ -570,6 +692,10 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+     *               <Statement> [ <TokenType::ElseKeyword> <Statement> ]
+     */
     class IfStatement final : public Statement
     {
         Expression m_expression;
@@ -591,6 +717,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BlockStatement> ::= <TokenType::OpenBrace> { <BlockItem> } <TokenType::CloseBrace>
+     */
     class BlockStatement final : public Statement
     {
         std::vector<std::unique_ptr<BlockItem>> m_blockItems;
@@ -604,6 +733,10 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> [<Expression>] <TokenType::SemiColon>
+     *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParenthese> <Statement>
+     */
     class ForStatement final : public Statement
     {
         std::unique_ptr<Statement> m_statement;
@@ -629,6 +762,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <Declaration> ::= <TokenType::IntKeyword> <TokenType::Identifier> [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
+     */
     class Declaration final : public BlockItem
     {
         std::string m_name;
@@ -647,6 +783,10 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration> [<Expression>]
+     *                           <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese> <Statement>
+     */
     class ForDeclarationStatement final : public Statement
     {
         std::unique_ptr<Statement> m_statement;
@@ -671,6 +811,10 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <HeadWhileStatement> ::= <TokenType::WhileKeyword> <TokenType::OpenParenthese> <Expression>
+     *                          <TokenType::CloseParenthese> <Statement>
+     */
     class HeadWhileStatement final : public Statement
     {
         Expression m_expression;
@@ -687,6 +831,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <FootWhileStatement> ::= <TokenType::DoKeyword> <Statement> <TokenType::WhileKeyword> <Expression> <TokenType::SemiColon>
+     */
     class FootWhileStatement final : public Statement
     {
         std::unique_ptr<Statement> m_statement;
@@ -703,12 +850,18 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <BreakStatement> ::= <TokenType::BreakKeyword> <TokenType::SemiColon>
+     */
     class BreakStatement final : public Statement
     {
     public:
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <ContinueStatement> ::= <TokenType::ContinueStatement> <TokenType::SemiColon>
+     */
     class ContinueStatement final : public Statement
     {
     public:
@@ -721,6 +874,12 @@ namespace OpenCL::Parser
         Global() = default;
     };
 
+    /**
+     * <function> ::= <TokenType::IntKeyword> <TokenType::Identifier> <TokenType::OpenParenthese>
+     *                [ <TokenType::IntKeyword> <TokenType::Identifier> { <TokenType::Comma> <TokenType::IntKeyword>
+     *                <TokenType::Identifier> } ] <TokenType::CloseParenthese>
+     *                ( <TokenType::OpenBrace>  { <BlockItem> } <TokenType::CloseBrace>  | <TokenType::SemiColon>  )
+     */
     class Function final : public Global
     {
         std::string m_name;
@@ -758,6 +917,9 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
+    /**
+     * <program> ::= {<Function> | <GlobalDeclaration>}
+     */
     class Program final : public Node
     {
         std::vector<std::unique_ptr<Global>> m_globals;
