@@ -8,13 +8,51 @@
 
 namespace OpenCL::Parser
 {
-    struct Context
+    class Context
     {
+        std::vector<std::map<std::string, llvm::AllocaInst*>> m_namedValues;
+
+    public:
+
         llvm::LLVMContext context;
         llvm::IRBuilder<> builder{context};
         std::unique_ptr<llvm::Module> module;
-        std::map<std::string,llvm::AllocaInst*> namedValues;
         llvm::Function* currentFunction;
+        std::vector<llvm::BasicBlock*> continueBlocks;
+        std::vector<llvm::BasicBlock*> breakBlocks;
+
+        llvm::Value* getNamedValue(const std::string& name)
+        {
+            for(auto begin = m_namedValues.rbegin(); begin != m_namedValues.rend(); begin++)
+            {
+                if(auto result = begin->find(name);result != begin->end())
+                {
+                    return result->second;
+                }
+            }
+            return module->getGlobalVariable(name,true);
+        }
+
+        void popScope()
+        {
+            m_namedValues.pop_back();
+        }
+
+        void pushScope()
+        {
+            m_namedValues.emplace_back();
+        }
+
+        void addValueToScope(const std::string& name,llvm::AllocaInst* value)
+        {
+            m_namedValues.back()[name] = value;
+        }
+
+        void clearScope()
+        {
+            m_namedValues.clear();
+            pushScope();
+        }
     };
 
     class Node
@@ -156,7 +194,7 @@ namespace OpenCL::Parser
 
         const std::string& getValue() const;
 
-        llvm::Value* codegen(Context& context) const override;
+        llvm::Constant* codegen(Context& context) const override;
     };
 
     class VariableFactor final : public Factor
@@ -342,13 +380,13 @@ namespace OpenCL::Parser
 
     private:
 
-        std::vector<std::pair<RelationalOperator,ShiftExpression>> m_optionalRelationalExpressions;
+        std::vector<std::pair<RelationalOperator, ShiftExpression>> m_optionalRelationalExpressions;
 
     public:
 
         explicit RelationalExpression(ShiftExpression&& shiftExpression,
-                                              std::vector<std::pair<RelationalOperator,
-                                                                                 ShiftExpression>>&& optionalRelationalExpressions);
+                                      std::vector<std::pair<RelationalOperator,
+                                                            ShiftExpression>>&& optionalRelationalExpressions);
 
         const ShiftExpression& getShiftExpression() const;
 
@@ -371,13 +409,13 @@ namespace OpenCL::Parser
 
     private:
 
-        std::vector<std::pair<EqualityOperator,RelationalExpression>> m_optionalRelationalExpressions;
+        std::vector<std::pair<EqualityOperator, RelationalExpression>> m_optionalRelationalExpressions;
 
     public:
 
         explicit EqualityExpression(RelationalExpression&& relationalExpression,
-                                            std::vector<std::pair<EqualityOperator,
-                                                                             RelationalExpression>>&& optionalRelationalExpressions);
+                                    std::vector<std::pair<EqualityOperator,
+                                                          RelationalExpression>>&& optionalRelationalExpressions);
 
         const RelationalExpression& getRelationalExpression() const;
 
@@ -386,19 +424,70 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
-    class LogicalAndExpression final : public Node
+    class BitAndExpression final : public Node
     {
         EqualityExpression m_equalityExpression;
         std::vector<EqualityExpression> m_optionalEqualityExpressions;
 
     public:
 
-        explicit LogicalAndExpression(EqualityExpression&& equalityExpression,
-                                      std::vector<EqualityExpression>&& optionalEqualityExpressions);
+        BitAndExpression(EqualityExpression&& equalityExpression,
+                         std::vector<EqualityExpression>&& optionalEqualityExpressions);
 
         const EqualityExpression& getEqualityExpression() const;
 
         const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
+    };
+
+    class BitXorExpression final : public Node
+    {
+        BitAndExpression m_bitAndExpression;
+        std::vector<BitAndExpression> m_optionalBitAndExpressions;
+
+    public:
+
+        BitXorExpression(BitAndExpression&& bitAndExpression,
+                         std::vector<BitAndExpression>&& optionalBitAndExpressions);
+
+        const BitAndExpression& getBitAndExpression() const;
+
+        const std::vector<BitAndExpression>& getOptionalBitAndExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
+    };
+
+    class BitOrExpression final : public Node
+    {
+        BitXorExpression m_bitXorExpression;
+        std::vector<BitXorExpression> m_optionalBitXorExpressions;
+
+    public:
+
+        BitOrExpression(BitXorExpression&& bitXorExpression,
+                        std::vector<BitXorExpression>&& optionalBitXorExpressions);
+
+        const BitXorExpression& getBitXorExpression() const;
+
+        const std::vector<BitXorExpression>& getOptionalBitXorExpressions() const;
+
+        llvm::Value* codegen(Context& context) const override;
+    };
+
+    class LogicalAndExpression final : public Node
+    {
+        BitOrExpression m_equalityExpression;
+        std::vector<BitOrExpression> m_optionalEqualityExpressions;
+
+    public:
+
+        LogicalAndExpression(BitOrExpression&& equalityExpression,
+                             std::vector<BitOrExpression>&& optionalEqualityExpressions);
+
+        const BitOrExpression& getBitOrExpression() const;
+
+        const std::vector<BitOrExpression>& getOptionalBitOrExpressions() const;
 
         llvm::Value* codegen(Context& context) const override;
     };
@@ -517,15 +606,19 @@ namespace OpenCL::Parser
 
     class ForStatement final : public Statement
     {
+        std::unique_ptr<Statement> m_statement;
         std::unique_ptr<Expression> m_initial;
         std::unique_ptr<Expression> m_controlling;
         std::unique_ptr<Expression> m_post;
 
     public:
 
-        explicit ForStatement(std::unique_ptr<Expression>&& initial = nullptr,
+        explicit ForStatement(std::unique_ptr<Statement>&& statement,
+                              std::unique_ptr<Expression>&& initial = nullptr,
                               std::unique_ptr<Expression>&& controlling = nullptr,
                               std::unique_ptr<Expression>&& post = nullptr);
+
+        const Statement& getStatement() const;
 
         const Expression* getInitial() const;
 
@@ -556,15 +649,18 @@ namespace OpenCL::Parser
 
     class ForDeclarationStatement final : public Statement
     {
+        std::unique_ptr<Statement> m_statement;
         Declaration m_initial;
         std::unique_ptr<Expression> m_controlling;
         std::unique_ptr<Expression> m_post;
 
     public:
 
-        explicit ForDeclarationStatement(Declaration&& initial,
+        explicit ForDeclarationStatement(std::unique_ptr<Statement>&& statement, Declaration&& initial,
                                          std::unique_ptr<Expression>&& controlling = nullptr,
                                          std::unique_ptr<Expression>&& post = nullptr);
+
+        const Statement& getStatement() const;
 
         const Declaration& getInitial() const;
 
@@ -619,7 +715,13 @@ namespace OpenCL::Parser
         llvm::Value* codegen(Context& context) const override;
     };
 
-    class Function final : public Node
+    class Global : public Node
+    {
+    protected:
+        Global() = default;
+    };
+
+    class Function final : public Global
     {
         std::string m_name;
         std::vector<std::string> m_arguments;
@@ -640,15 +742,31 @@ namespace OpenCL::Parser
         llvm::Function* codegen(Context& context) const override;
     };
 
-    class Program final : public Node
+    class GlobalDeclaration final : public Global
     {
-        std::vector<Function> m_functions;
+        std::string m_name;
+        std::unique_ptr<ConstantFactor> m_optionalValue;
 
     public:
 
-        explicit Program(std::vector<Function>&& functions) noexcept;
+        explicit GlobalDeclaration(std::string name, std::unique_ptr<ConstantFactor>&& value = nullptr);
 
-        const std::vector<Function>& getFunctions() const;
+        const std::string& getName() const;
+
+        const ConstantFactor* getOptionalValue() const;
+
+        llvm::Value* codegen(Context& context) const override;
+    };
+
+    class Program final : public Node
+    {
+        std::vector<std::unique_ptr<Global>> m_globals;
+
+    public:
+
+        explicit Program(std::vector<std::unique_ptr<Global>>&& globals) noexcept;
+
+        const std::vector<std::unique_ptr<Global>>& getGlobals() const;
 
         llvm::Value* codegen(Context& context) const override;
     };

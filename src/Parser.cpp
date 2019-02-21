@@ -6,6 +6,10 @@ namespace
 {
     OpenCL::Parser::Program parseProgram(Tokens& tokens);
 
+    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens);
+
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens);
+
     OpenCL::Parser::Function parseFunction(Tokens& tokens);
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens);
@@ -21,6 +25,12 @@ namespace
     OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens);
 
     OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens);
+
+    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens);
+
+    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens);
+
+    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens);
 
     OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens);
 
@@ -62,12 +72,81 @@ namespace
 
     OpenCL::Parser::Program parseProgram(Tokens& tokens)
     {
-        std::vector<Function> functions;
+        std::vector<std::unique_ptr<Global>> global;
         while (!tokens.empty())
         {
-            functions.push_back(parseFunction(tokens));
+            global.push_back(parseGlobal(tokens));
         }
-        return Program(std::move(functions));
+        return Program(std::move(global));
+    }
+
+    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
+    {
+        auto currToken = tokens.back();
+        if(currToken.getTokenType() != TokenType::IntKeyword)
+        {
+            throw std::runtime_error("Only int supported as data type for globals and function return type");
+        }
+        currToken = tokens.at(tokens.size()-2);
+        if(currToken.getTokenType() != TokenType::Identifier)
+        {
+            throw std::runtime_error("Expected Identifier after int");
+        }
+        currToken = tokens.at(tokens.size()-3);
+        if(currToken.getTokenType() == TokenType::OpenParanthese)
+        {
+            return std::make_unique<Function>(parseFunction(tokens));
+        }
+        else if(currToken.getTokenType() == TokenType::SemiColon
+        || currToken.getTokenType() == TokenType::Assignment)
+        {
+            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(tokens));
+        }
+        else
+        {
+            throw std::runtime_error("Invalid token after global identifier");
+        }
+    }
+
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens)
+    {
+        auto currToken = tokens.back();
+        tokens.pop_back();
+        if (currToken.getTokenType() != TokenType::IntKeyword)
+        {
+            throw std::runtime_error("Unsupported return type");
+        }
+        currToken = tokens.back();
+        tokens.pop_back();
+        if (currToken.getTokenType() != TokenType::Identifier)
+        {
+            throw std::runtime_error("Invalid identifier for Global declaration");
+        }
+        auto name = std::get<std::string>(currToken.getValue());
+        currToken = tokens.back();
+        tokens.pop_back();
+        if(currToken.getTokenType() == TokenType::Assignment)
+        {
+            currToken = tokens.back();
+            tokens.pop_back();
+            if(currToken.getTokenType() != TokenType::IntegerLiteral)
+            {
+                throw std::runtime_error("Can only use Integer literal to initialize global declaration");
+            }
+            auto constant = std::to_string(std::get<std::uint64_t>(currToken.getValue()));
+            currToken = tokens.back();
+            if(currToken.getTokenType() != TokenType::SemiColon)
+            {
+                throw std::runtime_error("Expected ; after initialization of global declaration");
+            }
+            tokens.pop_back();
+            return GlobalDeclaration(name,std::make_unique<ConstantFactor>(constant));
+        }
+        else
+        {
+            tokens.pop_back();
+            return GlobalDeclaration(name);
+        }
     }
 
     OpenCL::Parser::Function parseFunction(Tokens& tokens)
@@ -250,7 +329,7 @@ namespace
 
                 auto control = [&]() -> std::unique_ptr<Expression>
                 {
-                    if (tokens.back().getTokenType() == TokenType::SemiColon)
+                    if (dynamic_cast<Declaration*>(blockitem.get()) || tokens.back().getTokenType() != TokenType::SemiColon)
                     {
                         auto expression = parseExpression(tokens);
                         if (tokens.back().getTokenType() != TokenType::SemiColon)
@@ -262,10 +341,6 @@ namespace
                     }
                     else
                     {
-                        if (tokens.back().getTokenType() != TokenType::SemiColon)
-                        {
-                            throw std::runtime_error("Expected ; after control part of for loop header");
-                        }
                         tokens.pop_back();
                         return nullptr;
                     }
@@ -273,37 +348,35 @@ namespace
 
                 auto post = [&]() -> std::unique_ptr<Expression>
                 {
-                    if (tokens.back().getTokenType() == TokenType::CloseParanthese)
+                    if (tokens.back().getTokenType() != TokenType::CloseParanthese)
                     {
                         auto expression = parseExpression(tokens);
                         if (tokens.back().getTokenType() != TokenType::CloseParanthese)
                         {
-                            throw std::runtime_error("Expected ; after control part of for loop header");
+                            throw std::runtime_error("Expected ) after control part of for loop header");
                         }
                         tokens.pop_back();
                         return std::make_unique<Expression>(std::move(expression));
                     }
                     else
                     {
-                        if (tokens.back().getTokenType() != TokenType::CloseParanthese)
-                        {
-                            throw std::runtime_error("Expected ; after control part of for loop header");
-                        }
                         tokens.pop_back();
                         return nullptr;
                     }
                 }();
 
+                auto statement = parseStatement(tokens);
+
                 if (auto declaration = dynamic_cast<Declaration*>(blockitem.get());declaration)
                 {
-                    return std::make_unique<ForDeclarationStatement>(std::move(*declaration),
+                    return std::make_unique<ForDeclarationStatement>(std::move(statement),std::move(*declaration),
                                                                      std::move(control),
                                                                      std::move(post));
                 }
                 else if (auto
                         expressionStatement = dynamic_cast<ExpressionStatement*>(blockitem.get());expressionStatement)
                 {
-                    return std::make_unique<ForStatement>(expressionStatement->moveOptionalExpression(),
+                    return std::make_unique<ForStatement>(std::move(statement),expressionStatement->moveOptionalExpression(),
                                                           std::move(control),
                                                           std::move(post));
                 }
@@ -356,8 +429,16 @@ namespace
                 }
                 return std::make_unique<FootWhileStatement>(std::move(statement), std::move(expression));
             }
-            case TokenType::BreakKeyword:return std::make_unique<BreakStatement>();
-            case TokenType::ContinueKeyword:return std::make_unique<ContinueStatement>();
+            case TokenType::BreakKeyword:
+            {
+                tokens.pop_back();
+                return std::make_unique<BreakStatement>();
+            }
+            case TokenType::ContinueKeyword:
+            {
+                tokens.pop_back();
+                return std::make_unique<ContinueStatement>();
+            }
             default:
             {
                 if (!tokens.empty() && tokens.back().getTokenType() != TokenType::SemiColon)
@@ -483,18 +564,66 @@ namespace
 
     OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens)
     {
-        auto result = parseEqualityExpression(tokens);
+        auto result = parseBitOrExpression(tokens);
 
-        std::vector<EqualityExpression> optionalEqualityExpressions;
+        std::vector<BitOrExpression> list;
         auto currToken = tokens.back();
         while (currToken.getTokenType() == TokenType::LogicAnd)
         {
             tokens.pop_back();
-            optionalEqualityExpressions.push_back(parseEqualityExpression(tokens));
+            list.push_back(parseBitOrExpression(tokens));
             currToken = tokens.back();
         }
 
-        return LogicalAndExpression(std::move(result), std::move(optionalEqualityExpressions));
+        return LogicalAndExpression(std::move(result), std::move(list));
+    }
+
+    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens)
+    {
+        auto result = parseBitXorExpression(tokens);
+
+        std::vector<BitXorExpression> list;
+        auto currToken = tokens.back();
+        while(currToken.getTokenType() == TokenType::BitOr)
+        {
+            tokens.pop_back();
+            list.push_back(parseBitXorExpression(tokens));
+            currToken = tokens.back();
+        }
+
+        return BitOrExpression(std::move(result),std::move(list));
+    }
+
+    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens)
+    {
+        auto result = parseBitAndExpression(tokens);
+
+        std::vector<BitAndExpression> list;
+        auto currToken = tokens.back();
+        while(currToken.getTokenType() == TokenType::BitXor)
+        {
+            tokens.pop_back();
+            list.push_back(parseBitAndExpression(tokens));
+            currToken = tokens.back();
+        }
+
+        return BitXorExpression(std::move(result),std::move(list));
+    }
+
+    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens)
+    {
+        auto result = parseEqualityExpression(tokens);
+
+        std::vector<EqualityExpression> list;
+        auto currToken = tokens.back();
+        while(currToken.getTokenType() == TokenType::BitAnd)
+        {
+            tokens.pop_back();
+            list.push_back(parseEqualityExpression(tokens));
+            currToken = tokens.back();
+        }
+
+        return BitAndExpression(std::move(result),std::move(list));
     }
 
     OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens)
@@ -604,6 +733,7 @@ namespace
                                   default:throw std::runtime_error("Invalid token");
                                   }
                               }(), parseFactor(tokens));
+            currToken = tokens.back();
         }
 
         return Term(std::move(result), std::move(list));

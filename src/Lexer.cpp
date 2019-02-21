@@ -5,6 +5,7 @@
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& source)
 {
+    bool isComment = false;
     std::regex identifierMatch("[a-zA-Z_]\\w*");
     std::regex integerLiteralMatch("(0x)?[0-9a-fA-F]+");
     std::vector<Token> result;
@@ -185,6 +186,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             result.emplace_back(line,column,TokenType::ShiftLeft);
         }
+        else if (lastText == "//")
+        {
+            isComment = true;
+        }
         else if (std::regex_match(lastText, identifierMatch))
         {
             result.emplace_back(line,column,TokenType::Identifier,std::move(lastText));
@@ -231,6 +236,18 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
 
     for (auto iter : source)
     {
+        if(isComment)
+        {
+            if(iter == '\n')
+            {
+                isComment = false;
+                lastText.clear();
+            }
+            else
+            {
+                continue;
+            }
+        }
         if(!iter)
         {
             continue;
