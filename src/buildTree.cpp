@@ -70,6 +70,19 @@ namespace
             || type == TokenType::BitXorAssign;
     }
 
+    bool isType(TokenType type)
+    {
+        return type == TokenType::VoidKeyword
+            || type == TokenType::CharKeyword
+            || type == TokenType::ShortKeyword
+            || type == TokenType::IntKeyword
+            || type == TokenType::LongKeyword
+            || type == TokenType::FloatKeyword
+            || type == TokenType::DoubleKeyword
+            || type == TokenType::SignedKeyword
+            || type == TokenType::UnsignedKeyword;
+    }
+
     OpenCL::Parser::Program parseProgram(Tokens& tokens)
     {
         std::vector<std::unique_ptr<Global>> global;
@@ -83,22 +96,22 @@ namespace
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if(currToken.getTokenType() != TokenType::IntKeyword)
+        if (currToken.getTokenType() != TokenType::IntKeyword)
         {
             throw std::runtime_error("Only int supported as data type for globals and function return type");
         }
-        currToken = tokens.at(tokens.size()-2);
-        if(currToken.getTokenType() != TokenType::Identifier)
+        currToken = tokens.at(tokens.size() - 2);
+        if (currToken.getTokenType() != TokenType::Identifier)
         {
             throw std::runtime_error("Expected Identifier after int");
         }
-        currToken = tokens.at(tokens.size()-3);
-        if(currToken.getTokenType() == TokenType::OpenParenthese)
+        currToken = tokens.at(tokens.size() - 3);
+        if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
             return std::make_unique<Function>(parseFunction(tokens));
         }
-        else if(currToken.getTokenType() == TokenType::SemiColon
-        || currToken.getTokenType() == TokenType::Assignment)
+        else if (currToken.getTokenType() == TokenType::SemiColon
+            || currToken.getTokenType() == TokenType::Assignment)
         {
             return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(tokens));
         }
@@ -125,22 +138,22 @@ namespace
         auto name = std::get<std::string>(currToken.getValue());
         currToken = tokens.back();
         tokens.pop_back();
-        if(currToken.getTokenType() == TokenType::Assignment)
+        if (currToken.getTokenType() == TokenType::Assignment)
         {
             currToken = tokens.back();
             tokens.pop_back();
-            if(currToken.getTokenType() != TokenType::IntegerLiteral)
+            if (currToken.getTokenType() != TokenType::IntegerLiteral)
             {
                 throw std::runtime_error("Can only use Integer literal to initialize global declaration");
             }
             auto constant = std::to_string(std::get<std::uint64_t>(currToken.getValue()));
             currToken = tokens.back();
-            if(currToken.getTokenType() != TokenType::SemiColon)
+            if (currToken.getTokenType() != TokenType::SemiColon)
             {
                 throw std::runtime_error("Expected ; after initialization of global declaration");
             }
             tokens.pop_back();
-            return GlobalDeclaration(name,std::make_unique<ConstantFactor>(constant));
+            return GlobalDeclaration(name, std::make_unique<ConstantFactor>(constant));
         }
         else
         {
@@ -209,20 +222,47 @@ namespace
 
         auto statement = parseStatement(tokens);
         auto pointer = dynamic_cast<BlockStatement*>(statement.get());
-        if(!pointer)
+        if (!pointer)
         {
             throw std::runtime_error("Expected Block statement after function");
         }
 
-        return Function(std::move(name), std::move(arguments),std::move(*pointer));
+        return Function(std::move(name), std::move(arguments), std::move(*pointer));
+    }
+
+    Type parseType(Tokens& tokens)
+    {
+        auto currToken = tokens.back();
+        switch (currToken.getTokenType())
+        {
+        case TokenType::VoidKeyword:
+            return Type(Type::Types::Void,false);
+        case TokenType::CharKeyword:
+            return Type(Type::Types::Char,true);
+        case TokenType::ShortKeyword:
+            return Type(Type::Types::Short,true);
+        case TokenType::SignedKeyword:
+        case TokenType::IntKeyword:
+            return Type(Type::Types::Int,true);
+        case TokenType::LongKeyword:
+            return Type(Type::Types::Long,true);
+        case TokenType::FloatKeyword:
+            return Type(Type::Types::Float,true);
+        case TokenType::DoubleKeyword:
+            return Type(Type::Types::Double,true);
+        case TokenType::UnsignedKeyword:
+            return Type(Type::Types::Int,false);
+        default:
+            throw std::runtime_error("Unknown type");
+        }
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if (currToken.getTokenType() == TokenType::IntKeyword)
+        if (isType(currToken.getTokenType()))
         {
-            tokens.pop_back();
+            auto type = parseType(tokens);
             currToken = tokens.back();
             if (currToken.getTokenType() != TokenType::Identifier)
             {
@@ -230,17 +270,19 @@ namespace
             }
             tokens.pop_back();
             auto name = std::get<std::string>(currToken.getValue());
-            auto result = [&tokens, name = std::move(name)]
+            auto result = [&tokens, name = std::move(name),type]
             {
-                auto type = tokens.back().getTokenType();
-                if (isAssignment(type))
+                auto currToken = tokens.back().getTokenType();
+                if (isAssignment(currToken))
                 {
                     tokens.pop_back();
-                    return Declaration(name, std::make_unique<Expression>(parseExpression(tokens)));
+                    return Declaration(type,
+                                       name,
+                                       std::make_unique<Expression>(parseExpression(tokens)));
                 }
                 else
                 {
-                    return Declaration(name);
+                    return Declaration(type, name);
                 }
             }();
             if (tokens.empty() || tokens.back().getTokenType() != TokenType::SemiColon)
@@ -309,7 +351,7 @@ namespace
                 {
                     blockItems.push_back(parseBlockItem(tokens));
                 }
-                if (tokens.empty()  || tokens.back().getTokenType() != TokenType::CloseBrace)
+                if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseBrace)
                 {
                     throw std::runtime_error("Expected } to close Block");
                 }
@@ -329,7 +371,8 @@ namespace
 
                 auto control = [&]() -> std::unique_ptr<Expression>
                 {
-                    if (dynamic_cast<Declaration*>(blockitem.get()) || tokens.back().getTokenType() != TokenType::SemiColon)
+                    if (dynamic_cast<Declaration*>(blockitem.get())
+                        || tokens.back().getTokenType() != TokenType::SemiColon)
                     {
                         auto expression = parseExpression(tokens);
                         if (tokens.back().getTokenType() != TokenType::SemiColon)
@@ -369,14 +412,15 @@ namespace
 
                 if (auto declaration = dynamic_cast<Declaration*>(blockitem.get());declaration)
                 {
-                    return std::make_unique<ForDeclarationStatement>(std::move(statement),std::move(*declaration),
+                    return std::make_unique<ForDeclarationStatement>(std::move(statement), std::move(*declaration),
                                                                      std::move(control),
                                                                      std::move(post));
                 }
                 else if (auto
                         expressionStatement = dynamic_cast<ExpressionStatement*>(blockitem.get());expressionStatement)
                 {
-                    return std::make_unique<ForStatement>(std::move(statement),expressionStatement->moveOptionalExpression(),
+                    return std::make_unique<ForStatement>(std::move(statement),
+                                                          expressionStatement->moveOptionalExpression(),
                                                           std::move(control),
                                                           std::move(post));
                 }
@@ -493,7 +537,7 @@ namespace
         if (tokens.size() > 2 && currentToken.getTokenType() == TokenType::Identifier
             && isAssignment(tokens[tokens.size() - 2].getTokenType()))
         {
-            auto op = tokens[tokens.size()-2];
+            auto op = tokens[tokens.size() - 2];
             const auto& identifier = std::get<std::string>(currentToken.getValue());
             tokens.pop_back();
             tokens.pop_back();
@@ -514,7 +558,9 @@ namespace
                                                               case TokenType::BitAndAssign:return AssignmentExpression::AssignOperator::BitAndAssign;
                                                               case TokenType::BitOrAssign:return AssignmentExpression::AssignOperator::BitOrAssign;
                                                               case TokenType::BitXorAssign:return AssignmentExpression::AssignOperator::BitXorAssign;
-                                                              default:throw std::runtime_error("Invalid token for assignment");
+                                                              default:
+                                                                  throw std::runtime_error(
+                                                                      "Invalid token for assignment");
                                                               }
                                                           }());
         }
@@ -584,14 +630,14 @@ namespace
 
         std::vector<BitXorExpression> list;
         auto currToken = tokens.back();
-        while(currToken.getTokenType() == TokenType::BitOr)
+        while (currToken.getTokenType() == TokenType::BitOr)
         {
             tokens.pop_back();
             list.push_back(parseBitXorExpression(tokens));
             currToken = tokens.back();
         }
 
-        return BitOrExpression(std::move(result),std::move(list));
+        return BitOrExpression(std::move(result), std::move(list));
     }
 
     OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens)
@@ -600,14 +646,14 @@ namespace
 
         std::vector<BitAndExpression> list;
         auto currToken = tokens.back();
-        while(currToken.getTokenType() == TokenType::BitXor)
+        while (currToken.getTokenType() == TokenType::BitXor)
         {
             tokens.pop_back();
             list.push_back(parseBitAndExpression(tokens));
             currToken = tokens.back();
         }
 
-        return BitXorExpression(std::move(result),std::move(list));
+        return BitXorExpression(std::move(result), std::move(list));
     }
 
     OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens)
@@ -616,14 +662,14 @@ namespace
 
         std::vector<EqualityExpression> list;
         auto currToken = tokens.back();
-        while(currToken.getTokenType() == TokenType::BitAnd)
+        while (currToken.getTokenType() == TokenType::BitAnd)
         {
             tokens.pop_back();
             list.push_back(parseEqualityExpression(tokens));
             currToken = tokens.back();
         }
 
-        return BitAndExpression(std::move(result),std::move(list));
+        return BitAndExpression(std::move(result), std::move(list));
     }
 
     OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens)
@@ -841,7 +887,7 @@ namespace
 
         if (dynamic_cast<ParentheseFactor*>(result.get()))
         {
-            if(tokens.empty() || tokens.back().getTokenType() != TokenType::CloseParenthese)
+            if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseParenthese)
             {
                 throw std::runtime_error("Expected )");
             }

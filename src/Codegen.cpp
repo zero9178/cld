@@ -747,3 +747,18 @@ llvm::Value* OpenCL::Parser::BitOrExpression::codegen(OpenCL::Parser::Context& c
     }
     return left;
 }
+
+llvm::Type* OpenCL::Parser::Type::type(Context& context) const
+{
+    switch(getType())
+    {
+    case Types::Void:return llvm::Type::getVoidTy(context.context);
+    case Types::Char:return llvm::Type::getInt8Ty(context.context);
+    case Types::Short:return llvm::Type::getInt16Ty(context.context);
+    case Types::Int:return llvm::Type::getInt32Ty(context.context);
+    case Types::Long:return llvm::Type::getInt32Ty(context.context);
+    case Types::Float:return llvm::Type::getFloatTy(context.context);
+    case Types::Double:return llvm::Type::getDoubleTy(context.context);
+    }
+    return nullptr;
+}

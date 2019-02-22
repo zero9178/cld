@@ -75,6 +75,48 @@ namespace OpenCL::Parser
     };
 
     /**
+     * <Type> ::= <TokenType::VoidKeyword>
+     *          | <TokenType::CharKeyword>
+     *          | <TokenType::ShortKeyword>
+     *          | <TokenType::IntKeyword>
+     *          | <TokenType::LongKeyword>
+     *          | <TokenType::FloatKeyword>
+     *          | <TokenType::DoubleKeyword>
+     *          | <TokenType::SignedKeyword>
+     *          | <TokenType::UnsignedKeyword>
+     */
+    class Type
+    {
+    public:
+
+        enum class Types
+        {
+            Void,
+            Char,
+            Short,
+            Int,
+            Long,
+            Float,
+            Double
+        };
+
+    private:
+
+        Types m_type;
+        bool m_isSigned;
+
+    public:
+
+        Type(Types type, bool isSigned);
+
+        Types getType() const;
+
+        bool isSigned() const;
+
+        llvm::Type* type(Context& context) const;
+    };
+
+    /**
      * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
      */
     class NonCommaExpression : public Node
@@ -763,18 +805,21 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Declaration> ::= <TokenType::IntKeyword> <TokenType::Identifier> [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
+     * <Declaration> ::= <Type> <TokenType::Identifier> [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
      */
     class Declaration final : public BlockItem
     {
+        Type m_type;
         std::string m_name;
         std::unique_ptr<Expression> m_optionalExpression;
 
     public:
 
-        explicit Declaration(std::string name);
+        explicit Declaration(Type type,
+                                     std::string name,
+                                     std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
-        Declaration(std::string name, std::unique_ptr<Expression>&& optionalExpression);
+        const Type& getType() const;
 
         const std::string& getName() const;
 

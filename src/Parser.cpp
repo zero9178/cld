@@ -46,13 +46,14 @@ const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpres
     return m_optionalExpression.get();
 }
 
-OpenCL::Parser::Declaration::Declaration(std::string name) : m_name(std::move(name))
+OpenCL::Parser::Declaration::Declaration(Type type, std::string name, std::unique_ptr<Expression>&& optionalExpression)
+    : m_type(type), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
 {}
 
-OpenCL::Parser::Declaration::Declaration(std::string name,
-                                         std::unique_ptr<Expression>&& optionalExpression)
-    : m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
-{}
+const OpenCL::Parser::Type& OpenCL::Parser::Declaration::getType() const
+{
+    return m_type;
+}
 
 const OpenCL::Parser::Expression& OpenCL::Parser::ReturnStatement::getExpression() const
 {
@@ -544,4 +545,17 @@ const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
 const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOptionalValue() const
 {
     return m_optionalValue.get();
+}
+
+OpenCL::Parser::Type::Type(OpenCL::Parser::Type::Types type, bool isSigned) : m_type(type), m_isSigned(isSigned)
+{}
+
+OpenCL::Parser::Type::Types OpenCL::Parser::Type::getType() const
+{
+    return m_type;
+}
+
+bool OpenCL::Parser::Type::isSigned() const
+{
+    return m_isSigned;
 }

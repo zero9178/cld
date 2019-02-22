@@ -1,18 +1,39 @@
 
-int getBitCount(int number)
+int fact(int number)
 {
-    int count = 0;
-    for(int i = 0; i < 32 && 1<<i <= number; i++)
+    unsigned result = 1;
+    for(unsigned i = 2; i <= number; i++)
     {
-        if(number & 1<<i)
-        {
-            count++;
-        }
+        result *= i;
     }
-    return count;
+    return result;
 }
 
-int main()
+float w0(float number,int n)
 {
-    return getBitCount(0xF0);
+    float result = 0;
+    float pot = number;
+    for(unsigned i = 1;i < n; i++)
+    {
+        int nPot = 1;
+        for(unsigned i2 = 0; i2 < i; i++)
+        {
+            nPot *= i;
+        }
+        if(i % 2 == 0)
+        {
+            result -= nPot / fact(i) * pot;
+        }
+        else
+        {
+            result += nPot / fact(i) * pot;
+        }
+        pot *= number;
+    }
+    return result;
+}
+
+float main()
+{
+    return w0(0.54,10);
 }

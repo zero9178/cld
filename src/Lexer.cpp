@@ -10,6 +10,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
     bool isBlockComment = false;
     std::regex identifierMatch("[a-zA-Z_]\\w*");
     std::regex integerLiteralMatch("(0x)?[0-9a-fA-F]+");
+    std::regex floatLiteralMatch("[0-9]+(\\.[0-9]+)?[fF]?");
     std::vector<Token> result;
     std::string lastText;
     std::uint64_t line = 1,column = 0;
@@ -276,11 +277,27 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             }
             else
             {
-                std::stringstream ss;
-                ss << lastText;
+                std::istringstream ss(lastText);
                 std::uint64_t number;
                 ss >> number;
                 result.emplace_back(line,column,TokenType::IntegerLiteral,number);
+            }
+        }
+        else if(std::regex_match(lastText,floatLiteralMatch))
+        {
+            if (lastText.back() == 'f' || lastText.back() == 'F')
+            {
+                std::istringstream ss(lastText.substr(0,lastText.size()-1));
+                float number;
+                ss>>number;
+                result.emplace_back(line,column,TokenType::FloatLiteral,number);
+            }
+            else
+            {
+                std::istringstream ss(lastText);
+                double number;
+                ss>>number;
+                result.emplace_back(line,column,TokenType::DoubleLiteral,number);
             }
         }
         else
@@ -427,6 +444,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             lastText += iter;
             break;
         }
+        case '\r':
         case '\n':
         {
             column = 0;
