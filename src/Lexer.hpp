@@ -14,9 +14,7 @@ namespace OpenCL::Lexer
         CloseParenthese,
         OpenBrace,
         CloseBrace,
-        IntegerLiteral,
-        FloatLiteral,
-        DoubleLiteral,
+        Literal,
         StringLiteral,
         SemiColon,
         Comma,
@@ -83,7 +81,7 @@ namespace OpenCL::Lexer
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
-        using variant = std::variant<std::monostate, std::uint64_t, std::string,float,double>;
+        using variant = std::variant<std::monostate,std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,std::string>;
         TokenType m_tokenType;
         variant m_value;
 

@@ -20,7 +20,7 @@ const std::string& OpenCL::Parser::Function::getName() const
     return m_name;
 }
 
-const std::vector<std::string>& OpenCL::Parser::Function::getArguments() const
+const std::vector<std::pair<OpenCL::Parser::Type, std::string>>& OpenCL::Parser::Function::getArguments() const
 {
     return m_arguments;
 }
@@ -30,9 +30,11 @@ const OpenCL::Parser::BlockStatement& OpenCL::Parser::Function::getBlockStatemen
     return m_block;
 }
 
-OpenCL::Parser::Function::Function(std::string name,
-                                   std::vector<std::string> arguments,
-                                   BlockStatement&& blockItems) : m_name(std::move(
+OpenCL::Parser::Function::Function(Type returnType,
+                                   std::string name,
+                                   std::vector<std::pair<Type,
+                                                             std::string>> arguments,
+                                   BlockStatement&& blockItems) : m_returnType(returnType), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
 {}
 
@@ -407,10 +409,10 @@ const OpenCL::Parser::Factor& OpenCL::Parser::UnaryFactor::getFactor() const
     return *m_factor;
 }
 
-OpenCL::Parser::ConstantFactor::ConstantFactor(std::string value) : m_value(std::move(value))
+OpenCL::Parser::ConstantFactor::ConstantFactor(const variant& value) : m_value(value)
 {}
 
-const std::string& OpenCL::Parser::ConstantFactor::getValue() const
+const OpenCL::Parser::ConstantFactor::variant& OpenCL::Parser::ConstantFactor::getValue() const
 {
     return m_value;
 }
@@ -533,9 +535,17 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
     return m_optionalBitXorExpressions;
 }
 
-OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::string name, std::unique_ptr<ConstantFactor>&& value)
-    : m_name(std::move(name)), m_optionalValue(std::move(value))
+OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(Type type,
+                                                     std::string name,
+                                                     std::unique_ptr<ConstantFactor>&& value)
+    : m_type(type), m_name(std::move(name)), m_optionalValue(std::move(value))
 {}
+
+
+const OpenCL::Parser::Type& OpenCL::Parser::GlobalDeclaration::getType() const
+{
+    return m_type;
+}
 
 const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
 {
@@ -558,4 +568,10 @@ OpenCL::Parser::Type::Types OpenCL::Parser::Type::getType() const
 bool OpenCL::Parser::Type::isSigned() const
 {
     return m_isSigned;
+}
+
+
+const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
+{
+    return m_returnType;
 }

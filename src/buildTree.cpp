@@ -43,6 +43,8 @@ namespace
     OpenCL::Parser::Term parseTerm(Tokens& tokens);
 
     std::unique_ptr<OpenCL::Parser::Factor> parseFactor(Tokens& tokens);
+
+    OpenCL::Parser::Type parseType(Tokens& tokens);
 }
 
 OpenCL::Parser::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
@@ -96,14 +98,14 @@ namespace
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if (currToken.getTokenType() != TokenType::IntKeyword)
+        if (!isType(currToken.getTokenType()))
         {
-            throw std::runtime_error("Only int supported as data type for globals and function return type");
+            throw std::runtime_error("Expected type for global declaration");
         }
         currToken = tokens.at(tokens.size() - 2);
         if (currToken.getTokenType() != TokenType::Identifier)
         {
-            throw std::runtime_error("Expected Identifier after int");
+            throw std::runtime_error("Expected Identifier after type");
         }
         currToken = tokens.at(tokens.size() - 3);
         if (currToken.getTokenType() == TokenType::OpenParenthese)
@@ -124,11 +126,11 @@ namespace
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        tokens.pop_back();
-        if (currToken.getTokenType() != TokenType::IntKeyword)
+        if (!isType(currToken.getTokenType()))
         {
             throw std::runtime_error("Unsupported return type");
         }
+        auto type = parseType(tokens);
         currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::Identifier)
@@ -142,34 +144,44 @@ namespace
         {
             currToken = tokens.back();
             tokens.pop_back();
-            if (currToken.getTokenType() != TokenType::IntegerLiteral)
+            if (currToken.getTokenType() != TokenType::Literal)
             {
                 throw std::runtime_error("Can only use Integer literal to initialize global declaration");
             }
-            auto constant = std::to_string(std::get<std::uint64_t>(currToken.getValue()));
+            auto variant = std::visit([](auto&& value) -> typename ConstantFactor::variant
+                                      {
+                                          if constexpr(std::is_constructible_v<typename ConstantFactor::variant, decltype(value)>)
+                                          {
+                                              return {value};
+                                          }
+                                          else
+                                          {
+                                              throw std::runtime_error("Invalid value in variant of literal");
+                                          }
+                                      }, currToken.getValue());
             currToken = tokens.back();
             if (currToken.getTokenType() != TokenType::SemiColon)
             {
                 throw std::runtime_error("Expected ; after initialization of global declaration");
             }
             tokens.pop_back();
-            return GlobalDeclaration(name, std::make_unique<ConstantFactor>(constant));
+            return GlobalDeclaration(type, name, std::make_unique<ConstantFactor>(std::move(variant)));
         }
         else
         {
             tokens.pop_back();
-            return GlobalDeclaration(name);
+            return GlobalDeclaration(type, name);
         }
     }
 
     OpenCL::Parser::Function parseFunction(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        tokens.pop_back();
-        if (currToken.getTokenType() != TokenType::IntKeyword)
+        if (!isType(currToken.getTokenType()))
         {
             throw std::runtime_error("Unsupported return type");
         }
+        auto retType = parseType(tokens);
         currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::Identifier)
@@ -183,25 +195,33 @@ namespace
         {
             throw std::runtime_error("Expected Opening Parantheses after function identifier");
         }
-        std::vector<std::string> arguments;
+        std::vector<std::pair<Type, std::string>> arguments;
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::CloseParenthese)
         {
             while (true)
             {
                 currToken = tokens.back();
-                tokens.pop_back();
-                if (currToken.getTokenType() != TokenType::IntKeyword)
+                if (!isType(currToken.getTokenType()))
                 {
                     throw std::runtime_error("Unsupported argument type");
                 }
+                auto type = parseType(tokens);
                 currToken = tokens.back();
-                tokens.pop_back();
-                if (currToken.getTokenType() != TokenType::Identifier)
+                if (currToken.getTokenType() == TokenType::Identifier)
                 {
-                    throw std::runtime_error("Expected identifier after paramter type");
+                    arguments.emplace_back(type, std::get<std::string>(currToken.getValue()));
+                    tokens.pop_back();
                 }
-                arguments.push_back(std::get<std::string>(currToken.getValue()));
+                else if (currToken.getTokenType() == TokenType::CloseParenthese
+                    || currToken.getTokenType() == TokenType::Comma)
+                {
+                    arguments.emplace_back(type, "");
+                }
+                else
+                {
+                    throw std::runtime_error("Expected identifier,Close Parentheses or Comma after parameter type");
+                }
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::CloseParenthese)
                 {
@@ -210,6 +230,10 @@ namespace
                 else if (currToken.getTokenType() != TokenType::Comma)
                 {
                     throw std::runtime_error("Expected Comma between arguments");
+                }
+                else
+                {
+                    tokens.pop_back();
                 }
             }
         }
@@ -227,33 +251,25 @@ namespace
             throw std::runtime_error("Expected Block statement after function");
         }
 
-        return Function(std::move(name), std::move(arguments), std::move(*pointer));
+        return Function(retType, std::move(name), std::move(arguments), std::move(*pointer));
     }
 
     Type parseType(Tokens& tokens)
     {
         auto currToken = tokens.back();
+        tokens.pop_back();
         switch (currToken.getTokenType())
         {
-        case TokenType::VoidKeyword:
-            return Type(Type::Types::Void,false);
-        case TokenType::CharKeyword:
-            return Type(Type::Types::Char,true);
-        case TokenType::ShortKeyword:
-            return Type(Type::Types::Short,true);
+        case TokenType::VoidKeyword:return Type(Type::Types::Void, false);
+        case TokenType::CharKeyword:return Type(Type::Types::Char, true);
+        case TokenType::ShortKeyword:return Type(Type::Types::Short, true);
         case TokenType::SignedKeyword:
-        case TokenType::IntKeyword:
-            return Type(Type::Types::Int,true);
-        case TokenType::LongKeyword:
-            return Type(Type::Types::Long,true);
-        case TokenType::FloatKeyword:
-            return Type(Type::Types::Float,true);
-        case TokenType::DoubleKeyword:
-            return Type(Type::Types::Double,true);
-        case TokenType::UnsignedKeyword:
-            return Type(Type::Types::Int,false);
-        default:
-            throw std::runtime_error("Unknown type");
+        case TokenType::IntKeyword:return Type(Type::Types::Int, true);
+        case TokenType::LongKeyword:return Type(Type::Types::Long, true);
+        case TokenType::FloatKeyword:return Type(Type::Types::Float, true);
+        case TokenType::DoubleKeyword:return Type(Type::Types::Double, true);
+        case TokenType::UnsignedKeyword:return Type(Type::Types::Int, false);
+        default:throw std::runtime_error("Unknown type");
         }
     }
 
@@ -270,7 +286,7 @@ namespace
             }
             tokens.pop_back();
             auto name = std::get<std::string>(currToken.getValue());
-            auto result = [&tokens, name = std::move(name),type]
+            auto result = [&tokens, name = std::move(name), type]
             {
                 auto currToken = tokens.back().getTokenType();
                 if (isAssignment(currToken))
@@ -877,9 +893,19 @@ namespace
                 }
                 }
             }
-            case TokenType::IntegerLiteral:
+            case TokenType::Literal:
             {
-                return std::make_unique<ConstantFactor>(std::to_string(std::get<std::uint64_t>(currToken.getValue())));
+                return std::make_unique<ConstantFactor>(std::visit([](auto&& value) -> typename ConstantFactor::variant
+                                                                   {
+                    if constexpr(std::is_constructible_v<typename ConstantFactor::variant, decltype(value)>)
+                    {
+                        return {value};
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Invalid value in variant of literal");
+                    }
+                                                                   }, currToken.getValue()));
             }
             default:throw std::runtime_error("Invalid token");
             }

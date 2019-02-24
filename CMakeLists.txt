@@ -14,3 +14,5 @@ llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object O
 add_executable(OpenCLParser src/main.cpp src/Lexer.cpp src/Lexer.hpp src/buildTree.cpp src/Parser.hpp src/Parser.cpp src/Codegen.cpp)
 target_link_libraries(OpenCLParser ${llvm_libs})
 target_compile_definitions(OpenCLParser PUBLIC __STDC_FORMAT_MACROS)
+
+add_executable(DemoC src/input.c)
