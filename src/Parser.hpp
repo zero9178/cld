@@ -112,6 +112,15 @@ namespace OpenCL::Parser
      *          | <TokenType::DoubleKeyword>
      *          | <TokenType::SignedKeyword>
      *          | <TokenType::UnsignedKeyword>
+     *          {<TokenType::VoidKeyword>
+     *          | <TokenType::CharKeyword>
+     *          | <TokenType::ShortKeyword>
+     *          | <TokenType::IntKeyword>
+     *          | <TokenType::LongKeyword>
+     *          | <TokenType::FloatKeyword>
+     *          | <TokenType::DoubleKeyword>
+     *          | <TokenType::SignedKeyword>
+     *          | <TokenType::UnsignedKeyword>}
      */
     class Type
     {
@@ -119,7 +128,6 @@ namespace OpenCL::Parser
 
         enum class Types
         {
-            Void,
             Char,
             Short,
             Int,
@@ -130,35 +138,20 @@ namespace OpenCL::Parser
 
     private:
 
-        Types m_type;
+        std::vector<Types> m_type;
         bool m_isSigned;
 
     public:
 
         Type(Types type, bool isSigned);
 
-        Types getType() const;
-
         bool isSigned() const;
+
+        bool isVoid() const;
 
         llvm::Type* type(Context& context) const;
 
-        template<class T>
-        llvm::Value* makeValue(T value,Context& context) const
-        {
-            static_assert(std::is_integral_v<T>);
-            switch(getType())
-            {
-            case Types::Void:return nullptr;
-            case Types::Char:return llvm::ConstantInt::get(type(context),value,isSigned());
-            case Types::Short:return llvm::ConstantInt::get(type(context),value,isSigned());
-            case Types::Int:return llvm::ConstantInt::get(type(context),value,isSigned());
-            case Types::Long:return llvm::ConstantInt::get(type(context),value,isSigned());
-            case Types::Float:return llvm::ConstantFP::get(type(context),value);
-            case Types::Double:return llvm::ConstantFP::get(type(context),value);
-            }
-            return nullptr;
-        }
+        llvm::Value* makeValue(const std::variant<std::int64_t,std::uint64_t,double>& value,Context& context) const;
     };
 
     /**

@@ -33,7 +33,7 @@ const OpenCL::Parser::BlockStatement& OpenCL::Parser::Function::getBlockStatemen
 OpenCL::Parser::Function::Function(Type returnType,
                                    std::string name,
                                    std::vector<std::pair<Type,
-                                                             std::string>> arguments,
+                                                         std::string>> arguments,
                                    BlockStatement&& blockItems) : m_returnType(returnType), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
 {}
@@ -538,9 +538,8 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
 OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(Type type,
                                                      std::string name,
                                                      std::unique_ptr<ConstantFactor>&& value)
-    : m_type(type), m_name(std::move(name)), m_optionalValue(std::move(value))
+    : m_type(std::move(type)), m_name(std::move(name)), m_optionalValue(std::move(value))
 {}
-
 
 const OpenCL::Parser::Type& OpenCL::Parser::GlobalDeclaration::getType() const
 {
@@ -560,16 +559,34 @@ const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOpti
 OpenCL::Parser::Type::Type(OpenCL::Parser::Type::Types type, bool isSigned) : m_type(type), m_isSigned(isSigned)
 {}
 
-OpenCL::Parser::Type::Types OpenCL::Parser::Type::getType() const
-{
-    return m_type;
-}
-
 bool OpenCL::Parser::Type::isSigned() const
 {
     return m_isSigned;
 }
 
+bool OpenCL::Parser::Type::isVoid() const
+{
+    return m_type.empty();
+}
+
+llvm::Value* OpenCL::Parser::Type::makeValue(const std::variant<std::int64_t, std::uint64_t, double>& value,
+                                             OpenCL::Parser::Context& context) const
+{
+    if(m_type.empty())
+    {
+        return nullptr;
+    }
+    switch(m_type[0])
+    {
+    case Types::Char:return llvm::ConstantInt::get(llvm::Type::getInt8Ty(context.context),std::visit([]()->char{},value));
+    case Types::Short:break;
+    case Types::Int:break;
+    case Types::Long:break;
+    case Types::Float:break;
+    case Types::Double:break;
+    }
+    return nullptr;
+}
 
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
