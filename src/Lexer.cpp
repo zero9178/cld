@@ -67,6 +67,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             result.emplace_back(line, column, TokenType::SignedKeyword);
         }
+        else if(lastText == "sizeof")
+        {
+            result.emplace_back(line,column,TokenType::SizeofKeyword);
+        }
         else if (lastText == "unsigned")
         {
             result.emplace_back(line, column, TokenType::UnsignedKeyword);

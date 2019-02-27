@@ -67,6 +67,7 @@ namespace OpenCL::Lexer
         StaticKeyword,
         AutoKeyword,
         RegisterKeyword,
+        SizeofKeyword,
         ReturnKeyword,
         BreakKeyword,
         ContinueKeyword,

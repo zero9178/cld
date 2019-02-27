@@ -35,6 +35,11 @@ namespace OpenCL::Parser
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
 
+        bool hasFunction(const std::string& name)
+        {
+            return m_functions.find(name) != m_functions.end();
+        }
+
         Function getFunction(const std::string& name)
         {
             return m_functions[name];
@@ -266,6 +271,25 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
+
+    /**
+     * <CastFactor> ::= <TokenType::OpenParanthese> <Type> <TokenType::CloseParanthese> <Expression>
+     */
+     class CastFactor final : public Factor
+     {
+         Type m_outType;
+         Expression m_expression;
+
+     public:
+
+         CastFactor(Type outType, Expression&& expression);
+
+         const Type& getOutType() const;
+
+         const Expression& getExpression() const;
+
+         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+     };
 
     /**
      * <UnaryFactor> ::= <UnaryFactor::UnaryOperator> <Factor>

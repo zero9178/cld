@@ -1,12 +1,11 @@
 
-int foo(unsigned int one,unsigned int two);
+unsigned long long someConstant()
+{
+    return 0xCAFEBABE;
+}
 
 int main()
 {
-    return foo(6,7);
-}
-
-int foo(unsigned int one,unsigned int two)
-{
-    return one < 5 || two < 8 || 3 < two;
+    float f = 5 / (float)someConstant();
+    return f * 1000000000000;
 }

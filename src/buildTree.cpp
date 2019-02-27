@@ -850,7 +850,25 @@ namespace
         {
             switch (currToken.getTokenType())
             {
-            case TokenType::OpenParenthese:return std::make_unique<ParentheseFactor>(parseExpression(tokens));
+            case TokenType::OpenParenthese:
+            {
+                currToken = tokens.back();
+                if(isType(currToken.getTokenType()))
+                {
+                    auto type = parseType(tokens);
+                    currToken = tokens.back();
+                    tokens.pop_back();
+                    if(currToken.getTokenType() != TokenType::CloseParenthese)
+                    {
+                        throw std::runtime_error("Expected Closing Parenthese after type cast");
+                    }
+                    return std::make_unique<CastFactor>(std::move(type),parseExpression(tokens));
+                }
+                else
+                {
+                    return std::make_unique<ParentheseFactor>(parseExpression(tokens));
+                }
+            }
             case TokenType::Negation:
                 return std::make_unique<UnaryFactor>(UnaryFactor::UnaryOperator::UnaryNegation,
                                                      parseFactor(tokens));

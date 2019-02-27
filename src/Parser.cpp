@@ -584,7 +584,21 @@ llvm::Type* OpenCL::Parser::Type::type(Context& context) const
     case Types::Char:return context.builder.getInt8Ty();
     case Types::Short:return context.builder.getInt16Ty();
     case Types::Int:return context.builder.getInt32Ty();
-    case Types::Long:return context.builder.getInt32Ty();
+    case Types::Long:
+    {
+        if(m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+        else if(m_types[1] == Types::Long)
+        {
+            return context.builder.getInt64Ty();
+        }
+        else
+        {
+            throw std::runtime_error("Cannot combine long with other");
+        }
+    }
     case Types::Float:return context.builder.getFloatTy();
     case Types::Double:return context.builder.getDoubleTy();
     case Types::Unsigned:
@@ -599,12 +613,27 @@ llvm::Type* OpenCL::Parser::Type::type(Context& context) const
         case Types::Char:return context.builder.getInt8Ty();
         case Types::Short:return context.builder.getInt16Ty();
         case Types::Int:return context.builder.getInt32Ty();
-        case Types::Long:return context.builder.getInt32Ty();
+        case Types::Long:
+        {
+            if(m_types.size() == 2)
+            {
+                return context.builder.getInt32Ty();
+            }
+            else if(m_types[2] == Types::Long)
+            {
+                return context.builder.getInt64Ty();
+            }
+            else
+            {
+                throw std::runtime_error("Cannot combine long with other");
+            }
+        }
         case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
         case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
         case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
         case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
         }
+        break;
     }
     case Types::Signed:
     {
@@ -617,7 +646,21 @@ llvm::Type* OpenCL::Parser::Type::type(Context& context) const
         case Types::Char:return context.builder.getInt8Ty();
         case Types::Short:return context.builder.getInt16Ty();
         case Types::Int:return context.builder.getInt32Ty();
-        case Types::Long:return context.builder.getInt32Ty();
+        case Types::Long:
+        {
+            if(m_types.size() == 2)
+            {
+                return context.builder.getInt32Ty();
+            }
+            else if(m_types[2] == Types::Long)
+            {
+                return context.builder.getInt64Ty();
+            }
+            else
+            {
+                throw std::runtime_error("Cannot combine long with other");
+            }
+        }
         case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
         case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
         case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
@@ -625,9 +668,27 @@ llvm::Type* OpenCL::Parser::Type::type(Context& context) const
         }
     }
     }
+    return nullptr;
 }
 
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
     return m_returnType;
 }
+
+OpenCL::Parser::CastFactor::CastFactor(OpenCL::Parser::Type outType,
+                                       Expression&& expression)
+    : m_outType(std::move(outType)), m_expression(std::move(expression))
+{}
+
+const OpenCL::Parser::Type& OpenCL::Parser::CastFactor::getOutType() const
+{
+    return m_outType;
+}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::CastFactor::getExpression() const
+{
+    return m_expression;
+}
+
+
