@@ -1,5 +1,9 @@
 #include <utility>
 
+#include <utility>
+
+#include <utility>
+
 #include "Parser.hpp"
 
 #include <algorithm>
@@ -25,16 +29,16 @@ const std::vector<std::pair<OpenCL::Parser::Type, std::string>>& OpenCL::Parser:
     return m_arguments;
 }
 
-const OpenCL::Parser::BlockStatement& OpenCL::Parser::Function::getBlockStatement() const
+const OpenCL::Parser::BlockStatement* OpenCL::Parser::Function::getBlockStatement() const
 {
-    return m_block;
+    return m_block.get();
 }
 
 OpenCL::Parser::Function::Function(Type returnType,
                                    std::string name,
                                    std::vector<std::pair<Type,
                                                          std::string>> arguments,
-                                   BlockStatement&& blockItems) : m_returnType(returnType), m_name(std::move(
+                                   std::unique_ptr<BlockStatement>&& blockItems) : m_returnType(std::move(returnType)), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
 {}
 
@@ -49,7 +53,7 @@ const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpres
 }
 
 OpenCL::Parser::Declaration::Declaration(Type type, std::string name, std::unique_ptr<Expression>&& optionalExpression)
-    : m_type(type), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
+    : m_type(std::move(type)), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
 {}
 
 const OpenCL::Parser::Type& OpenCL::Parser::Declaration::getType() const
@@ -556,36 +560,71 @@ const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOpti
     return m_optionalValue.get();
 }
 
-OpenCL::Parser::Type::Type(OpenCL::Parser::Type::Types type, bool isSigned) : m_type(type), m_isSigned(isSigned)
+OpenCL::Parser::Type::Type(std::vector<OpenCL::Parser::Type::Types>&& types) : m_types(std::move(types))
 {}
 
 bool OpenCL::Parser::Type::isSigned() const
 {
-    return m_isSigned;
+    return m_types.empty() || m_types[0] != Types::Unsigned;
 }
 
 bool OpenCL::Parser::Type::isVoid() const
 {
-    return m_type.empty();
+    return m_types.empty();
 }
 
-llvm::Value* OpenCL::Parser::Type::makeValue(const std::variant<std::int64_t, std::uint64_t, double>& value,
-                                             OpenCL::Parser::Context& context) const
+llvm::Type* OpenCL::Parser::Type::type(Context& context) const
 {
-    if(m_type.empty())
+    if(m_types.empty())
     {
-        return nullptr;
+        return context.builder.getVoidTy();
     }
-    switch(m_type[0])
+    switch(m_types[0])
     {
-    case Types::Char:return llvm::ConstantInt::get(llvm::Type::getInt8Ty(context.context),std::visit([]()->char{},value));
-    case Types::Short:break;
-    case Types::Int:break;
-    case Types::Long:break;
-    case Types::Float:break;
-    case Types::Double:break;
+    case Types::Char:return context.builder.getInt8Ty();
+    case Types::Short:return context.builder.getInt16Ty();
+    case Types::Int:return context.builder.getInt32Ty();
+    case Types::Long:return context.builder.getInt32Ty();
+    case Types::Float:return context.builder.getFloatTy();
+    case Types::Double:return context.builder.getDoubleTy();
+    case Types::Unsigned:
+    {
+        if(m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+
+        switch(m_types[1])
+        {
+        case Types::Char:return context.builder.getInt8Ty();
+        case Types::Short:return context.builder.getInt16Ty();
+        case Types::Int:return context.builder.getInt32Ty();
+        case Types::Long:return context.builder.getInt32Ty();
+        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
+        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
+        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
+        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        }
     }
-    return nullptr;
+    case Types::Signed:
+    {
+        if(m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+        switch(m_types[1])
+        {
+        case Types::Char:return context.builder.getInt8Ty();
+        case Types::Short:return context.builder.getInt16Ty();
+        case Types::Int:return context.builder.getInt32Ty();
+        case Types::Long:return context.builder.getInt32Ty();
+        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
+        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
+        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
+        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        }
+    }
+    }
 }
 
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const

@@ -47,7 +47,7 @@ int main()
                                                          .setOptLevel(llvm::CodeGenOpt::Level::None).setSymbolResolver(std::move(ptr)).create());
         ref->finalizeMemory(&error);
         void* address = (void*)ee->getFunctionAddress("main");
-        std::cout<<((float(*)())address)();
+        std::cout<<((int(*)())address)();
     }
 
     llvm::llvm_shutdown();

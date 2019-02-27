@@ -97,17 +97,22 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
     {
+        std::uint64_t pos = 1;
         auto currToken = tokens.back();
         if (!isType(currToken.getTokenType()))
         {
             throw std::runtime_error("Expected type for global declaration");
         }
-        currToken = tokens.at(tokens.size() - 2);
+        while (isType(currToken.getTokenType()))
+        {
+            pos++;
+            currToken = tokens.at(tokens.size() - pos);
+        }
         if (currToken.getTokenType() != TokenType::Identifier)
         {
             throw std::runtime_error("Expected Identifier after type");
         }
-        currToken = tokens.at(tokens.size() - 3);
+        currToken = tokens.at(tokens.size() - pos - 1);
         if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
             return std::make_unique<Function>(parseFunction(tokens));
@@ -244,33 +249,69 @@ namespace
             throw std::runtime_error("Expected Close Parantheses after Argument List");
         }
 
-        auto statement = parseStatement(tokens);
-        auto pointer = dynamic_cast<BlockStatement*>(statement.get());
-        if (!pointer)
+        currToken = tokens.back();
+        if(currToken.getTokenType() == TokenType::OpenBrace)
         {
-            throw std::runtime_error("Expected Block statement after function");
-        }
+            auto statement = parseStatement(tokens);
+            auto pointer = dynamic_cast<BlockStatement*>(statement.get());
+            if (!pointer)
+            {
+                throw std::runtime_error("Expected Block statement after function");
+            }
 
-        return Function(retType, std::move(name), std::move(arguments), std::move(*pointer));
+            return Function(retType, std::move(name), std::move(arguments),std::make_unique<BlockStatement>(std::move(*pointer)));
+        }
+        else if(currToken.getTokenType() == TokenType::SemiColon)
+        {
+            tokens.pop_back();
+            return Function(retType,std::move(name),std::move(arguments));
+        }
+        else
+        {
+            throw std::runtime_error("Expected closing Brace or Semicolon after function declaration");
+        }
     }
 
     Type parseType(Tokens& tokens)
     {
+        std::vector<Type::Types> types;
         auto currToken = tokens.back();
-        tokens.pop_back();
-        switch (currToken.getTokenType())
+        do
         {
-        case TokenType::VoidKeyword:return Type(Type::Types::Void, false);
-        case TokenType::CharKeyword:return Type(Type::Types::Char, true);
-        case TokenType::ShortKeyword:return Type(Type::Types::Short, true);
-        case TokenType::SignedKeyword:
-        case TokenType::IntKeyword:return Type(Type::Types::Int, true);
-        case TokenType::LongKeyword:return Type(Type::Types::Long, true);
-        case TokenType::FloatKeyword:return Type(Type::Types::Float, true);
-        case TokenType::DoubleKeyword:return Type(Type::Types::Double, true);
-        case TokenType::UnsignedKeyword:return Type(Type::Types::Int, false);
-        default:throw std::runtime_error("Unknown type");
+            tokens.pop_back();
+            switch(currToken.getTokenType())
+            {
+            case TokenType::VoidKeyword:return Type(std::move(types));
+            case TokenType::CharKeyword:
+                types.push_back(Type::Types::Char);
+                break;
+            case TokenType::ShortKeyword:
+                types.push_back(Type::Types::Short);
+                break;
+            case TokenType::IntKeyword:
+                types.push_back(Type::Types::Int);
+                break;
+            case TokenType::LongKeyword:
+                types.push_back(Type::Types::Long);
+                break;
+            case TokenType::FloatKeyword:
+                types.push_back(Type::Types::Float);
+                break;
+            case TokenType::DoubleKeyword:
+                types.push_back(Type::Types::Double);
+                break;
+            case TokenType::SignedKeyword:
+                types.push_back(Type::Types::Signed);
+                break;
+            case TokenType::UnsignedKeyword:
+                types.push_back(Type::Types::Unsigned);
+                break;
+            default:throw std::runtime_error("Invalid token");
+            }
+            currToken = tokens.back();
         }
+        while (isType(currToken.getTokenType()));
+        return Type(std::move(types));
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)

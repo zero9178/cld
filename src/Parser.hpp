@@ -2,6 +2,7 @@
 #define OPENCLPARSER_PARSER_HPP
 
 #include "Lexer.hpp"
+#include <set>
 #include <vector>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
@@ -133,17 +134,18 @@ namespace OpenCL::Parser
             Int,
             Long,
             Float,
-            Double
+            Double,
+            Unsigned,
+            Signed
         };
 
     private:
 
-        std::vector<Types> m_type;
-        bool m_isSigned;
+        std::vector<Types> m_types;
 
     public:
 
-        Type(Types type, bool isSigned);
+        explicit Type(std::vector<OpenCL::Parser::Type::Types>&& types);
 
         bool isSigned() const;
 
@@ -151,7 +153,8 @@ namespace OpenCL::Parser
 
         llvm::Type* type(Context& context) const;
 
-        llvm::Value* makeValue(const std::variant<std::int64_t,std::uint64_t,double>& value,Context& context) const;
+        using variant = std::variant<std::int64_t,std::uint64_t,double>;
+
     };
 
     /**
@@ -974,15 +977,15 @@ namespace OpenCL::Parser
         Type m_returnType;
         std::string m_name;
         std::vector<std::pair<Type,std::string>> m_arguments;
-        BlockStatement m_block;
+        std::unique_ptr<BlockStatement> m_block;
 
     public:
 
         Function(Type returnType,
-                         std::string name,
-                         std::vector<std::pair<Type,
-                                                                     std::string>> arguments,
-                         BlockStatement&& blockItems);
+                 std::string name,
+                 std::vector<std::pair<Type,
+                                       std::string>> arguments,
+                 std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
         const Type& getReturnType() const;
 
@@ -990,7 +993,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<Type, std::string>>& getArguments() const;
 
-        const BlockStatement& getBlockStatement() const;
+        const BlockStatement* getBlockStatement() const;
 
         std::pair<llvm::Value*,bool> codegen(Context& context) const override;
     };

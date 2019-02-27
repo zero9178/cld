@@ -197,8 +197,18 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Program::codegen(OpenCL::Parser::C
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::GlobalDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
+    auto* type = getType().type(context);
+    llvm::Value* value = nullptr;
+    if(type->isIntegerTy())
+    {
+        value = llvm::ConstantInt::get(type,0);
+    }
+    else if(type->isFloatingPointTy())
+    {
+        value = llvm::ConstantFP::get(type,0);
+    }
     auto [constant,sign] = getOptionalValue() ? getOptionalValue()->codegen(context)
-        : std::pair<llvm::Value*,bool>{getType().makeValue(0,context),getType().isSigned()};
+        : std::pair<llvm::Value*,bool>{value,getType().isSigned()};
     if(constant->getType() != getType().type(context) || sign != getType().isSigned())
     {
         castPrimitive(constant,sign,getType().type(context),getType().isSigned(),context);
@@ -212,6 +222,19 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::GlobalDeclaration::codegen(OpenCL:
 std::pair<llvm::Value*,bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::Context& context) const
 {
     {
+        std::vector<const Type*> types;
+        std::transform(getArguments().begin(),getArguments().end(),std::back_inserter(types),[](const auto& pair)
+        {
+            return &pair.first;
+        });
+        context.addFunction(getName(),{&getReturnType(),types});
+        context.functionRetType = &getReturnType();
+        if(!getBlockStatement())
+        {
+            return {nullptr,false};
+        }
+    }
+    {
         std::vector<llvm::Type*> types;
         for (auto&[type, name] : getArguments())
         {
@@ -223,13 +246,6 @@ std::pair<llvm::Value*,bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::C
                                                          getName(),
                                                          context.module.get());
     }
-    std::vector<const Type*> types;
-    std::transform(getArguments().begin(),getArguments().end(),std::back_inserter(types),[](const auto& pair)
-    {
-        return &pair.first;
-    });
-    context.addFunction(getName(),{&getReturnType(),types});
-    context.functionRetType = &getReturnType();
     std::size_t i = 0;
     for (auto& iter : context.currentFunction->args())
     {
@@ -249,13 +265,23 @@ std::pair<llvm::Value*,bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::C
         context.addValueToScope(iter.getName(),{alloca,getArguments()[i++].first.isSigned()});
     }
 
-    getBlockStatement().codegen(context);
+    getBlockStatement()->codegen(context);
     auto& block = context.currentFunction->back();
     if (block.empty() || !block.back().isTerminator())
     {
-        if (getReturnType().getType() != Type::Types::Void)
+        if (!getReturnType().isVoid())
         {
-            context.builder.CreateRet(getReturnType().makeValue(0, context));
+            auto* type = getReturnType().type(context);
+            llvm::Value* value = nullptr;
+            if(type->isIntegerTy())
+            {
+                value = llvm::ConstantInt::get(type,0);
+            }
+            else if(type->isFloatingPointTy())
+            {
+                value = llvm::ConstantFP::get(type,0);
+            }
+            context.builder.CreateRet(value);
         }
         else
         {
@@ -532,7 +558,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
     auto [left,sign] = context.getNamedValue(getIdentifier());
     if (!left)
     {
-        throw;//TODO
+        throw std::runtime_error("Undefined reference to " + getIdentifier());
     }
     auto* leftType = llvm::cast<llvm::PointerType>(left->getType());
     switch (getAssignOperator())
@@ -920,6 +946,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::LogicalAndExpression::codegen(Open
     auto [left,sign] = getBitOrExpression().codegen(context);
     for (auto& factor : getOptionalBitOrExpressions())
     {
+        auto* function = context.builder.GetInsertBlock()->getParent();
         if(left->getType()->isFloatingPointTy())
         {
             left = context.builder.CreateFCmpUNE(left,llvm::ConstantFP::get(left->getType(),0));
@@ -928,18 +955,38 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::LogicalAndExpression::codegen(Open
         {
             left = context.builder.CreateICmpNE(left, context.builder.getInt32(0));
         }
+        auto* thenBB = llvm::BasicBlock::Create(context.context,"then",function);
+        auto* elseBB = llvm::BasicBlock::Create(context.context,"else");
+        auto* mergeBB = llvm::BasicBlock::Create(context.context,"ifcond");
+
+        context.builder.CreateCondBr(left,thenBB,elseBB);
+
+        context.builder.SetInsertPoint(thenBB);
         auto [right,rsign] = factor.codegen(context);
         if(right->getType()->isFloatingPointTy())
         {
             right = context.builder.CreateFCmpUNE(right,llvm::ConstantFP::get(left->getType(),0));
         }
-        else if (left->getType()->isIntegerTy() && left->getType()->getIntegerBitWidth() > 1)
+        else if (right->getType()->isIntegerTy() && right->getType()->getIntegerBitWidth() > 1)
         {
             right = context.builder.CreateICmpNE(right, context.builder.getInt32(0));
         }
+        right = context.builder.CreateZExt(right,context.builder.getInt32Ty());
+        context.builder.CreateBr(mergeBB);
+        thenBB = context.builder.GetInsertBlock();
 
-        left = context.builder.CreateAnd(left, right);
-        left = context.builder.CreateZExt(left,context.builder.getInt32Ty());
+        function->getBasicBlockList().push_back(elseBB);
+        context.builder.SetInsertPoint(elseBB);
+
+        context.builder.CreateBr(mergeBB);
+        elseBB = context.builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(mergeBB);
+        context.builder.SetInsertPoint(mergeBB);
+        auto* pn = context.builder.CreatePHI(context.builder.getInt32Ty(),2,"iftmp");
+        pn->addIncoming(right,thenBB);
+        pn->addIncoming(context.builder.getInt32(0),elseBB);
+        left = pn;
     }
     return {left,true};
 }
@@ -949,6 +996,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::LogicalOrExpression::codegen(OpenC
     auto [left,sign] = getAndExpression().codegen(context);
     for (auto& factor : getOptionalAndExpressions())
     {
+        auto* function = context.builder.GetInsertBlock()->getParent();
         if(left->getType()->isFloatingPointTy())
         {
             left = context.builder.CreateFCmpUNE(left,llvm::ConstantFP::get(left->getType(),0));
@@ -957,18 +1005,38 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::LogicalOrExpression::codegen(OpenC
         {
             left = context.builder.CreateICmpNE(left, context.builder.getInt32(0));
         }
+        auto* thenBB = llvm::BasicBlock::Create(context.context,"then",function);
+        auto* elseBB = llvm::BasicBlock::Create(context.context,"else");
+        auto* mergeBB = llvm::BasicBlock::Create(context.context,"ifcond");
+
+        context.builder.CreateCondBr(left,elseBB,thenBB);
+
+        context.builder.SetInsertPoint(thenBB);
         auto [right,rsign] = factor.codegen(context);
         if(right->getType()->isFloatingPointTy())
         {
             right = context.builder.CreateFCmpUNE(right,llvm::ConstantFP::get(left->getType(),0));
         }
-        else if (left->getType()->isIntegerTy() && left->getType()->getIntegerBitWidth() > 1)
+        else if (right->getType()->isIntegerTy() && right->getType()->getIntegerBitWidth() > 1)
         {
             right = context.builder.CreateICmpNE(right, context.builder.getInt32(0));
         }
+        right = context.builder.CreateZExt(right,context.builder.getInt32Ty());
+        context.builder.CreateBr(mergeBB);
+        thenBB = context.builder.GetInsertBlock();
 
-        left = context.builder.CreateOr(left, right);
-        left = context.builder.CreateZExt(left,context.builder.getInt32Ty());
+        function->getBasicBlockList().push_back(elseBB);
+        context.builder.SetInsertPoint(elseBB);
+
+        context.builder.CreateBr(mergeBB);
+        elseBB = context.builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(mergeBB);
+        context.builder.SetInsertPoint(mergeBB);
+        auto* pn = context.builder.CreatePHI(context.builder.getInt32Ty(),2);
+        pn->addIncoming(right,thenBB);
+        pn->addIncoming(context.builder.getInt32(1),elseBB);
+        left = pn;
     }
     return {left,true};
 }
@@ -1022,18 +1090,6 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::ConditionalExpression::codegen(Ope
 std::pair<llvm::Value*, bool> OpenCL::Parser::ParentheseFactor::codegen(OpenCL::Parser::Context& context) const
 {
     return getExpression().codegen(context);
-}
-
-namespace
-{
-    template <class... Ts>
-    struct overloaded : Ts ...
-    {
-        using Ts::operator()...;
-    };
-
-    template <class... Ts>
-    overloaded(Ts...) -> overloaded<Ts...>;
 }
 
 std::pair<llvm::Value*,bool> OpenCL::Parser::ConstantFactor::codegen(OpenCL::Parser::Context& context) const
@@ -1232,19 +1288,4 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::BitOrExpression::codegen(OpenCL::P
         sign = sign || rsign;
     }
     return {left,sign};
-}
-
-llvm::Type* OpenCL::Parser::Type::type(Context& context) const
-{
-    switch (getType())
-    {
-    case Types::Void:return llvm::Type::getVoidTy(context.context);
-    case Types::Char:return llvm::Type::getInt8Ty(context.context);
-    case Types::Short:return llvm::Type::getInt16Ty(context.context);
-    case Types::Int:return llvm::Type::getInt32Ty(context.context);
-    case Types::Long:return llvm::Type::getInt32Ty(context.context);
-    case Types::Float:return llvm::Type::getFloatTy(context.context);
-    case Types::Double:return llvm::Type::getDoubleTy(context.context);
-    }
-    return nullptr;
 }
