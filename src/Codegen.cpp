@@ -32,9 +32,9 @@ namespace
                 }
                 else if (destType->isPointerTy())
                 {
-                    if(value->getType()->getIntegerBitWidth() != 64)
+                    if (value->getType()->getIntegerBitWidth() != 64)
                     {
-                        value = context.builder.CreateIntCast(value,context.builder.getInt64Ty(),isSigned);
+                        value = context.builder.CreateIntCast(value, context.builder.getInt64Ty(), isSigned);
                     }
                     value = context.builder.CreateIntToPtr(value, destType);
                 }
@@ -191,15 +191,15 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryFactor::codegen(OpenCL::Parse
     }
     case UnaryOperator::UnaryAddressOf:
     {
-        if(!llvm::isa<llvm::LoadInst>(factor))
+        if (!llvm::isa<llvm::LoadInst>(factor))
         {
             throw std::runtime_error("Cannot take address of type");
         }
-        return {llvm::cast<llvm::LoadInst>(factor)->getPointerOperand(),false};
+        return {llvm::cast<llvm::LoadInst>(factor)->getPointerOperand(), false};
     }
     case UnaryOperator::UnaryDereference:
     {
-        return {context.builder.CreateLoad(factor),sign};
+        return {context.builder.CreateLoad(factor), sign};
     }
     case UnaryOperator::UnaryLogicalNegation:
     {
@@ -1459,4 +1459,39 @@ llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) 
 {
     auto* type = getType().type(context);
     return llvm::PointerType::getUnqual(type);
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PrimaryExpressionIdentifier::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::PrimaryExpressionConstant::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PrimaryExpressionParenthese::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PostFixExpressionPrimaryExpression::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PostFixExpressionSubscript::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
 }

@@ -18,7 +18,8 @@ const std::string& OpenCL::Parser::Function::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>, std::string>>& OpenCL::Parser::Function::getArguments() const
+const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+                            std::string>>& OpenCL::Parser::Function::getArguments() const
 {
     return m_arguments;
 }
@@ -32,11 +33,13 @@ OpenCL::Parser::Function::Function(std::unique_ptr<Type>&& returnType,
                                    std::string name,
                                    std::vector<std::pair<std::unique_ptr<Type>,
                                                          std::string>> arguments,
-                                   std::unique_ptr<BlockStatement>&& blockItems) : m_returnType(std::move(returnType)), m_name(std::move(
+                                   std::unique_ptr<BlockStatement>&& blockItems)
+    : m_returnType(std::move(returnType)), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
 {
     assert(m_returnType);
-    assert(std::all_of(m_arguments.begin(),m_arguments.begin(),[](const auto& pair){return static_cast<bool>(pair.first);}));
+    assert(std::all_of(m_arguments.begin(), m_arguments.begin(), [](const auto& pair)
+    { return static_cast<bool>(pair.first); }));
 }
 
 const std::string& OpenCL::Parser::Declaration::getName() const
@@ -49,7 +52,9 @@ const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpres
     return m_optionalExpression.get();
 }
 
-OpenCL::Parser::Declaration::Declaration(std::unique_ptr<Type>&& type, std::string name, std::unique_ptr<Expression>&& optionalExpression)
+OpenCL::Parser::Declaration::Declaration(std::unique_ptr<Type>&& type,
+                                         std::string name,
+                                         std::unique_ptr<Expression>&& optionalExpression)
     : m_type(std::move(type)), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
 {
     assert(m_type);
@@ -227,7 +232,6 @@ OpenCL::Parser::AssignmentExpression::AssignOperator OpenCL::Parser::AssignmentE
     return m_assignOperator;
 }
 
-
 const OpenCL::Parser::UnaryFactor& OpenCL::Parser::AssignmentExpression::getUnaryFactor() const
 {
     return m_unaryFactor;
@@ -238,11 +242,11 @@ const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::
     return *m_nonCommaExpression;
 }
 
-
 OpenCL::Parser::AssignmentExpression::AssignmentExpression(UnaryFactor&& unaryFactor,
                                                            OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator,
                                                            std::unique_ptr<NonCommaExpression>&& nonCommaExpression)
-    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator), m_nonCommaExpression(std::move(nonCommaExpression))
+    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
+      m_nonCommaExpression(std::move(nonCommaExpression))
 {
     assert(m_nonCommaExpression);
 }
@@ -561,7 +565,8 @@ const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOpti
     return m_optionalValue.get();
 }
 
-OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types) : m_types(std::move(types))
+OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types)
+    : m_types(std::move(types))
 {}
 
 bool OpenCL::Parser::PrimitiveType::isSigned() const
@@ -613,3 +618,70 @@ const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
 {
     return *m_type;
 }
+
+OpenCL::Parser::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::string identifier) : m_identifier(std::move(
+    identifier))
+{}
+
+const std::string& OpenCL::Parser::PrimaryExpressionIdentifier::getIdentifier() const
+{
+    return m_identifier;
+}
+
+OpenCL::Parser::PrimaryExpressionConstant::PrimaryExpressionConstant(const OpenCL::Parser::PrimaryExpressionConstant::variant& value)
+    : m_value(value)
+{}
+
+const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::PrimaryExpressionConstant::getValue() const
+{
+    return m_value;
+}
+
+OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::unique_ptr<Expression>&& expression)
+    : m_expression(std::move(expression))
+{}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::PrimaryExpressionParenthese::getExpression() const
+{
+    return *m_expression;
+}
+
+OpenCL::Parser::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::unique_ptr<PrimaryExpression>&& primaryExpression)
+    : m_primaryExpression(std::move(primaryExpression))
+{}
+
+const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimaryExpression::getPrimaryExpression() const
+{
+    return *m_primaryExpression;
+}
+
+OpenCL::Parser::PostFixExpressionSubscript::PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                                       std::unique_ptr<Expression>&& expression)
+    : m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionSubscript::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::PostFixExpressionSubscript::getExpression() const
+{
+    return *m_expression;
+}
+
+OpenCL::Parser::PostFixExpressionDot::PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                           std::string identifier) : m_postFixExpression(
+    std::move(postFixExpression)), m_identifier(std::move(identifier))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDot::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+const std::string& OpenCL::Parser::PostFixExpressionDot::getIdentifier() const
+{
+    return m_identifier;
+}
+

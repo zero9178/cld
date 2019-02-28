@@ -158,7 +158,8 @@ namespace
             }
             auto variant = std::visit([](auto&& value) -> typename ConstantFactor::variant
                                       {
-                                          if constexpr(std::is_constructible_v<typename ConstantFactor::variant, decltype(value)>)
+                                          if constexpr(std::is_constructible_v<typename ConstantFactor::variant,
+                                                                               decltype(value)>)
                                           {
                                               return {value};
                                           }
@@ -253,7 +254,7 @@ namespace
         }
 
         currToken = tokens.back();
-        if(currToken.getTokenType() == TokenType::OpenBrace)
+        if (currToken.getTokenType() == TokenType::OpenBrace)
         {
             auto statement = parseStatement(tokens);
             auto pointer = dynamic_cast<BlockStatement*>(statement.get());
@@ -262,12 +263,15 @@ namespace
                 throw std::runtime_error("Expected Block statement after function");
             }
 
-            return Function(std::move(retType), std::move(name), std::move(arguments),std::make_unique<BlockStatement>(std::move(*pointer)));
+            return Function(std::move(retType),
+                            std::move(name),
+                            std::move(arguments),
+                            std::make_unique<BlockStatement>(std::move(*pointer)));
         }
-        else if(currToken.getTokenType() == TokenType::SemiColon)
+        else if (currToken.getTokenType() == TokenType::SemiColon)
         {
             tokens.pop_back();
-            return Function(std::move(retType),std::move(name),std::move(arguments));
+            return Function(std::move(retType), std::move(name), std::move(arguments));
         }
         else
         {
@@ -284,52 +288,43 @@ namespace
             {
                 tokens.pop_back();
                 typeTokens.push_back(currToken);
-                if(tokens.empty())
+                if (tokens.empty())
                 {
                     break;
                 }
                 currToken = tokens.back();
-            }
-            while(isType(currToken.getTokenType()));
+            } while (isType(currToken.getTokenType()));
         }
 
-        if(typeTokens.back().getTokenType() == TokenType::Asterisk)
+        if (typeTokens.back().getTokenType() == TokenType::Asterisk)
         {
             typeTokens.pop_back();
-            std::reverse(typeTokens.begin(),typeTokens.end());
+            std::reverse(typeTokens.begin(), typeTokens.end());
             return std::make_unique<PointerType>(parseType(typeTokens));
         }
         else
         {
             std::vector<PrimitiveType::Types> types;
-            for(auto& currToken : typeTokens)
+            for (auto& currToken : typeTokens)
             {
-                switch(currToken.getTokenType())
+                switch (currToken.getTokenType())
                 {
                 case TokenType::VoidKeyword:return std::make_unique<PrimitiveType>(std::move(types));
-                case TokenType::CharKeyword:
-                    types.push_back(PrimitiveType::Types::Char);
+                case TokenType::CharKeyword:types.push_back(PrimitiveType::Types::Char);
                     break;
-                case TokenType::ShortKeyword:
-                    types.push_back(PrimitiveType::Types::Short);
+                case TokenType::ShortKeyword:types.push_back(PrimitiveType::Types::Short);
                     break;
-                case TokenType::IntKeyword:
-                    types.push_back(PrimitiveType::Types::Int);
+                case TokenType::IntKeyword:types.push_back(PrimitiveType::Types::Int);
                     break;
-                case TokenType::LongKeyword:
-                    types.push_back(PrimitiveType::Types::Long);
+                case TokenType::LongKeyword:types.push_back(PrimitiveType::Types::Long);
                     break;
-                case TokenType::FloatKeyword:
-                    types.push_back(PrimitiveType::Types::Float);
+                case TokenType::FloatKeyword:types.push_back(PrimitiveType::Types::Float);
                     break;
-                case TokenType::DoubleKeyword:
-                    types.push_back(PrimitiveType::Types::Double);
+                case TokenType::DoubleKeyword:types.push_back(PrimitiveType::Types::Double);
                     break;
-                case TokenType::SignedKeyword:
-                    types.push_back(PrimitiveType::Types::Signed);
+                case TokenType::SignedKeyword:types.push_back(PrimitiveType::Types::Signed);
                     break;
-                case TokenType::UnsignedKeyword:
-                    types.push_back(PrimitiveType::Types::Unsigned);
+                case TokenType::UnsignedKeyword:types.push_back(PrimitiveType::Types::Unsigned);
                     break;
                 default:throw std::runtime_error("Invalid token");
                 }
@@ -616,11 +611,11 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens)
     {
-        auto result = std::find_if(tokens.rbegin(),tokens.rend(),[](const Token& token)
+        auto result = std::find_if(tokens.rbegin(), tokens.rend(), [](const Token& token)
         {
             return token.getTokenType() == TokenType::SemiColon || isAssignment(token.getTokenType());
         });
-        if(result == tokens.rend())
+        if (result == tokens.rend())
         {
             throw std::runtime_error("Unexpected end of tokens");
         }
@@ -642,26 +637,26 @@ namespace
         tokens.pop_back();
         auto assignment = parseNonCommaExpression(tokens);
         return AssignmentExpression(std::move(unary),
-                                                          [assignment = currentToken.getTokenType()]
-                                                          {
-                                                              switch (assignment)
-                                                              {
-                                                              case TokenType::Assignment:return AssignmentExpression::AssignOperator::NoOperator;
-                                                              case TokenType::PlusAssign:return AssignmentExpression::AssignOperator::PlusAssign;
-                                                              case TokenType::MinusAssign:return AssignmentExpression::AssignOperator::MinusAssign;
-                                                              case TokenType::DivideAssign:return AssignmentExpression::AssignOperator::DivideAssign;
-                                                              case TokenType::MultiplyAssign:return AssignmentExpression::AssignOperator::MultiplyAssign;
-                                                              case TokenType::ModuloAssign:return AssignmentExpression::AssignOperator::ModuloAssign;
-                                                              case TokenType::ShiftLeftAssign:return AssignmentExpression::AssignOperator::LeftShiftAssign;
-                                                              case TokenType::ShiftRightAssign:return AssignmentExpression::AssignOperator::RightShiftAssign;
-                                                              case TokenType::BitAndAssign:return AssignmentExpression::AssignOperator::BitAndAssign;
-                                                              case TokenType::BitOrAssign:return AssignmentExpression::AssignOperator::BitOrAssign;
-                                                              case TokenType::BitXorAssign:return AssignmentExpression::AssignOperator::BitXorAssign;
-                                                              default:
-                                                                  throw std::runtime_error(
-                                                                      "Invalid token for assignment");
-                                                              }
-                                                          }(),std::move(assignment));
+                                    [assignment = currentToken.getTokenType()]
+                                    {
+                                        switch (assignment)
+                                        {
+                                        case TokenType::Assignment:return AssignmentExpression::AssignOperator::NoOperator;
+                                        case TokenType::PlusAssign:return AssignmentExpression::AssignOperator::PlusAssign;
+                                        case TokenType::MinusAssign:return AssignmentExpression::AssignOperator::MinusAssign;
+                                        case TokenType::DivideAssign:return AssignmentExpression::AssignOperator::DivideAssign;
+                                        case TokenType::MultiplyAssign:return AssignmentExpression::AssignOperator::MultiplyAssign;
+                                        case TokenType::ModuloAssign:return AssignmentExpression::AssignOperator::ModuloAssign;
+                                        case TokenType::ShiftLeftAssign:return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                                        case TokenType::ShiftRightAssign:return AssignmentExpression::AssignOperator::RightShiftAssign;
+                                        case TokenType::BitAndAssign:return AssignmentExpression::AssignOperator::BitAndAssign;
+                                        case TokenType::BitOrAssign:return AssignmentExpression::AssignOperator::BitOrAssign;
+                                        case TokenType::BitXorAssign:return AssignmentExpression::AssignOperator::BitXorAssign;
+                                        default:
+                                            throw std::runtime_error(
+                                                "Invalid token for assignment");
+                                        }
+                                    }(), std::move(assignment));
     }
 
     OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens)
@@ -882,24 +877,24 @@ namespace
     std::unique_ptr<OpenCL::Parser::Factor> parseFactor(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        tokens.pop_back();
         auto result = [&]() -> std::unique_ptr<Factor>
         {
             switch (currToken.getTokenType())
             {
             case TokenType::OpenParenthese:
             {
+                tokens.pop_back();
                 currToken = tokens.back();
-                if(isType(currToken.getTokenType()))
+                if (isType(currToken.getTokenType()))
                 {
                     auto type = parseType(tokens);
                     currToken = tokens.back();
                     tokens.pop_back();
-                    if(currToken.getTokenType() != TokenType::CloseParenthese)
+                    if (currToken.getTokenType() != TokenType::CloseParenthese)
                     {
                         throw std::runtime_error("Expected Closing Parenthese after type cast");
                     }
-                    return std::make_unique<CastFactor>(std::move(type),parseExpression(tokens));
+                    return std::make_unique<CastFactor>(std::move(type), parseExpression(tokens));
                 }
                 else
                 {
@@ -910,10 +905,10 @@ namespace
             case TokenType::Asterisk:
             case TokenType::Negation:
             case TokenType::BitWiseNegation:
-            case TokenType::LogicalNegation:
-                return std::make_unique<UnaryFactor>(parseUnary(tokens));
+            case TokenType::LogicalNegation:return std::make_unique<UnaryFactor>(parseUnary(tokens));
             case TokenType::Increment:
             {
+                tokens.pop_back();
                 auto nextToken = tokens.back();
                 if (nextToken.getTokenType() != TokenType::Identifier)
                 {
@@ -924,6 +919,7 @@ namespace
             }
             case TokenType::Decrement:
             {
+                tokens.pop_back();
                 auto nextToken = tokens.back();
                 if (nextToken.getTokenType() != TokenType::Identifier)
                 {
@@ -934,6 +930,7 @@ namespace
             }
             case TokenType::Identifier:
             {
+                tokens.pop_back();
                 auto nextToken = tokens.back();
                 switch (nextToken.getTokenType())
                 {
@@ -988,16 +985,19 @@ namespace
             }
             case TokenType::Literal:
             {
+                tokens.pop_back();
                 return std::make_unique<ConstantFactor>(std::visit([](auto&& value) -> typename ConstantFactor::variant
                                                                    {
-                    if constexpr(std::is_constructible_v<typename ConstantFactor::variant, decltype(value)>)
-                    {
-                        return {value};
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Invalid value in variant of literal");
-                    }
+                                                                       if constexpr(std::is_constructible_v<typename ConstantFactor::variant,
+                                                                                                            decltype(value)>)
+                                                                       {
+                                                                           return {value};
+                                                                       }
+                                                                       else
+                                                                       {
+                                                                           throw std::runtime_error(
+                                                                               "Invalid value in variant of literal");
+                                                                       }
                                                                    }, currToken.getValue()));
             }
             default:throw std::runtime_error("Invalid token");
@@ -1018,19 +1018,21 @@ namespace
 
     OpenCL::Parser::UnaryFactor parseUnary(Tokens& tokens)
     {
-        switch(tokens.back().getTokenType())
+        auto currToken = tokens.back();
+        tokens.pop_back();
+        switch (currToken.getTokenType())
         {
-        case TokenType::Ampersand:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryAddressOf,parseFactor(tokens));
-        case TokenType::Asterisk:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryDereference,parseFactor(tokens));
-        case TokenType::Negation:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryNegation,parseFactor(tokens));
+        case TokenType::Ampersand:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryAddressOf, parseFactor(tokens));
+        case TokenType::Asterisk:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryDereference, parseFactor(tokens));
+        case TokenType::Negation:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryNegation, parseFactor(tokens));
         case TokenType::BitWiseNegation:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryBitWiseNegation,parseFactor(tokens));
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryBitWiseNegation,
+                               parseFactor(tokens));
         case TokenType::LogicalNegation:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryLogicalNegation,parseFactor(tokens));
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryLogicalNegation,
+                               parseFactor(tokens));
         default:break;
         }
+        throw std::runtime_error("Invalid token for Unary expression");
     }
 }

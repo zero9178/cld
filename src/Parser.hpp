@@ -13,7 +13,7 @@ namespace OpenCL::Parser
 
     class Context
     {
-        using tuple = std::tuple<llvm::Value*,bool>;
+        using tuple = std::tuple<llvm::Value*, bool>;
 
         struct Function
         {
@@ -21,9 +21,9 @@ namespace OpenCL::Parser
             std::vector<const Type*> arguments;
         };
 
-        std::map<std::string,Function> m_functions;
-        std::map<std::string,tuple> m_globalValues;
-        std::vector<std::map<std::string,tuple>> m_namedValues;
+        std::map<std::string, Function> m_functions;
+        std::map<std::string, tuple> m_globalValues;
+        std::vector<std::map<std::string, tuple>> m_namedValues;
 
     public:
 
@@ -47,9 +47,9 @@ namespace OpenCL::Parser
 
         tuple getNamedValue(const std::string& name)
         {
-            for(auto begin = m_namedValues.rbegin(); begin != m_namedValues.rend(); begin++)
+            for (auto begin = m_namedValues.rbegin(); begin != m_namedValues.rend(); begin++)
             {
-                if(auto result = begin->find(name);result != begin->end())
+                if (auto result = begin->find(name);result != begin->end())
                 {
                     return result->second;
                 }
@@ -72,12 +72,12 @@ namespace OpenCL::Parser
             m_namedValues.back()[name] = value;
         }
 
-        void addGlobal(const std::string& name,const tuple& value)
+        void addGlobal(const std::string& name, const tuple& value)
         {
             m_globalValues[name] = value;
         }
 
-        void addFunction(const std::string& name,const Function& function)
+        void addFunction(const std::string& name, const Function& function)
         {
             m_functions[name] = function;
         }
@@ -226,6 +226,185 @@ namespace OpenCL::Parser
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
+
+    /**
+     * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
+     *                       | <PrimaryExpressionConstant>
+     *                       | <PrimaryExpressionParenthese>
+     */
+    class PrimaryExpression : public Node
+    {
+    protected:
+
+        PrimaryExpression() = default;
+    };
+
+    /**
+     * <PrimaryExpressionIdentifier> ::= <TokenType::Identifier>
+     */
+    class PrimaryExpressionIdentifier final : public PrimaryExpression
+    {
+        std::string m_identifier;
+
+    public:
+
+        explicit PrimaryExpressionIdentifier(std::string identifier);
+
+        const std::string& getIdentifier() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PrimaryExpressionConstant> ::= <TokenType::Constant>
+     */
+    class PrimaryExpressionConstant final : public PrimaryExpression
+    {
+
+    public:
+
+        using variant = std::variant<std::int32_t,
+                                     std::uint32_t,
+                                     std::int64_t,
+                                     std::uint64_t,
+                                     float,
+                                     double,
+                                     std::string>;
+
+    private:
+
+        variant m_value;
+
+    public:
+
+        explicit PrimaryExpressionConstant(const variant& value);
+
+        const variant& getValue() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PrimaryExpressionParenthese> ::= <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+     */
+    class PrimaryExpressionParenthese final : public PrimaryExpression
+    {
+        std::unique_ptr<Expression> m_expression;
+
+    public:
+
+        explicit PrimaryExpressionParenthese(std::unique_ptr<Expression>&& expression);
+
+        const Expression& getExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <ArgumentExpressionList> ::= <AssignmentExpression>
+     *                            | <ArgumentExpressionList> <TokenType::Comma> <AssignmentExpression>
+     */
+    class ArgumentExpressionList
+    {
+
+    };
+
+    /**
+     * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
+     *                       | <PostFixExpressionSubscript>
+     *                       | <PostFixExpressionDot>
+     *                       | <PostFixExpression> ( [ <ArgumentExpressionList> ] )
+     *                       | <PostFixExpression> "->" <TokenType::Identifier>
+     *                       | <PostFixExpression> <TokenType::Increment>
+     *                       | <PostFixExpression> <TokenType::Decrement>
+     *                       | <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese> <TokenType::OpenBrace>
+     *                                                      <InitializerList> <TokenType::CloseBrace>
+     */
+    class PostFixExpression : public Node
+    {
+    protected:
+
+        PostFixExpression() = default;
+    };
+
+
+    /**
+     * <PostFixExpressionPrimaryExpression> ::= <PrimaryExpression>
+     */
+    class PostFixExpressionPrimaryExpression final : public PostFixExpression
+    {
+        std::unique_ptr<PrimaryExpression> m_primaryExpression;
+
+    public:
+
+        explicit PostFixExpressionPrimaryExpression(std::unique_ptr<PrimaryExpression>&& primaryExpression);
+
+        const PrimaryExpression& getPrimaryExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionSubscript> ::= <PostFixExpression> "[" <Expression> "]"
+     */
+    class PostFixExpressionSubscript final : public PostFixExpression
+    {
+
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+        std::unique_ptr<Expression> m_expression;
+
+    public:
+
+        PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                   std::unique_ptr<Expression>&& expression);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        const Expression& getExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionDot> ::= <PostFixExpression> "." <TokenType::Identifier>
+     */
+    class PostFixExpressionDot final : public PostFixExpression
+    {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+        std::string m_identifier;
+
+    public:
+
+        PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                             std::string identifier);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        const std::string& getIdentifier() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <UnaryExpression> ::= <PostFixExpression>
+     *                     | <TokenType::Increment> <UnaryExpression>
+     *                     | <TokenType::Decrement> <UnaryExpression>
+     *                     | <TokenType::Ampersand> <UnaryExpression>
+     *                     | <TokenType::Asterisk> <UnaryExpression>
+     *                     | <TokenType::Plus> <UnaryExpression>
+     *                     | <TokenType::Minus> <UnaryExpression>
+     *                     | <TokenType::BitNot> <UnaryExpression>
+     *                     | <TokenType::LogicalNot> <UnaryExpression>
+     *                     | <TokenType::SizeOfKeyword> <UnaryExpression>
+     *                     | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
+     */
+    class UnaryExpression : public Node
+    {
+    protected:
+
+        UnaryExpression() = default;
+    };
+
     /**
      * <Factor>
      * ::=  <FunctionCall>
@@ -263,21 +442,21 @@ namespace OpenCL::Parser
     /**
      * <CastFactor> ::= <TokenType::OpenParanthese> <Type> <TokenType::CloseParanthese> <Expression>
      */
-     class CastFactor final : public Factor
-     {
-         std::unique_ptr<Type> m_outType;
-         Expression m_expression;
+    class CastFactor final : public Factor
+    {
+        std::unique_ptr<Type> m_outType;
+        Expression m_expression;
 
-     public:
+    public:
 
-         CastFactor(std::unique_ptr<Type>&& outType, Expression&& expression);
+        CastFactor(std::unique_ptr<Type>&& outType, Expression&& expression);
 
-         const Type& getOutType() const;
+        const Type& getOutType() const;
 
-         const Expression& getExpression() const;
+        const Expression& getExpression() const;
 
-         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-     };
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
 
     /**
      * <UnaryFactor> ::= <UnaryFactor::UnaryOperator> <Factor>
@@ -365,7 +544,13 @@ namespace OpenCL::Parser
     {
     public:
 
-        using variant = std::variant<std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,std::string>;
+        using variant = std::variant<std::int32_t,
+                                     std::uint32_t,
+                                     std::int64_t,
+                                     std::uint64_t,
+                                     float,
+                                     double,
+                                     std::string>;
 
     private:
 
@@ -377,7 +562,7 @@ namespace OpenCL::Parser
 
         const variant& getValue() const;
 
-        std::pair<llvm::Value*,bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
     /**
@@ -924,8 +1109,8 @@ namespace OpenCL::Parser
     public:
 
         explicit Declaration(std::unique_ptr<Type>&& type,
-                                     std::string name,
-                                     std::unique_ptr<Expression>&& optionalExpression = nullptr);
+                             std::string name,
+                             std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
         const Type& getType() const;
 
@@ -1037,7 +1222,7 @@ namespace OpenCL::Parser
     {
         std::unique_ptr<Type> m_returnType;
         std::string m_name;
-        std::vector<std::pair<std::unique_ptr<Type>,std::string>> m_arguments;
+        std::vector<std::pair<std::unique_ptr<Type>, std::string>> m_arguments;
         std::unique_ptr<BlockStatement> m_block;
 
     public:
@@ -1056,7 +1241,7 @@ namespace OpenCL::Parser
 
         const BlockStatement* getBlockStatement() const;
 
-        std::pair<llvm::Value*,bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
     class GlobalDeclaration final : public Global
@@ -1068,8 +1253,8 @@ namespace OpenCL::Parser
     public:
 
         explicit GlobalDeclaration(std::unique_ptr<Type>&& type,
-                                           std::string name,
-                                           std::unique_ptr<ConstantFactor>&& value = nullptr);
+                                   std::string name,
+                                   std::unique_ptr<ConstantFactor>&& value = nullptr);
 
         const Type& getType() const;
 
