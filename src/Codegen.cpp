@@ -30,6 +30,14 @@ namespace
                         value = context.builder.CreateUIToFP(value, destType);
                     }
                 }
+                else if (destType->isPointerTy())
+                {
+                    if(value->getType()->getIntegerBitWidth() != 64)
+                    {
+                        value = context.builder.CreateIntCast(value,context.builder.getInt64Ty(),isSigned);
+                    }
+                    value = context.builder.CreateIntToPtr(value, destType);
+                }
                 else
                 {
                     throw std::runtime_error("Cannot convert type");
@@ -181,7 +189,20 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryFactor::codegen(OpenCL::Parse
         }
         return {context.builder.CreateNot(factor), sign};
     }
+    case UnaryOperator::UnaryAddressOf:
+    {
+        if(!llvm::isa<llvm::LoadInst>(factor))
+        {
+            throw std::runtime_error("Cannot take address of type");
+        }
+        return {llvm::cast<llvm::LoadInst>(factor)->getPointerOperand(),false};
+    }
+    case UnaryOperator::UnaryDereference:
+    {
+        return {context.builder.CreateLoad(factor),sign};
+    }
     case UnaryOperator::UnaryLogicalNegation:
+    {
         if (factor->getType()->isIntegerTy() && factor->getType()->getIntegerBitWidth() > 1)
         {
             factor = context.builder.CreateICmpNE(factor,
@@ -196,6 +217,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryFactor::codegen(OpenCL::Parse
             throw std::runtime_error("Cannot apply ! operator to specified type");
         }
         return {context.builder.CreateZExt(context.builder.CreateNot(factor), context.builder.getInt32Ty()), true};
+    }
     }
     return {nullptr, false};
 }
@@ -246,22 +268,22 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
             std::vector<const Type*> types;
             std::transform(getArguments().begin(), getArguments().end(), std::back_inserter(types), [](const auto& pair)
             {
-                return &pair.first;
+                return pair.first.get();
             });
-            context.addFunction(getName(), {&getReturnType(), types});
+            context.addFunction(getName(), {&getReturnType(), std::move(types)});
             context.functionRetType = &getReturnType();
         }
         {
             std::vector<llvm::Type*> types;
             for (auto&[type, name] : getArguments())
             {
-                types.emplace_back(type.type(context));
+                types.emplace_back(type->type(context));
             }
             auto* ft = llvm::FunctionType::get(getReturnType().type(context), types, false);
-            llvm::Function::Create(ft,llvm::Function::ExternalLinkage,getName(),context.module.get());
+            llvm::Function::Create(ft, llvm::Function::ExternalLinkage, getName(), context.module.get());
         }
     }
-    if(!getBlockStatement())
+    if (!getBlockStatement())
     {
         return {};
     }
@@ -269,7 +291,10 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
     std::size_t i = 0;
     for (auto& iter : context.currentFunction->args())
     {
-        iter.setName(getArguments()[i++].second);
+        if (!getArguments()[i++].second.empty())
+        {
+            iter.setName(getArguments()[i++].second);
+        }
     }
 
     auto* bb = llvm::BasicBlock::Create(context.context, "entry", context.currentFunction);
@@ -278,11 +303,15 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
     i = 0;
     for (auto& iter : context.currentFunction->args())
     {
+        if (getArguments()[i++].second.empty())
+        {
+            continue;
+        }
         llvm::IRBuilder<>
             tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
         auto* alloca = tmpB.CreateAlloca(iter.getType(), nullptr, iter.getName());
         context.builder.CreateStore(&iter, alloca);
-        context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first.isSigned()});
+        context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first->isSigned()});
     }
 
     getBlockStatement()->codegen(context);
@@ -579,25 +608,21 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Expression::codegen(OpenCL::Parser
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(OpenCL::Parser::Context& context) const
 {
-    auto[left, sign] = context.getNamedValue(getIdentifier());
-    if (!left)
-    {
-        throw std::runtime_error("Undefined reference to " + getIdentifier());
-    }
+    auto[left, sign] = getUnaryFactor().codegen(context);
     auto* leftType = llvm::cast<llvm::PointerType>(left->getType());
     switch (getAssignOperator())
     {
     case AssignOperator::NoOperator:
     {
-        auto[value, sign] = getExpression().codegen(context);
+        auto[value, sign] = getNonCommaExpression().codegen(context);
         castPrimitive(value, sign, leftType->getElementType(), sign, context);
         context.builder.CreateStore(value, left);
         break;
     }
     case AssignOperator::PlusAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         if (current->getType()->isIntegerTy())
         {
@@ -613,8 +638,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
     }
     case AssignOperator::MinusAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         if (current->getType()->isIntegerTy())
         {
@@ -630,8 +655,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
     }
     case AssignOperator::DivideAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         if (current->getType()->isIntegerTy())
         {
@@ -654,8 +679,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
     }
     case AssignOperator::MultiplyAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         if (current->getType()->isIntegerTy())
         {
@@ -671,54 +696,54 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
     }
     case AssignOperator::ModuloAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateSRem(current, newValue), left);
         break;
     }
     case AssignOperator::LeftShiftAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateShl(current, newValue), left);
         break;
     }
     case AssignOperator::RightShiftAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateAShr(current, newValue), left);
         break;
     }
     case AssignOperator::BitAndAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateAnd(current, newValue), left);
         break;
     }
     case AssignOperator::BitOrAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateOr(current, newValue), left);
         break;
     }
     case AssignOperator::BitXorAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left, getIdentifier().c_str());
-        auto[newValue, newSign] = getExpression().codegen(context);
+        llvm::Value* current = context.builder.CreateLoad(left);
+        auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         context.builder.CreateStore(context.builder.CreateXor(current, newValue), left);
         break;
     }
     }
-    return {context.builder.CreateLoad(left, getIdentifier().c_str()), sign};
+    return {context.builder.CreateLoad(left), sign};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::Term::codegen(OpenCL::Parser::Context& context) const
@@ -1330,4 +1355,108 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::CastFactor::codegen(OpenCL::Parser
     auto[value, sign] = getExpression().codegen(context);
     castPrimitive(value, sign, getOutType().type(context), getOutType().isSigned(), context);
     return {value, getOutType().isSigned()};
+}
+
+llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
+{
+    if (m_types.empty())
+    {
+        return context.builder.getVoidTy();
+    }
+    switch (m_types[0])
+    {
+    case Types::Char:return context.builder.getInt8Ty();
+    case Types::Short:return context.builder.getInt16Ty();
+    case Types::Int:return context.builder.getInt32Ty();
+    case Types::Long:
+    {
+        if (m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+        else if (m_types[1] == Types::Long)
+        {
+            return context.builder.getInt64Ty();
+        }
+        else
+        {
+            throw std::runtime_error("Cannot combine long with other");
+        }
+    }
+    case Types::Float:return context.builder.getFloatTy();
+    case Types::Double:return context.builder.getDoubleTy();
+    case Types::Unsigned:
+    {
+        if (m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+
+        switch (m_types[1])
+        {
+        case Types::Char:return context.builder.getInt8Ty();
+        case Types::Short:return context.builder.getInt16Ty();
+        case Types::Int:return context.builder.getInt32Ty();
+        case Types::Long:
+        {
+            if (m_types.size() == 2)
+            {
+                return context.builder.getInt32Ty();
+            }
+            else if (m_types[2] == Types::Long)
+            {
+                return context.builder.getInt64Ty();
+            }
+            else
+            {
+                throw std::runtime_error("Cannot combine long with other");
+            }
+        }
+        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
+        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
+        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
+        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        }
+        break;
+    }
+    case Types::Signed:
+    {
+        if (m_types.size() == 1)
+        {
+            return context.builder.getInt32Ty();
+        }
+        switch (m_types[1])
+        {
+        case Types::Char:return context.builder.getInt8Ty();
+        case Types::Short:return context.builder.getInt16Ty();
+        case Types::Int:return context.builder.getInt32Ty();
+        case Types::Long:
+        {
+            if (m_types.size() == 2)
+            {
+                return context.builder.getInt32Ty();
+            }
+            else if (m_types[2] == Types::Long)
+            {
+                return context.builder.getInt64Ty();
+            }
+            else
+            {
+                throw std::runtime_error("Cannot combine long with other");
+            }
+        }
+        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
+        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
+        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
+        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        }
+    }
+    }
+    return nullptr;
+}
+
+llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) const
+{
+    auto* type = getType().type(context);
+    return llvm::PointerType::getUnqual(type);
 }

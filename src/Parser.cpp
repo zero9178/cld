@@ -1,9 +1,3 @@
-#include <utility>
-
-#include <utility>
-
-#include <utility>
-
 #include "Parser.hpp"
 
 #include <algorithm>
@@ -24,7 +18,7 @@ const std::string& OpenCL::Parser::Function::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<OpenCL::Parser::Type, std::string>>& OpenCL::Parser::Function::getArguments() const
+const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>, std::string>>& OpenCL::Parser::Function::getArguments() const
 {
     return m_arguments;
 }
@@ -34,13 +28,16 @@ const OpenCL::Parser::BlockStatement* OpenCL::Parser::Function::getBlockStatemen
     return m_block.get();
 }
 
-OpenCL::Parser::Function::Function(Type returnType,
+OpenCL::Parser::Function::Function(std::unique_ptr<Type>&& returnType,
                                    std::string name,
-                                   std::vector<std::pair<Type,
+                                   std::vector<std::pair<std::unique_ptr<Type>,
                                                          std::string>> arguments,
                                    std::unique_ptr<BlockStatement>&& blockItems) : m_returnType(std::move(returnType)), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
-{}
+{
+    assert(m_returnType);
+    assert(std::all_of(m_arguments.begin(),m_arguments.begin(),[](const auto& pair){return static_cast<bool>(pair.first);}));
+}
 
 const std::string& OpenCL::Parser::Declaration::getName() const
 {
@@ -52,13 +49,15 @@ const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpres
     return m_optionalExpression.get();
 }
 
-OpenCL::Parser::Declaration::Declaration(Type type, std::string name, std::unique_ptr<Expression>&& optionalExpression)
+OpenCL::Parser::Declaration::Declaration(std::unique_ptr<Type>&& type, std::string name, std::unique_ptr<Expression>&& optionalExpression)
     : m_type(std::move(type)), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
-{}
+{
+    assert(m_type);
+}
 
 const OpenCL::Parser::Type& OpenCL::Parser::Declaration::getType() const
 {
-    return m_type;
+    return *m_type;
 }
 
 const OpenCL::Parser::Expression& OpenCL::Parser::ReturnStatement::getExpression() const
@@ -223,27 +222,29 @@ const OpenCL::Parser::NonCommaExpression* OpenCL::Parser::Expression::getOptiona
     return m_optionalNonCommaExpression.get();
 }
 
-OpenCL::Parser::AssignmentExpression::AssignmentExpression(std::string identifier,
-                                                           std::unique_ptr<NonCommaExpression>&& expression,
-                                                           OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator)
-    : m_identifier(std::move(identifier)), m_expression(std::move(expression)), m_assignOperator(assignOperator)
-{
-    assert(m_expression);
-}
-
-const std::string& OpenCL::Parser::AssignmentExpression::getIdentifier() const
-{
-    return m_identifier;
-}
-
-const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::getExpression() const
-{
-    return *m_expression;
-}
-
 OpenCL::Parser::AssignmentExpression::AssignOperator OpenCL::Parser::AssignmentExpression::getAssignOperator() const
 {
     return m_assignOperator;
+}
+
+
+const OpenCL::Parser::UnaryFactor& OpenCL::Parser::AssignmentExpression::getUnaryFactor() const
+{
+    return m_unaryFactor;
+}
+
+const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::getNonCommaExpression() const
+{
+    return *m_nonCommaExpression;
+}
+
+
+OpenCL::Parser::AssignmentExpression::AssignmentExpression(UnaryFactor&& unaryFactor,
+                                                           OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator,
+                                                           std::unique_ptr<NonCommaExpression>&& nonCommaExpression)
+    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator), m_nonCommaExpression(std::move(nonCommaExpression))
+{
+    assert(m_nonCommaExpression);
 }
 
 OpenCL::Parser::Term::Term(std::unique_ptr<Factor>&& factor,
@@ -539,7 +540,7 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
     return m_optionalBitXorExpressions;
 }
 
-OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(Type type,
+OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::unique_ptr<Type>&& type,
                                                      std::string name,
                                                      std::unique_ptr<ConstantFactor>&& value)
     : m_type(std::move(type)), m_name(std::move(name)), m_optionalValue(std::move(value))
@@ -547,7 +548,7 @@ OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(Type type,
 
 const OpenCL::Parser::Type& OpenCL::Parser::GlobalDeclaration::getType() const
 {
-    return m_type;
+    return *m_type;
 }
 
 const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
@@ -560,130 +561,34 @@ const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOpti
     return m_optionalValue.get();
 }
 
-OpenCL::Parser::Type::Type(std::vector<OpenCL::Parser::Type::Types>&& types) : m_types(std::move(types))
+OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types) : m_types(std::move(types))
 {}
 
-bool OpenCL::Parser::Type::isSigned() const
+bool OpenCL::Parser::PrimitiveType::isSigned() const
 {
     return m_types.empty() || m_types[0] != Types::Unsigned;
 }
 
-bool OpenCL::Parser::Type::isVoid() const
+bool OpenCL::Parser::PrimitiveType::isVoid() const
 {
     return m_types.empty();
 }
 
-llvm::Type* OpenCL::Parser::Type::type(Context& context) const
-{
-    if(m_types.empty())
-    {
-        return context.builder.getVoidTy();
-    }
-    switch(m_types[0])
-    {
-    case Types::Char:return context.builder.getInt8Ty();
-    case Types::Short:return context.builder.getInt16Ty();
-    case Types::Int:return context.builder.getInt32Ty();
-    case Types::Long:
-    {
-        if(m_types.size() == 1)
-        {
-            return context.builder.getInt32Ty();
-        }
-        else if(m_types[1] == Types::Long)
-        {
-            return context.builder.getInt64Ty();
-        }
-        else
-        {
-            throw std::runtime_error("Cannot combine long with other");
-        }
-    }
-    case Types::Float:return context.builder.getFloatTy();
-    case Types::Double:return context.builder.getDoubleTy();
-    case Types::Unsigned:
-    {
-        if(m_types.size() == 1)
-        {
-            return context.builder.getInt32Ty();
-        }
-
-        switch(m_types[1])
-        {
-        case Types::Char:return context.builder.getInt8Ty();
-        case Types::Short:return context.builder.getInt16Ty();
-        case Types::Int:return context.builder.getInt32Ty();
-        case Types::Long:
-        {
-            if(m_types.size() == 2)
-            {
-                return context.builder.getInt32Ty();
-            }
-            else if(m_types[2] == Types::Long)
-            {
-                return context.builder.getInt64Ty();
-            }
-            else
-            {
-                throw std::runtime_error("Cannot combine long with other");
-            }
-        }
-        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
-        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
-        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
-        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
-        }
-        break;
-    }
-    case Types::Signed:
-    {
-        if(m_types.size() == 1)
-        {
-            return context.builder.getInt32Ty();
-        }
-        switch(m_types[1])
-        {
-        case Types::Char:return context.builder.getInt8Ty();
-        case Types::Short:return context.builder.getInt16Ty();
-        case Types::Int:return context.builder.getInt32Ty();
-        case Types::Long:
-        {
-            if(m_types.size() == 2)
-            {
-                return context.builder.getInt32Ty();
-            }
-            else if(m_types[2] == Types::Long)
-            {
-                return context.builder.getInt64Ty();
-            }
-            else
-            {
-                throw std::runtime_error("Cannot combine long with other");
-            }
-        }
-        case Types::Float:throw std::runtime_error("Cannot combine unsigned with float");
-        case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
-        case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
-        case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
-        }
-    }
-    }
-    return nullptr;
-}
-
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
-    return m_returnType;
+    return *m_returnType;
 }
 
-OpenCL::Parser::CastFactor::CastFactor(OpenCL::Parser::Type outType,
+OpenCL::Parser::CastFactor::CastFactor(std::unique_ptr<Type>&& outType,
                                        Expression&& expression)
     : m_outType(std::move(outType)), m_expression(std::move(expression))
-{}
+{
+    assert(m_outType);
+}
 
 const OpenCL::Parser::Type& OpenCL::Parser::CastFactor::getOutType() const
 {
-    return m_outType;
+    return *m_outType;
 }
 
 const OpenCL::Parser::Expression& OpenCL::Parser::CastFactor::getExpression() const
@@ -691,4 +596,20 @@ const OpenCL::Parser::Expression& OpenCL::Parser::CastFactor::getExpression() co
     return m_expression;
 }
 
+OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type) : m_type(std::move(type))
+{}
 
+bool OpenCL::Parser::PointerType::isSigned() const
+{
+    return false;
+}
+
+bool OpenCL::Parser::PointerType::isVoid() const
+{
+    return false;
+}
+
+const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
+{
+    return *m_type;
+}

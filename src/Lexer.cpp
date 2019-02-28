@@ -137,7 +137,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         else if (lastText == "&")
         {
-            result.emplace_back(line, column, TokenType::BitAnd);
+            result.emplace_back(line, column, TokenType::Ampersand);
         }
         else if (lastText == "^")
         {
@@ -165,7 +165,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         else if (lastText == "*")
         {
-            result.emplace_back(line, column, TokenType::Multiplication);
+            result.emplace_back(line, column, TokenType::Asterisk);
         }
         else if (lastText == "/")
         {

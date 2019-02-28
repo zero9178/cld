@@ -44,7 +44,9 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Factor> parseFactor(Tokens& tokens);
 
-    OpenCL::Parser::Type parseType(Tokens& tokens);
+    OpenCL::Parser::UnaryFactor parseUnary(Tokens& tokens);
+
+    std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens);
 }
 
 OpenCL::Parser::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
@@ -82,7 +84,8 @@ namespace
             || type == TokenType::FloatKeyword
             || type == TokenType::DoubleKeyword
             || type == TokenType::SignedKeyword
-            || type == TokenType::UnsignedKeyword;
+            || type == TokenType::UnsignedKeyword
+            || type == TokenType::Asterisk;
     }
 
     OpenCL::Parser::Program parseProgram(Tokens& tokens)
@@ -170,12 +173,12 @@ namespace
                 throw std::runtime_error("Expected ; after initialization of global declaration");
             }
             tokens.pop_back();
-            return GlobalDeclaration(type, name, std::make_unique<ConstantFactor>(std::move(variant)));
+            return GlobalDeclaration(std::move(type), name, std::make_unique<ConstantFactor>(std::move(variant)));
         }
         else
         {
             tokens.pop_back();
-            return GlobalDeclaration(type, name);
+            return GlobalDeclaration(std::move(type), name);
         }
     }
 
@@ -200,7 +203,7 @@ namespace
         {
             throw std::runtime_error("Expected Opening Parantheses after function identifier");
         }
-        std::vector<std::pair<Type, std::string>> arguments;
+        std::vector<std::pair<std::unique_ptr<Type>, std::string>> arguments;
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::CloseParenthese)
         {
@@ -215,13 +218,13 @@ namespace
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::Identifier)
                 {
-                    arguments.emplace_back(type, std::get<std::string>(currToken.getValue()));
+                    arguments.emplace_back(std::move(type), std::get<std::string>(currToken.getValue()));
                     tokens.pop_back();
                 }
                 else if (currToken.getTokenType() == TokenType::CloseParenthese
                     || currToken.getTokenType() == TokenType::Comma)
                 {
-                    arguments.emplace_back(type, "");
+                    arguments.emplace_back(std::move(type), "");
                 }
                 else
                 {
@@ -259,12 +262,12 @@ namespace
                 throw std::runtime_error("Expected Block statement after function");
             }
 
-            return Function(retType, std::move(name), std::move(arguments),std::make_unique<BlockStatement>(std::move(*pointer)));
+            return Function(std::move(retType), std::move(name), std::move(arguments),std::make_unique<BlockStatement>(std::move(*pointer)));
         }
         else if(currToken.getTokenType() == TokenType::SemiColon)
         {
             tokens.pop_back();
-            return Function(retType,std::move(name),std::move(arguments));
+            return Function(std::move(retType),std::move(name),std::move(arguments));
         }
         else
         {
@@ -272,52 +275,73 @@ namespace
         }
     }
 
-    Type parseType(Tokens& tokens)
+    std::unique_ptr<Type> parseType(Tokens& tokens)
     {
-        std::vector<Type::Types> types;
-        auto currToken = tokens.back();
-        do
+        Tokens typeTokens;
         {
-            tokens.pop_back();
-            switch(currToken.getTokenType())
+            auto currToken = tokens.back();
+            do
             {
-            case TokenType::VoidKeyword:return Type(std::move(types));
-            case TokenType::CharKeyword:
-                types.push_back(Type::Types::Char);
-                break;
-            case TokenType::ShortKeyword:
-                types.push_back(Type::Types::Short);
-                break;
-            case TokenType::IntKeyword:
-                types.push_back(Type::Types::Int);
-                break;
-            case TokenType::LongKeyword:
-                types.push_back(Type::Types::Long);
-                break;
-            case TokenType::FloatKeyword:
-                types.push_back(Type::Types::Float);
-                break;
-            case TokenType::DoubleKeyword:
-                types.push_back(Type::Types::Double);
-                break;
-            case TokenType::SignedKeyword:
-                types.push_back(Type::Types::Signed);
-                break;
-            case TokenType::UnsignedKeyword:
-                types.push_back(Type::Types::Unsigned);
-                break;
-            default:throw std::runtime_error("Invalid token");
+                tokens.pop_back();
+                typeTokens.push_back(currToken);
+                if(tokens.empty())
+                {
+                    break;
+                }
+                currToken = tokens.back();
             }
-            currToken = tokens.back();
+            while(isType(currToken.getTokenType()));
         }
-        while (isType(currToken.getTokenType()));
-        return Type(std::move(types));
+
+        if(typeTokens.back().getTokenType() == TokenType::Asterisk)
+        {
+            typeTokens.pop_back();
+            std::reverse(typeTokens.begin(),typeTokens.end());
+            return std::make_unique<PointerType>(parseType(typeTokens));
+        }
+        else
+        {
+            std::vector<PrimitiveType::Types> types;
+            for(auto& currToken : typeTokens)
+            {
+                switch(currToken.getTokenType())
+                {
+                case TokenType::VoidKeyword:return std::make_unique<PrimitiveType>(std::move(types));
+                case TokenType::CharKeyword:
+                    types.push_back(PrimitiveType::Types::Char);
+                    break;
+                case TokenType::ShortKeyword:
+                    types.push_back(PrimitiveType::Types::Short);
+                    break;
+                case TokenType::IntKeyword:
+                    types.push_back(PrimitiveType::Types::Int);
+                    break;
+                case TokenType::LongKeyword:
+                    types.push_back(PrimitiveType::Types::Long);
+                    break;
+                case TokenType::FloatKeyword:
+                    types.push_back(PrimitiveType::Types::Float);
+                    break;
+                case TokenType::DoubleKeyword:
+                    types.push_back(PrimitiveType::Types::Double);
+                    break;
+                case TokenType::SignedKeyword:
+                    types.push_back(PrimitiveType::Types::Signed);
+                    break;
+                case TokenType::UnsignedKeyword:
+                    types.push_back(PrimitiveType::Types::Unsigned);
+                    break;
+                default:throw std::runtime_error("Invalid token");
+                }
+            }
+            return std::make_unique<PrimitiveType>(std::move(types));
+        }
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if (isType(currToken.getTokenType()))
+        if (isType(currToken.getTokenType()) && currToken.getTokenType() != TokenType::Asterisk)
         {
             auto type = parseType(tokens);
             currToken = tokens.back();
@@ -327,19 +351,19 @@ namespace
             }
             tokens.pop_back();
             auto name = std::get<std::string>(currToken.getValue());
-            auto result = [&tokens, name = std::move(name), type]
+            auto result = [&tokens, name = std::move(name), type = std::move(type)]()mutable
             {
                 auto currToken = tokens.back().getTokenType();
-                if (isAssignment(currToken))
+                if (currToken == TokenType::Assignment)
                 {
                     tokens.pop_back();
-                    return Declaration(type,
+                    return Declaration(std::move(type),
                                        name,
                                        std::make_unique<Expression>(parseExpression(tokens)));
                 }
                 else
                 {
-                    return Declaration(type, name);
+                    return Declaration(std::move(type), name);
                 }
             }();
             if (tokens.empty() || tokens.back().getTokenType() != TokenType::SemiColon)
@@ -588,19 +612,37 @@ namespace
         return Expression(std::move(expression), std::move(optional));
     }
 
+    OpenCL::Parser::AssignmentExpression parseAssignment(Tokens& tokens);
+
     std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens)
     {
-        auto currentToken = tokens.back();
-        if (tokens.size() > 2 && currentToken.getTokenType() == TokenType::Identifier
-            && isAssignment(tokens[tokens.size() - 2].getTokenType()))
+        auto result = std::find_if(tokens.rbegin(),tokens.rend(),[](const Token& token)
         {
-            auto op = tokens[tokens.size() - 2];
-            const auto& identifier = std::get<std::string>(currentToken.getValue());
-            tokens.pop_back();
-            tokens.pop_back();
-            return std::make_unique<AssignmentExpression>(identifier,
-                                                          parseNonCommaExpression(tokens),
-                                                          [assignment = op.getTokenType()]
+            return token.getTokenType() == TokenType::SemiColon || isAssignment(token.getTokenType());
+        });
+        if(result == tokens.rend())
+        {
+            throw std::runtime_error("Unexpected end of tokens");
+        }
+        bool assignment = result->getTokenType() != TokenType::SemiColon;
+        if (assignment)
+        {
+            return std::make_unique<AssignmentExpression>(parseAssignment(tokens));
+        }
+        else
+        {
+            return std::make_unique<ConditionalExpression>(parseConditionalExpression(tokens));
+        }
+    }
+
+    OpenCL::Parser::AssignmentExpression parseAssignment(Tokens& tokens)
+    {
+        auto unary = parseUnary(tokens);
+        auto currentToken = tokens.back();
+        tokens.pop_back();
+        auto assignment = parseNonCommaExpression(tokens);
+        return AssignmentExpression(std::move(unary),
+                                                          [assignment = currentToken.getTokenType()]
                                                           {
                                                               switch (assignment)
                                                               {
@@ -619,12 +661,7 @@ namespace
                                                                   throw std::runtime_error(
                                                                       "Invalid token for assignment");
                                                               }
-                                                          }());
-        }
-        else
-        {
-            return std::make_unique<ConditionalExpression>(parseConditionalExpression(tokens));
-        }
+                                                          }(),std::move(assignment));
     }
 
     OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens)
@@ -719,7 +756,7 @@ namespace
 
         std::vector<EqualityExpression> list;
         auto currToken = tokens.back();
-        while (currToken.getTokenType() == TokenType::BitAnd)
+        while (currToken.getTokenType() == TokenType::Ampersand)
         {
             tokens.pop_back();
             list.push_back(parseEqualityExpression(tokens));
@@ -821,7 +858,7 @@ namespace
 
         std::vector<std::pair<Term::BinaryDotOperator, std::unique_ptr<Factor>>> list;
         auto currToken = tokens.back();
-        while (currToken.getTokenType() == TokenType::Multiplication
+        while (currToken.getTokenType() == TokenType::Asterisk
             || currToken.getTokenType() == TokenType::Division
             || currToken.getTokenType() == TokenType::Modulo)
         {
@@ -830,7 +867,7 @@ namespace
                               {
                                   switch (currToken.getTokenType())
                                   {
-                                  case TokenType::Multiplication:return Term::BinaryDotOperator::BinaryMultiply;
+                                  case TokenType::Asterisk:return Term::BinaryDotOperator::BinaryMultiply;
                                   case TokenType::Division:return Term::BinaryDotOperator::BinaryDivide;
                                   case TokenType::Modulo:return Term::BinaryDotOperator::BinaryRemainder;
                                   default:throw std::runtime_error("Invalid token");
@@ -869,15 +906,12 @@ namespace
                     return std::make_unique<ParentheseFactor>(parseExpression(tokens));
                 }
             }
+            case TokenType::Ampersand:
+            case TokenType::Asterisk:
             case TokenType::Negation:
-                return std::make_unique<UnaryFactor>(UnaryFactor::UnaryOperator::UnaryNegation,
-                                                     parseFactor(tokens));
             case TokenType::BitWiseNegation:
-                return std::make_unique<UnaryFactor>(UnaryFactor::UnaryOperator::UnaryBitWiseNegation,
-                                                     parseFactor(tokens));
             case TokenType::LogicalNegation:
-                return std::make_unique<UnaryFactor>(UnaryFactor::UnaryOperator::UnaryLogicalNegation,
-                                                     parseFactor(tokens));
+                return std::make_unique<UnaryFactor>(parseUnary(tokens));
             case TokenType::Increment:
             {
                 auto nextToken = tokens.back();
@@ -980,5 +1014,23 @@ namespace
         }
 
         return result;
+    }
+
+    OpenCL::Parser::UnaryFactor parseUnary(Tokens& tokens)
+    {
+        switch(tokens.back().getTokenType())
+        {
+        case TokenType::Ampersand:
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryAddressOf,parseFactor(tokens));
+        case TokenType::Asterisk:
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryDereference,parseFactor(tokens));
+        case TokenType::Negation:
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryNegation,parseFactor(tokens));
+        case TokenType::BitWiseNegation:
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryBitWiseNegation,parseFactor(tokens));
+        case TokenType::LogicalNegation:
+            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryLogicalNegation,parseFactor(tokens));
+        default:break;
+        }
     }
 }

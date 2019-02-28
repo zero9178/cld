@@ -109,7 +109,25 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Type> ::= <TokenType::VoidKeyword>
+     * <Type> ::= <PrimitiveType> || <PointerType>
+     */
+    class Type
+    {
+    protected:
+
+        Type() = default;
+
+    public:
+
+        virtual bool isSigned() const = 0;
+
+        virtual bool isVoid() const = 0;
+
+        virtual llvm::Type* type(Context& context) const = 0;
+    };
+
+    /**
+     * <PrimitiveType> ::= <TokenType::VoidKeyword>
      *          | <TokenType::CharKeyword>
      *          | <TokenType::ShortKeyword>
      *          | <TokenType::IntKeyword>
@@ -128,7 +146,7 @@ namespace OpenCL::Parser
      *          | <TokenType::SignedKeyword>
      *          | <TokenType::UnsignedKeyword>}
      */
-    class Type
+    class PrimitiveType final : public Type
     {
     public:
 
@@ -150,16 +168,33 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit Type(std::vector<OpenCL::Parser::Type::Types>&& types);
+        explicit PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types);
 
-        bool isSigned() const;
+        bool isSigned() const override;
 
-        bool isVoid() const;
+        bool isVoid() const override;
 
-        llvm::Type* type(Context& context) const;
+        llvm::Type* type(Context& context) const override;
+    };
 
-        using variant = std::variant<std::int64_t,std::uint64_t,double>;
+    /**
+     * <PointerType> ::= <Type> <TokenType::Asterisk>
+     */
+    class PointerType final : public Type
+    {
+        std::unique_ptr<Type> m_type;
 
+    public:
+
+        explicit PointerType(std::unique_ptr<Type>&& type);
+
+        const Type& getType() const;
+
+        bool isSigned() const override;
+
+        bool isVoid() const override;
+
+        llvm::Type* type(Context& context) const override;
     };
 
     /**
@@ -187,53 +222,6 @@ namespace OpenCL::Parser
         const NonCommaExpression& getNonCommaExpression() const;
 
         const NonCommaExpression* getOptionalNonCommaExpression() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <AssignmentExpression> ::= <TokenType::Identifier> <AssignmentExpression::AssignOperator> <Expression>
-     */
-    class AssignmentExpression final : public NonCommaExpression
-    {
-        std::string m_identifier;
-        std::unique_ptr<NonCommaExpression> m_expression;
-
-    public:
-
-        /**
-         * <AssignmentExpression::AssignOperator>
-         */
-        enum class AssignOperator
-        {
-            NoOperator,///<<TokenType::Assignment>
-            PlusAssign,///<<TokenType::PlusAssign>
-            MinusAssign,///<<TokenType::MinusAssign>
-            DivideAssign,///<TokenType::DiviceAssign>
-            MultiplyAssign,///<<TokenType::MultiplyAssign>
-            ModuloAssign,///<<TokenType::ModuloAssign>
-            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
-            RightShiftAssign,///<<TokenType::RightShiftAssign>
-            BitAndAssign,///<<TokenType::BitAndAssign>
-            BitOrAssign,///<<TokenType::BitOrAssign>
-            BitXorAssign///<<TokenType::BitXorAssign>
-        };
-
-    private:
-
-        AssignOperator m_assignOperator;
-
-    public:
-
-        AssignmentExpression(std::string identifier,
-                             std::unique_ptr<NonCommaExpression>&& expression,
-                             AssignOperator assignOperator);
-
-        const std::string& getIdentifier() const;
-
-        const NonCommaExpression& getExpression() const;
-
-        AssignOperator getAssignOperator() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -277,12 +265,12 @@ namespace OpenCL::Parser
      */
      class CastFactor final : public Factor
      {
-         Type m_outType;
+         std::unique_ptr<Type> m_outType;
          Expression m_expression;
 
      public:
 
-         CastFactor(Type outType, Expression&& expression);
+         CastFactor(std::unique_ptr<Type>&& outType, Expression&& expression);
 
          const Type& getOutType() const;
 
@@ -303,6 +291,8 @@ namespace OpenCL::Parser
             UnaryNegation,
             UnaryBitWiseNegation,
             UnaryLogicalNegation,
+            UnaryAddressOf,
+            UnaryDereference
         };
 
     private:
@@ -317,6 +307,53 @@ namespace OpenCL::Parser
         UnaryOperator getUnaryOperator() const;
 
         const OpenCL::Parser::Factor& getFactor() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <AssignmentExpression> ::= <UnaryFactor> <AssignmentExpression::AssignOperator> <AssignmentExpression>
+     */
+    class AssignmentExpression final : public NonCommaExpression
+    {
+        UnaryFactor m_unaryFactor;
+
+    public:
+
+        /**
+         * <AssignmentExpression::AssignOperator>
+         */
+        enum class AssignOperator
+        {
+            NoOperator,///<<TokenType::Assignment>
+            PlusAssign,///<<TokenType::PlusAssign>
+            MinusAssign,///<<TokenType::MinusAssign>
+            DivideAssign,///<TokenType::DivideAssign>
+            MultiplyAssign,///<<TokenType::MultiplyAssign>
+            ModuloAssign,///<<TokenType::ModuloAssign>
+            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
+            RightShiftAssign,///<<TokenType::RightShiftAssign>
+            BitAndAssign,///<<TokenType::BitAndAssign>
+            BitOrAssign,///<<TokenType::BitOrAssign>
+            BitXorAssign///<<TokenType::BitXorAssign>
+        };
+
+    private:
+
+        AssignOperator m_assignOperator;
+        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
+
+    public:
+
+        AssignmentExpression(UnaryFactor&& unaryFactor,
+                             AssignOperator assignOperator,
+                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
+
+        const UnaryFactor& getUnaryFactor() const;
+
+        const NonCommaExpression& getNonCommaExpression() const;
+
+        AssignOperator getAssignOperator() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -880,13 +917,13 @@ namespace OpenCL::Parser
      */
     class Declaration final : public BlockItem
     {
-        Type m_type;
+        std::unique_ptr<Type> m_type;
         std::string m_name;
         std::unique_ptr<Expression> m_optionalExpression;
 
     public:
 
-        explicit Declaration(Type type,
+        explicit Declaration(std::unique_ptr<Type>&& type,
                                      std::string name,
                                      std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
@@ -998,16 +1035,16 @@ namespace OpenCL::Parser
      */
     class Function final : public Global
     {
-        Type m_returnType;
+        std::unique_ptr<Type> m_returnType;
         std::string m_name;
-        std::vector<std::pair<Type,std::string>> m_arguments;
+        std::vector<std::pair<std::unique_ptr<Type>,std::string>> m_arguments;
         std::unique_ptr<BlockStatement> m_block;
 
     public:
 
-        Function(Type returnType,
+        Function(std::unique_ptr<Type>&& returnType,
                  std::string name,
-                 std::vector<std::pair<Type,
+                 std::vector<std::pair<std::unique_ptr<Type>,
                                        std::string>> arguments,
                  std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
@@ -1015,7 +1052,7 @@ namespace OpenCL::Parser
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<Type, std::string>>& getArguments() const;
+        const std::vector<std::pair<std::unique_ptr<Type>, std::string>>& getArguments() const;
 
         const BlockStatement* getBlockStatement() const;
 
@@ -1024,13 +1061,13 @@ namespace OpenCL::Parser
 
     class GlobalDeclaration final : public Global
     {
-        Type m_type;
+        std::unique_ptr<Type> m_type;
         std::string m_name;
         std::unique_ptr<ConstantFactor> m_optionalValue;
 
     public:
 
-        explicit GlobalDeclaration(Type type,
+        explicit GlobalDeclaration(std::unique_ptr<Type>&& type,
                                            std::string name,
                                            std::unique_ptr<ConstantFactor>&& value = nullptr);
 
