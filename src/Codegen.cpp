@@ -1495,3 +1495,20 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(Open
 {
     return std::pair<llvm::Value*, bool>();
 }
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::UnaryExpressionPostFixExpression::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::UnaryExpressionUnaryOperator::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryExpressionSizeOf::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}

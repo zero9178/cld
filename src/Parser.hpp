@@ -301,10 +301,9 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <ArgumentExpressionList> ::= <AssignmentExpression>
-     *                            | <ArgumentExpressionList> <TokenType::Comma> <AssignmentExpression>
+     * <ArgumentExpressionList> ::= <AssignmentExpression> { <TokenType::Comma> <AssignmentExpression>}
      */
-    class ArgumentExpressionList
+    class ArgumentExpressionList final : public Node
     {
 
     };
@@ -386,23 +385,101 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <UnaryExpression> ::= <PostFixExpression>
-     *                     | <TokenType::Increment> <UnaryExpression>
-     *                     | <TokenType::Decrement> <UnaryExpression>
-     *                     | <TokenType::Ampersand> <UnaryExpression>
-     *                     | <TokenType::Asterisk> <UnaryExpression>
-     *                     | <TokenType::Plus> <UnaryExpression>
-     *                     | <TokenType::Minus> <UnaryExpression>
-     *                     | <TokenType::BitNot> <UnaryExpression>
-     *                     | <TokenType::LogicalNot> <UnaryExpression>
-     *                     | <TokenType::SizeOfKeyword> <UnaryExpression>
-     *                     | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
+     * <UnaryExpression> ::= <UnaryExpressionPostFixExpression>
+     *                     | <UnaryExpressionUnaryOperator>
+     *                     | <UnaryExpressionSizeOf>
      */
     class UnaryExpression : public Node
     {
     protected:
 
         UnaryExpression() = default;
+    };
+
+    /**
+     * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
+     */
+    class UnaryExpressionPostFixExpression final : public UnaryExpression
+    {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+
+    public:
+
+        explicit UnaryExpressionPostFixExpression(std::unique_ptr<PostFixExpression>&& postFixExpression);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <UnaryExpressionUnaryOperator> ::= <TokenType::Increment> <UnaryExpression>
+     *                                  | <TokenType::Decrement> <UnaryExpression>
+     *                                  | <TokenType::Ampersand> <UnaryExpression>
+     *                                  | <TokenType::Asterisk> <UnaryExpression>
+     *                                  | <TokenType::Plus> <UnaryExpression>
+     *                                  | <TokenType::Minus> <UnaryExpression>
+     *                                  | <TokenType::BitNot> <UnaryExpression>
+     *                                  | <TokenType::LogicalNot> <UnaryExpression>
+     */
+    class UnaryExpressionUnaryOperator final : public UnaryExpression
+    {
+    public:
+
+        enum class UnaryOperator
+        {
+            Increment,
+            Decrement,
+            Ampersand,
+            Asterisk,
+            Plus,
+            Minus,
+            BitNot,
+            LogicalNot
+        };
+
+    private:
+
+        UnaryOperator m_operator;
+        std::unique_ptr<UnaryExpression> m_unaryExpression;
+
+    public:
+
+        UnaryExpressionUnaryOperator(UnaryOperator anOperator, std::unique_ptr<UnaryExpression>&& unaryExpression);
+
+        UnaryOperator getAnOperator() const;
+
+        const UnaryExpression& getUnaryExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
+     *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
+     */
+    class UnaryExpressionSizeOf final : public UnaryExpression
+    {
+        std::variant<std::unique_ptr<UnaryExpression>,std::unique_ptr<Type>> m_unaryOrType;
+
+    public:
+
+        explicit UnaryExpressionSizeOf(std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<Type>>&& unaryOrType);
+
+        const std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<Type>>& getUnaryOrType() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <CastExpression> ::= <UnaryExpression>
+     *                    | <TokenType::OpenParenthese> <Type> <TokenType::CloseParentheses> <CastExpression>
+     */
+    class CastExpression final : public Node
+    {
+        std::variant<std::unique_ptr<UnaryExpression>,std::pair<std::unique_ptr<Type>,std::unique_ptr<CastExpression>>> m_unaryOrCast;
+
+
     };
 
     /**

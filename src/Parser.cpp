@@ -685,3 +685,37 @@ const std::string& OpenCL::Parser::PostFixExpressionDot::getIdentifier() const
     return m_identifier;
 }
 
+OpenCL::Parser::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(std::unique_ptr<PostFixExpression>&& postFixExpression)
+    : m_postFixExpression(std::move(postFixExpression))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::UnaryExpressionPostFixExpression::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+OpenCL::Parser::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(OpenCL::Parser::UnaryExpressionUnaryOperator::UnaryOperator anOperator,
+                                                                           std::unique_ptr<UnaryExpression>&& unaryExpression)
+    : m_operator(anOperator), m_unaryExpression(std::move(unaryExpression))
+{}
+
+OpenCL::Parser::UnaryExpressionUnaryOperator::UnaryOperator OpenCL::Parser::UnaryExpressionUnaryOperator::getAnOperator() const
+{
+    return m_operator;
+}
+
+const OpenCL::Parser::UnaryExpression& OpenCL::Parser::UnaryExpressionUnaryOperator::getUnaryExpression() const
+{
+    return *m_unaryExpression;
+}
+
+OpenCL::Parser::UnaryExpressionSizeOf::UnaryExpressionSizeOf(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
+                                                                                std::unique_ptr<OpenCL::Parser::Type>>&& unaryOrType)
+    : m_unaryOrType(std::move(unaryOrType))
+{}
+
+const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
+                   std::unique_ptr<OpenCL::Parser::Type>>& OpenCL::Parser::UnaryExpressionSizeOf::getUnaryOrType() const
+{
+    return m_unaryOrType;
+}
