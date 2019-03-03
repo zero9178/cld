@@ -13,7 +13,7 @@ namespace OpenCL::Parser
 
     class Context
     {
-        using tuple = std::tuple<llvm::Value*, bool>;
+        using tuple = std::pair<llvm::Value*, bool>;
 
         struct Function
         {
@@ -277,7 +277,7 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PrimaryExpressionConstant(const variant& value);
+        explicit PrimaryExpressionConstant(variant value);
 
         const variant& getValue() const;
 
@@ -289,23 +289,15 @@ namespace OpenCL::Parser
      */
     class PrimaryExpressionParenthese final : public PrimaryExpression
     {
-        std::unique_ptr<Expression> m_expression;
+        Expression m_expression;
 
     public:
 
-        explicit PrimaryExpressionParenthese(std::unique_ptr<Expression>&& expression);
+        explicit PrimaryExpressionParenthese(Expression&& expression);
 
         const Expression& getExpression() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <ArgumentExpressionList> ::= <AssignmentExpression> { <TokenType::Comma> <AssignmentExpression>}
-     */
-    class ArgumentExpressionList final : public Node
-    {
-
     };
 
     /**
@@ -316,8 +308,6 @@ namespace OpenCL::Parser
      *                       | <PostFixExpression> "->" <TokenType::Identifier>
      *                       | <PostFixExpression> <TokenType::Increment>
      *                       | <PostFixExpression> <TokenType::Decrement>
-     *                       | <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese> <TokenType::OpenBrace>
-     *                                                      <InitializerList> <TokenType::CloseBrace>
      */
     class PostFixExpression : public Node
     {
@@ -325,7 +315,6 @@ namespace OpenCL::Parser
 
         PostFixExpression() = default;
     };
-
 
     /**
      * <PostFixExpressionPrimaryExpression> ::= <PrimaryExpression>
@@ -397,6 +386,73 @@ namespace OpenCL::Parser
     };
 
     /**
+     * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
+     */
+    class AssignmentExpression final : public NonCommaExpression
+    {
+        std::unique_ptr<UnaryExpression> m_unaryFactor;
+
+    public:
+
+        /**
+         * <AssignmentExpression::AssignOperator>
+         */
+        enum class AssignOperator
+        {
+            NoOperator,///<<TokenType::Assignment>
+            PlusAssign,///<<TokenType::PlusAssign>
+            MinusAssign,///<<TokenType::MinusAssign>
+            DivideAssign,///<TokenType::DivideAssign>
+            MultiplyAssign,///<<TokenType::MultiplyAssign>
+            ModuloAssign,///<<TokenType::ModuloAssign>
+            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
+            RightShiftAssign,///<<TokenType::RightShiftAssign>
+            BitAndAssign,///<<TokenType::BitAndAssign>
+            BitOrAssign,///<<TokenType::BitOrAssign>
+            BitXorAssign///<<TokenType::BitXorAssign>
+        };
+
+    private:
+
+        AssignOperator m_assignOperator;
+        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
+
+    public:
+
+        AssignmentExpression(std::unique_ptr<UnaryExpression>&& unaryFactor,
+                             AssignOperator assignOperator,
+                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
+
+        const UnaryExpression& getUnaryFactor() const;
+
+        const NonCommaExpression& getNonCommaExpression() const;
+
+        AssignOperator getAssignOperator() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <ArgumentExpressionList> ::= <AssignmentExpression> { <TokenType::Comma> <AssignmentExpression>}
+     */
+    class ArgumentExpressionList final : public Node
+    {
+        AssignmentExpression m_assignmentExpression;
+        std::vector<AssignmentExpression> m_optionalAssignmanetExpressions;
+
+    public:
+
+        ArgumentExpressionList(AssignmentExpression&& assignmentExpression,
+                               std::vector<AssignmentExpression>&& optionalAssignmanetExpressions);
+
+        const AssignmentExpression& getAssignmentExpression() const;
+
+        const std::vector<AssignmentExpression>& getOptionalAssignmanetExpressions() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
      * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
      */
     class UnaryExpressionPostFixExpression final : public UnaryExpression
@@ -417,10 +473,10 @@ namespace OpenCL::Parser
      *                                  | <TokenType::Decrement> <UnaryExpression>
      *                                  | <TokenType::Ampersand> <UnaryExpression>
      *                                  | <TokenType::Asterisk> <UnaryExpression>
-     *                                  | <TokenType::Plus> <UnaryExpression>
-     *                                  | <TokenType::Minus> <UnaryExpression>
-     *                                  | <TokenType::BitNot> <UnaryExpression>
-     *                                  | <TokenType::LogicalNot> <UnaryExpression>
+     *                                  | <TokenType::Addition> <UnaryExpression>
+     *                                  | <TokenType::Negation> <UnaryExpression>
+     *                                  | <TokenType::BitWiseNegation> <UnaryExpression>
+     *                                  | <TokenType::LogicalNegation> <UnaryExpression>
      */
     class UnaryExpressionUnaryOperator final : public UnaryExpression
     {
@@ -479,275 +535,24 @@ namespace OpenCL::Parser
     {
         std::variant<std::unique_ptr<UnaryExpression>,std::pair<std::unique_ptr<Type>,std::unique_ptr<CastExpression>>> m_unaryOrCast;
 
-
-    };
-
-    /**
-     * <Factor>
-     * ::=  <FunctionCall>
-     * |    <ParentheseFactor>
-     * |    <UnaryFactor>
-     * |    <ConstantFactor>
-     * |    <VariableFactor>
-     * |    <PostIncrement>
-     * |    <PreIncrement>
-     * |    <PreDecrement>
-     * |    <PostDecrement>
-     */
-    class Factor : public Node
-    {
-    protected:
-        Factor() = default;
-    };
-
-    /**
-     * <ParentheseFactor> ::= <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
-     */
-    class ParentheseFactor final : public Factor
-    {
-        Expression m_expression;
-
     public:
 
-        explicit ParentheseFactor(Expression&& expression);
+        explicit CastExpression(std::variant<std::unique_ptr<UnaryExpression>,
+                                          std::pair<std::unique_ptr<Type>,
+                                                    std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
-        const Expression& getExpression() const;
+        const std::variant<std::unique_ptr<UnaryExpression>,
+                           std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
     /**
-     * <CastFactor> ::= <TokenType::OpenParanthese> <Type> <TokenType::CloseParanthese> <Expression>
-     */
-    class CastFactor final : public Factor
-    {
-        std::unique_ptr<Type> m_outType;
-        Expression m_expression;
-
-    public:
-
-        CastFactor(std::unique_ptr<Type>&& outType, Expression&& expression);
-
-        const Type& getOutType() const;
-
-        const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <UnaryFactor> ::= <UnaryFactor::UnaryOperator> <Factor>
-     */
-    class UnaryFactor final : public Factor
-    {
-    public:
-
-        enum class UnaryOperator
-        {
-            UnaryNegation,
-            UnaryBitWiseNegation,
-            UnaryLogicalNegation,
-            UnaryAddressOf,
-            UnaryDereference
-        };
-
-    private:
-
-        UnaryOperator m_unaryOperator;
-        std::unique_ptr<Factor> m_factor;
-
-    public:
-
-        UnaryFactor(UnaryOperator unaryOperator, std::unique_ptr<Factor>&& factor);
-
-        UnaryOperator getUnaryOperator() const;
-
-        const OpenCL::Parser::Factor& getFactor() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <AssignmentExpression> ::= <UnaryFactor> <AssignmentExpression::AssignOperator> <AssignmentExpression>
-     */
-    class AssignmentExpression final : public NonCommaExpression
-    {
-        UnaryFactor m_unaryFactor;
-
-    public:
-
-        /**
-         * <AssignmentExpression::AssignOperator>
-         */
-        enum class AssignOperator
-        {
-            NoOperator,///<<TokenType::Assignment>
-            PlusAssign,///<<TokenType::PlusAssign>
-            MinusAssign,///<<TokenType::MinusAssign>
-            DivideAssign,///<TokenType::DivideAssign>
-            MultiplyAssign,///<<TokenType::MultiplyAssign>
-            ModuloAssign,///<<TokenType::ModuloAssign>
-            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
-            RightShiftAssign,///<<TokenType::RightShiftAssign>
-            BitAndAssign,///<<TokenType::BitAndAssign>
-            BitOrAssign,///<<TokenType::BitOrAssign>
-            BitXorAssign///<<TokenType::BitXorAssign>
-        };
-
-    private:
-
-        AssignOperator m_assignOperator;
-        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
-
-    public:
-
-        AssignmentExpression(UnaryFactor&& unaryFactor,
-                             AssignOperator assignOperator,
-                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
-
-        const UnaryFactor& getUnaryFactor() const;
-
-        const NonCommaExpression& getNonCommaExpression() const;
-
-        AssignOperator getAssignOperator() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <ConstantFactor> ::= <TokenType::IntegerLiteral>
-     */
-    class ConstantFactor final : public Factor
-    {
-    public:
-
-        using variant = std::variant<std::int32_t,
-                                     std::uint32_t,
-                                     std::int64_t,
-                                     std::uint64_t,
-                                     float,
-                                     double,
-                                     std::string>;
-
-    private:
-
-        variant m_value;
-
-    public:
-
-        explicit ConstantFactor(const variant& value);
-
-        const variant& getValue() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <VariableFactor> ::= <TokenType::Identifier>
-     */
-    class VariableFactor final : public Factor
-    {
-        std::string m_name;
-
-    public:
-
-        explicit VariableFactor(std::string name);
-
-        const std::string& getName() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <PostIncrement> ::= <TokenType::Identifier> <TokenType::Increment>
-     */
-    class PostIncrement final : public Factor
-    {
-        std::string m_name;
-
-    public:
-
-        explicit PostIncrement(std::string name);
-
-        const std::string& getName() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <PreIncrement> ::= <TokenType::Increment> <TokenType::Identifier>
-     */
-    class PreIncrement final : public Factor
-    {
-        std::string m_name;
-
-    public:
-
-        explicit PreIncrement(std::string name);
-
-        const std::string& getName() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <PostDecrement> ::= <TokenType::Identifier> <TokenType::Decrement>
-     */
-    class PostDecrement final : public Factor
-    {
-        std::string m_name;
-
-    public:
-
-        explicit PostDecrement(std::string name);
-
-        const std::string& getName() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <PreDecrement> ::= <TokenType::Decrement> <TokenType::Identifier>
-     */
-    class PreDecrement final : public Factor
-    {
-        std::string m_name;
-
-    public:
-
-        explicit PreDecrement(std::string name);
-
-        const std::string& getName() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <FunctionCall> ::= <TokenType::Identifier> <TokenType::OpenParenthese>
-     *                    [ <NonCommaExpression> { <TokenType::Colon> <NonCommaExpression> } ] <TokenType::CloseParenthese>
-     */
-    class FunctionCall final : public Factor
-    {
-        std::string m_name;
-        std::vector<std::unique_ptr<NonCommaExpression>> m_expressions;
-
-    public:
-
-        FunctionCall(std::string name, std::vector<std::unique_ptr<NonCommaExpression>> expressions);
-
-        const std::string& getName() const;
-
-        const std::vector<std::unique_ptr<NonCommaExpression>>& getExpressions() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <Term> ::= <Factor> { <Term::BinaryDotOperator> <Factor> }
+     * <Term> ::= <CastExpression> { <Term::BinaryDotOperator> <CastExpressions> }
      */
     class Term final : public Node
     {
-        std::unique_ptr<Factor> m_factor;
+        CastExpression m_castExpression;
 
     public:
 
@@ -763,16 +568,16 @@ namespace OpenCL::Parser
 
     private:
 
-        std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>> m_optionalFactors;
+        std::vector<std::pair<BinaryDotOperator, CastExpression>> m_optionalCastExpressions;
 
     public:
 
-        Term(std::unique_ptr<Factor>&& factor,
-             std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>>&& optionalFactors);
+        Term(CastExpression&& castExpressions,
+             std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
 
-        const Factor& getFactor() const;
+        const CastExpression& getCastExpression() const;
 
-        const std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>>& getOptionalFactors() const;
+        const std::vector<std::pair<BinaryDotOperator, CastExpression>>& getOptionalCastExpressions() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -1325,19 +1130,19 @@ namespace OpenCL::Parser
     {
         std::unique_ptr<Type> m_type;
         std::string m_name;
-        std::unique_ptr<ConstantFactor> m_optionalValue;
+        std::unique_ptr<PrimaryExpressionConstant> m_optionalValue;
 
     public:
 
         explicit GlobalDeclaration(std::unique_ptr<Type>&& type,
                                    std::string name,
-                                   std::unique_ptr<ConstantFactor>&& value = nullptr);
+                                   std::unique_ptr<PrimaryExpressionConstant>&& value = nullptr);
 
         const Type& getType() const;
 
         const std::string& getName() const;
 
-        const ConstantFactor* getOptionalValue() const;
+        const PrimaryExpressionConstant* getOptionalValue() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };

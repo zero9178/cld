@@ -42,9 +42,13 @@ namespace
 
     OpenCL::Parser::Term parseTerm(Tokens& tokens);
 
-    std::unique_ptr<OpenCL::Parser::Factor> parseFactor(Tokens& tokens);
+    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens);
 
-    OpenCL::Parser::UnaryFactor parseUnary(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens);
+
+    std::unique_ptr<OpenCL::Parser::PostFixExpression> parsePostFixExpression(Tokens& tokens);
+
+    std::unique_ptr<OpenCL::Parser::PrimaryExpression> parsePrimaryExpression(Tokens& tokens);
 
     std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens);
 }
@@ -154,11 +158,11 @@ namespace
             tokens.pop_back();
             if (currToken.getTokenType() != TokenType::Literal)
             {
-                throw std::runtime_error("Can only use Integer literal to initialize global declaration");
+                throw std::runtime_error("Can only use Constant expression to initialize global declaration");
             }
-            auto variant = std::visit([](auto&& value) -> typename ConstantFactor::variant
+            auto variant = std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
                                       {
-                                          if constexpr(std::is_constructible_v<typename ConstantFactor::variant,
+                                          if constexpr(std::is_constructible_v<typename PrimaryExpressionConstant::variant,
                                                                                decltype(value)>)
                                           {
                                               return {value};
@@ -174,7 +178,7 @@ namespace
                 throw std::runtime_error("Expected ; after initialization of global declaration");
             }
             tokens.pop_back();
-            return GlobalDeclaration(std::move(type), name, std::make_unique<ConstantFactor>(std::move(variant)));
+            return GlobalDeclaration(std::move(type), name, std::make_unique<PrimaryExpressionConstant>(std::move(variant)));
         }
         else
         {
@@ -632,7 +636,7 @@ namespace
 
     OpenCL::Parser::AssignmentExpression parseAssignment(Tokens& tokens)
     {
-        auto unary = parseUnary(tokens);
+        auto unary = parseUnaryExpression(tokens);
         auto currentToken = tokens.back();
         tokens.pop_back();
         auto assignment = parseNonCommaExpression(tokens);
@@ -849,9 +853,9 @@ namespace
 
     OpenCL::Parser::Term parseTerm(Tokens& tokens)
     {
-        auto result = parseFactor(tokens);
+        auto result = parseCastExpression(tokens);
 
-        std::vector<std::pair<Term::BinaryDotOperator, std::unique_ptr<Factor>>> list;
+        std::vector<std::pair<Term::BinaryDotOperator,CastExpression>> list;
         auto currToken = tokens.back();
         while (currToken.getTokenType() == TokenType::Asterisk
             || currToken.getTokenType() == TokenType::Division
@@ -867,172 +871,157 @@ namespace
                                   case TokenType::Modulo:return Term::BinaryDotOperator::BinaryRemainder;
                                   default:throw std::runtime_error("Invalid token");
                                   }
-                              }(), parseFactor(tokens));
+                              }(), parseCastExpression(tokens));
             currToken = tokens.back();
         }
 
         return Term(std::move(result), std::move(list));
     }
 
-    std::unique_ptr<OpenCL::Parser::Factor> parseFactor(Tokens& tokens)
+    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens)
     {
-        auto currToken = tokens.back();
-        auto result = [&]() -> std::unique_ptr<Factor>
+        auto currToken = tokens.rbegin();
+        if(currToken->getTokenType() == TokenType::OpenParenthese)
         {
-            switch (currToken.getTokenType())
+            currToken++;
+            if(isType(currToken->getTokenType()) && currToken->getTokenType() != TokenType::Asterisk)
             {
-            case TokenType::OpenParenthese:
-            {
-                tokens.pop_back();
-                currToken = tokens.back();
-                if (isType(currToken.getTokenType()))
+                auto result = std::find_if(currToken + 1,tokens.rend(),[](const Token& token)
                 {
+                    return token.getTokenType() == TokenType::CloseParenthese || token.getTokenType() == TokenType::OpenBrace;
+                });
+                if(result == tokens.rend())
+                {
+                    throw std::runtime_error("Unexpected end of tokens");
+                }
+                if(result->getTokenType() == TokenType::CloseBrace)
+                {
+                    tokens.pop_back();
                     auto type = parseType(tokens);
-                    currToken = tokens.back();
-                    tokens.pop_back();
-                    if (currToken.getTokenType() != TokenType::CloseParenthese)
+                    if(tokens.back().getTokenType() != TokenType::CloseParenthese)
                     {
-                        throw std::runtime_error("Expected Closing Parenthese after type cast");
+                        throw std::runtime_error("Expected Close Parenthese after type cast");
                     }
-                    return std::make_unique<CastFactor>(std::move(type), parseExpression(tokens));
-                }
-                else
-                {
-                    return std::make_unique<ParentheseFactor>(parseExpression(tokens));
-                }
-            }
-            case TokenType::Ampersand:
-            case TokenType::Asterisk:
-            case TokenType::Negation:
-            case TokenType::BitWiseNegation:
-            case TokenType::LogicalNegation:return std::make_unique<UnaryFactor>(parseUnary(tokens));
-            case TokenType::Increment:
-            {
-                tokens.pop_back();
-                auto nextToken = tokens.back();
-                if (nextToken.getTokenType() != TokenType::Identifier)
-                {
-                    throw std::runtime_error("Increment can only be applied to a variable");
-                }
-                tokens.pop_back();
-                return std::make_unique<PreIncrement>(std::get<std::string>(nextToken.getValue()));
-            }
-            case TokenType::Decrement:
-            {
-                tokens.pop_back();
-                auto nextToken = tokens.back();
-                if (nextToken.getTokenType() != TokenType::Identifier)
-                {
-                    throw std::runtime_error("Increment can only be applied to a variable");
-                }
-                tokens.pop_back();
-                return std::make_unique<PreDecrement>(std::get<std::string>(nextToken.getValue()));
-            }
-            case TokenType::Identifier:
-            {
-                tokens.pop_back();
-                auto nextToken = tokens.back();
-                switch (nextToken.getTokenType())
-                {
-                case TokenType::Increment:
-                {
                     tokens.pop_back();
-                    return std::make_unique<PostIncrement>(std::get<std::string>(currToken.getValue()));
-                }
-                case TokenType::Decrement:
-                {
-                    tokens.pop_back();
-                    return std::make_unique<PostDecrement>(std::get<std::string>(currToken.getValue()));
-                }
-                case TokenType::OpenParenthese:
-                {
-                    tokens.pop_back();
-                    auto name = std::get<std::string>(currToken.getValue());
-                    std::vector<std::unique_ptr<NonCommaExpression>> result;
-                    if (tokens.back().getTokenType() != TokenType::CloseParenthese)
-                    {
-                        while (true)
-                        {
-                            result.push_back(parseNonCommaExpression(tokens));
-                            currToken = tokens.back();
-                            if (currToken.getTokenType() == TokenType::CloseParenthese)
-                            {
-                                break;
-                            }
-                            else if (currToken.getTokenType() != TokenType::Comma)
-                            {
-                                throw std::runtime_error("Expected Comma between function arguments");
-                            }
-                            else
-                            {
-                                tokens.pop_back();
-                            }
-                        }
-                    }
-                    currToken = tokens.back();
-                    tokens.pop_back();
-                    if (currToken.getTokenType() != TokenType::CloseParenthese)
-                    {
-                        throw std::runtime_error("Expected ) at the end of function call");
-                    }
-                    return std::make_unique<FunctionCall>(name, std::move(result));
-                }
-                default:
-                {
-                    return std::make_unique<VariableFactor>(std::get<std::string>(currToken.getValue()));
-                }
+                    return CastExpression(std::pair<std::unique_ptr<Type>,std::unique_ptr<CastExpression>>{std::move(type),std::make_unique<CastExpression>(parseCastExpression(tokens))});
                 }
             }
-            case TokenType::Literal:
-            {
-                tokens.pop_back();
-                return std::make_unique<ConstantFactor>(std::visit([](auto&& value) -> typename ConstantFactor::variant
-                                                                   {
-                                                                       if constexpr(std::is_constructible_v<typename ConstantFactor::variant,
-                                                                                                            decltype(value)>)
-                                                                       {
-                                                                           return {value};
-                                                                       }
-                                                                       else
-                                                                       {
-                                                                           throw std::runtime_error(
-                                                                               "Invalid value in variant of literal");
-                                                                       }
-                                                                   }, currToken.getValue()));
-            }
-            default:throw std::runtime_error("Invalid token");
-            }
-        }();
-
-        if (dynamic_cast<ParentheseFactor*>(result.get()))
-        {
-            if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseParenthese)
-            {
-                throw std::runtime_error("Expected )");
-            }
-            tokens.pop_back();
         }
-
-        return result;
+        return CastExpression(parseUnaryExpression(tokens));
     }
 
-    OpenCL::Parser::UnaryFactor parseUnary(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens)
+    {
+        auto currToken = tokens.back();
+        if(currToken.getTokenType() == TokenType::SizeofKeyword)
+        {
+            tokens.pop_back();
+            currToken = tokens.back();
+            if(currToken.getTokenType() == TokenType::OpenParenthese)
+            {
+                tokens.pop_back();
+                auto type = parseType(tokens);
+                currToken = tokens.back();
+                if(currToken.getTokenType() != TokenType::CloseParenthese)
+                {
+                    throw std::runtime_error("Expected Close Parenthese after type in sizeof");
+                }
+                tokens.pop_back();
+                return std::make_unique<UnaryExpressionSizeOf>(std::move(type));
+            }
+            else
+            {
+                auto unary = parseUnaryExpression(tokens);
+                return std::make_unique<UnaryExpressionSizeOf>(std::move(unary));
+            }
+        }
+        else if(currToken.getTokenType() == TokenType::Increment
+        || currToken.getTokenType() == TokenType::Decrement
+        || currToken.getTokenType() == TokenType::Ampersand
+        || currToken.getTokenType() == TokenType::Asterisk
+        || currToken.getTokenType() == TokenType::Addition
+        || currToken.getTokenType() == TokenType::Negation
+        || currToken.getTokenType() == TokenType::LogicalNegation
+        || currToken.getTokenType() == TokenType::BitWiseNegation)
+        {
+            tokens.pop_back();
+            auto op = [&currToken]
+            {
+                switch (currToken.getTokenType())
+                {
+                case TokenType::Increment:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Increment;
+                case TokenType::Decrement:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Decrement;
+                case TokenType::Ampersand:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Ampersand;
+                case TokenType::Asterisk:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Asterisk;
+                case TokenType::Addition:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Plus;
+                case TokenType::Negation:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::Minus;
+                case TokenType::LogicalNegation:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::BitNot;
+                case TokenType::BitWiseNegation:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot;
+                default:
+                    throw std::runtime_error("Invalid token");
+                }
+            }();
+            return std::make_unique<UnaryExpressionUnaryOperator>(op,parseUnaryExpression(tokens));
+        }
+        return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens));
+    }
+
+    std::unique_ptr<PostFixExpression> parsePostFixExpression(Tokens& tokens)
+    {
+        auto currToken = tokens.back();//TODO: This should be recursive
+        if(currToken.getTokenType() == TokenType::Identifier
+        || currToken.getTokenType() == TokenType::Literal
+        || currToken.getTokenType() == TokenType::OpenParenthese)
+        {
+            return std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens));
+        }
+        auto postFixExpression = parsePostFixExpression(tokens);
+    }
+
+    std::unique_ptr<PrimaryExpression> parsePrimaryExpression(Tokens& tokens)
     {
         auto currToken = tokens.back();
         tokens.pop_back();
-        switch (currToken.getTokenType())
+        if(currToken.getTokenType() == TokenType::Identifier)
         {
-        case TokenType::Ampersand:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryAddressOf, parseFactor(tokens));
-        case TokenType::Asterisk:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryDereference, parseFactor(tokens));
-        case TokenType::Negation:return UnaryFactor(UnaryFactor::UnaryOperator::UnaryNegation, parseFactor(tokens));
-        case TokenType::BitWiseNegation:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryBitWiseNegation,
-                               parseFactor(tokens));
-        case TokenType::LogicalNegation:
-            return UnaryFactor(UnaryFactor::UnaryOperator::UnaryLogicalNegation,
-                               parseFactor(tokens));
-        default:break;
+            return std::make_unique<PrimaryExpressionIdentifier>(std::get<std::string>(currToken.getValue()));
         }
-        throw std::runtime_error("Invalid token for Unary expression");
+        else if(currToken.getTokenType() == TokenType::Literal)
+        {
+            return std::make_unique<PrimaryExpressionConstant>(std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
+            {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr(std::is_constructible_v<typename PrimaryExpressionConstant::variant,T>)
+                {
+                    return {std::forward<decltype(value)>(value)};
+                }
+                else
+                {
+                    throw std::runtime_error("Can't convert type of variant to constant expression");
+                }
+                },currToken.getValue()));
+        }
+        else if(currToken.getTokenType() == TokenType::OpenParenthese)
+        {
+            auto expression = parseExpression(tokens);
+            if(tokens.back().getTokenType() != TokenType::CloseParenthese)
+            {
+                throw std::runtime_error("Expected Close Parenthese after expression in primary expression");
+            }
+            tokens.pop_back();
+            return std::make_unique<PrimaryExpressionParenthese>(std::move(expression));
+        }
+        else
+        {
+            throw std::runtime_error("Invalid token for primary expression");
+        }
     }
 }

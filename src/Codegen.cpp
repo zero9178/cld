@@ -165,63 +165,6 @@ namespace
     }
 }
 
-std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryFactor::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[factor, sign] = getFactor().codegen(context);
-    switch (getUnaryOperator())
-    {
-    case UnaryOperator::UnaryNegation:
-    {
-        if (factor->getType()->isIntegerTy())
-        {
-            return {context.builder.CreateNeg(factor), true};
-        }
-        else
-        {
-            return {context.builder.CreateFNeg(factor), true};
-        }
-    }
-    case UnaryOperator::UnaryBitWiseNegation:
-    {
-        if (!factor->getType()->isIntegerTy())
-        {
-            throw std::runtime_error("Cannot apply ~ operator to non integer type");
-        }
-        return {context.builder.CreateNot(factor), sign};
-    }
-    case UnaryOperator::UnaryAddressOf:
-    {
-        if (!llvm::isa<llvm::LoadInst>(factor))
-        {
-            throw std::runtime_error("Cannot take address of type");
-        }
-        return {llvm::cast<llvm::LoadInst>(factor)->getPointerOperand(), false};
-    }
-    case UnaryOperator::UnaryDereference:
-    {
-        return {context.builder.CreateLoad(factor), sign};
-    }
-    case UnaryOperator::UnaryLogicalNegation:
-    {
-        if (factor->getType()->isIntegerTy() && factor->getType()->getIntegerBitWidth() > 1)
-        {
-            factor = context.builder.CreateICmpNE(factor,
-                                                  context.builder.getIntN(factor->getType()->getIntegerBitWidth(), 0));
-        }
-        else if (factor->getType()->isFloatingPointTy())
-        {
-            factor = context.builder.CreateFCmpUNE(factor, llvm::ConstantFP::get(factor->getType(), 0.0));
-        }
-        else
-        {
-            throw std::runtime_error("Cannot apply ! operator to specified type");
-        }
-        return {context.builder.CreateZExt(context.builder.CreateNot(factor), context.builder.getInt32Ty()), true};
-    }
-    }
-    return {nullptr, false};
-}
-
 std::pair<llvm::Value*, bool> OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
 {
     context.module = std::make_unique<llvm::Module>("main", context.context);
@@ -748,10 +691,10 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::Term::codegen(OpenCL::Parser::Context& context) const
 {
-    auto[left, sign] = getFactor().codegen(context);
-    for (auto&[op, factor] : getOptionalFactors())
+    auto[left, sign] = getCastExpression().codegen(context);
+    for (auto&[op, cast] : getOptionalCastExpressions())
     {
-        auto[right, rsign] = factor->codegen(context);
+        auto[right, rsign] = cast.codegen(context);
         arithmeticCast(left, sign, right, rsign, context);
 
         switch (op)
@@ -1138,167 +1081,6 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::ConditionalExpression::codegen(Ope
     return {value, vsign};
 }
 
-std::pair<llvm::Value*, bool> OpenCL::Parser::ParentheseFactor::codegen(OpenCL::Parser::Context& context) const
-{
-    return getExpression().codegen(context);
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::ConstantFactor::codegen(OpenCL::Parser::Context& context) const
-{
-    return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, bool>
-                      {
-                          using T = std::decay_t<decltype(value)>;
-                          if constexpr(std::is_same_v<T, std::int32_t>)
-                          {
-                              return {llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.context), value, true),
-                                      true};
-                          }
-                          else if constexpr(std::is_same_v<T, std::uint32_t>)
-                          {
-                              return {llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.context), value, false),
-                                      false};
-                          }
-                          else if constexpr(std::is_same_v<T, std::int64_t>)
-                          {
-                              return {llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context), value, true),
-                                      true};
-                          }
-                          else if constexpr(std::is_same_v<T, std::uint64_t>)
-                          {
-                              return {llvm::ConstantInt::get(llvm::Type::getInt64Ty(context.context), value, false),
-                                      false};
-                          }
-                          else if constexpr(std::is_same_v<T, float>)
-                          {
-                              return {llvm::ConstantFP::get(llvm::Type::getFloatTy(context.context), value), true};
-                          }
-                          else if constexpr(std::is_same_v<T, double>)
-                          {
-                              return {llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.context), value), true};
-                          }
-                          else
-                          {
-                              return {nullptr, false};
-                          }
-                      }, getValue());
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::VariableFactor::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[value, sign] = context.getNamedValue(getName());
-    if (!value)
-    {
-        throw std::runtime_error("Undefined reference to variable " + getName());
-    }
-    return {context.builder.CreateLoad(value, getName().c_str()), sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::PostIncrement::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[left, sign] = context.getNamedValue(getName());
-    if (!left)
-    {
-        throw std::runtime_error("Undefined reference to variable " + getName());
-    }
-    auto* value = context.builder.CreateLoad(left, "prevVal");
-    if (value->getType()->isIntegerTy())
-    {
-        context.builder.CreateStore(context.builder.CreateAdd(value,
-                                                              context.builder
-                                                                     .getIntN(value->getType()->getIntegerBitWidth(),
-                                                                              1)),
-                                    left);
-    }
-    else if (value->getType()->isFloatingPointTy())
-    {
-        context.builder
-               .CreateStore(context.builder.CreateFAdd(value, llvm::ConstantFP::get(value->getType(), 1)), left);
-    }
-    return {value, sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::PreIncrement::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[left, sign] = context.getNamedValue(getName());
-    if (!left)
-    {
-        throw std::runtime_error("Undefined reference to variable " + getName());
-    }
-    auto* load = context.builder.CreateLoad(left, "prevVal");
-    llvm::Value* newValue = nullptr;
-    if (load->getType()->isIntegerTy())
-    {
-        newValue = context.builder.CreateAdd(load, context.builder.getIntN(load->getType()->getIntegerBitWidth(), 1));
-    }
-    else if (load)
-    {
-        newValue = context.builder.CreateFAdd(load, llvm::ConstantFP::get(load->getType(), 1));
-    }
-    context.builder.CreateStore(newValue, left);
-    return {newValue, sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::PostDecrement::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[left, sign] = context.getNamedValue(getName());
-    if (!left)
-    {
-        throw std::runtime_error("Undefined reference to variable " + getName());
-    }
-    auto* value = context.builder.CreateLoad(left, "prevVal");
-    if (value->getType()->isIntegerTy())
-    {
-        context.builder.CreateStore(context.builder.CreateSub(value,
-                                                              context.builder
-                                                                     .getIntN(value->getType()->getIntegerBitWidth(),
-                                                                              1)),
-                                    left);
-    }
-    else if (value->getType()->isFloatingPointTy())
-    {
-        context.builder
-               .CreateStore(context.builder.CreateFSub(value, llvm::ConstantFP::get(value->getType(), 1)), left);
-    }
-    return {value, sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::PreDecrement::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[left, sign] = context.getNamedValue(getName());
-    if (!left)
-    {
-        throw std::runtime_error("Undefined reference to variable " + getName());
-    }
-    auto* load = context.builder.CreateLoad(left, "prevVal");
-    llvm::Value* newValue = nullptr;
-    if (load->getType()->isIntegerTy())
-    {
-        newValue = context.builder.CreateSub(load, context.builder.getIntN(load->getType()->getIntegerBitWidth(), 1));
-    }
-    else if (load)
-    {
-        newValue = context.builder.CreateFSub(load, llvm::ConstantFP::get(load->getType(), 1));
-    }
-    context.builder.CreateStore(newValue, left);
-    return {newValue, sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::FunctionCall::codegen(OpenCL::Parser::Context& context) const
-{
-    auto function = context.getFunction(getName());
-    std::vector<llvm::Value*> arguments;
-    std::size_t i = 0;
-    for (auto& iter : getExpressions())
-    {
-        auto[argument, sign] = iter->codegen(context);
-        castPrimitive(argument, sign, function.arguments[i]->type(context), function.arguments[i]->isSigned(), context);
-        arguments.push_back(argument);
-        i++;
-    }
-    return {context.builder.CreateCall(context.module->getFunction(getName()), arguments, getName()),
-            function.retType->isSigned()};
-}
-
 std::pair<llvm::Value*, bool> OpenCL::Parser::BreakStatement::codegen(Context& context) const
 {
     context.builder.CreateBr(context.breakBlocks.back());
@@ -1348,13 +1130,6 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::BitOrExpression::codegen(OpenCL::P
         sign = sign || rsign;
     }
     return {left, sign};
-}
-
-std::pair<llvm::Value*, bool> OpenCL::Parser::CastFactor::codegen(OpenCL::Parser::Context& context) const
-{
-    auto[value, sign] = getExpression().codegen(context);
-    castPrimitive(value, sign, getOutType().type(context), getOutType().isSigned(), context);
-    return {value, getOutType().isSigned()};
 }
 
 llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
@@ -1464,26 +1239,56 @@ llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PrimaryExpressionIdentifier::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return context.getNamedValue(getIdentifier());
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::PrimaryExpressionConstant::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, bool>
+                      {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr(std::is_same_v<T,std::int32_t>)
+        {
+            return {context.builder.getInt32(value),true};
+        }
+        else if constexpr(std::is_same_v<T,std::uint32_t>)
+        {
+            return {context.builder.getInt32(value),false};
+        }
+        else if constexpr(std::is_same_v<T,std::int64_t>)
+        {
+            return {context.builder.getInt64(value),true};
+        }
+        else if constexpr(std::is_same_v<T,std::uint64_t>)
+        {
+            return {context.builder.getInt64(value),false};
+        }
+        else if constexpr(std::is_same_v<T,float>)
+        {
+            return {llvm::ConstantFP::get(llvm::Type::getFloatTy(context.context),value),true};
+        }
+        else if constexpr(std::is_same_v<T,double>)
+        {
+            return {llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.context),value),true};
+        }
+        else
+        {
+            throw std::runtime_error("Not implemented yet");
+        }
+                      }, getValue());
 }
 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PrimaryExpressionParenthese::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return getExpression().codegen(context);
 }
 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PostFixExpressionPrimaryExpression::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return getPrimaryExpression().codegen(context);
 }
-
 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PostFixExpressionSubscript::codegen(OpenCL::Parser::Context& context) const
@@ -1499,16 +1304,40 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(Open
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::UnaryExpressionPostFixExpression::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return getPostFixExpression().codegen(context);
 }
 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::UnaryExpressionUnaryOperator::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    //TODO:
+    auto [rhs,sign] = getUnaryExpression().codegen(context);
+    switch (getAnOperator())
+    {
+    case UnaryOperator::Increment:break;
+    case UnaryOperator::Decrement:break;
+    case UnaryOperator::Ampersand:break;
+    case UnaryOperator::Asterisk:break;
+    case UnaryOperator::Plus:break;
+    case UnaryOperator::Minus:break;
+    case UnaryOperator::BitNot:break;
+    case UnaryOperator::LogicalNot:break;
+    }
+    return {rhs,sign};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryExpressionSizeOf::codegen(OpenCL::Parser::Context& context) const
 {
     return std::pair<llvm::Value*, bool>();
 }
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::CastExpression::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::ArgumentExpressionList::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, bool>();
+}
+

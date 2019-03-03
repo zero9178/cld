@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Parser.hpp"
 
 #include <algorithm>
@@ -232,43 +234,6 @@ OpenCL::Parser::AssignmentExpression::AssignOperator OpenCL::Parser::AssignmentE
     return m_assignOperator;
 }
 
-const OpenCL::Parser::UnaryFactor& OpenCL::Parser::AssignmentExpression::getUnaryFactor() const
-{
-    return m_unaryFactor;
-}
-
-const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::getNonCommaExpression() const
-{
-    return *m_nonCommaExpression;
-}
-
-OpenCL::Parser::AssignmentExpression::AssignmentExpression(UnaryFactor&& unaryFactor,
-                                                           OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator,
-                                                           std::unique_ptr<NonCommaExpression>&& nonCommaExpression)
-    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
-      m_nonCommaExpression(std::move(nonCommaExpression))
-{
-    assert(m_nonCommaExpression);
-}
-
-OpenCL::Parser::Term::Term(std::unique_ptr<Factor>&& factor,
-                           std::vector<std::pair<BinaryDotOperator, std::unique_ptr<Factor>>>&& optionalFactors)
-    : m_factor(std::move(factor)), m_optionalFactors(std::move(optionalFactors))
-{
-    assert(m_factor);
-}
-
-const OpenCL::Parser::Factor& OpenCL::Parser::Term::getFactor() const
-{
-    return *m_factor;
-}
-
-const std::vector<std::pair<OpenCL::Parser::Term::BinaryDotOperator,
-                            std::unique_ptr<OpenCL::Parser::Factor>>>& OpenCL::Parser::Term::getOptionalFactors() const
-{
-    return m_optionalFactors;
-}
-
 OpenCL::Parser::AdditiveExpression::AdditiveExpression(Term&& term,
                                                        std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms)
     : m_term(std::move(term)), m_optionalTerms(std::move(optionalTerms))
@@ -392,98 +357,6 @@ const OpenCL::Parser::ConditionalExpression* OpenCL::Parser::ConditionalExpressi
     return m_optionalConditionalExpression.get();
 }
 
-OpenCL::Parser::ParentheseFactor::ParentheseFactor(Expression&& expression) : m_expression(
-    std::move(expression))
-{}
-
-const OpenCL::Parser::Expression& OpenCL::Parser::ParentheseFactor::getExpression() const
-{
-    return m_expression;
-}
-
-OpenCL::Parser::UnaryFactor::UnaryFactor(OpenCL::Parser::UnaryFactor::UnaryOperator unaryOperator,
-                                         std::unique_ptr<Factor>&& factor) : m_unaryOperator(
-    unaryOperator), m_factor(std::move(factor))
-{
-    assert(m_factor);
-}
-
-OpenCL::Parser::UnaryFactor::UnaryOperator OpenCL::Parser::UnaryFactor::getUnaryOperator() const
-{
-    return m_unaryOperator;
-}
-
-const OpenCL::Parser::Factor& OpenCL::Parser::UnaryFactor::getFactor() const
-{
-    return *m_factor;
-}
-
-OpenCL::Parser::ConstantFactor::ConstantFactor(const variant& value) : m_value(value)
-{}
-
-const OpenCL::Parser::ConstantFactor::variant& OpenCL::Parser::ConstantFactor::getValue() const
-{
-    return m_value;
-}
-
-OpenCL::Parser::VariableFactor::VariableFactor(std::string name) : m_name(std::move(name))
-{}
-
-const std::string& OpenCL::Parser::VariableFactor::getName() const
-{
-    return m_name;
-}
-
-OpenCL::Parser::PostIncrement::PostIncrement(std::string name) : m_name(std::move(name))
-{}
-
-const std::string& OpenCL::Parser::PostIncrement::getName() const
-{
-    return m_name;
-}
-
-OpenCL::Parser::PreIncrement::PreIncrement(std::string name) : m_name(std::move(name))
-{}
-
-const std::string& OpenCL::Parser::PreIncrement::getName() const
-{
-    return m_name;
-}
-
-OpenCL::Parser::PostDecrement::PostDecrement(std::string name) : m_name(std::move(name))
-{}
-
-const std::string& OpenCL::Parser::PostDecrement::getName() const
-{
-    return m_name;
-}
-
-OpenCL::Parser::PreDecrement::PreDecrement(std::string name) : m_name(std::move(name))
-{}
-
-const std::string& OpenCL::Parser::PreDecrement::getName() const
-{
-    return m_name;
-}
-
-OpenCL::Parser::FunctionCall::FunctionCall(std::string name,
-                                           std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>> expressions)
-    : m_name(std::move(name)), m_expressions(std::move(expressions))
-{
-    assert(std::all_of(m_expressions.begin(), m_expressions.end(), [](const std::unique_ptr<NonCommaExpression>& ptr)
-    { return ptr.get(); }));
-}
-
-const std::string& OpenCL::Parser::FunctionCall::getName() const
-{
-    return m_name;
-}
-
-const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::Parser::FunctionCall::getExpressions() const
-{
-    return m_expressions;
-}
-
 const OpenCL::Parser::Statement& OpenCL::Parser::ForStatement::getStatement() const
 {
     return *m_statement;
@@ -546,7 +419,7 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
 
 OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::unique_ptr<Type>&& type,
                                                      std::string name,
-                                                     std::unique_ptr<ConstantFactor>&& value)
+                                                     std::unique_ptr<PrimaryExpressionConstant>&& value)
     : m_type(std::move(type)), m_name(std::move(name)), m_optionalValue(std::move(value))
 {}
 
@@ -560,7 +433,7 @@ const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
     return m_name;
 }
 
-const OpenCL::Parser::ConstantFactor* OpenCL::Parser::GlobalDeclaration::getOptionalValue() const
+const OpenCL::Parser::PrimaryExpressionConstant* OpenCL::Parser::GlobalDeclaration::getOptionalValue() const
 {
     return m_optionalValue.get();
 }
@@ -582,23 +455,6 @@ bool OpenCL::Parser::PrimitiveType::isVoid() const
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
     return *m_returnType;
-}
-
-OpenCL::Parser::CastFactor::CastFactor(std::unique_ptr<Type>&& outType,
-                                       Expression&& expression)
-    : m_outType(std::move(outType)), m_expression(std::move(expression))
-{
-    assert(m_outType);
-}
-
-const OpenCL::Parser::Type& OpenCL::Parser::CastFactor::getOutType() const
-{
-    return *m_outType;
-}
-
-const OpenCL::Parser::Expression& OpenCL::Parser::CastFactor::getExpression() const
-{
-    return m_expression;
 }
 
 OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type) : m_type(std::move(type))
@@ -628,8 +484,8 @@ const std::string& OpenCL::Parser::PrimaryExpressionIdentifier::getIdentifier() 
     return m_identifier;
 }
 
-OpenCL::Parser::PrimaryExpressionConstant::PrimaryExpressionConstant(const OpenCL::Parser::PrimaryExpressionConstant::variant& value)
-    : m_value(value)
+OpenCL::Parser::PrimaryExpressionConstant::PrimaryExpressionConstant(OpenCL::Parser::PrimaryExpressionConstant::variant value)
+    : m_value(std::move(value))
 {}
 
 const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::PrimaryExpressionConstant::getValue() const
@@ -637,13 +493,13 @@ const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::Primar
     return m_value;
 }
 
-OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::unique_ptr<Expression>&& expression)
+OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(Expression&& expression)
     : m_expression(std::move(expression))
 {}
 
 const OpenCL::Parser::Expression& OpenCL::Parser::PrimaryExpressionParenthese::getExpression() const
 {
-    return *m_expression;
+    return m_expression;
 }
 
 OpenCL::Parser::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::unique_ptr<PrimaryExpression>&& primaryExpression)
@@ -718,4 +574,67 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
                    std::unique_ptr<OpenCL::Parser::Type>>& OpenCL::Parser::UnaryExpressionSizeOf::getUnaryOrType() const
 {
     return m_unaryOrType;
+}
+
+OpenCL::Parser::CastExpression::CastExpression(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
+                                                                  std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+                                                                            std::unique_ptr<OpenCL::Parser::CastExpression>>>&& unaryOrCast)
+    : m_unaryOrCast(std::move(unaryOrCast))
+{}
+
+const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
+                   std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+                             std::unique_ptr<OpenCL::Parser::CastExpression>>>& OpenCL::Parser::CastExpression::getUnaryOrCast() const
+{
+    return m_unaryOrCast;
+}
+
+OpenCL::Parser::ArgumentExpressionList::ArgumentExpressionList(AssignmentExpression&& assignmentExpression,
+                                                               std::vector<AssignmentExpression>&& optionalAssignmanetExpressions)
+    : m_assignmentExpression(std::move(assignmentExpression)), m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
+{}
+
+const OpenCL::Parser::AssignmentExpression& OpenCL::Parser::ArgumentExpressionList::getAssignmentExpression() const
+{
+    return m_assignmentExpression;
+}
+
+const std::vector<OpenCL::Parser::AssignmentExpression>& OpenCL::Parser::ArgumentExpressionList::getOptionalAssignmanetExpressions() const
+{
+    return m_optionalAssignmanetExpressions;
+}
+
+OpenCL::Parser::Term::Term(CastExpression&& castExpressions,
+                           std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions) : m_castExpression(
+    std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
+{}
+
+const OpenCL::Parser::CastExpression& OpenCL::Parser::Term::getCastExpression() const
+{
+    return m_castExpression;
+}
+
+const std::vector<std::pair<OpenCL::Parser::Term::BinaryDotOperator,
+                            OpenCL::Parser::CastExpression>>& OpenCL::Parser::Term::getOptionalCastExpressions() const
+{
+    return m_optionalCastExpressions;
+}
+
+
+OpenCL::Parser::AssignmentExpression::AssignmentExpression(std::unique_ptr<OpenCL::Parser::UnaryExpression>&& unaryFactor,
+                                                           OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator,
+                                                           std::unique_ptr<OpenCL::Parser::NonCommaExpression>&& nonCommaExpression)
+    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator), m_nonCommaExpression(std::move(nonCommaExpression))
+{
+    assert(m_unaryFactor);
+}
+
+const OpenCL::Parser::UnaryExpression& OpenCL::Parser::AssignmentExpression::getUnaryFactor() const
+{
+    return *m_unaryFactor;
+}
+
+const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::getNonCommaExpression() const
+{
+    return *m_nonCommaExpression;
 }
