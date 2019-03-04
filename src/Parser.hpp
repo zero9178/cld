@@ -304,7 +304,7 @@ namespace OpenCL::Parser
      * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
      *                       | <PostFixExpressionSubscript>
      *                       | <PostFixExpressionDot>
-     *                       | <PostFixExpression> ( [ <ArgumentExpressionList> ] )
+     *                       | <PostFixExpressionFunctionCall>
      *                       | <PostFixExpression> "->" <TokenType::Identifier>
      *                       | <PostFixExpression> <TokenType::Increment>
      *                       | <PostFixExpression> <TokenType::Decrement>
@@ -371,6 +371,14 @@ namespace OpenCL::Parser
         const std::string& getIdentifier() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParenthese> <ArgumentExpressionList> <TokenType::CloseParenthese>
+     */
+    class PostFixExpressionFunctionCall final : public PostFixExpression
+    {
+
     };
 
     /**

@@ -974,16 +974,41 @@ namespace
         return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens));
     }
 
+    bool isPostFixExpression(TokenType token)
+    {
+        switch(token)
+        {
+        case TokenType::Identifier:
+        case TokenType::OpenParenthese:
+        case TokenType::Literal:
+        case TokenType::Increment:
+        case TokenType::Decrement:
+            return true;
+        default:break;
+        }
+        return false;
+    }
+
     std::unique_ptr<PostFixExpression> parsePostFixExpression(Tokens& tokens)
     {
-        auto currToken = tokens.back();//TODO: This should be recursive
-        if(currToken.getTokenType() == TokenType::Identifier
-        || currToken.getTokenType() == TokenType::Literal
-        || currToken.getTokenType() == TokenType::OpenParenthese)
+        if(isPostFixExpression(tokens.back().getTokenType()))
         {
-            return std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens));
+            auto currToken = tokens.back();
+            tokens.pop_back();
+            auto postFixExpression = parsePostFixExpression(tokens);
+            if(currToken.getTokenType() == TokenType::Identifier
+                || currToken.getTokenType() == TokenType::Literal
+                || currToken.getTokenType() == TokenType::OpenParenthese)
+            {
+                Tokens temp = {currToken};
+                return std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(temp));
+            }
+            else
+            {
+                []{}();
+            }
         }
-        auto postFixExpression = parsePostFixExpression(tokens);
+        return nullptr;
     }
 
     std::unique_ptr<PrimaryExpression> parsePrimaryExpression(Tokens& tokens)

@@ -551,20 +551,20 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Expression::codegen(OpenCL::Parser
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(OpenCL::Parser::Context& context) const
 {
-    auto[left, sign] = getUnaryFactor().codegen(context);
-    auto* leftType = llvm::cast<llvm::PointerType>(left->getType());
+    auto [left, sign] = getUnaryFactor().codegen(context);
+    auto* load = llvm::cast<llvm::LoadInst>(left);
     switch (getAssignOperator())
     {
     case AssignOperator::NoOperator:
     {
         auto[value, sign] = getNonCommaExpression().codegen(context);
-        castPrimitive(value, sign, leftType->getElementType(), sign, context);
-        context.builder.CreateStore(value, left);
+        castPrimitive(value, sign, left->getType(), sign, context);
+        context.builder.CreateStore(value,load->getPointerOperand());
         break;
     }
     case AssignOperator::PlusAssign:
     {
-        llvm::Value* current = context.builder.CreateLoad(left);
+        llvm::Value* current = left;
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
         if (current->getType()->isIntegerTy())
@@ -575,8 +575,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         {
             current = context.builder.CreateFAdd(current, newValue);
         }
-        castPrimitive(current, sign || newSign, leftType->getElementType(), sign, context);
-        context.builder.CreateStore(current, left);
+        castPrimitive(current, sign || newSign, left->getType(), sign, context);
+        context.builder.CreateStore(current, load->getPointerOperand());
         break;
     }
     case AssignOperator::MinusAssign:
@@ -592,8 +592,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         {
             current = context.builder.CreateFSub(current, newValue);
         }
-        castPrimitive(current, sign || newSign, leftType->getElementType(), sign, context);
-        context.builder.CreateStore(current, left);
+        castPrimitive(current, sign || newSign, left->getType(), sign, context);
+        context.builder.CreateStore(current, load->getPointerOperand());
         break;
     }
     case AssignOperator::DivideAssign:
@@ -616,8 +616,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         {
             current = context.builder.CreateFDiv(current, newValue);
         }
-        castPrimitive(current, sign || newSign, leftType->getElementType(), sign, context);
-        context.builder.CreateStore(current, left);
+        castPrimitive(current, sign || newSign, left->getType(), sign, context);
+        context.builder.CreateStore(current, load->getPointerOperand());
         break;
     }
     case AssignOperator::MultiplyAssign:
@@ -633,8 +633,8 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         {
             current = context.builder.CreateFMul(current, newValue);
         }
-        castPrimitive(current, sign || newSign, leftType->getElementType(), sign, context);
-        context.builder.CreateStore(current, left);
+        castPrimitive(current, sign || newSign, left->getType(), sign, context);
+        context.builder.CreateStore(current, load->getPointerOperand());
         break;
     }
     case AssignOperator::ModuloAssign:
@@ -642,7 +642,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateSRem(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateSRem(current, newValue), load->getPointerOperand());
         break;
     }
     case AssignOperator::LeftShiftAssign:
@@ -650,7 +650,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateShl(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateShl(current, newValue), load->getPointerOperand());
         break;
     }
     case AssignOperator::RightShiftAssign:
@@ -658,7 +658,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateAShr(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateAShr(current, newValue), load->getPointerOperand());
         break;
     }
     case AssignOperator::BitAndAssign:
@@ -666,7 +666,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateAnd(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateAnd(current, newValue), load->getPointerOperand());
         break;
     }
     case AssignOperator::BitOrAssign:
@@ -674,7 +674,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateOr(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateOr(current, newValue), load->getPointerOperand());
         break;
     }
     case AssignOperator::BitXorAssign:
@@ -682,11 +682,11 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(Open
         llvm::Value* current = context.builder.CreateLoad(left);
         auto[newValue, newSign] = getNonCommaExpression().codegen(context);
         arithmeticCast(current, sign, newValue, newSign, context);
-        context.builder.CreateStore(context.builder.CreateXor(current, newValue), left);
+        context.builder.CreateStore(context.builder.CreateXor(current, newValue), load->getPointerOperand());
         break;
     }
     }
-    return {context.builder.CreateLoad(left), sign};
+    return {left, sign};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::Term::codegen(OpenCL::Parser::Context& context) const
@@ -1239,42 +1239,43 @@ llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) 
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PrimaryExpressionIdentifier::codegen(OpenCL::Parser::Context& context) const
 {
-    return context.getNamedValue(getIdentifier());
+    auto [value,sign] = context.getNamedValue(getIdentifier());
+    return {context.builder.CreateLoad(value),sign};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::PrimaryExpressionConstant::codegen(OpenCL::Parser::Context& context) const
 {
     return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, bool>
                       {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr(std::is_same_v<T,std::int32_t>)
-        {
-            return {context.builder.getInt32(value),true};
-        }
-        else if constexpr(std::is_same_v<T,std::uint32_t>)
-        {
-            return {context.builder.getInt32(value),false};
-        }
-        else if constexpr(std::is_same_v<T,std::int64_t>)
-        {
-            return {context.builder.getInt64(value),true};
-        }
-        else if constexpr(std::is_same_v<T,std::uint64_t>)
-        {
-            return {context.builder.getInt64(value),false};
-        }
-        else if constexpr(std::is_same_v<T,float>)
-        {
-            return {llvm::ConstantFP::get(llvm::Type::getFloatTy(context.context),value),true};
-        }
-        else if constexpr(std::is_same_v<T,double>)
-        {
-            return {llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.context),value),true};
-        }
-        else
-        {
-            throw std::runtime_error("Not implemented yet");
-        }
+                          using T = std::decay_t<decltype(value)>;
+                          if constexpr(std::is_same_v<T, std::int32_t>)
+                          {
+                              return {context.builder.getInt32(value), true};
+                          }
+                          else if constexpr(std::is_same_v<T, std::uint32_t>)
+                          {
+                              return {context.builder.getInt32(value), false};
+                          }
+                          else if constexpr(std::is_same_v<T, std::int64_t>)
+                          {
+                              return {context.builder.getInt64(value), true};
+                          }
+                          else if constexpr(std::is_same_v<T, std::uint64_t>)
+                          {
+                              return {context.builder.getInt64(value), false};
+                          }
+                          else if constexpr(std::is_same_v<T, float>)
+                          {
+                              return {llvm::ConstantFP::get(llvm::Type::getFloatTy(context.context), value), true};
+                          }
+                          else if constexpr(std::is_same_v<T, double>)
+                          {
+                              return {llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.context), value), true};
+                          }
+                          else
+                          {
+                              throw std::runtime_error("Not implemented yet");
+                          }
                       }, getValue());
 }
 
@@ -1310,20 +1311,108 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::UnaryExpressionUnaryOperator::codegen(OpenCL::Parser::Context& context) const
 {
-    //TODO:
-    auto [rhs,sign] = getUnaryExpression().codegen(context);
+    auto[rhs, sign] = getUnaryExpression().codegen(context);
     switch (getAnOperator())
     {
-    case UnaryOperator::Increment:break;
-    case UnaryOperator::Decrement:break;
-    case UnaryOperator::Ampersand:break;
-    case UnaryOperator::Asterisk:break;
-    case UnaryOperator::Plus:break;
-    case UnaryOperator::Minus:break;
-    case UnaryOperator::BitNot:break;
-    case UnaryOperator::LogicalNot:break;
+    case UnaryOperator::Increment:
+    {
+        llvm::Value* newValue = nullptr;
+        if (rhs->getType()->isIntegerTy())
+        {
+            newValue = context.builder.CreateAdd(rhs, context.builder.getIntN(rhs->getType()->getIntegerBitWidth(), 1));
+        }
+        else if (rhs->getType()->isFloatingPointTy())
+        {
+            newValue = context.builder.CreateFAdd(rhs, llvm::ConstantFP::get(rhs->getType(), 0));
+        }
+        else
+        {
+            throw std::runtime_error("Cannot apply unary ++ to type");
+        }
+        if (!llvm::isa<llvm::LoadInst>(rhs))
+        {
+            throw std::runtime_error("Cannot apply unary ++ to non lvalue");
+        }
+        return {context.builder.CreateStore(llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), newValue), sign};
     }
-    return {rhs,sign};
+    case UnaryOperator::Decrement:
+    {
+        llvm::Value* newValue = nullptr;
+        if (rhs->getType()->isIntegerTy())
+        {
+            newValue = context.builder.CreateSub(rhs, context.builder.getIntN(rhs->getType()->getIntegerBitWidth(), 1));
+        }
+        else if (rhs->getType()->isFloatingPointTy())
+        {
+            newValue = context.builder.CreateFSub(rhs, llvm::ConstantFP::get(rhs->getType(), 0));
+        }
+        else
+        {
+            throw std::runtime_error("Cannot apply unary -- to type");
+        }
+        if (!llvm::isa<llvm::LoadInst>(rhs))
+        {
+            throw std::runtime_error("Cannot apply unary -- to non lvalue");
+        }
+        return {context.builder.CreateStore(llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), newValue), sign};
+    }
+    case UnaryOperator::Ampersand:
+    {
+        if (!llvm::isa<llvm::LoadInst>(rhs))
+        {
+            throw std::runtime_error("Cannot take address of type");
+        }
+        return {llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), false};
+    }
+    case UnaryOperator::Asterisk:
+    {
+        return {context.builder.CreateLoad(rhs), sign};
+    }
+    case UnaryOperator::Plus:
+    {
+        if (rhs->getType()->isIntegerTy() && rhs->getType()->getIntegerBitWidth() < 32)
+        {
+            rhs = context.builder.CreateIntCast(rhs, context.builder.getInt32Ty(), sign);
+        }
+        return {rhs, sign};
+    }
+    case UnaryOperator::Minus:
+    {
+        if (rhs->getType()->isIntegerTy())
+        {
+            return {context.builder.CreateNeg(rhs), true};
+        }
+        else
+        {
+            return {context.builder.CreateFNeg(rhs), true};
+        }
+    }
+    case UnaryOperator::BitNot:
+    {
+        if (!rhs->getType()->isIntegerTy())
+        {
+            throw std::runtime_error("Cannot apply ~ to non integer type");
+        }
+        return {context.builder.CreateNot(rhs), sign};
+    }
+    case UnaryOperator::LogicalNot:
+    {
+        if (rhs->getType()->isIntegerTy() && rhs->getType()->getIntegerBitWidth() < 1)
+        {
+            rhs = context.builder.CreateICmpNE(rhs, context.builder.getIntN(rhs->getType()->getIntegerBitWidth(), 0));
+        }
+        else if (rhs->getType()->isFloatingPointTy())
+        {
+            rhs = context.builder.CreateFCmpUNE(rhs, llvm::ConstantFP::get(rhs->getType(), 0));
+        }
+        else
+        {
+            throw std::runtime_error("Cannot apply ! operator to specified type");
+        }
+        return {context.builder.CreateZExt(context.builder.CreateNot(rhs), context.builder.getInt32Ty()), sign};
+    }
+    }
+    return {nullptr, false};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryExpressionSizeOf::codegen(OpenCL::Parser::Context& context) const
@@ -1333,7 +1422,21 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::UnaryExpressionSizeOf::codegen(Ope
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::CastExpression::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, bool>
+                      {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr(std::is_same_v<T,std::unique_ptr<UnaryExpression>>)
+        {
+            return value->codegen(context);
+        }
+        else
+        {
+            auto& [type,cast] = value;
+            auto [rhs,sign] = cast->codegen(context);
+            castPrimitive(rhs,sign,type->type(context),type->isSigned(),context);
+            return {rhs,type->isSigned()};
+        }
+                      }, getUnaryOrCast());
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::ArgumentExpressionList::codegen(OpenCL::Parser::Context& context) const
