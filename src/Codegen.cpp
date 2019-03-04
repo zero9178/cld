@@ -1240,6 +1240,10 @@ std::pair<llvm::Value*,
           bool> OpenCL::Parser::PrimaryExpressionIdentifier::codegen(OpenCL::Parser::Context& context) const
 {
     auto [value,sign] = context.getNamedValue(getIdentifier());
+    if(!value)
+    {
+        return {context.module->getFunction(getIdentifier()),false};
+    }
     return {context.builder.CreateLoad(value),sign};
 }
 
@@ -1294,7 +1298,10 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           bool> OpenCL::Parser::PostFixExpressionSubscript::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    auto [value,sign] = getPostFixExpression().codegen(context);
+    auto* arrayPointer = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
+    auto* index = getExpression().codegen(context).first;
+    return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(arrayPointer,index)),sign};
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
@@ -1439,8 +1446,27 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::CastExpression::codegen(OpenCL::Pa
                       }, getUnaryOrCast());
 }
 
-std::pair<llvm::Value*, bool> OpenCL::Parser::ArgumentExpressionList::codegen(OpenCL::Parser::Context& context) const
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PostFixExpressionFunctionCall::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    auto value = getPostFixExpression().codegen(context).first;
+    if(!value->getType()->isFunctionTy() && !value->getType()->isPointerTy() && llvm::cast<llvm::PointerType>(value->getType())->getElementType()->isFunctionTy())
+    {
+        throw std::runtime_error("Called object is not a function or function pointer");
+    }
+    auto function = context.getFunction(value->getName());
+    std::vector<llvm::Value*> arguments;
+    std::size_t i  = 0;
+    for(auto& iter : getOptionalAssignmentExpressions())
+    {
+        auto [arg,signarg] = iter.codegen(context);
+        castPrimitive(arg,signarg,function.arguments[i]->type(context),function.arguments[i]->isSigned(),context);
+        arguments.emplace_back(arg);
+    }
+    return {context.builder.CreateCall(value,arguments),function.retType->isSigned()};
 }
 
+llvm::Type* OpenCL::Parser::ArrayType::type(OpenCL::Parser::Context& context) const
+{
+    return llvm::ArrayType::get(getType()->type(context),getSize());
+}

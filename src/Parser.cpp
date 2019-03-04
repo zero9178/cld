@@ -1,6 +1,6 @@
-#include <utility>
-
 #include "Parser.hpp"
+
+#include <utility>
 
 #include <algorithm>
 
@@ -56,10 +56,16 @@ const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpres
 
 OpenCL::Parser::Declaration::Declaration(std::unique_ptr<Type>&& type,
                                          std::string name,
+                                         std::vector<std::size_t> arraySizes,
                                          std::unique_ptr<Expression>&& optionalExpression)
-    : m_type(std::move(type)), m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
+    : m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
 {
-    assert(m_type);
+    assert(type);
+    std::for_each(arraySizes.rbegin(),arraySizes.rend(),[&type](std::size_t value)
+    {
+        type = std::make_unique<ArrayType>(std::move(type),value);
+    });
+    m_type = std::move(type);
 }
 
 const OpenCL::Parser::Type& OpenCL::Parser::Declaration::getType() const
@@ -512,7 +518,7 @@ const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimar
 }
 
 OpenCL::Parser::PostFixExpressionSubscript::PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                                                       std::unique_ptr<Expression>&& expression)
+                                                                       Expression&& expression)
     : m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
 {}
 
@@ -523,7 +529,7 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionSubscr
 
 const OpenCL::Parser::Expression& OpenCL::Parser::PostFixExpressionSubscript::getExpression() const
 {
-    return *m_expression;
+    return m_expression;
 }
 
 OpenCL::Parser::PostFixExpressionDot::PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
@@ -589,21 +595,6 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
     return m_unaryOrCast;
 }
 
-OpenCL::Parser::ArgumentExpressionList::ArgumentExpressionList(AssignmentExpression&& assignmentExpression,
-                                                               std::vector<AssignmentExpression>&& optionalAssignmanetExpressions)
-    : m_assignmentExpression(std::move(assignmentExpression)), m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
-{}
-
-const OpenCL::Parser::AssignmentExpression& OpenCL::Parser::ArgumentExpressionList::getAssignmentExpression() const
-{
-    return m_assignmentExpression;
-}
-
-const std::vector<OpenCL::Parser::AssignmentExpression>& OpenCL::Parser::ArgumentExpressionList::getOptionalAssignmanetExpressions() const
-{
-    return m_optionalAssignmanetExpressions;
-}
-
 OpenCL::Parser::Term::Term(CastExpression&& castExpressions,
                            std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions) : m_castExpression(
     std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
@@ -637,4 +628,51 @@ const OpenCL::Parser::UnaryExpression& OpenCL::Parser::AssignmentExpression::get
 const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::getNonCommaExpression() const
 {
     return *m_nonCommaExpression;
+}
+
+OpenCL::Parser::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                                             std::vector<AssignmentExpression>&& optionalAssignmanetExpressions)
+    : m_postFixExpression(std::move(postFixExpression)), m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
+{
+    assert(m_postFixExpression);
+}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionFunctionCall::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+const std::vector<OpenCL::Parser::AssignmentExpression>& OpenCL::Parser::PostFixExpressionFunctionCall::getOptionalAssignmentExpressions() const
+{
+    return m_optionalAssignmanetExpressions;
+}
+
+OpenCL::Parser::ArrayType::ArrayType(std::unique_ptr<Type>&& type,std::size_t size)
+    : m_type(std::move(type)), m_size(size)
+{
+    assert(m_type);
+    if(size <= 0)
+    {
+        throw std::runtime_error("Array must have a size greater than 0");
+    }
+}
+
+const std::unique_ptr<OpenCL::Parser::Type>& OpenCL::Parser::ArrayType::getType() const
+{
+    return m_type;
+}
+
+size_t OpenCL::Parser::ArrayType::getSize() const
+{
+    return m_size;
+}
+
+bool OpenCL::Parser::ArrayType::isSigned() const
+{
+    return false;
+}
+
+bool OpenCL::Parser::ArrayType::isVoid() const
+{
+    return false;
 }

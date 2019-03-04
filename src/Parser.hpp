@@ -54,7 +54,8 @@ namespace OpenCL::Parser
                     return result->second;
                 }
             }
-            return m_globalValues[name];
+            auto result = m_globalValues.find(name);
+            return result != m_globalValues.end() ? result->second : tuple{nullptr,false};
         }
 
         void popScope()
@@ -74,7 +75,11 @@ namespace OpenCL::Parser
 
         void addGlobal(const std::string& name, const tuple& value)
         {
-            m_globalValues[name] = value;
+            auto [it,ins] = m_globalValues.insert({name,value});
+            if(!ins)
+            {
+                throw std::runtime_error("Redefinition of global symbol " + name);
+            }
         }
 
         void addFunction(const std::string& name, const Function& function)
@@ -109,7 +114,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Type> ::= <PrimitiveType> || <PointerType>
+     * <Type> ::= <PrimitiveType> || <PointerType> || <ArrayType>
      */
     class Type
     {
@@ -196,6 +201,29 @@ namespace OpenCL::Parser
 
         llvm::Type* type(Context& context) const override;
     };
+
+    /**
+     * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <PrimaryExpressionConstant> <TokenType::CloseSquareBracket>
+     */
+     class ArrayType final : public Type
+     {
+         std::unique_ptr<Type> m_type;
+         std::size_t m_size;
+
+     public:
+
+         ArrayType(std::unique_ptr<Type>&& type, std::size_t size);
+
+         const std::unique_ptr<Type>& getType() const;
+
+         std::size_t getSize() const;
+
+         bool isSigned() const override;
+
+         bool isVoid() const override;
+
+         llvm::Type* type(Context& context) const override;
+     };
 
     /**
      * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
@@ -333,18 +361,18 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <PostFixExpressionSubscript> ::= <PostFixExpression> "[" <Expression> "]"
+     * <PostFixExpressionSubscript> ::= <PostFixExpression> <TokenType::OpenSquareBracket> <Expression> <TokenType::CloseSquareBracket>
      */
     class PostFixExpressionSubscript final : public PostFixExpression
     {
 
         std::unique_ptr<PostFixExpression> m_postFixExpression;
-        std::unique_ptr<Expression> m_expression;
+        Expression m_expression;
 
     public:
 
         PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                   std::unique_ptr<Expression>&& expression);
+                                   Expression&& expression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -373,12 +401,25 @@ namespace OpenCL::Parser
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
+    class AssignmentExpression;
+
     /**
      * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParenthese> <ArgumentExpressionList> <TokenType::CloseParenthese>
      */
     class PostFixExpressionFunctionCall final : public PostFixExpression
     {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+        std::vector<AssignmentExpression> m_optionalAssignmanetExpressions;
 
+    public:
+        PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                      std::vector<AssignmentExpression>&& optionalAssignmanetExpressions);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        const std::vector<AssignmentExpression>& getOptionalAssignmentExpressions() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
     /**
@@ -436,26 +477,6 @@ namespace OpenCL::Parser
         const NonCommaExpression& getNonCommaExpression() const;
 
         AssignOperator getAssignOperator() const;
-
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
-    };
-
-    /**
-     * <ArgumentExpressionList> ::= <AssignmentExpression> { <TokenType::Comma> <AssignmentExpression>}
-     */
-    class ArgumentExpressionList final : public Node
-    {
-        AssignmentExpression m_assignmentExpression;
-        std::vector<AssignmentExpression> m_optionalAssignmanetExpressions;
-
-    public:
-
-        ArgumentExpressionList(AssignmentExpression&& assignmentExpression,
-                               std::vector<AssignmentExpression>&& optionalAssignmanetExpressions);
-
-        const AssignmentExpression& getAssignmentExpression() const;
-
-        const std::vector<AssignmentExpression>& getOptionalAssignmanetExpressions() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -988,7 +1009,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Declaration> ::= <Type> <TokenType::Identifier> [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
+     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <PrimaryExpressionConstant> <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
      */
     class Declaration final : public BlockItem
     {
@@ -1000,6 +1021,7 @@ namespace OpenCL::Parser
 
         explicit Declaration(std::unique_ptr<Type>&& type,
                              std::string name,
+                             std::vector<std::size_t> arraySizes,
                              std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
         const Type& getType() const;

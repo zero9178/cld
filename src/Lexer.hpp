@@ -76,6 +76,8 @@ namespace OpenCL::Lexer
         ForKeyword,
         IfKeyword,
         WhileKeyword,
+        OpenSquareBracket,
+        CloseSquareBracket
     };
 
     class Token
