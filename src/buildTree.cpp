@@ -227,20 +227,45 @@ namespace
                 }
                 auto type = parseType(tokens);
                 currToken = tokens.back();
+                std::string argname = "";
                 if (currToken.getTokenType() == TokenType::Identifier)
                 {
-                    arguments.emplace_back(std::move(type), std::get<std::string>(currToken.getValue()));
+                    argname = std::get<std::string>(currToken.getValue());
                     tokens.pop_back();
                 }
-                else if (currToken.getTokenType() == TokenType::CloseParenthese
-                    || currToken.getTokenType() == TokenType::Comma)
+                std::vector<std::size_t> sizes;
+                while(tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
-                    arguments.emplace_back(std::move(type), "");
+                    tokens.pop_back();
+                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
+                    if(!result)
+                    {
+                        throw std::runtime_error("Expected primary constant expression for array size");
+                    }
+                    sizes.push_back(std::visit([](auto&& value)->std::size_t
+                                               {
+                                                   using T = std::decay_t<decltype(value)>;
+                                                   if constexpr(std::is_integral_v<T>)
+                                                   {
+                                                       return value;
+                                                   }
+                                                   else
+                                                   {
+                                                       throw std::runtime_error("Only integral type supported for array size");
+                                                   }
+                                               },result->getValue()));
+                    if(tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                    {
+                        throw std::runtime_error("Expected ] after array declaration");
+                    }
+                    tokens.pop_back();
                 }
-                else
+                std::for_each(sizes.rbegin(),sizes.rend(),[&type](std::size_t value)
                 {
-                    throw std::runtime_error("Expected identifier,Close Parentheses or Comma after parameter type");
-                }
+                    type = std::make_unique<ArrayType>(std::move(type),value);
+                });
+                arguments.emplace_back(std::move(type),argname);
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::CloseParenthese)
                 {
@@ -1103,11 +1128,15 @@ namespace
             else if (currToken.getTokenType() == TokenType::OpenParenthese)
             {
                 tokens.pop_back();
-                std::vector<AssignmentExpression> assignmentExpressions;
+                std::vector<std::unique_ptr<NonCommaExpression>> nonCommaExpressions;
                 while (tokens.back().getTokenType() != TokenType::CloseParenthese)
                 {
-                    assignmentExpressions.push_back(parseAssignment(tokens));
-                    if (tokens.back().getTokenType() != TokenType::Comma)
+                    nonCommaExpressions.push_back(parseNonCommaExpression(tokens));
+                    if (tokens.back().getTokenType() == TokenType::CloseParenthese)
+                    {
+                        break;
+                    }
+                    else if (tokens.back().getTokenType() != TokenType::Comma)
                     {
                         throw std::runtime_error("Expected , after argument of function");
                     }
@@ -1117,7 +1146,7 @@ namespace
                 auto postExpression = std::move(stack.top());
                 stack.pop();
                 stack.push(std::make_unique<PostFixExpressionFunctionCall>(std::move(postExpression),
-                                                                           std::move(assignmentExpressions)));
+                                                                           std::move(nonCommaExpressions)));
             }
             else if (currToken.getTokenType() == TokenType::OpenSquareBracket)
             {

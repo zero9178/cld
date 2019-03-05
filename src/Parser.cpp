@@ -631,10 +631,11 @@ const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::
 }
 
 OpenCL::Parser::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                                                             std::vector<AssignmentExpression>&& optionalAssignmanetExpressions)
+                                                                             std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions)
     : m_postFixExpression(std::move(postFixExpression)), m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
 {
     assert(m_postFixExpression);
+    assert(std::all_of(m_optionalAssignmanetExpressions.begin(),m_optionalAssignmanetExpressions.end(),[](const auto& ptr){return ptr.get();}));
 }
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionFunctionCall::getPostFixExpression() const
@@ -642,7 +643,7 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionFuncti
     return *m_postFixExpression;
 }
 
-const std::vector<OpenCL::Parser::AssignmentExpression>& OpenCL::Parser::PostFixExpressionFunctionCall::getOptionalAssignmentExpressions() const
+const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::Parser::PostFixExpressionFunctionCall::getOptionalAssignmentExpressions() const
 {
     return m_optionalAssignmanetExpressions;
 }

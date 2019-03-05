@@ -409,15 +409,15 @@ namespace OpenCL::Parser
     class PostFixExpressionFunctionCall final : public PostFixExpression
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
-        std::vector<AssignmentExpression> m_optionalAssignmanetExpressions;
+        std::vector<std::unique_ptr<NonCommaExpression>> m_optionalAssignmanetExpressions;
 
     public:
         PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                      std::vector<AssignmentExpression>&& optionalAssignmanetExpressions);
+                                      std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
 
-        const std::vector<AssignmentExpression>& getOptionalAssignmentExpressions() const;
+        const std::vector<std::unique_ptr<NonCommaExpression>>& getOptionalAssignmentExpressions() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };

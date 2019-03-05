@@ -65,6 +65,21 @@ namespace
                     throw std::runtime_error("Cannot convert type");
                 }
             }
+            else if(value->getType()->isPointerTy())
+            {
+                if(destType->isIntegerTy())
+                {
+                    value = context.builder.CreatePtrToInt(value,destType);
+                }
+            }
+            else if(value->getType()->isArrayTy())
+            {
+                if(llvm::isa<llvm::LoadInst>(value))
+                {
+                    auto* zero = context.builder.getInt32(0);
+                    value = context.builder.CreateInBoundsGEP(llvm::cast<llvm::LoadInst>(value)->getPointerOperand(),{zero,zero});
+                }
+            }
         }
         isSigned = destIsSigned;
     }
@@ -234,7 +249,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
     std::size_t i = 0;
     for (auto& iter : context.currentFunction->args())
     {
-        if (!getArguments()[i++].second.empty())
+        if (!getArguments()[i].second.empty())
         {
             iter.setName(getArguments()[i++].second);
         }
@@ -246,7 +261,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
     i = 0;
     for (auto& iter : context.currentFunction->args())
     {
-        if (getArguments()[i++].second.empty())
+        if (getArguments()[i].second.empty())
         {
             continue;
         }
@@ -1299,9 +1314,22 @@ std::pair<llvm::Value*,
           bool> OpenCL::Parser::PostFixExpressionSubscript::codegen(OpenCL::Parser::Context& context) const
 {
     auto [value,sign] = getPostFixExpression().codegen(context);
-    auto* arrayPointer = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
-    auto* index = getExpression().codegen(context).first;
-    return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(arrayPointer,index)),sign};
+    if(llvm::isa<llvm::ArrayType>(value->getType()))
+    {
+        auto* arrayPointer = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
+        auto* index = getExpression().codegen(context).first;
+        auto* zero = context.builder.getIntN(index->getType()->getIntegerBitWidth(),0);
+        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(arrayPointer,{zero,index})),sign};
+    }
+    else if(llvm::isa<llvm::PointerType>(value->getType()))
+    {
+        auto* index = getExpression().codegen(context).first;
+        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(value,index)),sign};
+    }
+    else
+    {
+        return {};
+    }
 }
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
@@ -1369,7 +1397,7 @@ std::pair<llvm::Value*,
         {
             throw std::runtime_error("Cannot take address of type");
         }
-        return {llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), false};
+        return {llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), sign};
     }
     case UnaryOperator::Asterisk:
     {
@@ -1459,9 +1487,10 @@ std::pair<llvm::Value*,
     std::size_t i  = 0;
     for(auto& iter : getOptionalAssignmentExpressions())
     {
-        auto [arg,signarg] = iter.codegen(context);
+        auto [arg,signarg] = iter->codegen(context);
         castPrimitive(arg,signarg,function.arguments[i]->type(context),function.arguments[i]->isSigned(),context);
         arguments.emplace_back(arg);
+        i++;
     }
     return {context.builder.CreateCall(value,arguments),function.retType->isSigned()};
 }
