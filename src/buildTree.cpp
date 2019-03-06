@@ -10,7 +10,7 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens);
 
-    OpenCL::Parser::StructType parseStruct(Tokens& tokens);
+    OpenCL::Parser::StructDeclaration parseStruct(Tokens& tokens);
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens);
 
@@ -112,7 +112,7 @@ namespace
     {
         if(tokens.back().getTokenType() == TokenType::StructKeyword)
         {
-            parseStruct(tokens);
+            return std::make_unique<StructDeclaration>(parseStruct(tokens));
         }
         std::uint64_t pos = 1;
         auto currToken = tokens.back();
@@ -145,7 +145,7 @@ namespace
         }
     }
 
-    OpenCL::Parser::StructType parseStruct(Tokens& tokens)
+    OpenCL::Parser::StructDeclaration parseStruct(Tokens& tokens)
     {
         auto currToken = tokens.back();
         if(currToken.getTokenType() != TokenType::StructKeyword)
@@ -177,13 +177,19 @@ namespace
             }
             fields.emplace_back(std::move(type),std::get<std::string>(currToken.getValue()));
             tokens.pop_back();
+            if(tokens.back().getTokenType() != TokenType::SemiColon)
+            {
+                throw std::runtime_error("Expected ; at the end of field definition");
+            }
+            tokens.pop_back();
         }
         tokens.pop_back();
         if(tokens.back().getTokenType() != TokenType::SemiColon)
         {
             throw std::runtime_error("Expected ; at the end of struct definition");
         }
-        return StructType(std::move(name), std::move(fields));
+        tokens.pop_back();
+        return StructDeclaration(std::move(name), std::move(fields));
     }
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens)

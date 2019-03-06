@@ -1164,14 +1164,14 @@ namespace OpenCL::Parser
       *                { <Type> <TokenType::Identifier> <TokenType::Semicolon> }
       *                <TokenType::CloseBrace>
       */
-    class StructType final : public Global
+    class StructDeclaration final : public Global
     {
         std::string m_name;
         std::vector<std::pair<std::unique_ptr<Type>,std::string>> m_types;
 
     public:
 
-        StructType(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types);
+        StructDeclaration(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types);
 
         const std::string& getName() const;
 

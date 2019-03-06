@@ -1581,10 +1581,10 @@ std::pair<llvm::Value*,
     return {value,sign};
 }
 
-std::pair<llvm::Value*, bool> OpenCL::Parser::StructType::codegen(OpenCL::Parser::Context& context) const
+std::pair<llvm::Value*, bool> OpenCL::Parser::StructDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
     std::vector<llvm::Type*> types;
-    std::transform(getTypes().begin(),getTypes().end(),std::back_inserter(types),[&](const auto pair)
+    std::transform(getTypes().begin(),getTypes().end(),std::back_inserter(types),[&](const auto& pair)
     {
         return pair.first->type(context);
     });
