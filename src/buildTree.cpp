@@ -10,6 +10,8 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens);
 
+    OpenCL::Parser::StructType parseStruct(Tokens& tokens);
+
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens);
 
     OpenCL::Parser::Function parseFunction(Tokens& tokens);
@@ -108,6 +110,10 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
     {
+        if(tokens.back().getTokenType() == TokenType::StructKeyword)
+        {
+            parseStruct(tokens);
+        }
         std::uint64_t pos = 1;
         auto currToken = tokens.back();
         if (!isType(currToken.getTokenType()))
@@ -137,6 +143,47 @@ namespace
         {
             throw std::runtime_error("Invalid token after global identifier");
         }
+    }
+
+    OpenCL::Parser::StructType parseStruct(Tokens& tokens)
+    {
+        auto currToken = tokens.back();
+        if(currToken.getTokenType() != TokenType::StructKeyword)
+        {
+            throw std::runtime_error("Expected struct keyword");
+        }
+        tokens.pop_back();
+        currToken = tokens.back();
+        if(currToken.getTokenType() != TokenType::Identifier)
+        {
+            throw std::runtime_error("Expected Identifier following Sturct");
+        }
+        std::string name = std::get<std::string>(currToken.getValue());
+        tokens.pop_back();
+        currToken = tokens.back();
+        if(currToken.getTokenType() != TokenType::OpenBrace)
+        {
+            throw std::runtime_error("Expected { after struct definition");
+        }
+        tokens.pop_back();
+        std::vector<std::pair<std::unique_ptr<Type>,std::string>> fields;
+        while(!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
+        {
+            auto type = parseType(tokens);
+            currToken = tokens.back();
+            if(currToken.getTokenType() != TokenType::Identifier)
+            {
+                throw std::runtime_error("Expected identifier after type in field definition");
+            }
+            fields.emplace_back(std::move(type),std::get<std::string>(currToken.getValue()));
+            tokens.pop_back();
+        }
+        tokens.pop_back();
+        if(tokens.back().getTokenType() != TokenType::SemiColon)
+        {
+            throw std::runtime_error("Expected ; at the end of struct definition");
+        }
+        return StructType(std::move(name), std::move(fields));
     }
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens)
@@ -713,52 +760,81 @@ namespace
         return Expression(std::move(expression), std::move(optional));
     }
 
-    OpenCL::Parser::AssignmentExpression parseAssignment(Tokens& tokens);
-
     std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens)
     {
-        auto result = std::find_if(tokens.rbegin(), tokens.rend(), [](const Token& token)
+        std::size_t braceCount = 0;
+        std::size_t squareCount = 0;
+        auto result = std::find_if(tokens.rbegin(), tokens.rend(), [&](const Token& token)
         {
-            return token.getTokenType() == TokenType::SemiColon || isAssignment(token.getTokenType());
+            if(token.getTokenType() == TokenType::SemiColon || isAssignment(token.getTokenType()))
+            {
+                return true;
+            }
+            else if(token.getTokenType() == TokenType::OpenParenthese)
+            {
+                braceCount++;
+            }
+            else if(token.getTokenType() == TokenType::CloseParenthese)
+            {
+                if(!braceCount)
+                {
+                    return true;
+                }
+                else
+                {
+                    braceCount--;
+                }
+            }
+            else if(token.getTokenType() == TokenType::OpenSquareBracket)
+            {
+                squareCount++;
+            }
+            else if(token.getTokenType() == TokenType::CloseSquareBracket)
+            {
+                if(!squareCount)
+                {
+                    return true;
+                }
+                else
+                {
+                    squareCount--;
+                }
+            }
+            return false;
         });
         bool assignment = result != tokens.rend() && isAssignment(result->getTokenType());
         if (assignment)
         {
-            return std::make_unique<AssignmentExpression>(parseAssignment(tokens));
+            auto unary = parseUnaryExpression(tokens);
+            auto currentToken = tokens.back();
+            tokens.pop_back();
+            auto nonCommaExpression = parseNonCommaExpression(tokens);
+            return std::make_unique<AssignmentExpression>(std::move(unary),
+                                        [assignment = currentToken.getTokenType()]
+                                        {
+                                            switch (assignment)
+                                            {
+                                            case TokenType::Assignment:return AssignmentExpression::AssignOperator::NoOperator;
+                                            case TokenType::PlusAssign:return AssignmentExpression::AssignOperator::PlusAssign;
+                                            case TokenType::MinusAssign:return AssignmentExpression::AssignOperator::MinusAssign;
+                                            case TokenType::DivideAssign:return AssignmentExpression::AssignOperator::DivideAssign;
+                                            case TokenType::MultiplyAssign:return AssignmentExpression::AssignOperator::MultiplyAssign;
+                                            case TokenType::ModuloAssign:return AssignmentExpression::AssignOperator::ModuloAssign;
+                                            case TokenType::ShiftLeftAssign:return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                                            case TokenType::ShiftRightAssign:return AssignmentExpression::AssignOperator::RightShiftAssign;
+                                            case TokenType::BitAndAssign:return AssignmentExpression::AssignOperator::BitAndAssign;
+                                            case TokenType::BitOrAssign:return AssignmentExpression::AssignOperator::BitOrAssign;
+                                            case TokenType::BitXorAssign:return AssignmentExpression::AssignOperator::BitXorAssign;
+                                            default:
+                                                throw std::runtime_error(
+                                                    "Invalid token for assignment");
+                                            }
+                                        }(), std::move(nonCommaExpression));
         }
         else
         {
             return std::make_unique<ConditionalExpression>(parseConditionalExpression(tokens));
         }
-    }
-
-    OpenCL::Parser::AssignmentExpression parseAssignment(Tokens& tokens)
-    {
-        auto unary = parseUnaryExpression(tokens);
-        auto currentToken = tokens.back();
-        tokens.pop_back();
-        auto assignment = parseNonCommaExpression(tokens);
-        return AssignmentExpression(std::move(unary),
-                                    [assignment = currentToken.getTokenType()]
-                                    {
-                                        switch (assignment)
-                                        {
-                                        case TokenType::Assignment:return AssignmentExpression::AssignOperator::NoOperator;
-                                        case TokenType::PlusAssign:return AssignmentExpression::AssignOperator::PlusAssign;
-                                        case TokenType::MinusAssign:return AssignmentExpression::AssignOperator::MinusAssign;
-                                        case TokenType::DivideAssign:return AssignmentExpression::AssignOperator::DivideAssign;
-                                        case TokenType::MultiplyAssign:return AssignmentExpression::AssignOperator::MultiplyAssign;
-                                        case TokenType::ModuloAssign:return AssignmentExpression::AssignOperator::ModuloAssign;
-                                        case TokenType::ShiftLeftAssign:return AssignmentExpression::AssignOperator::LeftShiftAssign;
-                                        case TokenType::ShiftRightAssign:return AssignmentExpression::AssignOperator::RightShiftAssign;
-                                        case TokenType::BitAndAssign:return AssignmentExpression::AssignOperator::BitAndAssign;
-                                        case TokenType::BitOrAssign:return AssignmentExpression::AssignOperator::BitOrAssign;
-                                        case TokenType::BitXorAssign:return AssignmentExpression::AssignOperator::BitXorAssign;
-                                        default:
-                                            throw std::runtime_error(
-                                                "Invalid token for assignment");
-                                        }
-                                    }(), std::move(assignment));
     }
 
     OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens)
@@ -1026,7 +1102,7 @@ namespace
                 {
                     throw std::runtime_error("Unexpected end of tokens");
                 }
-                if (result->getTokenType() == TokenType::CloseBrace)
+                if (result->getTokenType() == TokenType::CloseParenthese)
                 {
                     tokens.pop_back();
                     auto type = parseType(tokens);
@@ -1116,7 +1192,7 @@ namespace
     std::unique_ptr<PostFixExpression> parsePostFixExpression(Tokens& tokens)
     {
         std::stack<std::unique_ptr<PostFixExpression>> stack;
-        while (isPostFixExpression(tokens.back().getTokenType()))
+        while (!tokens.empty() && isPostFixExpression(tokens.back().getTokenType()))
         {
             auto currToken = tokens.back();
             if (currToken.getTokenType() == TokenType::Identifier
@@ -1183,6 +1259,20 @@ namespace
                 auto postExpression = std::move(stack.top());
                 stack.pop();
                 stack.push(std::make_unique<PostFixExpressionSubscript>(std::move(postExpression),std::move(expression)));
+            }
+            else if(currToken.getTokenType() == TokenType::Increment)
+            {
+                tokens.pop_back();
+                auto postExpression = std::move(stack.top());
+                stack.pop();
+                stack.push(std::make_unique<PostFixExpressionIncrement>(std::move(postExpression)));
+            }
+            else if(currToken.getTokenType() == TokenType::Decrement)
+            {
+                tokens.pop_back();
+                auto postExpression = std::move(stack.top());
+                stack.pop();
+                stack.push(std::make_unique<PostFixExpressionDecrement>(std::move(postExpression)));
             }
         }
         auto ret = std::move(stack.top());

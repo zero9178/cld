@@ -1,12 +1,29 @@
 
-int foo(int a[6])
+struct Test
 {
-    return a[0];
-}
+    int i;
+};
 
 int main()
 {
-    int i[6];
-    i[0] = 5;
-    return foo(i);
+    float f[4][4];
+    unsigned long long counter = 0;
+    for(unsigned int i = 0; i < 4; i++)
+    {
+        for(unsigned int i2 = 0; i2 < 4; ++i2)
+        {
+            f[i][i2] = ++counter / (float)16;
+        }
+    }
+
+    double sum = 0;
+    for(unsigned int i = 0; i < 4; i++)
+    {
+        for(unsigned int i2 = 0; i2 < 4; i2++)
+        {
+            sum += f[i][i2];
+        }
+    }
+
+    return sum * 10000000;
 }

@@ -34,18 +34,19 @@ namespace OpenCL::Parser
         const Type* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
+        std::map<std::string,llvm::StructType*> structs;
 
-        bool hasFunction(const std::string& name)
+        bool hasFunction(const std::string& name) const
         {
             return m_functions.find(name) != m_functions.end();
         }
 
-        Function getFunction(const std::string& name)
+        const Function& getFunction(const std::string& name) const
         {
-            return m_functions[name];
+            return m_functions.at(name);
         }
 
-        tuple getNamedValue(const std::string& name)
+        tuple getNamedValue(const std::string& name) const
         {
             for (auto begin = m_namedValues.rbegin(); begin != m_namedValues.rend(); begin++)
             {
@@ -334,8 +335,8 @@ namespace OpenCL::Parser
      *                       | <PostFixExpressionDot>
      *                       | <PostFixExpressionFunctionCall>
      *                       | <PostFixExpression> "->" <TokenType::Identifier>
-     *                       | <PostFixExpression> <TokenType::Increment>
-     *                       | <PostFixExpression> <TokenType::Decrement>
+     *                       | <PostFixExpressionIncrement>
+     *                       | <PostFixExpressionDecrement>
      */
     class PostFixExpression : public Node
     {
@@ -377,6 +378,38 @@ namespace OpenCL::Parser
         const PostFixExpression& getPostFixExpression() const;
 
         const Expression& getExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionIncrement> ::= <PostFixExpression> <TokenType::Increment>
+     */
+    class PostFixExpressionIncrement final : public PostFixExpression
+    {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+
+    public:
+
+        explicit PostFixExpressionIncrement(std::unique_ptr<PostFixExpression>&& postFixExpression);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionDecrement> ::= <PostFixExpression> <TokenType::Decrement>
+     */
+    class PostFixExpressionDecrement final : public PostFixExpression
+    {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+
+    public:
+
+        explicit PostFixExpressionDecrement(std::unique_ptr<PostFixExpression>&& postFixExpression);
+
+        const PostFixExpression& getPostFixExpression() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -1009,7 +1042,8 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <PrimaryExpressionConstant> <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
+     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
      */
     class Declaration final : public BlockItem
     {
@@ -1125,9 +1159,34 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <function> ::= <Type> <TokenType::Identifier> <TokenType::OpenParenthese>
-     *                [ <Type> [<TokenType::Identifier>] { <TokenType::Comma> <Type>
-     *                [<TokenType::Identifier>] } ] <TokenType::CloseParenthese>
+      * <StructType> ::= <TokenType::StructKeyword> <TokenType::Identifier> <TokenType::OpenBrace>
+      *                 <Type> <TokenType::Identifier> <TokenType::Semicolon>
+      *                { <Type> <TokenType::Identifier> <TokenType::Semicolon> }
+      *                <TokenType::CloseBrace>
+      */
+    class StructType final : public Global
+    {
+        std::string m_name;
+        std::vector<std::pair<std::unique_ptr<Type>,std::string>> m_types;
+
+    public:
+
+        StructType(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types);
+
+        const std::string& getName() const;
+
+        const std::vector<std::pair<std::unique_ptr<Type>,std::string>>& getTypes() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <Function> ::= <Type> <TokenType::Identifier> <TokenType::OpenParenthese>
+     *                [ <Type> [<TokenType::Identifier>] {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     *                <TokenType::CloseSquareBracket> }
+     *                { <TokenType::Comma> <Type>
+     *                [<TokenType::Identifier>] [<TokenType::OpenSquareBracket> <TokenType::Literal>
+     *                <TokenType::CloseSquareBracket> ] } ] <TokenType::CloseParenthese>
      *                ( <TokenType::OpenBrace>  { <BlockItem> } <TokenType::CloseBrace>  | <TokenType::SemiColon>  )
      */
     class Function final : public Global
@@ -1156,6 +1215,10 @@ namespace OpenCL::Parser
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
 
+    /**
+     * <GlobalDeclaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     *                <TokenType::CloseSquareBracket> }
+     */
     class GlobalDeclaration final : public Global
     {
         std::unique_ptr<Type> m_type;

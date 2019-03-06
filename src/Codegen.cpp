@@ -71,13 +71,25 @@ namespace
                 {
                     value = context.builder.CreatePtrToInt(value,destType);
                 }
+                else
+                {
+                    throw std::runtime_error("Cannot convert pointer type to other");
+                }
             }
             else if(value->getType()->isArrayTy())
             {
-                if(llvm::isa<llvm::LoadInst>(value))
+                if(llvm::isa<llvm::LoadInst>(value) && destType->isIntOrPtrTy())
                 {
                     auto* zero = context.builder.getInt32(0);
                     value = context.builder.CreateInBoundsGEP(llvm::cast<llvm::LoadInst>(value)->getPointerOperand(),{zero,zero});
+                    if(destType->isIntegerTy())
+                    {
+                        value = context.builder.CreatePtrToInt(value,destType);
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Cannot convert array type to other");
                 }
             }
         }
@@ -173,7 +185,7 @@ namespace
                                                     rhsIsSigned);
             }
         }
-        else
+        else if(!rhs->getType()->isPointerTy() || !lhs->getType()->isPointerTy())
         {
             throw std::runtime_error("Can't cast to common type");
         }
@@ -837,7 +849,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::RelationalExpression::codegen(Open
         switch (op)
         {
         case RelationalOperator::LessThan:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 if (sign || rsign)
                 {
@@ -848,13 +860,13 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::RelationalExpression::codegen(Open
                     left = context.builder.CreateICmpULT(left, right);
                 }
             }
-            else
+            else if (left->getType()->isFloatingPointTy())
             {
                 left = context.builder.CreateFCmpULT(left, right);
             }
             break;
         case RelationalOperator::LessThanOrEqual:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 if (sign || rsign)
                 {
@@ -865,13 +877,13 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::RelationalExpression::codegen(Open
                     left = context.builder.CreateICmpULE(left, right);
                 }
             }
-            else
+            else if(left->getType()->isFloatingPointTy())
             {
                 left = context.builder.CreateFCmpULE(left, right);
             }
             break;
         case RelationalOperator::GreaterThan:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 if (sign || rsign)
                 {
@@ -882,13 +894,13 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::RelationalExpression::codegen(Open
                     left = context.builder.CreateICmpUGT(left, right);
                 }
             }
-            else
+            else if(left->getType()->isFloatingPointTy())
             {
                 left = context.builder.CreateFCmpUGT(left, right);
             }
             break;
         case RelationalOperator::GreaterThanOrEqual:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 if (sign || rsign)
                 {
@@ -899,7 +911,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::RelationalExpression::codegen(Open
                     left = context.builder.CreateICmpUGE(left, right);
                 }
             }
-            else
+            else if(left->getType()->isFloatingPointTy())
             {
                 left = context.builder.CreateFCmpUGE(left, right);
             }
@@ -922,17 +934,17 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::EqualityExpression::codegen(OpenCL
         switch (op)
         {
         case EqualityOperator::Equal:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 left = context.builder.CreateICmpEQ(left, right);
             }
-            else
+            else if(left->getType()->isFloatingPointTy())
             {
                 left = context.builder.CreateFCmpUEQ(left, right);
             }
             break;
         case EqualityOperator::NotEqual:
-            if (left->getType()->isIntegerTy())
+            if (left->getType()->isIntegerTy() || left->getType()->isPointerTy())
             {
                 left = context.builder.CreateICmpNE(left, right);
             }
@@ -1248,7 +1260,14 @@ llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
 llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) const
 {
     auto* type = getType().type(context);
-    return llvm::PointerType::getUnqual(type);
+    if(!type->isVoidTy())
+    {
+        return llvm::PointerType::getUnqual(type);
+    }
+    else
+    {
+        return context.builder.getInt64Ty();
+    }
 }
 
 std::pair<llvm::Value*,
@@ -1368,7 +1387,8 @@ std::pair<llvm::Value*,
         {
             throw std::runtime_error("Cannot apply unary ++ to non lvalue");
         }
-        return {context.builder.CreateStore(llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), newValue), sign};
+        context.builder.CreateStore( newValue,llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand());
+        return {newValue, sign};
     }
     case UnaryOperator::Decrement:
     {
@@ -1389,7 +1409,8 @@ std::pair<llvm::Value*,
         {
             throw std::runtime_error("Cannot apply unary -- to non lvalue");
         }
-        return {context.builder.CreateStore(llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), newValue), sign};
+        context.builder.CreateStore(newValue,llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand());
+        return {newValue, sign};
     }
     case UnaryOperator::Ampersand:
     {
@@ -1498,4 +1519,76 @@ std::pair<llvm::Value*,
 llvm::Type* OpenCL::Parser::ArrayType::type(OpenCL::Parser::Context& context) const
 {
     return llvm::ArrayType::get(getType()->type(context),getSize());
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PostFixExpressionIncrement::codegen(OpenCL::Parser::Context& context) const
+{
+    auto [value,sign] = getPostFixExpression().codegen(context);
+    auto* load = llvm::cast_or_null<llvm::LoadInst>(value);
+    if(!load)
+    {
+        throw std::runtime_error("Can't increment non lvalue");
+    }
+    llvm::Value* newValue = nullptr;
+    if(value->getType()->isIntegerTy())
+    {
+        newValue = context.builder.CreateAdd(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),1));
+    }
+    else if(value->getType()->isFloatingPointTy())
+    {
+        newValue = context.builder.CreateFAdd(value,llvm::ConstantFP::get(value->getType(),1));
+    }
+    else if(value->getType()->isPointerTy())
+    {
+        newValue = context.builder.CreateInBoundsGEP(value,context.builder.getInt32(1));
+    }
+    else
+    {
+        throw std::runtime_error("Can't increment value that is not an integer or floating point type");
+    }
+    context.builder.CreateStore(newValue,load->getPointerOperand());
+    return {value,sign};
+}
+
+std::pair<llvm::Value*,
+          bool> OpenCL::Parser::PostFixExpressionDecrement::codegen(OpenCL::Parser::Context& context) const
+{
+    auto [value,sign] = getPostFixExpression().codegen(context);
+    auto* load = llvm::cast_or_null<llvm::LoadInst>(value);
+    if(!load)
+    {
+        throw std::runtime_error("Can't increment non lvalue");
+    }
+    llvm::Value* newValue = nullptr;
+    if(value->getType()->isIntegerTy())
+    {
+        newValue = context.builder.CreateSub(value,context.builder.getIntN(value->getType()->getIntegerBitWidth(),1));
+    }
+    else if(value->getType()->isFloatingPointTy())
+    {
+        newValue = context.builder.CreateFSub(value,llvm::ConstantFP::get(value->getType(),1));
+    }
+    else if(value->getType()->isPointerTy())
+    {
+        newValue = context.builder.CreateInBoundsGEP(value,context.builder.getInt32(-1));
+    }
+    else
+    {
+        throw std::runtime_error("Can't increment value that is not an integer or floating point type");
+    }
+    context.builder.CreateStore(newValue,load->getPointerOperand());
+    return {value,sign};
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::StructType::codegen(OpenCL::Parser::Context& context) const
+{
+    std::vector<llvm::Type*> types;
+    std::transform(getTypes().begin(),getTypes().end(),std::back_inserter(types),[&](const auto pair)
+    {
+        return pair.first->type(context);
+    });
+    auto* structType = llvm::StructType::get(context.context,types);
+    context.structs[getName()] = structType;
+    return {};
 }

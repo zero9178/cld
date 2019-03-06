@@ -35,9 +35,9 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             result.emplace_back(line, column, TokenType::VoidKeyword);
         }
-        else if (lastText == "void")
+        else if (lastText == "struct")
         {
-            result.emplace_back(line, column, TokenType::VoidKeyword);
+            result.emplace_back(line, column, TokenType::StructKeyword);
         }
         else if (lastText == "char")
         {
@@ -326,13 +326,13 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                 {
                     std::int64_t number;
                     ss >> number;
-                    if (number > std::numeric_limits<std::uint32_t>::max())
+                    if (number > std::numeric_limits<std::int32_t>::max())
                     {
                         result.emplace_back(line, column, TokenType::Literal, number);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Literal, static_cast<std::uint32_t>(number));
+                        result.emplace_back(line, column, TokenType::Literal, static_cast<std::int32_t>(number));
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")

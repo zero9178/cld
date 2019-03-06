@@ -677,3 +677,38 @@ bool OpenCL::Parser::ArrayType::isVoid() const
 {
     return false;
 }
+
+OpenCL::Parser::PostFixExpressionIncrement::PostFixExpressionIncrement(std::unique_ptr<PostFixExpression>&& postFixExpression)
+    : m_postFixExpression(std::move(postFixExpression))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionIncrement::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+OpenCL::Parser::PostFixExpressionDecrement::PostFixExpressionDecrement(std::unique_ptr<PostFixExpression>&& postFixExpression)
+    : m_postFixExpression(std::move(postFixExpression))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDecrement::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+OpenCL::Parser::StructType::StructType(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types)
+: m_name(std::move(name)), m_types(std::move(types))
+{
+    assert(!m_types.empty());
+    assert(std::all_of(m_types.begin(),m_types.end(),[](const auto& pair){return pair.first.get();}));
+}
+
+const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructType::getTypes() const
+{
+    return m_types;
+}
+
+const std::string& OpenCL::Parser::StructType::getName() const
+{
+    return m_name;
+}
