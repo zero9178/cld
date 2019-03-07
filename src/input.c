@@ -13,6 +13,8 @@ struct Test foo()
     return t;
 }
 
+int i;
+
 int main()
 {
     return foo().i;

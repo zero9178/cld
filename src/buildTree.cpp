@@ -12,9 +12,9 @@ namespace
 
     OpenCL::Parser::StructDeclaration parseStruct(Tokens& tokens);
 
-    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens);
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type, Tokens& tokens);
 
-    OpenCL::Parser::Function parseFunction(Tokens& tokens);
+    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype, Tokens& tokens);
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens);
 
@@ -93,9 +93,6 @@ namespace
             || type == TokenType::DoubleKeyword
             || type == TokenType::SignedKeyword
             || type == TokenType::UnsignedKeyword
-            || type == TokenType::Asterisk
-            || type == TokenType::OpenSquareBracket
-            || type == TokenType::CloseSquareBracket
             || type == TokenType::StructKeyword;
     }
 
@@ -115,30 +112,30 @@ namespace
         {
             return std::make_unique<StructDeclaration>(parseStruct(tokens));
         }
-        std::uint64_t pos = 1;
         auto currToken = tokens.back();
         if (!isType(currToken.getTokenType()))
         {
             throw std::runtime_error("Expected type for global declaration");
         }
-        while (isType(currToken.getTokenType()))
-        {
-            pos++;
-            currToken = tokens.at(tokens.size() - pos);
-        }
+        auto type = parseType(tokens);
+        currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::Identifier)
         {
             throw std::runtime_error("Expected Identifier after type");
         }
-        currToken = tokens.at(tokens.size() - pos - 1);
+        if(tokens.size() == 1)
+        {
+            throw std::runtime_error("Unexpected end of tokens");
+        }
+        currToken = tokens.at(tokens.size()-2);
         if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
-            return std::make_unique<Function>(parseFunction(tokens));
+            return std::make_unique<Function>(parseFunction(std::move(type), tokens));
         }
         else if (currToken.getTokenType() == TokenType::SemiColon
             || currToken.getTokenType() == TokenType::Assignment)
         {
-            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(tokens));
+            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(std::move(type), tokens));
         }
         else
         {
@@ -193,15 +190,9 @@ namespace
         return StructDeclaration(std::move(name), std::move(fields));
     }
 
-    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens)
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type, Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if (!isType(currToken.getTokenType()))
-        {
-            throw std::runtime_error("Unsupported return type");
-        }
-        auto type = parseType(tokens);
-        currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::Identifier)
         {
@@ -242,20 +233,13 @@ namespace
         }
         else
         {
-            tokens.pop_back();
             return GlobalDeclaration(std::move(type), name);
         }
     }
 
-    OpenCL::Parser::Function parseFunction(Tokens& tokens)
+    OpenCL::Parser::Function parseFunction(std::unique_ptr<Type>&& rettype, Tokens& tokens)
     {
         auto currToken = tokens.back();
-        if (!isType(currToken.getTokenType()))
-        {
-            throw std::runtime_error("Unsupported return type");
-        }
-        auto retType = parseType(tokens);
-        currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::Identifier)
         {
@@ -281,7 +265,7 @@ namespace
                 }
                 auto type = parseType(tokens);
                 currToken = tokens.back();
-                std::string argname = "";
+                std::string argname;
                 if (currToken.getTokenType() == TokenType::Identifier)
                 {
                     argname = std::get<std::string>(currToken.getValue());
@@ -359,7 +343,7 @@ namespace
                 throw std::runtime_error("Expected Block statement after function");
             }
 
-            return Function(std::move(retType),
+            return Function(std::move(rettype),
                             std::move(name),
                             std::move(arguments),
                             std::make_unique<BlockStatement>(std::move(*pointer)));
@@ -367,7 +351,7 @@ namespace
         else if (currToken.getTokenType() == TokenType::SemiColon)
         {
             tokens.pop_back();
-            return Function(std::move(retType), std::move(name), std::move(arguments));
+            return Function(std::move(rettype), std::move(name), std::move(arguments));
         }
         else
         {

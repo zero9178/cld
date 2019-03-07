@@ -1354,12 +1354,8 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
 {
     auto* structValue = getPostFixExpression().codegen(context).first;
-    auto* structLoad = llvm::cast_or_null<llvm::LoadInst>(structValue);
-    if(!structLoad)
-    {
-
-    }
-    auto* type = llvm::cast_or_null<llvm::StructType>(structValue->getType());
+    auto* structLoad = llvm::cast<llvm::LoadInst>(structValue);
+    auto* type = llvm::dyn_cast<llvm::StructType>(structValue->getType());
     if(!type)
     {
         throw std::runtime_error("Can only apply . to struct or union");
