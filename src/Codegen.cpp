@@ -1353,7 +1353,23 @@ std::pair<llvm::Value*,
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, bool>();
+    auto* structValue = getPostFixExpression().codegen(context).first;
+    auto* structLoad = llvm::cast_or_null<llvm::LoadInst>(structValue);
+    if(!structLoad)
+    {
+
+    }
+    auto* type = llvm::cast_or_null<llvm::StructType>(structValue->getType());
+    if(!type)
+    {
+        throw std::runtime_error("Can only apply . to struct or union");
+    }
+    auto* zero = context.builder.getInt32(0);
+    auto& structInfo = context.structs[structValue->getType()->getStructName()];
+    auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
+    auto* memberType = structInfo.types[index->getValue().getLimitedValue()];
+    auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(),{zero,index});
+    return {context.builder.CreateLoad(pointer),memberType->isSigned()};
 }
 
 std::pair<llvm::Value*,
@@ -1583,12 +1599,20 @@ std::pair<llvm::Value*,
 
 std::pair<llvm::Value*, bool> OpenCL::Parser::StructDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
+    OpenCL::Parser::Context::Struct structType;
     std::vector<llvm::Type*> types;
     std::transform(getTypes().begin(),getTypes().end(),std::back_inserter(types),[&](const auto& pair)
     {
+        structType.order.insert({pair.second,structType.types.size()});
+        structType.types.push_back(pair.first.get());
         return pair.first->type(context);
     });
-    auto* structType = llvm::StructType::get(context.context,types);
+    llvm::StructType::create(context.context,types,getName());
     context.structs[getName()] = structType;
     return {};
+}
+
+llvm::Type* OpenCL::Parser::StructType::type(OpenCL::Parser::Context& context) const
+{
+    return context.module->getTypeByName(getName());
 }

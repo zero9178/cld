@@ -78,7 +78,8 @@ namespace OpenCL::Lexer
         WhileKeyword,
         OpenSquareBracket,
         CloseSquareBracket,
-        StructKeyword
+        StructKeyword,
+        Dot
     };
 
     class Token

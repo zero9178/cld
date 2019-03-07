@@ -34,7 +34,14 @@ namespace OpenCL::Parser
         const Type* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
-        std::map<std::string,llvm::StructType*> structs;
+
+        struct Struct
+        {
+            std::map<std::string,std::uint64_t> order;
+            std::vector<const Type*> types;
+        };
+
+        std::map<std::string,Struct> structs;
 
         bool hasFunction(const std::string& name) const
         {
@@ -115,7 +122,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Type> ::= <PrimitiveType> || <PointerType> || <ArrayType>
+     * <Type> ::= <PrimitiveType> | <PointerType> | <ArrayType> | <StructType>
      */
     class Type
     {
@@ -218,6 +225,26 @@ namespace OpenCL::Parser
          const std::unique_ptr<Type>& getType() const;
 
          std::size_t getSize() const;
+
+         bool isSigned() const override;
+
+         bool isVoid() const override;
+
+         llvm::Type* type(Context& context) const override;
+     };
+
+     /**
+      * <StructType> ::= <TokenType::StructKeyword> <TokenType::Identifer>
+      */
+     class StructType final : public Type
+     {
+         std::string m_name;
+
+     public:
+
+         explicit StructType(std::string name);
+
+         const std::string& getName() const;
 
          bool isSigned() const override;
 
@@ -415,7 +442,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <PostFixExpressionDot> ::= <PostFixExpression> "." <TokenType::Identifier>
+     * <PostFixExpressionDot> ::= <PostFixExpression> <TokenType::Dot> <TokenType::Identifier>
      */
     class PostFixExpressionDot final : public PostFixExpression
     {

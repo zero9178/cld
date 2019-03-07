@@ -522,6 +522,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             }
             break;
         }
+        case '.':
+        {
+            if(processLastWord())
+            {
+                result.emplace_back(line,column,TokenType::Dot);
+            }
+            break;
+        }
         case '+':
         case '-':
         case '*':

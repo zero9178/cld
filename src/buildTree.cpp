@@ -95,7 +95,8 @@ namespace
             || type == TokenType::UnsignedKeyword
             || type == TokenType::Asterisk
             || type == TokenType::OpenSquareBracket
-            || type == TokenType::CloseSquareBracket;
+            || type == TokenType::CloseSquareBracket
+            || type == TokenType::StructKeyword;
     }
 
     OpenCL::Parser::Program parseProgram(Tokens& tokens)
@@ -110,7 +111,7 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
     {
-        if(tokens.back().getTokenType() == TokenType::StructKeyword)
+        if(tokens.back().getTokenType() == TokenType::StructKeyword && tokens.size() > 2 && tokens.at(tokens.size()-3).getTokenType() == TokenType::OpenBrace)
         {
             return std::make_unique<StructDeclaration>(parseStruct(tokens));
         }
@@ -378,20 +379,40 @@ namespace
     {
         Tokens typeTokens;
         {
+            bool wasStruct = false;
             auto currToken = tokens.back();
             do
             {
+                if(wasStruct)
+                {
+                    wasStruct = false;
+                }
                 tokens.pop_back();
                 typeTokens.push_back(currToken);
                 if (tokens.empty())
                 {
                     break;
                 }
+                if(typeTokens.back().getTokenType() == TokenType::StructKeyword)
+                {
+                    wasStruct = true;
+                }
                 currToken = tokens.back();
-            } while (isType(currToken.getTokenType()));
+            } while (isType(currToken.getTokenType()) || (wasStruct && currToken.getTokenType() == TokenType::Identifier));
         }
 
-        if (typeTokens.back().getTokenType() == TokenType::Asterisk)
+        if (typeTokens.front().getTokenType() == TokenType::StructKeyword)
+        {
+            std::reverse(typeTokens.begin(),typeTokens.end());
+            typeTokens.pop_back();
+            if(typeTokens.back().getTokenType() != TokenType::Identifier)
+            {
+                throw std::runtime_error("Expected identifier after struct");
+            }
+            const auto& name = std::get<std::string>(typeTokens.back().getValue());
+            return std::make_unique<StructType>(name);
+        }
+        else if (typeTokens.back().getTokenType() == TokenType::Asterisk)
         {
             typeTokens.pop_back();
             std::reverse(typeTokens.begin(), typeTokens.end());
@@ -1184,6 +1205,7 @@ namespace
     {
         switch (token)
         {
+        case TokenType::Dot:
         case TokenType::OpenSquareBracket:
         case TokenType::Identifier:
         case TokenType::OpenParenthese:
@@ -1280,6 +1302,23 @@ namespace
                 stack.pop();
                 stack.push(std::make_unique<PostFixExpressionDecrement>(std::move(postExpression)));
             }
+            else if(currToken.getTokenType() == TokenType::Dot)
+            {
+                tokens.pop_back();
+                currToken = tokens.back();
+                if(currToken.getTokenType() != TokenType::Identifier)
+                {
+                    throw std::runtime_error("Expected Identifier after .");
+                }
+                tokens.pop_back();
+                auto postExpression = std::move(stack.top());
+                stack.pop();
+                stack.push(std::make_unique<PostFixExpressionDot>(std::move(postExpression),std::get<std::string>(currToken.getValue())));
+            }
+        }
+        if(stack.size() != 1)
+        {
+            throw std::runtime_error("Invalid amount of post fix expressions");
         }
         auto ret = std::move(stack.top());
         stack.pop();

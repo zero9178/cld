@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Parser.hpp"
 
 #include <utility>
@@ -712,3 +714,22 @@ const std::string& OpenCL::Parser::StructDeclaration::getName() const
 {
     return m_name;
 }
+
+OpenCL::Parser::StructType::StructType(std::string name) : m_name(std::move(name))
+{}
+
+const std::string& OpenCL::Parser::StructType::getName() const
+{
+    return m_name;
+}
+
+bool OpenCL::Parser::StructType::isSigned() const
+{
+    return false;
+}
+
+bool OpenCL::Parser::StructType::isVoid() const
+{
+    return false;
+}
+
