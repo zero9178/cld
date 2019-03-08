@@ -46,33 +46,19 @@ OpenCL::Parser::Function::Function(std::unique_ptr<Type>&& returnType,
     { return static_cast<bool>(pair.first); }));
 }
 
-const std::string& OpenCL::Parser::Declaration::getName() const
+OpenCL::Parser::Declarations::Declarations(std::vector<std::tuple<std::unique_ptr<OpenCL::Parser::Type>,
+                                                                        std::string,
+                                                                        std::unique_ptr<OpenCL::Parser::Expression>>>&& declarations)
+    : m_declarations(std::move(declarations))
 {
-    return m_name;
+    assert(std::all_of(m_declarations.begin(),m_declarations.end(),[](const auto& tuple){return std::get<0>(tuple).get();}));
 }
 
-const OpenCL::Parser::Expression* OpenCL::Parser::Declaration::getOptionalExpression() const
+const std::vector<std::tuple<std::unique_ptr<OpenCL::Parser::Type>,
+                             std::string,
+                             std::unique_ptr<OpenCL::Parser::Expression>>>& OpenCL::Parser::Declarations::getDeclarations() const
 {
-    return m_optionalExpression.get();
-}
-
-OpenCL::Parser::Declaration::Declaration(std::unique_ptr<Type>&& type,
-                                         std::string name,
-                                         std::vector<std::size_t> arraySizes,
-                                         std::unique_ptr<Expression>&& optionalExpression)
-    : m_name(std::move(name)), m_optionalExpression(std::move(optionalExpression))
-{
-    assert(type);
-    std::for_each(arraySizes.rbegin(),arraySizes.rend(),[&type](std::size_t value)
-    {
-        type = std::make_unique<ArrayType>(std::move(type),value);
-    });
-    m_type = std::move(type);
-}
-
-const OpenCL::Parser::Type& OpenCL::Parser::Declaration::getType() const
-{
-    return *m_type;
+    return m_declarations;
 }
 
 const OpenCL::Parser::Expression& OpenCL::Parser::ReturnStatement::getExpression() const
@@ -161,7 +147,7 @@ const OpenCL::Parser::Expression* OpenCL::Parser::ForStatement::getPost() const
 }
 
 OpenCL::Parser::ForDeclarationStatement::ForDeclarationStatement(std::unique_ptr<Statement>&& statement,
-                                                                 Declaration&& initial,
+                                                                 Declarations&& initial,
                                                                  std::unique_ptr<Expression>&& controlling,
                                                                  std::unique_ptr<Expression>&& post)
     : m_statement(std::move(statement)), m_initial(std::move(initial)), m_controlling(std::move(controlling)),
@@ -170,7 +156,7 @@ OpenCL::Parser::ForDeclarationStatement::ForDeclarationStatement(std::unique_ptr
     assert(m_statement);
 }
 
-const OpenCL::Parser::Declaration& OpenCL::Parser::ForDeclarationStatement::getInitial() const
+const OpenCL::Parser::Declarations& OpenCL::Parser::ForDeclarationStatement::getInitial() const
 {
     return m_initial;
 }
@@ -460,6 +446,12 @@ bool OpenCL::Parser::PrimitiveType::isVoid() const
     return m_types.empty();
 }
 
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PrimitiveType::clone() const
+{
+    auto copy = this->m_types;
+    return std::make_unique<PrimitiveType>(std::move(copy));
+}
+
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
     return *m_returnType;
@@ -481,6 +473,11 @@ bool OpenCL::Parser::PointerType::isVoid() const
 const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
 {
     return *m_type;
+}
+
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PointerType::clone() const
+{
+    return std::make_unique<PointerType>(m_type->clone());
 }
 
 OpenCL::Parser::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::string identifier) : m_identifier(std::move(
@@ -548,6 +545,22 @@ const std::string& OpenCL::Parser::PostFixExpressionDot::getIdentifier() const
 {
     return m_identifier;
 }
+
+OpenCL::Parser::PostFixExpressionArrow::PostFixExpressionArrow(std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                           std::string identifier) : m_postFixExpression(
+    std::move(postFixExpression)), m_identifier(std::move(identifier))
+{}
+
+const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionArrow::getPostFixExpression() const
+{
+    return *m_postFixExpression;
+}
+
+const std::string& OpenCL::Parser::PostFixExpressionArrow::getIdentifier() const
+{
+    return m_identifier;
+}
+
 
 OpenCL::Parser::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(std::unique_ptr<PostFixExpression>&& postFixExpression)
     : m_postFixExpression(std::move(postFixExpression))
@@ -680,6 +693,11 @@ bool OpenCL::Parser::ArrayType::isVoid() const
     return false;
 }
 
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::ArrayType::clone() const
+{
+    return std::make_unique<ArrayType>(m_type->clone(),m_size);
+}
+
 OpenCL::Parser::PostFixExpressionIncrement::PostFixExpressionIncrement(std::unique_ptr<PostFixExpression>&& postFixExpression)
     : m_postFixExpression(std::move(postFixExpression))
 {}
@@ -731,5 +749,10 @@ bool OpenCL::Parser::StructType::isSigned() const
 bool OpenCL::Parser::StructType::isVoid() const
 {
     return false;
+}
+
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::StructType::clone() const
+{
+    return std::make_unique<StructType>(m_name);
 }
 

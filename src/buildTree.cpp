@@ -93,7 +93,8 @@ namespace
             || type == TokenType::DoubleKeyword
             || type == TokenType::SignedKeyword
             || type == TokenType::UnsignedKeyword
-            || type == TokenType::StructKeyword;
+            || type == TokenType::StructKeyword
+            || type == TokenType::Asterisk;
     }
 
     OpenCL::Parser::Program parseProgram(Tokens& tokens)
@@ -173,8 +174,41 @@ namespace
             {
                 throw std::runtime_error("Expected identifier after type in field definition");
             }
-            fields.emplace_back(std::move(type),std::get<std::string>(currToken.getValue()));
+            std::string fieldName = std::get<std::string>(currToken.getValue());
             tokens.pop_back();
+            std::vector<std::size_t> sizes;
+            while(tokens.back().getTokenType() == TokenType::OpenSquareBracket)
+            {
+                tokens.pop_back();
+                auto primaryConstant = parsePrimaryExpression(tokens);
+                auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
+                if(!result)
+                {
+                    throw std::runtime_error("Expected primary constant expression for array size");
+                }
+                sizes.push_back(std::visit([](auto&& value)->std::size_t
+                                           {
+                                               using T = std::decay_t<decltype(value)>;
+                                               if constexpr(std::is_integral_v<T>)
+                                               {
+                                                   return value;
+                                               }
+                                               else
+                                               {
+                                                   throw std::runtime_error("Only integral type supported for array size");
+                                               }
+                                           },result->getValue()));
+                if(tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                {
+                    throw std::runtime_error("Expected ] after array declaration");
+                }
+                tokens.pop_back();
+            }
+            std::for_each(sizes.rbegin(),sizes.rend(),[&type](std::size_t value)
+            {
+                type = std::make_unique<ArrayType>(std::move(type),value);
+            });
+            fields.emplace_back(std::move(type),fieldName);
             if(tokens.back().getTokenType() != TokenType::SemiColon)
             {
                 throw std::runtime_error("Expected ; at the end of field definition");
@@ -471,66 +505,75 @@ namespace
         if (isType(currToken.getTokenType()) && currToken.getTokenType() != TokenType::Asterisk)
         {
             auto type = parseType(tokens);
-            currToken = tokens.back();
-            if (currToken.getTokenType() != TokenType::Identifier)
+            std::vector<std::tuple<std::unique_ptr<Type>,std::string,std::unique_ptr<Expression>>> declarations;
+            while(true)
             {
-                throw std::runtime_error("Expected Identifier after variable declaration");
-            }
-            tokens.pop_back();
-            std::vector<std::size_t> sizes;
-            while(tokens.back().getTokenType() == TokenType::OpenSquareBracket)
-            {
-                tokens.pop_back();
-                auto primaryConstant = parsePrimaryExpression(tokens);
-                auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
-                if(!result)
+                currToken = tokens.back();
+                if (currToken.getTokenType() != TokenType::Identifier)
                 {
-                    throw std::runtime_error("Expected primary constant expression for array size");
-                }
-                sizes.push_back(std::visit([](auto&& value)->std::size_t
-                                           {
-                    using T = std::decay_t<decltype(value)>;
-                    if constexpr(std::is_integral_v<T>)
-                    {
-                        return value;
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Only integral type supported for array size");
-                    }
-                    },result->getValue()));
-                if(tokens.back().getTokenType() != TokenType::CloseSquareBracket)
-                {
-                    throw std::runtime_error("Expected ] after array declaration");
+                    throw std::runtime_error("Expected Identifier after variable declaration");
                 }
                 tokens.pop_back();
-            }
-            auto name = std::get<std::string>(currToken.getValue());
-            auto result = [&tokens, name = std::move(name), type = std::move(type),sizes = std::move(sizes)]()mutable
-            {
-                auto currToken = tokens.back().getTokenType();
-                if (currToken == TokenType::Assignment)
+                std::vector<std::size_t> sizes;
+                while(tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
                     tokens.pop_back();
-                    return Declaration(std::move(type),
-                                       name,
-                                       sizes,
-                                       std::make_unique<Expression>(parseExpression(tokens)));
+                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
+                    if(!result)
+                    {
+                        throw std::runtime_error("Expected primary constant expression for array size");
+                    }
+                    sizes.push_back(std::visit([](auto&& value)->std::size_t
+                                               {
+                                                   using T = std::decay_t<decltype(value)>;
+                                                   if constexpr(std::is_integral_v<T>)
+                                                   {
+                                                       return value;
+                                                   }
+                                                   else
+                                                   {
+                                                       throw std::runtime_error("Only integral type supported for array size");
+                                                   }
+                                               },result->getValue()));
+                    if(tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                    {
+                        throw std::runtime_error("Expected ] after array declaration");
+                    }
+                    tokens.pop_back();
+                }
+                auto thisType = type->clone();
+                std::for_each(sizes.rbegin(),sizes.rend(),[&thisType](std::size_t value)
+                {
+                    thisType = std::make_unique<ArrayType>(std::move(thisType),value);
+                });
+                auto name = std::get<std::string>(currToken.getValue());
+                currToken = tokens.back();
+                if (currToken.getTokenType() == TokenType::Assignment)
+                {
+                    tokens.pop_back();
+                    declarations.emplace_back(std::move(thisType),name,std::make_unique<Expression>(parseExpression(tokens)));
                 }
                 else
                 {
-                    return Declaration(std::move(type), name,sizes);
+                    declarations.emplace_back(std::move(thisType),name,nullptr);
                 }
-            }();
-            if (tokens.empty() || tokens.back().getTokenType() != TokenType::SemiColon)
-            {
-                throw std::runtime_error("Declaration not terminated with ;");
+                if (tokens.empty() || (tokens.back().getTokenType() != TokenType::SemiColon
+                && tokens.back().getTokenType() != TokenType::Comma))
+                {
+                    throw std::runtime_error("Declaration not terminated with ;");
+                }
+                else if(tokens.back().getTokenType() == TokenType::SemiColon)
+                {
+                    tokens.pop_back();
+                    break;
+                }
+                else
+                {
+                    tokens.pop_back();
+                }
             }
-            else
-            {
-                tokens.pop_back();
-            }
-            return std::make_unique<Declaration>(std::move(result));
+            return std::make_unique<Declarations>(std::move(declarations));
         }
         else
         {
@@ -608,7 +651,7 @@ namespace
 
                 auto control = [&]() -> std::unique_ptr<Expression>
                 {
-                    if (dynamic_cast<Declaration*>(blockitem.get())
+                    if (dynamic_cast<Declarations*>(blockitem.get())
                         || tokens.back().getTokenType() != TokenType::SemiColon)
                     {
                         auto expression = parseExpression(tokens);
@@ -647,7 +690,7 @@ namespace
 
                 auto statement = parseStatement(tokens);
 
-                if (auto declaration = dynamic_cast<Declaration*>(blockitem.get());declaration)
+                if (auto declaration = dynamic_cast<Declarations*>(blockitem.get());declaration)
                 {
                     return std::make_unique<ForDeclarationStatement>(std::move(statement), std::move(*declaration),
                                                                      std::move(control),
@@ -1185,10 +1228,18 @@ namespace
         return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens));
     }
 
-    bool isPostFixExpression(TokenType token)
+    bool isPostFixExpression(Tokens& token)
     {
-        switch (token)
+        switch (token.back().getTokenType())
         {
+        case TokenType::Negation:
+        {
+            if(token.size() < 1)
+            {
+                return false;
+            }
+            return token.at(token.size()-2).getTokenType() == TokenType::GreaterThan;
+        }
         case TokenType::Dot:
         case TokenType::OpenSquareBracket:
         case TokenType::Identifier:
@@ -1204,7 +1255,7 @@ namespace
     std::unique_ptr<PostFixExpression> parsePostFixExpression(Tokens& tokens)
     {
         std::stack<std::unique_ptr<PostFixExpression>> stack;
-        while (!tokens.empty() && isPostFixExpression(tokens.back().getTokenType()))
+        while (!tokens.empty() && isPostFixExpression(tokens))
         {
             auto currToken = tokens.back();
             if (currToken.getTokenType() == TokenType::Identifier
@@ -1298,6 +1349,20 @@ namespace
                 auto postExpression = std::move(stack.top());
                 stack.pop();
                 stack.push(std::make_unique<PostFixExpressionDot>(std::move(postExpression),std::get<std::string>(currToken.getValue())));
+            }
+            else if(currToken.getTokenType() == TokenType::Negation)
+            {
+                tokens.pop_back();
+                tokens.pop_back();
+                currToken = tokens.back();
+                if(currToken.getTokenType() != TokenType::Identifier)
+                {
+                    throw std::runtime_error("Expected Identifier after .");
+                }
+                tokens.pop_back();
+                auto postExpression = std::move(stack.top());
+                stack.pop();
+                stack.push(std::make_unique<PostFixExpressionArrow>(std::move(postExpression),std::get<std::string>(currToken.getValue())));
             }
         }
         if(stack.size() != 1)

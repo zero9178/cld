@@ -137,6 +137,8 @@ namespace OpenCL::Parser
         virtual bool isVoid() const = 0;
 
         virtual llvm::Type* type(Context& context) const = 0;
+
+        virtual std::unique_ptr<Type> clone() const = 0;
     };
 
     /**
@@ -188,6 +190,8 @@ namespace OpenCL::Parser
         bool isVoid() const override;
 
         llvm::Type* type(Context& context) const override;
+
+        std::unique_ptr<Type> clone() const override;
     };
 
     /**
@@ -208,6 +212,8 @@ namespace OpenCL::Parser
         bool isVoid() const override;
 
         llvm::Type* type(Context& context) const override;
+
+        std::unique_ptr<Type> clone() const override;
     };
 
     /**
@@ -231,6 +237,8 @@ namespace OpenCL::Parser
          bool isVoid() const override;
 
          llvm::Type* type(Context& context) const override;
+
+         std::unique_ptr<Type> clone() const override;
      };
 
      /**
@@ -251,6 +259,8 @@ namespace OpenCL::Parser
          bool isVoid() const override;
 
          llvm::Type* type(Context& context) const override;
+
+         std::unique_ptr<Type> clone() const override;
      };
 
     /**
@@ -361,7 +371,7 @@ namespace OpenCL::Parser
      *                       | <PostFixExpressionSubscript>
      *                       | <PostFixExpressionDot>
      *                       | <PostFixExpressionFunctionCall>
-     *                       | <PostFixExpression> "->" <TokenType::Identifier>
+     *                       | <PostFixExpressionArrow>
      *                       | <PostFixExpressionIncrement>
      *                       | <PostFixExpressionDecrement>
      */
@@ -453,6 +463,26 @@ namespace OpenCL::Parser
 
         PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
                              std::string identifier);
+
+        const PostFixExpression& getPostFixExpression() const;
+
+        const std::string& getIdentifier() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionArrow> ::= <PostFixExpression> <TokenType::Negate> <TokenType::GreaterThan> <TokenType::Identifier>
+     */
+    class PostFixExpressionArrow final : public PostFixExpression
+    {
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
+        std::string m_identifier;
+
+    public:
+
+        PostFixExpressionArrow(std::unique_ptr<PostFixExpression>&& postFixExpression,
+        std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -1070,26 +1100,22 @@ namespace OpenCL::Parser
 
     /**
      * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] <TokenType::SemiColon>
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ]} <TokenType::SemiColon>
      */
-    class Declaration final : public BlockItem
+    class Declarations final : public BlockItem
     {
-        std::unique_ptr<Type> m_type;
-        std::string m_name;
-        std::unique_ptr<Expression> m_optionalExpression;
+        std::vector<std::tuple<std::unique_ptr<Type>,std::string,std::unique_ptr<Expression>>> m_declarations;
 
     public:
 
-        explicit Declaration(std::unique_ptr<Type>&& type,
-                             std::string name,
-                             std::vector<std::size_t> arraySizes,
-                             std::unique_ptr<Expression>&& optionalExpression = nullptr);
+        explicit Declarations(std::vector<std::tuple<std::unique_ptr<Type>,
+                                                  std::string,
+                                                  std::unique_ptr<Expression>>>&& declarations);
 
-        const Type& getType() const;
-
-        const std::string& getName() const;
-
-        const Expression* getOptionalExpression() const;
+        const std::vector<std::tuple<std::unique_ptr<Type>,
+                                     std::string,
+                                     std::unique_ptr<Expression>>>& getDeclarations() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };
@@ -1101,19 +1127,19 @@ namespace OpenCL::Parser
     class ForDeclarationStatement final : public Statement
     {
         std::unique_ptr<Statement> m_statement;
-        Declaration m_initial;
+        Declarations m_initial;
         std::unique_ptr<Expression> m_controlling;
         std::unique_ptr<Expression> m_post;
 
     public:
 
-        explicit ForDeclarationStatement(std::unique_ptr<Statement>&& statement, Declaration&& initial,
+        explicit ForDeclarationStatement(std::unique_ptr<Statement>&& statement, Declarations&& initial,
                                          std::unique_ptr<Expression>&& controlling = nullptr,
                                          std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
 
-        const Declaration& getInitial() const;
+        const Declarations& getInitial() const;
 
         const Expression* getControlling() const;
 

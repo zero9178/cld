@@ -31,7 +31,11 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             isBlockComment = true;
             return false;
         }
-        if (lastText == "void")
+        else if (lastText == ".")
+        {
+            result.emplace_back(line,column,TokenType::Dot);
+        }
+        else if (lastText == "void")
         {
             result.emplace_back(line, column, TokenType::VoidKeyword);
         }
@@ -522,14 +526,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             }
             break;
         }
-        case '.':
-        {
-            if(processLastWord())
-            {
-                result.emplace_back(line,column,TokenType::Dot);
-            }
-            break;
-        }
         case '+':
         case '-':
         case '*':
@@ -545,6 +541,15 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         case '>':
         {
             if (matches())
+            {
+                processLastWord();
+            }
+            lastText += iter;
+            break;
+        }
+        case '.':
+        {
+            if(!(std::regex_match(lastText,integerLiteralMatch) || std::regex_match(lastText,floatLiteralMatch)))
             {
                 processLastWord();
             }

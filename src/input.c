@@ -1,21 +1,20 @@
 
-struct Test
+struct Point
 {
-    int f;
-    int i;
+    double x;
+    double y;
 };
 
-struct Test foo()
+void incrementPoint(struct Point* p)
 {
-    struct Test t;
-    t.f = 2;
-    t.i = 7;
-    return t;
+    p->x += 1;
+    p->y += 1;
 }
-
-int i;
 
 int main()
 {
-    return foo().i;
+    struct Point p0;
+    p0.x = p0.y = 5.0;
+    incrementPoint(&p0);
+    return (int)(p0.x + p0.y);
 }
