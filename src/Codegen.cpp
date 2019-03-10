@@ -257,7 +257,7 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Function::codegen(OpenCL::Parser::
                 else
                 {
                     types.emplace_back(llvm::PointerType::getUnqual(type->type(context)));
-                    needsByVal.insert(i + 2);
+                    needsByVal.insert(i + (getReturnType().isVoid() ? 1 : 2));
                 }
                 i++;
             }
@@ -1372,9 +1372,13 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::PrimaryExpressionConstant::codegen
                           {
                               return {llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.context), value), true};
                           }
+                          else if constexpr(std::is_same_v<T,std::string>)
+                          {
+                              return {context.builder.CreateLoad(context.builder.CreateGlobalString(value)),true};
+                          }
                           else
                           {
-                              throw std::runtime_error("Not implemented yet");
+                              throw std::runtime_error("Not implemented");
                           }
                       }, getValue());
 }
@@ -1726,3 +1730,107 @@ llvm::Type* OpenCL::Parser::StructType::type(OpenCL::Parser::Context& context) c
 {
     return context.module->getTypeByName(getName());
 }
+
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::PostFixExpressionArrow::codegen(OpenCL::Parser::Context& context) const
+{
+    auto* structValue = getPostFixExpression().codegen(context).first;
+    auto* type = llvm::dyn_cast<llvm::StructType>(structValue->getType()->getPointerElementType());
+    if (!type)
+    {
+        throw std::runtime_error("Can only apply -> to pointer to struct or union");
+    }
+    auto* zero = context.builder.getInt32(0);
+    auto& structInfo = context.structs[type->getName()];
+    auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
+    auto* memberType = structInfo.types[index->getValue().getLimitedValue()];
+    auto* pointer = context.builder.CreateInBoundsGEP(structValue, {zero, index});
+    return {context.builder.CreateLoad(pointer), memberType->isSigned()};
+}
+
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::SwitchStatement::codegen(OpenCL::Parser::Context& context) const
+{
+    auto [value,sign] = getExpression().codegen(context);
+    auto* defaultBlock = llvm::BasicBlock::Create(context.context,"default");
+    auto* thenBlock = llvm::BasicBlock::Create(context.context,"then");
+    context.breakBlocks.push_back(thenBlock);
+    context.switchStack.push_back(context.builder.CreateSwitch(value,defaultBlock));
+    getStatement().codegen(context);
+    auto* function = context.builder.GetInsertBlock()->getParent();
+    if(!std::any_of(function->getBasicBlockList().begin(),function->getBasicBlockList().end(),[defaultBlock](const llvm::BasicBlock& block)
+    {
+        return defaultBlock == &block;
+    }))
+    {
+        function->getBasicBlockList().push_back(defaultBlock);
+        context.builder.SetInsertPoint(defaultBlock);
+        context.builder.CreateBr(defaultBlock);
+    }
+    if(!defaultBlock->getTerminator())
+    {
+        context.builder.SetInsertPoint(defaultBlock);
+        context.builder.CreateBr(thenBlock);
+    }
+    function->getBasicBlockList().push_back(thenBlock);
+    context.builder.SetInsertPoint(thenBlock);
+    context.breakBlocks.pop_back();
+    context.switchStack.pop_back();
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::DefaultStatement::codegen(OpenCL::Parser::Context& context) const
+{
+    if(context.switchStack.empty())
+    {
+        throw std::runtime_error("default without switch statement");
+    }
+    auto* function = context.builder.GetInsertBlock()->getParent();
+    auto* block = context.switchStack.back()->getDefaultDest();
+    if(context.switchStack.back()->getNumCases() > 0)
+    {
+        auto* successor = (context.switchStack.back()->case_begin()+(context.switchStack.back()->getNumCases()-1))->getCaseSuccessor();
+        if(!successor->getTerminator())
+        {
+            context.builder.CreateBr(block);
+        }
+    }
+    function->getBasicBlockList().push_back(block);
+    context.builder.SetInsertPoint(block);
+    getStatement().codegen(context);
+    return std::pair<llvm::Value*, bool>();
+}
+
+std::pair<llvm::Value*, bool> OpenCL::Parser::CaseStatement::codegen(OpenCL::Parser::Context& context) const
+{
+    if(context.switchStack.empty())
+    {
+        throw std::runtime_error("case without switch statement");
+    }
+    auto [value,sign] = getConstant().codegen(context);
+    auto* function = context.builder.GetInsertBlock()->getParent();
+    auto* newBlock = llvm::BasicBlock::Create(context.context);
+    if(context.switchStack.back()->getNumCases() > 0)
+    {
+        auto* successor = (context.switchStack.back()->case_begin()+(context.switchStack.back()->getNumCases()-1))->getCaseSuccessor();
+        if(!successor->getTerminator())
+        {
+            context.builder.CreateBr(newBlock);
+        }
+    }
+    function->getBasicBlockList().push_back(newBlock);
+    auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value);
+    if(!constant)
+    {
+        throw std::runtime_error("Expected constant expression after case");
+    }
+    context.switchStack.back()->addCase(constant,newBlock);
+    context.builder.SetInsertPoint(newBlock);
+    if (getStatement())
+    {
+        getStatement()->codegen(context);
+    }
+
+    return std::pair<llvm::Value*, bool>();
+}
+

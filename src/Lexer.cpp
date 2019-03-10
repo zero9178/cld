@@ -5,6 +5,7 @@
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& source)
 {
+    bool isCharacter = false;
     bool isStringLiteral = false;
     bool isComment = false;
     bool isBlockComment = false;
@@ -33,7 +34,23 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         else if (lastText == ".")
         {
-            result.emplace_back(line,column,TokenType::Dot);
+            result.emplace_back(line, column, TokenType::Dot);
+        }
+        else if (lastText == "->")
+        {
+            result.emplace_back(line, column, TokenType::Arrow);
+        }
+        else if (lastText == "switch")
+        {
+            result.emplace_back(line, column, TokenType::SwitchKeyword);
+        }
+        else if (lastText == "case")
+        {
+            result.emplace_back(line, column, TokenType::CaseKeyword);
+        }
+        else if (lastText == "default")
+        {
+            result.emplace_back(line, column, TokenType::DefaultKeyword);
         }
         else if (lastText == "void")
         {
@@ -71,9 +88,13 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             result.emplace_back(line, column, TokenType::SignedKeyword);
         }
-        else if(lastText == "sizeof")
+        else if (lastText == "const")
         {
-            result.emplace_back(line,column,TokenType::SizeofKeyword);
+            result.emplace_back(line,column,TokenType::ConstKeyword);
+        }
+        else if (lastText == "sizeof")
+        {
+            result.emplace_back(line, column, TokenType::SizeofKeyword);
         }
         else if (lastText == "unsigned")
         {
@@ -418,15 +439,104 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                 if (!lastText.empty() && lastText.back() != '\\')
                 {
                     isStringLiteral = false;
-                    result.emplace_back(line, column, TokenType::StringLiteral, lastText);
+                    result.emplace_back(line, column, TokenType::Literal, lastText);
+                    lastText.clear();
                     continue;
                 }
                 else if (lastText.empty())
                 {
                     isStringLiteral = false;
-                    result.emplace_back(line, column, TokenType::StringLiteral, lastText);
+                    result.emplace_back(line, column, TokenType::Literal, lastText);
+                    lastText.clear();
                     continue;
                 }
+            }
+            lastText += iter;
+            continue;
+        }
+        if (isCharacter)
+        {
+            if (iter == '\'')
+            {
+                isCharacter = false;
+                result.emplace_back(line, column, TokenType::Literal, [lastText]() -> std::int32_t
+                {
+                    if (lastText.empty())
+                    {
+                        throw std::runtime_error("Character constant can't be empty");
+                    }
+                    if (lastText.size() == 1)
+                    {
+                        return lastText.front();
+                    }
+                    if(lastText == "\\'")
+                    {
+                        return '\'';
+                    }
+                    else if(lastText == "\\\"")
+                    {
+                        return '"';
+                    }
+                    else if(lastText == "\\\\")
+                    {
+                        return '\\';
+                    }
+                    else if(lastText == "\\a")
+                    {
+                        return '\a';
+                    }
+                    else if(lastText == "\\b")
+                    {
+                        return '\b';
+                    }
+                    else if(lastText == "\\f")
+                    {
+                        return '\f';
+                    }
+                    else if(lastText == "\\n")
+                    {
+                        return '\n';
+                    }
+                    else if(lastText == "\\r")
+                    {
+                        return '\r';
+                    }
+                    else if(lastText == "\\t")
+                    {
+                        return '\t';
+                    }
+                    else if(lastText == "\\v")
+                    {
+                        return '\v';
+                    }
+                    else
+                    {
+                        std::regex octalChar("\\\\[0-7]{1,3}");
+                        if(std::regex_match(lastText,octalChar))
+                        {
+                            std::istringstream ss(lastText.substr(1,lastText.size()-1));
+                            std::int32_t number;
+                            ss>>number;
+                            return number;
+                        }
+                        else
+                        {
+                            std::regex hexChar("\\\\x[0-9a-fA-F]*");
+                            std::smatch match;
+                            std::regex_search(lastText,match,hexChar);
+                            if(match.empty())
+                            {
+                                throw std::runtime_error("Could not find hex chars");
+                            }
+                            std::istringstream ss(match[0]);
+                            std::int32_t number;
+                            ss>>number;
+                            return number;
+                        }
+                    }
+                }());
+                lastText.clear();
+                continue;
             }
             lastText += iter;
             continue;
@@ -438,6 +548,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         column++;
         switch (iter)
         {
+        case '\'':
+        {
+            if (processLastWord())
+            {
+                isCharacter = true;
+            }
+            break;
+        }
         case '(':
         {
             if (processLastWord())
@@ -504,17 +622,17 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         case '[':
         {
-            if(processLastWord())
+            if (processLastWord())
             {
-                result.emplace_back(line,column,TokenType::OpenSquareBracket);
+                result.emplace_back(line, column, TokenType::OpenSquareBracket);
             }
             break;
         }
         case ']':
         {
-            if(processLastWord())
+            if (processLastWord())
             {
-                result.emplace_back(line,column,TokenType::CloseSquareBracket);
+                result.emplace_back(line, column, TokenType::CloseSquareBracket);
             }
             break;
         }
@@ -549,7 +667,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         case '.':
         {
-            if(!(std::regex_match(lastText,integerLiteralMatch) || std::regex_match(lastText,floatLiteralMatch)))
+            if (!(std::regex_match(lastText, integerLiteralMatch) || std::regex_match(lastText, floatLiteralMatch)))
             {
                 processLastWord();
             }

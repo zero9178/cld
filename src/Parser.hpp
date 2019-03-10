@@ -34,6 +34,7 @@ namespace OpenCL::Parser
         const Type* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
+        std::vector<llvm::SwitchInst*> switchStack;
 
         struct Struct
         {
@@ -126,15 +127,21 @@ namespace OpenCL::Parser
      */
     class Type
     {
+
+        bool m_isConst;
+
     protected:
 
-        Type() = default;
+        explicit Type(bool isConst = false) : m_isConst(isConst)
+        {}
 
     public:
 
-        virtual bool isSigned() const = 0;
+        virtual bool isSigned() const;
 
-        virtual bool isVoid() const = 0;
+        virtual bool isVoid() const;
+
+        bool isConst() const;
 
         virtual llvm::Type* type(Context& context) const = 0;
 
@@ -151,6 +158,7 @@ namespace OpenCL::Parser
      *          | <TokenType::DoubleKeyword>
      *          | <TokenType::SignedKeyword>
      *          | <TokenType::UnsignedKeyword>
+     *          | <TokenType::ConstKeyword>
      *          {<TokenType::VoidKeyword>
      *          | <TokenType::CharKeyword>
      *          | <TokenType::ShortKeyword>
@@ -159,7 +167,8 @@ namespace OpenCL::Parser
      *          | <TokenType::FloatKeyword>
      *          | <TokenType::DoubleKeyword>
      *          | <TokenType::SignedKeyword>
-     *          | <TokenType::UnsignedKeyword>}
+     *          | <TokenType::UnsignedKeyword>
+     *          | <TokenType::ConstKeyword>}
      */
     class PrimitiveType final : public Type
     {
@@ -207,10 +216,6 @@ namespace OpenCL::Parser
 
         const Type& getType() const;
 
-        bool isSigned() const override;
-
-        bool isVoid() const override;
-
         llvm::Type* type(Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
@@ -232,10 +237,6 @@ namespace OpenCL::Parser
 
          std::size_t getSize() const;
 
-         bool isSigned() const override;
-
-         bool isVoid() const override;
-
          llvm::Type* type(Context& context) const override;
 
          std::unique_ptr<Type> clone() const override;
@@ -253,10 +254,6 @@ namespace OpenCL::Parser
          explicit StructType(std::string name);
 
          const std::string& getName() const;
-
-         bool isSigned() const override;
-
-         bool isVoid() const override;
 
          llvm::Type* type(Context& context) const override;
 
@@ -472,7 +469,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <PostFixExpressionArrow> ::= <PostFixExpression> <TokenType::Negate> <TokenType::GreaterThan> <TokenType::Identifier>
+     * <PostFixExpressionArrow> ::= <PostFixExpression> <TokenType::Arrow> <TokenType::Identifier>
      */
     class PostFixExpressionArrow final : public PostFixExpression
     {
@@ -987,6 +984,9 @@ namespace OpenCL::Parser
      * |    <FootWhileStatement>
      * |    <BreakStatement>
      * |    <ContinueStatement>
+     * |    <SwitchStatement>
+     * |    <DefaultStatement>
+     * |    <CaseStatement>
      */
     class Statement : public BlockItem
     {
@@ -1049,6 +1049,61 @@ namespace OpenCL::Parser
         const Statement& getBranch() const;
 
         const Statement* getElseBranch() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+     *                          <Statement>
+     */
+    class SwitchStatement final : public Statement
+    {
+        Expression m_expression;
+        std::unique_ptr<Statement> m_statement;
+
+    public:
+
+        SwitchStatement(Expression&& expression, std::unique_ptr<Statement>&& statement);
+
+        const Expression& getExpression() const;
+
+        const Statement& getStatement() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <DefaultStatement> ::= <TokenType::DefaultKeyword> <TokenType::Colon> <Statement>
+     */
+    class DefaultStatement final : public Statement
+    {
+        std::unique_ptr<Statement> m_statement;
+
+    public:
+
+        explicit DefaultStatement(std::unique_ptr<Statement>&& statement);
+
+        const Statement& getStatement() const;
+
+        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+    };
+
+    /**
+     * <CaseStatement> ::= <TokenType::CaseKeyword> <ConstantExpression> <TokenType::Colon> [<Statement>]
+     */
+    class CaseStatement final : public Statement
+    {
+        Expression m_constant;
+        std::unique_ptr<Statement> m_statement;
+
+    public:
+
+        CaseStatement(Expression&& constant, std::unique_ptr<Statement>&& statement);
+
+        const Expression& getConstant() const;
+
+        const Statement* getStatement() const;
 
         std::pair<llvm::Value*, bool> codegen(Context& context) const override;
     };

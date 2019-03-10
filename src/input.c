@@ -1,20 +1,16 @@
 
-struct Point
+unsigned int findNull(const char* s)
 {
-    double x;
-    double y;
-};
-
-void incrementPoint(struct Point* p)
-{
-    p->x += 1;
-    p->y += 1;
+    unsigned int i = 0;
+    while(s[i] != '\0')
+    {
+        i++;
+    }
+    return i;
 }
 
 int main()
 {
-    struct Point p0;
-    p0.x = p0.y = 5.0;
-    incrementPoint(&p0);
-    return (int)(p0.x + p0.y);
+    char* s = "test";
+    return findNull(s);
 }

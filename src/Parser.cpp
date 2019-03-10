@@ -460,16 +460,6 @@ const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type) : m_type(std::move(type))
 {}
 
-bool OpenCL::Parser::PointerType::isSigned() const
-{
-    return false;
-}
-
-bool OpenCL::Parser::PointerType::isVoid() const
-{
-    return false;
-}
-
 const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
 {
     return *m_type;
@@ -560,7 +550,6 @@ const std::string& OpenCL::Parser::PostFixExpressionArrow::getIdentifier() const
 {
     return m_identifier;
 }
-
 
 OpenCL::Parser::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(std::unique_ptr<PostFixExpression>&& postFixExpression)
     : m_postFixExpression(std::move(postFixExpression))
@@ -683,16 +672,6 @@ size_t OpenCL::Parser::ArrayType::getSize() const
     return m_size;
 }
 
-bool OpenCL::Parser::ArrayType::isSigned() const
-{
-    return false;
-}
-
-bool OpenCL::Parser::ArrayType::isVoid() const
-{
-    return false;
-}
-
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::ArrayType::clone() const
 {
     return std::make_unique<ArrayType>(m_type->clone(),m_size);
@@ -741,18 +720,67 @@ const std::string& OpenCL::Parser::StructType::getName() const
     return m_name;
 }
 
-bool OpenCL::Parser::StructType::isSigned() const
-{
-    return false;
-}
-
-bool OpenCL::Parser::StructType::isVoid() const
-{
-    return false;
-}
-
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::StructType::clone() const
 {
     return std::make_unique<StructType>(m_name);
 }
 
+OpenCL::Parser::SwitchStatement::SwitchStatement(OpenCL::Parser::Expression&& expression,
+                                                 std::unique_ptr<Statement>&& statement)
+    : m_expression(std::move(expression)), m_statement(std::move(statement))
+{
+    assert(m_statement);
+}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::SwitchStatement::getExpression() const
+{
+    return m_expression;
+}
+
+const OpenCL::Parser::Statement& OpenCL::Parser::SwitchStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+OpenCL::Parser::DefaultStatement::DefaultStatement(std::unique_ptr<Statement>&& statement)
+    : m_statement(std::move(statement))
+{
+    assert(m_statement);
+}
+
+const OpenCL::Parser::Statement& OpenCL::Parser::DefaultStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+OpenCL::Parser::CaseStatement::CaseStatement(Expression&& constant,
+                                             std::unique_ptr<Statement>&& statement) : m_constant(
+    std::move(constant)), m_statement(std::move(statement))
+{
+
+}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::CaseStatement::getConstant() const
+{
+    return m_constant;
+}
+
+const OpenCL::Parser::Statement* OpenCL::Parser::CaseStatement::getStatement() const
+{
+    return m_statement.get();
+}
+
+bool OpenCL::Parser::Type::isSigned() const
+{
+    return false;
+}
+
+bool OpenCL::Parser::Type::isVoid() const
+{
+    return false;
+}
+
+bool OpenCL::Parser::Type::isConst() const
+{
+    return m_isConst;
+}

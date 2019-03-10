@@ -15,7 +15,6 @@ namespace OpenCL::Lexer
         OpenBrace,
         CloseBrace,
         Literal,
-        StringLiteral,
         SemiColon,
         Comma,
         Negation,
@@ -67,6 +66,7 @@ namespace OpenCL::Lexer
         StaticKeyword,
         AutoKeyword,
         RegisterKeyword,
+        ConstKeyword,
         SizeofKeyword,
         ReturnKeyword,
         BreakKeyword,
@@ -79,7 +79,11 @@ namespace OpenCL::Lexer
         OpenSquareBracket,
         CloseSquareBracket,
         StructKeyword,
-        Dot
+        Dot,
+        Arrow,
+        SwitchKeyword,
+        CaseKeyword,
+        DefaultKeyword,
     };
 
     class Token
@@ -109,6 +113,16 @@ namespace OpenCL::Lexer
         const variant& getValue() const
         {
             return m_value;
+        }
+
+        uint64_t getLine() const
+        {
+            return m_line;
+        }
+
+        uint64_t getColumn() const
+        {
+            return m_column;
         }
     };
 
