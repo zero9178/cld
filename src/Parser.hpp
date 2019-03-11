@@ -13,11 +13,11 @@ namespace OpenCL::Parser
 
     class Context
     {
-        using tuple = std::pair<llvm::Value*, bool>;
+        using tuple = std::pair<llvm::Value*,std::shared_ptr<Type>>;
 
         struct Function
         {
-            const Type* retType;
+            std::shared_ptr<Type> retType;
             std::vector<const Type*> arguments;
         };
 
@@ -39,7 +39,7 @@ namespace OpenCL::Parser
         struct Struct
         {
             std::map<std::string,std::uint64_t> order;
-            std::vector<const Type*> types;
+            std::vector<std::shared_ptr<Type>> types;
         };
 
         std::map<std::string,Struct> structs;
@@ -64,7 +64,7 @@ namespace OpenCL::Parser
                 }
             }
             auto result = m_globalValues.find(name);
-            return result != m_globalValues.end() ? result->second : tuple{nullptr,false};
+            return result != m_globalValues.end() ? result->second : tuple{};
         }
 
         void popScope()
@@ -119,7 +119,7 @@ namespace OpenCL::Parser
 
         Node& operator=(Node&&) noexcept = default;
 
-        virtual std::pair<llvm::Value*, bool> codegen(Context& context) const = 0;
+        virtual std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const = 0;
     };
 
     /**
@@ -185,11 +185,20 @@ namespace OpenCL::Parser
 
     private:
 
-        std::vector<Types> m_types;
+        std::uint64_t m_bitCount;
+        bool m_isConst;
+        bool m_isFloatingPoint;
+        bool m_isSigned;
 
     public:
 
         explicit PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types);
+
+        PrimitiveType(std::uint64_t bitCount,bool isConst, bool isFloatingPoint, bool isSigned);
+
+        std::uint64_t getBitCount() const;
+
+        bool isFloatingPoint() const;
 
         bool isSigned() const override;
 
@@ -291,7 +300,7 @@ namespace OpenCL::Parser
 
         const NonCommaExpression* getOptionalNonCommaExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
 
@@ -320,7 +329,7 @@ namespace OpenCL::Parser
 
         const std::string& getIdentifier() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -349,7 +358,7 @@ namespace OpenCL::Parser
 
         const variant& getValue() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -365,7 +374,7 @@ namespace OpenCL::Parser
 
         const Expression& getExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -397,7 +406,7 @@ namespace OpenCL::Parser
 
         const PrimaryExpression& getPrimaryExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -418,7 +427,7 @@ namespace OpenCL::Parser
 
         const Expression& getExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -434,7 +443,7 @@ namespace OpenCL::Parser
 
         const PostFixExpression& getPostFixExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -450,7 +459,7 @@ namespace OpenCL::Parser
 
         const PostFixExpression& getPostFixExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -470,7 +479,7 @@ namespace OpenCL::Parser
 
         const std::string& getIdentifier() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -490,7 +499,7 @@ namespace OpenCL::Parser
 
         const std::string& getIdentifier() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     class AssignmentExpression;
@@ -511,7 +520,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::unique_ptr<NonCommaExpression>>& getOptionalAssignmentExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -570,7 +579,7 @@ namespace OpenCL::Parser
 
         AssignOperator getAssignOperator() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -586,7 +595,7 @@ namespace OpenCL::Parser
 
         const PostFixExpression& getPostFixExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -628,7 +637,7 @@ namespace OpenCL::Parser
 
         const UnaryExpression& getUnaryExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -637,15 +646,15 @@ namespace OpenCL::Parser
      */
     class UnaryExpressionSizeOf final : public UnaryExpression
     {
-        std::variant<std::unique_ptr<UnaryExpression>,std::unique_ptr<Type>> m_unaryOrType;
+        std::variant<std::unique_ptr<UnaryExpression>,std::shared_ptr<Type>> m_unaryOrType;
 
     public:
 
-        explicit UnaryExpressionSizeOf(std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<Type>>&& unaryOrType);
+        explicit UnaryExpressionSizeOf(std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>&& unaryOrType);
 
-        const std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<Type>>& getUnaryOrType() const;
+        const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>& getUnaryOrType() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -654,18 +663,18 @@ namespace OpenCL::Parser
      */
     class CastExpression final : public Node
     {
-        std::variant<std::unique_ptr<UnaryExpression>,std::pair<std::unique_ptr<Type>,std::unique_ptr<CastExpression>>> m_unaryOrCast;
+        std::variant<std::unique_ptr<UnaryExpression>,std::pair<std::shared_ptr<Type>,std::unique_ptr<CastExpression>>> m_unaryOrCast;
 
     public:
 
         explicit CastExpression(std::variant<std::unique_ptr<UnaryExpression>,
-                                          std::pair<std::unique_ptr<Type>,
+                                          std::pair<std::shared_ptr<Type>,
                                                     std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
         const std::variant<std::unique_ptr<UnaryExpression>,
-                           std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
+                           std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -700,7 +709,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<BinaryDotOperator, CastExpression>>& getOptionalCastExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -734,7 +743,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<BinaryDashOperator, Term>>& getOptionalTerms() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -769,7 +778,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<ShiftOperator, AdditiveExpression>>& getOptionalAdditiveExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -806,7 +815,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<RelationalOperator, ShiftExpression>>& getOptionalRelationalExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -841,7 +850,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::pair<EqualityOperator, RelationalExpression>>& getOptionalRelationalExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -861,7 +870,7 @@ namespace OpenCL::Parser
 
         const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -881,7 +890,7 @@ namespace OpenCL::Parser
 
         const std::vector<BitAndExpression>& getOptionalBitAndExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -901,7 +910,7 @@ namespace OpenCL::Parser
 
         const std::vector<BitXorExpression>& getOptionalBitXorExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -921,7 +930,7 @@ namespace OpenCL::Parser
 
         const std::vector<BitOrExpression>& getOptionalBitOrExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -941,7 +950,7 @@ namespace OpenCL::Parser
 
         const std::vector<LogicalAndExpression>& getOptionalAndExpressions() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -965,7 +974,7 @@ namespace OpenCL::Parser
 
         const ConditionalExpression* getOptionalConditionalExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1012,7 +1021,7 @@ namespace OpenCL::Parser
 
         const Expression& getExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1030,7 +1039,7 @@ namespace OpenCL::Parser
 
         std::unique_ptr<Expression> moveOptionalExpression();
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1055,7 +1064,7 @@ namespace OpenCL::Parser
 
         const Statement* getElseBranch() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1075,7 +1084,7 @@ namespace OpenCL::Parser
 
         const Statement& getStatement() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1091,7 +1100,7 @@ namespace OpenCL::Parser
 
         const Statement& getStatement() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1110,7 +1119,7 @@ namespace OpenCL::Parser
 
         const Statement* getStatement() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1126,7 +1135,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1155,7 +1164,7 @@ namespace OpenCL::Parser
 
         const Expression* getPost() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1165,19 +1174,19 @@ namespace OpenCL::Parser
      */
     class Declarations final : public BlockItem
     {
-        std::vector<std::tuple<std::unique_ptr<Type>,std::string,std::unique_ptr<Expression>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>,std::string,std::unique_ptr<Expression>>> m_declarations;
 
     public:
 
-        explicit Declarations(std::vector<std::tuple<std::unique_ptr<Type>,
+        explicit Declarations(std::vector<std::tuple<std::shared_ptr<Type>,
                                                   std::string,
                                                   std::unique_ptr<Expression>>>&& declarations);
 
-        const std::vector<std::tuple<std::unique_ptr<Type>,
+        const std::vector<std::tuple<std::shared_ptr<Type>,
                                      std::string,
                                      std::unique_ptr<Expression>>>& getDeclarations() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1205,7 +1214,7 @@ namespace OpenCL::Parser
 
         const Expression* getPost() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1225,7 +1234,7 @@ namespace OpenCL::Parser
 
         const Statement& getStatement() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1244,7 +1253,7 @@ namespace OpenCL::Parser
 
         const Expression& getExpression() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1253,7 +1262,7 @@ namespace OpenCL::Parser
     class BreakStatement final : public Statement
     {
     public:
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1262,7 +1271,7 @@ namespace OpenCL::Parser
     class ContinueStatement final : public Statement
     {
     public:
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     class Global : public Node
@@ -1280,17 +1289,17 @@ namespace OpenCL::Parser
     class StructDeclaration final : public Global
     {
         std::string m_name;
-        std::vector<std::pair<std::unique_ptr<Type>,std::string>> m_types;
+        std::vector<std::pair<std::shared_ptr<Type>,std::string>> m_types;
 
     public:
 
-        StructDeclaration(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types);
+        StructDeclaration(std::string name, std::vector<std::pair<std::shared_ptr<Type>, std::string>>&& types);
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::unique_ptr<Type>,std::string>>& getTypes() const;
+        const std::vector<std::pair<std::shared_ptr<Type>,std::string>>& getTypes() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1304,28 +1313,28 @@ namespace OpenCL::Parser
      */
     class Function final : public Global
     {
-        std::unique_ptr<Type> m_returnType;
+        std::shared_ptr<Type> m_returnType;
         std::string m_name;
-        std::vector<std::pair<std::unique_ptr<Type>, std::string>> m_arguments;
+        std::vector<std::pair<std::shared_ptr<Type>, std::string>> m_arguments;
         std::unique_ptr<BlockStatement> m_block;
 
     public:
 
-        Function(std::unique_ptr<Type>&& returnType,
+        Function(std::shared_ptr<Type> returnType,
                  std::string name,
-                 std::vector<std::pair<std::unique_ptr<Type>,
+                 std::vector<std::pair<std::shared_ptr<Type>,
                                        std::string>> arguments,
                  std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
-        const Type& getReturnType() const;
+        const std::shared_ptr<Type>& getReturnType() const;
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::unique_ptr<Type>, std::string>>& getArguments() const;
+        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getArguments() const;
 
         const BlockStatement* getBlockStatement() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1334,23 +1343,23 @@ namespace OpenCL::Parser
      */
     class GlobalDeclaration final : public Global
     {
-        std::unique_ptr<Type> m_type;
+        std::shared_ptr<Type> m_type;
         std::string m_name;
         std::unique_ptr<PrimaryExpressionConstant> m_optionalValue;
 
     public:
 
-        explicit GlobalDeclaration(std::unique_ptr<Type>&& type,
+        explicit GlobalDeclaration(std::shared_ptr<Type> type,
                                    std::string name,
                                    std::unique_ptr<PrimaryExpressionConstant>&& value = nullptr);
 
-        const Type& getType() const;
+        const std::shared_ptr<Type>& getType() const;
 
         const std::string& getName() const;
 
         const PrimaryExpressionConstant* getOptionalValue() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     /**
@@ -1366,7 +1375,7 @@ namespace OpenCL::Parser
 
         const std::vector<std::unique_ptr<Global>>& getGlobals() const;
 
-        std::pair<llvm::Value*, bool> codegen(Context& context) const override;
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
     Program buildTree(std::vector<Lexer::Token>&& tokens);

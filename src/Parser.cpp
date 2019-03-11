@@ -22,7 +22,7 @@ const std::string& OpenCL::Parser::Function::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,
                             std::string>>& OpenCL::Parser::Function::getArguments() const
 {
     return m_arguments;
@@ -33,9 +33,9 @@ const OpenCL::Parser::BlockStatement* OpenCL::Parser::Function::getBlockStatemen
     return m_block.get();
 }
 
-OpenCL::Parser::Function::Function(std::unique_ptr<Type>&& returnType,
+OpenCL::Parser::Function::Function(std::shared_ptr<Type> returnType,
                                    std::string name,
-                                   std::vector<std::pair<std::unique_ptr<Type>,
+                                   std::vector<std::pair<std::shared_ptr<Type>,
                                                          std::string>> arguments,
                                    std::unique_ptr<BlockStatement>&& blockItems)
     : m_returnType(std::move(returnType)), m_name(std::move(
@@ -46,7 +46,7 @@ OpenCL::Parser::Function::Function(std::unique_ptr<Type>&& returnType,
     { return static_cast<bool>(pair.first); }));
 }
 
-OpenCL::Parser::Declarations::Declarations(std::vector<std::tuple<std::unique_ptr<OpenCL::Parser::Type>,
+OpenCL::Parser::Declarations::Declarations(std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
                                                                         std::string,
                                                                         std::unique_ptr<OpenCL::Parser::Expression>>>&& declarations)
     : m_declarations(std::move(declarations))
@@ -54,7 +54,7 @@ OpenCL::Parser::Declarations::Declarations(std::vector<std::tuple<std::unique_pt
     assert(std::all_of(m_declarations.begin(),m_declarations.end(),[](const auto& tuple){return std::get<0>(tuple).get();}));
 }
 
-const std::vector<std::tuple<std::unique_ptr<OpenCL::Parser::Type>,
+const std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
                              std::string,
                              std::unique_ptr<OpenCL::Parser::Expression>>>& OpenCL::Parser::Declarations::getDeclarations() const
 {
@@ -411,15 +411,15 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
     return m_optionalBitXorExpressions;
 }
 
-OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::unique_ptr<Type>&& type,
+OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::shared_ptr<Type> type,
                                                      std::string name,
                                                      std::unique_ptr<PrimaryExpressionConstant>&& value)
     : m_type(std::move(type)), m_name(std::move(name)), m_optionalValue(std::move(value))
 {}
 
-const OpenCL::Parser::Type& OpenCL::Parser::GlobalDeclaration::getType() const
+const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::GlobalDeclaration::getType() const
 {
-    return *m_type;
+    return m_type;
 }
 
 const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
@@ -433,36 +433,99 @@ const OpenCL::Parser::PrimaryExpressionConstant* OpenCL::Parser::GlobalDeclarati
 }
 
 OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types)
-    : m_types(std::move(types))
+: m_bitCount([&types]
+             {
+    auto copy = types;
+    auto result = std::remove_if(copy.begin(),copy.end(),[](PrimitiveType::Types types)
+    {
+        return types == PrimitiveType::Types::Const || types == PrimitiveType::Types::Signed || types == PrimitiveType::Types::Unsigned;
+    });
+    if(result != copy.end())
+    {
+        copy.erase(result,copy.end());
+    }
+    if(copy.empty())
+    {
+        return std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
+        {
+            return types == PrimitiveType::Types::Signed || types == PrimitiveType::Types::Unsigned;
+        }) ? 32 : 0;
+    }
+    switch(copy[0])
+    {
+    case Types::Char:return 8;
+    case Types::Short:return 16;
+    case Types::Int:return 32;
+    case Types::Long:
+    {
+        if(copy.size() == 1)
+        {
+            return 32;
+        }
+        else if(copy.size() == 2 && copy[1] ==Types::Long)
+        {
+            return 64;
+        }
+        else
+        {
+            throw std::runtime_error("Cannot combine long with other");
+        }
+    }
+    case Types::Float:return 32;
+    case Types::Double:return 64;
+    default:throw std::runtime_error("Invalid token");
+    }
+             }()),
+             m_isConst(std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
+             {
+                 return types == PrimitiveType::Types::Const;
+             })),
+             m_isFloatingPoint(std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
+             {
+                 return types == PrimitiveType::Types::Float || types == PrimitiveType::Types::Double;
+             })),
+             m_isSigned(m_isFloatingPoint || (types.empty() ? false : types[0] != PrimitiveType::Types::Unsigned))
 {}
+
+OpenCL::Parser::PrimitiveType::PrimitiveType(std::uint64_t bitCount, bool isConst, bool isFloatingPoint, bool isSigned)
+: m_bitCount(bitCount), m_isConst(isConst), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned)
+{
+
+}
+
+std::uint64_t OpenCL::Parser::PrimitiveType::getBitCount() const
+{
+    return m_bitCount;
+}
+
+bool OpenCL::Parser::PrimitiveType::isFloatingPoint() const
+{
+    return m_isFloatingPoint;
+}
 
 bool OpenCL::Parser::PrimitiveType::isSigned() const
 {
-    return m_types.empty() || m_types[0] != Types::Unsigned;
+    return m_isSigned;
 }
 
 bool OpenCL::Parser::PrimitiveType::isVoid() const
 {
-    return m_types.empty();
+    return !m_bitCount;
 }
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PrimitiveType::clone() const
 {
-    auto copy = this->m_types;
-    return std::make_unique<PrimitiveType>(std::move(copy));
+    return std::make_unique<PrimitiveType>(getBitCount(),isConst(),isFloatingPoint(),isSigned());
 }
 
 bool OpenCL::Parser::PrimitiveType::isConst() const
 {
-    return std::any_of(m_types.begin(),m_types.end(),[](PrimitiveType::Types type)
-    {
-        return type == PrimitiveType::Types::Const;
-    });
+    return m_isConst;
 }
 
-const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
+const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::Function::getReturnType() const
 {
-    return *m_returnType;
+    return m_returnType;
 }
 
 OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type, bool isConst) : m_type(std::move(type)), m_isConst(isConst)
@@ -589,24 +652,24 @@ const OpenCL::Parser::UnaryExpression& OpenCL::Parser::UnaryExpressionUnaryOpera
 }
 
 OpenCL::Parser::UnaryExpressionSizeOf::UnaryExpressionSizeOf(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                                                                                std::unique_ptr<OpenCL::Parser::Type>>&& unaryOrType)
+                                                                                std::shared_ptr<OpenCL::Parser::Type>>&& unaryOrType)
     : m_unaryOrType(std::move(unaryOrType))
 {}
 
 const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                   std::unique_ptr<OpenCL::Parser::Type>>& OpenCL::Parser::UnaryExpressionSizeOf::getUnaryOrType() const
+                   std::shared_ptr<OpenCL::Parser::Type>>& OpenCL::Parser::UnaryExpressionSizeOf::getUnaryOrType() const
 {
     return m_unaryOrType;
 }
 
 OpenCL::Parser::CastExpression::CastExpression(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                                                                  std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+                                                                  std::pair<std::shared_ptr<OpenCL::Parser::Type>,
                                                                             std::unique_ptr<OpenCL::Parser::CastExpression>>>&& unaryOrCast)
     : m_unaryOrCast(std::move(unaryOrCast))
 {}
 
 const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                   std::pair<std::unique_ptr<OpenCL::Parser::Type>,
+                   std::pair<std::shared_ptr<OpenCL::Parser::Type>,
                              std::unique_ptr<OpenCL::Parser::CastExpression>>>& OpenCL::Parser::CastExpression::getUnaryOrCast() const
 {
     return m_unaryOrCast;
@@ -708,14 +771,14 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDecrem
     return *m_postFixExpression;
 }
 
-OpenCL::Parser::StructDeclaration::StructDeclaration(std::string name, std::vector<std::pair<std::unique_ptr<Type>, std::string>>&& types)
+OpenCL::Parser::StructDeclaration::StructDeclaration(std::string name, std::vector<std::pair<std::shared_ptr<Type>, std::string>>&& types)
 : m_name(std::move(name)), m_types(std::move(types))
 {
     assert(!m_types.empty());
     assert(std::all_of(m_types.begin(),m_types.end(),[](const auto& pair){return pair.first.get();}));
 }
 
-const std::vector<std::pair<std::unique_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructDeclaration::getTypes() const
+const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructDeclaration::getTypes() const
 {
     return m_types;
 }

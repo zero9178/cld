@@ -171,7 +171,7 @@ namespace
             throw std::runtime_error("Expected { after struct definition");
         }
         tokens.pop_back();
-        std::vector<std::pair<std::unique_ptr<Type>, std::string>> fields;
+        std::vector<std::pair<std::shared_ptr<Type>, std::string>> fields;
         while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
         {
             auto type = parseType(tokens);
@@ -218,7 +218,7 @@ namespace
                 {
                     clone = std::make_unique<ArrayType>(std::move(clone), value);
                 });
-                fields.emplace_back(std::move(clone), fieldName);
+                fields.emplace_back(std::shared_ptr<Type>(clone.release()), fieldName);
                 if(tokens.back().getTokenType() != TokenType::Comma)
                 {
                     break;
@@ -304,7 +304,7 @@ namespace
         {
             throw std::runtime_error("Expected Opening Parantheses after function identifier");
         }
-        std::vector<std::pair<std::unique_ptr<Type>, std::string>> arguments;
+        std::vector<std::pair<std::shared_ptr<Type>, std::string>> arguments;
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::CloseParenthese)
         {
@@ -356,7 +356,7 @@ namespace
                 {
                     type = std::make_unique<ArrayType>(std::move(type), value);
                 });
-                arguments.emplace_back(std::move(type), argname);
+                arguments.emplace_back(std::shared_ptr<Type>(type.release()), argname);
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::CloseParenthese)
                 {
@@ -396,7 +396,7 @@ namespace
                 throw std::runtime_error("Expected Block statement after function");
             }
 
-            return Function(std::move(rettype),
+            return Function(std::shared_ptr<Type>(rettype.release()),
                             std::move(name),
                             std::move(arguments),
                             std::make_unique<BlockStatement>(std::move(*pointer)));
@@ -404,7 +404,7 @@ namespace
         else if (currToken.getTokenType() == TokenType::SemiColon)
         {
             tokens.pop_back();
-            return Function(std::move(rettype), std::move(name), std::move(arguments));
+            return Function(std::shared_ptr<Type>(rettype.release()), std::move(name), std::move(arguments));
         }
         else
         {
@@ -646,7 +646,7 @@ namespace
         if (isType(currToken.getTokenType()) && currToken.getTokenType() != TokenType::Asterisk)
         {
             auto type = parseType(tokens);
-            std::vector<std::tuple<std::unique_ptr<Type>, std::string, std::unique_ptr<Expression>>> declarations;
+            std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<Expression>>> declarations;
             while (true)
             {
                 currToken = tokens.back();
@@ -695,7 +695,7 @@ namespace
                 {
                     tokens.pop_back();
                     declarations
-                        .emplace_back(std::move(thisType), name, std::make_unique<Expression>(parseExpression(tokens)));
+                        .emplace_back(std::shared_ptr<Type>(thisType.release()), name, std::make_unique<Expression>(parseExpression(tokens)));
                 }
                 else
                 {
