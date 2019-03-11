@@ -452,12 +452,20 @@ std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PrimitiveType::clone() con
     return std::make_unique<PrimitiveType>(std::move(copy));
 }
 
+bool OpenCL::Parser::PrimitiveType::isConst() const
+{
+    return std::any_of(m_types.begin(),m_types.end(),[](PrimitiveType::Types type)
+    {
+        return type == PrimitiveType::Types::Const;
+    });
+}
+
 const OpenCL::Parser::Type& OpenCL::Parser::Function::getReturnType() const
 {
     return *m_returnType;
 }
 
-OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type) : m_type(std::move(type))
+OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type, bool isConst) : m_type(std::move(type)), m_isConst(isConst)
 {}
 
 const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
@@ -467,7 +475,12 @@ const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PointerType::clone() const
 {
-    return std::make_unique<PointerType>(m_type->clone());
+    return std::make_unique<PointerType>(m_type->clone(),m_isConst);
+}
+
+bool OpenCL::Parser::PointerType::isConst() const
+{
+    return m_isConst;
 }
 
 OpenCL::Parser::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::string identifier) : m_identifier(std::move(
@@ -712,7 +725,7 @@ const std::string& OpenCL::Parser::StructDeclaration::getName() const
     return m_name;
 }
 
-OpenCL::Parser::StructType::StructType(std::string name) : m_name(std::move(name))
+OpenCL::Parser::StructType::StructType(std::string name, bool isConst) : m_name(std::move(name)), m_isConst(isConst)
 {}
 
 const std::string& OpenCL::Parser::StructType::getName() const
@@ -722,7 +735,12 @@ const std::string& OpenCL::Parser::StructType::getName() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::StructType::clone() const
 {
-    return std::make_unique<StructType>(m_name);
+    return std::make_unique<StructType>(m_name,m_isConst);
+}
+
+bool OpenCL::Parser::StructType::isConst() const
+{
+    return m_isConst;
 }
 
 OpenCL::Parser::SwitchStatement::SwitchStatement(OpenCL::Parser::Expression&& expression,
@@ -782,5 +800,5 @@ bool OpenCL::Parser::Type::isVoid() const
 
 bool OpenCL::Parser::Type::isConst() const
 {
-    return m_isConst;
+    return false;
 }

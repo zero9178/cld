@@ -1,16 +1,12 @@
 
-unsigned int findNull(const char* s)
+struct Point
 {
-    unsigned int i = 0;
-    while(s[i] != '\0')
-    {
-        i++;
-    }
-    return i;
-}
+    double x,y;
+};
 
 int main()
 {
-    char* s = "test";
-    return findNull(s);
+    struct Point p;
+    p.x = p.y = 5.0;
+    return p.x * p.y;
 }

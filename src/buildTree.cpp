@@ -56,6 +56,10 @@ namespace
     std::unique_ptr<OpenCL::Parser::PrimaryExpression> parsePrimaryExpression(Tokens& tokens);
 
     std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens);
+
+    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens);
+
+    OpenCL::Parser::StructType parseStructType(Tokens& tokens);
 }
 
 OpenCL::Parser::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
@@ -95,7 +99,6 @@ namespace
             || type == TokenType::SignedKeyword
             || type == TokenType::UnsignedKeyword
             || type == TokenType::StructKeyword
-            || type == TokenType::Asterisk
             || type == TokenType::ConstKeyword;
     }
 
@@ -177,42 +180,52 @@ namespace
             {
                 throw std::runtime_error("Expected identifier after type in field definition");
             }
-            std::string fieldName = std::get<std::string>(currToken.getValue());
-            tokens.pop_back();
-            std::vector<std::size_t> sizes;
-            while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
+            while(true)
             {
+                std::string fieldName = std::get<std::string>(currToken.getValue());
                 tokens.pop_back();
-                auto primaryConstant = parsePrimaryExpression(tokens);
-                auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
-                if (!result)
+                std::vector<std::size_t> sizes;
+                while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
-                    throw std::runtime_error("Expected primary constant expression for array size");
+                    tokens.pop_back();
+                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
+                    if (!result)
+                    {
+                        throw std::runtime_error("Expected primary constant expression for array size");
+                    }
+                    sizes.push_back(std::visit([](auto&& value) -> std::size_t
+                                               {
+                                                   using T = std::decay_t<decltype(value)>;
+                                                   if constexpr(std::is_integral_v<T>)
+                                                   {
+                                                       return value;
+                                                   }
+                                                   else
+                                                   {
+                                                       throw std::runtime_error(
+                                                           "Only integral type supported for array size");
+                                                   }
+                                               }, result->getValue()));
+                    if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                    {
+                        throw std::runtime_error("Expected ] after array declaration");
+                    }
+                    tokens.pop_back();
                 }
-                sizes.push_back(std::visit([](auto&& value) -> std::size_t
-                                           {
-                                               using T = std::decay_t<decltype(value)>;
-                                               if constexpr(std::is_integral_v<T>)
-                                               {
-                                                   return value;
-                                               }
-                                               else
-                                               {
-                                                   throw std::runtime_error(
-                                                       "Only integral type supported for array size");
-                                               }
-                                           }, result->getValue()));
-                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                auto clone = type->clone();
+                std::for_each(sizes.rbegin(), sizes.rend(), [&clone](std::size_t value)
                 {
-                    throw std::runtime_error("Expected ] after array declaration");
+                    clone = std::make_unique<ArrayType>(std::move(clone), value);
+                });
+                fields.emplace_back(std::move(clone), fieldName);
+                if(tokens.back().getTokenType() != TokenType::Comma)
+                {
+                    break;
                 }
                 tokens.pop_back();
+                currToken = tokens.back();
             }
-            std::for_each(sizes.rbegin(), sizes.rend(), [&type](std::size_t value)
-            {
-                type = std::make_unique<ArrayType>(std::move(type), value);
-            });
-            fields.emplace_back(std::move(type), fieldName);
             if (tokens.back().getTokenType() != TokenType::SemiColon)
             {
                 throw std::runtime_error("Expected ; at the end of field definition");
@@ -401,110 +414,230 @@ namespace
 
     std::unique_ptr<Type> parseType(Tokens& tokens)
     {
-        Tokens typeTokens;
+        std::stack<std::unique_ptr<Type>> types;
+        for (auto iter = tokens.rbegin(); iter != tokens.rend();)
         {
-            bool wasStruct = false;
-            auto currToken = tokens.back();
-            do
+            switch (iter->getTokenType())
             {
-                if (wasStruct)
-                {
-                    wasStruct = false;
-                }
+            case TokenType::VoidKeyword:
+            case TokenType::CharKeyword:
+            case TokenType::ShortKeyword:
+            case TokenType::IntKeyword:
+            case TokenType::LongKeyword:
+            case TokenType::FloatKeyword:
+            case TokenType::DoubleKeyword:
+            case TokenType::SignedKeyword:
+            case TokenType::UnsignedKeyword:
+            {
+                types.push(std::make_unique<PrimitiveType>(parsePrimitiveType(tokens)));
+                iter = tokens.rbegin();
+                break;
+            }
+            case TokenType::ConstKeyword:
+            {
+                iter++;
+                break;
+            }
+            case TokenType::StructKeyword:
+            {
+                types.push(std::make_unique<StructType>(parseStructType(tokens)));
+                iter = tokens.rbegin();
+                break;
+            }
+            case TokenType::Asterisk:
+            {
                 tokens.pop_back();
-                typeTokens.push_back(currToken);
-                if (tokens.empty())
+                auto prevType = std::move(types.top());
+                types.pop();
+                bool isConst = false;
+                if(tokens.back().getTokenType() == TokenType::ConstKeyword)
                 {
-                    break;
+                    isConst = true;
+                    tokens.pop_back();
                 }
-                if (typeTokens.back().getTokenType() == TokenType::StructKeyword)
+                types.push(std::make_unique<PointerType>(std::move(prevType),isConst));
+                iter = tokens.rbegin();
+                break;
+            }
+            default:
+                if(types.size() != 1)
                 {
-                    wasStruct = true;
+                    throw std::runtime_error("Invalid type token count");
                 }
-                currToken = tokens.back();
-            } while (isType(currToken.getTokenType())
-                || (wasStruct && currToken.getTokenType() == TokenType::Identifier));
+                return std::move(types.top());
+            }
         }
+        if(types.size() != 1)
+        {
+            throw std::runtime_error("Invalid type token count");
+        }
+        return std::move(types.top());
+        //        Tokens typeTokens;
+        //        {
+        //            bool wasStruct = false;
+        //            auto currToken = tokens.back();
+        //            do
+        //            {
+        //                if (wasStruct)
+        //                {
+        //                    wasStruct = false;
+        //                }
+        //                tokens.pop_back();
+        //                typeTokens.push_back(currToken);
+        //                if (tokens.empty())
+        //                {
+        //                    break;
+        //                }
+        //                if (typeTokens.back().getTokenType() == TokenType::StructKeyword)
+        //                {
+        //                    wasStruct = true;
+        //                }
+        //                currToken = tokens.back();
+        //            } while (isType(currToken.getTokenType())
+        //                || (wasStruct && currToken.getTokenType() == TokenType::Identifier));
+        //        }
+        //
+        //        if (typeTokens.back().getTokenType() == TokenType::Asterisk)
+        //        {
+        //            typeTokens.pop_back();
+        //            std::reverse(typeTokens.begin(), typeTokens.end());
+        //            return std::make_unique<PointerType>(parseType(typeTokens));
+        //        }
+        //        else if (typeTokens.front().getTokenType() == TokenType::StructKeyword)
+        //        {
+        //            std::reverse(typeTokens.begin(), typeTokens.end());
+        //            typeTokens.pop_back();
+        //            if (typeTokens.back().getTokenType() != TokenType::Identifier)
+        //            {
+        //                throw std::runtime_error("Expected identifier after struct");
+        //            }
+        //            const auto& name = std::get<std::string>(typeTokens.back().getValue());
+        //            typeTokens.pop_back();
+        //            return std::make_unique<StructType>(name);
+        //        }
+        //        else if (typeTokens.back().getTokenType() == TokenType::OpenSquareBracket)
+        //        {
+        //            typeTokens.pop_back();
+        //            std::reverse(typeTokens.begin(), typeTokens.end());
+        //            auto type = parseType(typeTokens);
+        //            auto primary = parsePrimaryExpression(tokens);
+        //            if (auto result = dynamic_cast<const PrimaryExpressionConstant*>(primary.get());!result)
+        //            {
+        //                throw std::runtime_error("Expected constant expression in array type");
+        //            }
+        //            else
+        //            {
+        //                auto array = std::visit([type = std::move(type)](auto&& value)mutable -> std::unique_ptr<ArrayType>
+        //                                        {
+        //                                            using T = std::decay_t<decltype(value)>;
+        //                                            if constexpr (std::is_integral_v<T>)
+        //                                            {
+        //                                                return std::make_unique<ArrayType>(std::move(type), value);
+        //                                            }
+        //                                            else
+        //                                            {
+        //                                                throw std::runtime_error("Can't use type as size of array");
+        //                                            }
+        //                                        }, result->getValue());
+        //                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+        //                {
+        //                    throw std::runtime_error("Expected ] after array declaration");
+        //                }
+        //                tokens.pop_back();
+        //                return array;
+        //            }
+        //        }
+        //        else
+        //        {
+        //            std::vector<PrimitiveType::Types> types;
+        //            for (auto& currToken : typeTokens)
+        //            {
+        //                switch (currToken.getTokenType())
+        //                {
+        //                case TokenType::VoidKeyword:return std::make_unique<PrimitiveType>(std::move(types));
+        //                case TokenType::CharKeyword:types.push_back(PrimitiveType::Types::Char);
+        //                    break;
+        //                case TokenType::ShortKeyword:types.push_back(PrimitiveType::Types::Short);
+        //                    break;
+        //                case TokenType::IntKeyword:types.push_back(PrimitiveType::Types::Int);
+        //                    break;
+        //                case TokenType::LongKeyword:types.push_back(PrimitiveType::Types::Long);
+        //                    break;
+        //                case TokenType::FloatKeyword:types.push_back(PrimitiveType::Types::Float);
+        //                    break;
+        //                case TokenType::DoubleKeyword:types.push_back(PrimitiveType::Types::Double);
+        //                    break;
+        //                case TokenType::SignedKeyword:types.push_back(PrimitiveType::Types::Signed);
+        //                    break;
+        //                case TokenType::UnsignedKeyword:types.push_back(PrimitiveType::Types::Unsigned);
+        //                    break;
+        //                default:throw std::runtime_error("Invalid token");
+        //                }
+        //            }
+        //            return std::make_unique<PrimitiveType>(std::move(types));
+        //        }
+    }
 
-        if (typeTokens.back().getTokenType() == TokenType::Asterisk)
+    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens)
+    {
+        std::vector<PrimitiveType::Types> types;
+        auto currToken = tokens.back();
+        while (isType(currToken.getTokenType()))
         {
-            typeTokens.pop_back();
-            std::reverse(typeTokens.begin(), typeTokens.end());
-            return std::make_unique<PointerType>(parseType(typeTokens));
+            tokens.pop_back();
+            switch (currToken.getTokenType())
+            {
+            case TokenType::VoidKeyword:return PrimitiveType(std::move(types));
+            case TokenType::CharKeyword:types.push_back(PrimitiveType::Types::Char);
+                break;
+            case TokenType::ShortKeyword:types.push_back(PrimitiveType::Types::Short);
+                break;
+            case TokenType::IntKeyword:types.push_back(PrimitiveType::Types::Int);
+                break;
+            case TokenType::LongKeyword:types.push_back(PrimitiveType::Types::Long);
+                break;
+            case TokenType::FloatKeyword:types.push_back(PrimitiveType::Types::Float);
+                break;
+            case TokenType::DoubleKeyword:types.push_back(PrimitiveType::Types::Double);
+                break;
+            case TokenType::SignedKeyword:types.push_back(PrimitiveType::Types::Signed);
+                break;
+            case TokenType::UnsignedKeyword:types.push_back(PrimitiveType::Types::Unsigned);
+                break;
+            case TokenType::ConstKeyword:types.push_back(PrimitiveType::Types::Const);
+                break;
+            default:throw std::runtime_error("Invalid token");
+            }
+            currToken = tokens.back();
         }
-        else if (typeTokens.front().getTokenType() == TokenType::StructKeyword)
+        return PrimitiveType(std::move(types));
+    }
+
+    OpenCL::Parser::StructType parseStructType(Tokens& tokens)
+    {
+        bool isConst = false;
+        if(tokens.back().getTokenType() == TokenType::ConstKeyword)
         {
-            std::reverse(typeTokens.begin(), typeTokens.end());
-            typeTokens.pop_back();
-            if (typeTokens.back().getTokenType() != TokenType::Identifier)
-            {
-                throw std::runtime_error("Expected identifier after struct");
-            }
-            const auto& name = std::get<std::string>(typeTokens.back().getValue());
-            typeTokens.pop_back();
-            return std::make_unique<StructType>(name);
+            isConst = true;
+            tokens.pop_back();
         }
-        else if (typeTokens.back().getTokenType() == TokenType::OpenSquareBracket)
+        if(tokens.back().getTokenType() != TokenType::StructKeyword)
         {
-            typeTokens.pop_back();
-            std::reverse(typeTokens.begin(), typeTokens.end());
-            auto type = parseType(typeTokens);
-            auto primary = parsePrimaryExpression(tokens);
-            if (auto result = dynamic_cast<const PrimaryExpressionConstant*>(primary.get());!result)
-            {
-                throw std::runtime_error("Expected constant expression in array type");
-            }
-            else
-            {
-                auto array = std::visit([type = std::move(type)](auto&& value)mutable -> std::unique_ptr<ArrayType>
-                                        {
-                                            using T = std::decay_t<decltype(value)>;
-                                            if constexpr (std::is_integral_v<T>)
-                                            {
-                                                return std::make_unique<ArrayType>(std::move(type), value);
-                                            }
-                                            else
-                                            {
-                                                throw std::runtime_error("Can't use type as size of array");
-                                            }
-                                        }, result->getValue());
-                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
-                {
-                    throw std::runtime_error("Expected ] after array declaration");
-                }
-                tokens.pop_back();
-                return array;
-            }
+            throw std::runtime_error("Expected struct keyword in struct type instantiation");
         }
-        else
+        tokens.pop_back();
+        if(tokens.back().getTokenType() != TokenType::Identifier)
         {
-            std::vector<PrimitiveType::Types> types;
-            for (auto& currToken : typeTokens)
-            {
-                switch (currToken.getTokenType())
-                {
-                case TokenType::VoidKeyword:return std::make_unique<PrimitiveType>(std::move(types));
-                case TokenType::CharKeyword:types.push_back(PrimitiveType::Types::Char);
-                    break;
-                case TokenType::ShortKeyword:types.push_back(PrimitiveType::Types::Short);
-                    break;
-                case TokenType::IntKeyword:types.push_back(PrimitiveType::Types::Int);
-                    break;
-                case TokenType::LongKeyword:types.push_back(PrimitiveType::Types::Long);
-                    break;
-                case TokenType::FloatKeyword:types.push_back(PrimitiveType::Types::Float);
-                    break;
-                case TokenType::DoubleKeyword:types.push_back(PrimitiveType::Types::Double);
-                    break;
-                case TokenType::SignedKeyword:types.push_back(PrimitiveType::Types::Signed);
-                    break;
-                case TokenType::UnsignedKeyword:types.push_back(PrimitiveType::Types::Unsigned);
-                    break;
-                default:throw std::runtime_error("Invalid token");
-                }
-            }
-            return std::make_unique<PrimitiveType>(std::move(types));
+            throw std::runtime_error("Expected identifier after struct keyword");
         }
+        std::string name = std::get<std::string>(tokens.back().getValue());
+        tokens.pop_back();
+        if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+        {
+            isConst = true;
+            tokens.pop_back();
+        }
+        return StructType(std::move(name), isConst);
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)

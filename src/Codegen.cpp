@@ -641,7 +641,11 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::Expression::codegen(OpenCL::Parser
 std::pair<llvm::Value*, bool> OpenCL::Parser::AssignmentExpression::codegen(OpenCL::Parser::Context& context) const
 {
     auto[left, sign] = getUnaryFactor().codegen(context);
-    auto* load = llvm::cast<llvm::LoadInst>(left);
+    auto* load = llvm::dyn_cast<llvm::LoadInst>(left);
+    if(!load)
+    {
+        throw std::runtime_error("Not allowed to assign to non lvalue");
+    }
     switch (getAssignOperator())
     {
     case AssignOperator::NoOperator:
@@ -1223,22 +1227,31 @@ std::pair<llvm::Value*, bool> OpenCL::Parser::BitOrExpression::codegen(OpenCL::P
 
 llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
 {
-    if (m_types.empty())
+    auto types = m_types;
+    auto result = std::remove_if(types.begin(),types.end(),[](PrimitiveType::Types types)
+    {
+        return types == PrimitiveType::Types::Const;
+    });
+    if(result != types.end())
+    {
+        types.erase(result,types.end());
+    }
+    if (types.empty())
     {
         return context.builder.getVoidTy();
     }
-    switch (m_types[0])
+    switch (types[0])
     {
     case Types::Char:return context.builder.getInt8Ty();
     case Types::Short:return context.builder.getInt16Ty();
     case Types::Int:return context.builder.getInt32Ty();
     case Types::Long:
     {
-        if (m_types.size() == 1)
+        if (types.size() == 1)
         {
             return context.builder.getInt32Ty();
         }
-        else if (m_types[1] == Types::Long)
+        else if (types[1] == Types::Long)
         {
             return context.builder.getInt64Ty();
         }
@@ -1251,23 +1264,23 @@ llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
     case Types::Double:return context.builder.getDoubleTy();
     case Types::Unsigned:
     {
-        if (m_types.size() == 1)
+        if (types.size() == 1)
         {
             return context.builder.getInt32Ty();
         }
 
-        switch (m_types[1])
+        switch (types[1])
         {
         case Types::Char:return context.builder.getInt8Ty();
         case Types::Short:return context.builder.getInt16Ty();
         case Types::Int:return context.builder.getInt32Ty();
         case Types::Long:
         {
-            if (m_types.size() == 2)
+            if (types.size() == 2)
             {
                 return context.builder.getInt32Ty();
             }
-            else if (m_types[2] == Types::Long)
+            else if (types[2] == Types::Long)
             {
                 return context.builder.getInt64Ty();
             }
@@ -1280,27 +1293,28 @@ llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
         case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
         case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
         case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        default:throw std::runtime_error("Invalid token");
         }
         break;
     }
     case Types::Signed:
     {
-        if (m_types.size() == 1)
+        if (types.size() == 1)
         {
             return context.builder.getInt32Ty();
         }
-        switch (m_types[1])
+        switch (types[1])
         {
         case Types::Char:return context.builder.getInt8Ty();
         case Types::Short:return context.builder.getInt16Ty();
         case Types::Int:return context.builder.getInt32Ty();
         case Types::Long:
         {
-            if (m_types.size() == 2)
+            if (types.size() == 2)
             {
                 return context.builder.getInt32Ty();
             }
-            else if (m_types[2] == Types::Long)
+            else if (types[2] == Types::Long)
             {
                 return context.builder.getInt64Ty();
             }
@@ -1313,8 +1327,10 @@ llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
         case Types::Double:throw std::runtime_error("Cannot combine unsigned with double");
         case Types::Unsigned:throw std::runtime_error("Cannot combine unsigned with unsigned");
         case Types::Signed:throw std::runtime_error("Cannot combine unsigned with signed");
+        default:throw std::runtime_error("Invalid token");
         }
     }
+    default:throw std::runtime_error("Invalid token");
     }
     return nullptr;
 }

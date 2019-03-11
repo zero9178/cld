@@ -127,13 +127,9 @@ namespace OpenCL::Parser
      */
     class Type
     {
-
-        bool m_isConst;
-
     protected:
 
-        explicit Type(bool isConst = false) : m_isConst(isConst)
-        {}
+        Type() = default;
 
     public:
 
@@ -141,7 +137,7 @@ namespace OpenCL::Parser
 
         virtual bool isVoid() const;
 
-        bool isConst() const;
+        virtual bool isConst() const;
 
         virtual llvm::Type* type(Context& context) const = 0;
 
@@ -183,7 +179,8 @@ namespace OpenCL::Parser
             Float,
             Double,
             Unsigned,
-            Signed
+            Signed,
+            Const
         };
 
     private:
@@ -198,23 +195,28 @@ namespace OpenCL::Parser
 
         bool isVoid() const override;
 
+        bool isConst() const override;
+
         llvm::Type* type(Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
     };
 
     /**
-     * <PointerType> ::= <Type> <TokenType::Asterisk>
+     * <PointerType> ::= <Type> <TokenType::Asterisk> [ <TokenType::ConstKeyword> ]
      */
     class PointerType final : public Type
     {
         std::unique_ptr<Type> m_type;
+        bool m_isConst;
 
     public:
 
-        explicit PointerType(std::unique_ptr<Type>&& type);
+        explicit PointerType(std::unique_ptr<Type>&& type, bool isConst);
 
         const Type& getType() const;
+
+        bool isConst() const override;
 
         llvm::Type* type(Context& context) const override;
 
@@ -243,17 +245,20 @@ namespace OpenCL::Parser
      };
 
      /**
-      * <StructType> ::= <TokenType::StructKeyword> <TokenType::Identifer>
+      * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer> [ <TokenType::ConstKeyword> ]
       */
      class StructType final : public Type
      {
          std::string m_name;
+         bool m_isConst;
 
      public:
 
-         explicit StructType(std::string name);
+         explicit StructType(std::string name, bool isConst);
 
          const std::string& getName() const;
+
+         bool isConst() const override;
 
          llvm::Type* type(Context& context) const override;
 
