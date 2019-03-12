@@ -34,7 +34,7 @@ namespace OpenCL::Parser
         const Type* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
-        std::vector<llvm::SwitchInst*> switchStack;
+        std::vector<std::pair<llvm::SwitchInst*,bool>> switchStack;
 
         struct Struct
         {

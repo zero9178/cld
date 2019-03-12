@@ -2,6 +2,8 @@
 
 #include <sstream>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Support/TargetRegistry.h>
 
 namespace
 {
@@ -197,6 +199,15 @@ std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
 {
     context.module = std::make_unique<llvm::Module>("main", context.context);
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(llvm::sys::getProcessTriple(),error);
+    if(!target)
+    {
+        throw std::runtime_error(error);
+    }
+    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(),"generic","",{},{});
+    context.module->setDataLayout(targetMachine->createDataLayout());
+    context.module->setTargetTriple(llvm::sys::getProcessTriple());
     for (auto& iter : getGlobals())
     {
         iter->codegen(context);
@@ -395,6 +406,17 @@ std::pair<llvm::Value*,
     {
         auto* allocaType = type->type(context);
         auto* alloca = tmpB.CreateAlloca(allocaType, nullptr, name);
+        if(allocaType->isPointerTy())
+        {
+            alloca->setAlignment(8);
+        }
+        else if(allocaType->isIntegerTy() || allocaType->isFloatingPointTy())
+        {
+            if(allocaType->isFloatingPointTy() || allocaType->getIntegerBitWidth() <= 64)
+            {
+                alloca->setAlignment(allocaType->getIntegerBitWidth() / 8);
+            }
+        }
         if (optionalExpression)
         {
             auto[value, otherType] = optionalExpression->codegen(context);
@@ -1598,13 +1620,8 @@ std::pair<llvm::Value*,
                           }
                           else
                           {
-                              llvm::Type* type = value->type(context);
-                              auto* size = context.builder.CreateConstGEP1_64(
-                                  llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(
-                                      type)),
-                                  1);
-                              return {context.builder.CreatePtrToInt(size, context.builder.getInt64Ty()),
-                                      std::make_unique<PrimitiveType>(64, false, false, false)};
+                              auto size = context.module->getDataLayout().getTypeAllocSize(value->type(context));
+                              return {context.builder.getIntN(64,size),std::make_unique<PrimitiveType>(64, false, false, false)};
                           }
                       }, getUnaryOrType());
 }
@@ -1799,7 +1816,7 @@ std::pair<llvm::Value*,
     auto* defaultBlock = llvm::BasicBlock::Create(context.context, "default");
     auto* thenBlock = llvm::BasicBlock::Create(context.context, "then");
     context.breakBlocks.push_back(thenBlock);
-    context.switchStack.push_back(context.builder.CreateSwitch(value, defaultBlock));
+    context.switchStack.emplace_back(context.builder.CreateSwitch(value, defaultBlock),sign->isSigned());
     getStatement().codegen(context);
     auto* function = context.builder.GetInsertBlock()->getParent();
     if (!std::any_of(function->getBasicBlockList().begin(),
@@ -1833,15 +1850,24 @@ std::pair<llvm::Value*,
         throw std::runtime_error("default without switch statement");
     }
     auto* function = context.builder.GetInsertBlock()->getParent();
-    auto* block = context.switchStack.back()->getDefaultDest();
-    if (context.switchStack.back()->getNumCases() > 0)
+    auto* block = context.switchStack.back().first->getDefaultDest();
+    if (context.switchStack.back().first->getNumCases() > 0)
     {
-        auto* successor = (context.switchStack.back()->case_begin() + (context.switchStack.back()->getNumCases() - 1))
+        auto* successor = (context.switchStack.back().first->case_begin() + (context.switchStack.back().first->getNumCases() - 1))
             ->getCaseSuccessor();
         if (!successor->getTerminator())
         {
             context.builder.CreateBr(block);
         }
+    }
+    if (std::any_of(function->getBasicBlockList().begin(),
+                     function->getBasicBlockList().end(),
+                     [block](const llvm::BasicBlock& dblock)
+                     {
+                         return block == &dblock;
+                     }))
+    {
+        throw std::runtime_error("There can only be a single default statement");
     }
     function->getBasicBlockList().push_back(block);
     context.builder.SetInsertPoint(block);
@@ -1857,11 +1883,15 @@ std::pair<llvm::Value*,
         throw std::runtime_error("case without switch statement");
     }
     auto[value, sign] = getConstant().codegen(context);
+    if(value->getType() != context.switchStack.back().first->getCondition()->getType())
+    {
+        castPrimitive(value,sign->isSigned(),context.switchStack.back().first->getCondition()->getType(),context.switchStack.back().second,context);
+    }
     auto* function = context.builder.GetInsertBlock()->getParent();
     auto* newBlock = llvm::BasicBlock::Create(context.context);
-    if (context.switchStack.back()->getNumCases() > 0)
+    if (context.switchStack.back().first->getNumCases() > 0)
     {
-        auto* successor = (context.switchStack.back()->case_begin() + (context.switchStack.back()->getNumCases() - 1))
+        auto* successor = (context.switchStack.back().first->case_begin() + (context.switchStack.back().first->getNumCases() - 1))
             ->getCaseSuccessor();
         if (!successor->getTerminator())
         {
@@ -1869,13 +1899,12 @@ std::pair<llvm::Value*,
         }
     }
     function->getBasicBlockList().push_back(newBlock);
-    bool isConst = llvm::isa<llvm::ConstantExpr>(value);
-    auto* constant = llvm::dyn_cast<llvm::ConstantExpr>(value);
+    auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value);
     if (!constant)
     {
         throw std::runtime_error("Expected constant expression after case");
     }
-    context.switchStack.back()->addCase(constant, newBlock);
+    context.switchStack.back().first->addCase(constant, newBlock);
     context.builder.SetInsertPoint(newBlock);
     if (getStatement())
     {

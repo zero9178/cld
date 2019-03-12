@@ -24,6 +24,10 @@ int main()
     file.seekg(0,std::ios_base::beg);
     file.read(source.data(),source.size());
 
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    LLVMLinkInMCJIT();
+
     OpenCL::Parser::Context context;
     auto result = OpenCL::Lexer::tokenize(source);
     auto node = OpenCL::Parser::buildTree(std::move(result));
@@ -32,10 +36,6 @@ int main()
     context.module->print(llvm::outs(), nullptr);
 
     llvm::verifyModule(*context.module,&llvm::errs());
-
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    LLVMLinkInMCJIT();
 
     {
         llvm::EngineBuilder builder(std::move(context.module));
