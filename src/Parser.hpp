@@ -254,7 +254,8 @@ namespace OpenCL::Parser
      };
 
      /**
-      * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer> [ <TokenType::ConstKeyword> ]
+      * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer>
+      *                  [ <TokenType::ConstKeyword> ]
       */
      class StructType final : public Type
      {

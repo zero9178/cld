@@ -453,9 +453,24 @@ OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::Primiti
     }
     switch(copy[0])
     {
-    case Types::Char:return 8;
-    case Types::Short:return 16;
-    case Types::Int:return 32;
+    case Types::Char:
+        if(copy.size() != 1)
+        {
+            throw std::runtime_error("Cannot combine char with other");
+        }
+        return 8;
+    case Types::Short:
+        if(copy.size() != 1)
+        {
+            throw std::runtime_error("Cannot combine short with other");
+        }
+        return 16;
+    case Types::Int:
+        if(copy.size() != 1)
+        {
+            throw std::runtime_error("Cannot combine int with other");
+        }
+        return 32;
     case Types::Long:
     {
         if(copy.size() == 1)
@@ -471,8 +486,18 @@ OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::Primiti
             throw std::runtime_error("Cannot combine long with other");
         }
     }
-    case Types::Float:return 32;
-    case Types::Double:return 64;
+    case Types::Float:
+        if(copy.size() != 1)
+        {
+            throw std::runtime_error("Cannot combine float with other");
+        }
+        return 32;
+    case Types::Double:
+        if(copy.size() != 1)
+        {
+            throw std::runtime_error("Cannot combine double with other");
+        }
+        return 64;
     default:throw std::runtime_error("Invalid token");
     }
              }()),

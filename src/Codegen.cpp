@@ -214,31 +214,31 @@ std::pair<llvm::Value*,
     {
         castPrimitive(constant, sign->isSigned(), getType()->type(context), getType()->isSigned(), context);
     }
-    auto getZeroFor = [&context](llvm::Type* type,auto&& func) -> llvm::Constant*
+    auto getZeroFor = [&context](llvm::Type* type, auto&& func) -> llvm::Constant*
     {
-        if(type->isIntegerTy())
+        if (type->isIntegerTy())
         {
-            return llvm::ConstantInt::get(type,0);
+            return llvm::ConstantInt::get(type, 0);
         }
-        else if(type->isFloatingPointTy())
+        else if (type->isFloatingPointTy())
         {
-            return llvm::ConstantFP::get(type,0);
+            return llvm::ConstantFP::get(type, 0);
         }
-        else if(type->isPointerTy())
+        else if (type->isPointerTy())
         {
             return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
         }
-        else if(type->isStructTy())
+        else if (type->isStructTy())
         {
             auto* structType = llvm::cast<llvm::StructType>(type);
             std::size_t count = structType->getStructNumElements();
             std::vector<llvm::Constant*> constants;
             constants.reserve(count);
-            for(std::size_t i = 0; i < count; i++)
+            for (std::size_t i = 0; i < count; i++)
             {
-                constants.push_back(func(structType->getTypeAtIndex(i),func));
+                constants.push_back(func(structType->getTypeAtIndex(i), func));
             }
-            return llvm::ConstantStruct::get(structType,constants);
+            return llvm::ConstantStruct::get(structType, constants);
         }
         else
         {
@@ -251,7 +251,7 @@ std::pair<llvm::Value*,
                                                getType()->isConst(),
                                                llvm::GlobalVariable::LinkageTypes::CommonLinkage,
                                                constant ? llvm::cast<llvm::Constant>(constant) :
-                                               getZeroFor(getType()->type(context),getZeroFor),
+                                               getZeroFor(getType()->type(context), getZeroFor),
                                                getName());
     context.addGlobal(getName(), {newGlobal, getType()});
     return {};
@@ -1522,9 +1522,9 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::U
     }
     case UnaryOperator::Asterisk:
     {
-        if(auto result = std::dynamic_pointer_cast<PointerType>(sign);result)
+        if (auto result = std::dynamic_pointer_cast<PointerType>(sign);result)
         {
-            return {context.builder.CreateLoad(rhs),result->getType().clone()};
+            return {context.builder.CreateLoad(rhs), result->getType().clone()};
         }
         else
         {
@@ -1599,11 +1599,10 @@ std::pair<llvm::Value*,
                           else
                           {
                               llvm::Type* type = value->type(context);
-                              auto* one = context.builder.getInt32(1);
-                              auto* size = context.builder.CreateGEP(type,
-                                                                     llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(
-                                                                         type)),
-                                                                     one);
+                              auto* size = context.builder.CreateConstGEP1_64(
+                                  llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(
+                                      type)),
+                                  1);
                               return {context.builder.CreatePtrToInt(size, context.builder.getInt64Ty()),
                                       std::make_unique<PrimitiveType>(64, false, false, false)};
                           }
@@ -1870,7 +1869,8 @@ std::pair<llvm::Value*,
         }
     }
     function->getBasicBlockList().push_back(newBlock);
-    auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value);
+    bool isConst = llvm::isa<llvm::ConstantExpr>(value);
+    auto* constant = llvm::dyn_cast<llvm::ConstantExpr>(value);
     if (!constant)
     {
         throw std::runtime_error("Expected constant expression after case");
