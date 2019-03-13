@@ -1368,15 +1368,11 @@ namespace OpenCL::Parser
      */
     class TypedefDeclaration final : public Global
     {
-        std::vector<std::pair<std::shared_ptr<Type>,std::string>> m_typedefs;
         std::unique_ptr<StructOrUnionDeclaration> m_optionalStructOrUnion;
 
     public:
 
-        explicit TypedefDeclaration(std::vector<std::pair<std::shared_ptr<Type>, std::string>> typedefs,
-                                            std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
-
-        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypedefs() const;
+        explicit TypedefDeclaration(std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
 
         const std::unique_ptr<StructOrUnionDeclaration>& getOptionalStructOrUnion() const;
 

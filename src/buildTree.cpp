@@ -13,6 +13,8 @@ namespace
 
     public:
 
+        std::map<std::string,std::shared_ptr<OpenCL::Parser::Type>> typedefs;
+
         ParsingContext()
         {
             m_currentScope.emplace_back();
@@ -27,9 +29,9 @@ namespace
 
         void addToScope(std::string name)
         {
-            if(!m_currentScope.back().insert(std::move(name)).second)
+            if(auto result = m_currentScope.back().insert(std::move(name));!result.second)
             {
-                throw std::runtime_error(name + " already exists in this scope");
+                throw std::runtime_error(*result.first + " already exists in this scope");
             }
         }
 
@@ -145,7 +147,7 @@ namespace
             || type == TokenType::BitXorAssign;
     }
 
-    bool isType(Token type,ParsingContext& context)
+    bool isType(const Token& type,ParsingContext& context)
     {
         return type.getTokenType() == TokenType::VoidKeyword
             || type.getTokenType() == TokenType::CharKeyword
@@ -160,6 +162,31 @@ namespace
             || type.getTokenType() == TokenType::ConstKeyword
             || type.getTokenType() == TokenType::UnionKeyword
             || (type.getTokenType() == TokenType::Identifier && !context.isInScope(std::get<std::string>(type.getValue())));
+    }
+
+    std::unique_ptr<Type> makeConst(const std::unique_ptr<Type>& type)
+    {
+        auto clone = type->clone();
+        if(dynamic_cast<PrimitiveType*>(clone.get()))
+        {
+            auto* prim = static_cast<PrimitiveType*>(clone.get());
+            clone = std::make_unique<PrimitiveType>(prim->getBitCount(),true,prim->isFloatingPoint(),prim->isSigned());
+        }
+        else if(dynamic_cast<PointerType*>(clone.get()))
+        {
+            auto* pointer = static_cast<PointerType*>(clone.get());
+            clone = std::make_unique<PointerType>(pointer->getType().clone(),true);
+        }
+        else if(dynamic_cast<StructType*>(clone.get()))
+        {
+            auto* structT = static_cast<StructType*>(clone.get());
+            clone = std::make_unique<StructType>(structT->getName(),true);
+        }
+        else
+        {
+            throw std::runtime_error("Not implemented yet");
+        }
+        return clone;
     }
 
     OpenCL::Parser::Program parseProgram(Tokens& tokens, ParsingContext& context)
@@ -358,7 +385,7 @@ namespace
         }
     }
 
-    OpenCL::Parser::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context)
+    TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context)
     {
         if(tokens.back().getTokenType() != TokenType::TypedefKeyword)
         {
@@ -385,7 +412,6 @@ namespace
             type = parseType(tokens, context);
         }
 
-        std::vector<std::pair<std::shared_ptr<Type>,std::string>> typedefs;
         while(!tokens.empty())
         {
             bool isPointer = false;
@@ -438,20 +464,7 @@ namespace
             auto clone = type->clone();
             if(isConst && !isPointer)
             {
-                if(dynamic_cast<PrimitiveType*>(clone.get()))
-                {
-                    auto* prim = static_cast<PrimitiveType*>(clone.get());
-                    clone = std::make_unique<PrimitiveType>(prim->getBitCount(),true,prim->isFloatingPoint(),prim->isSigned());
-                }
-                else if(dynamic_cast<PointerType*>(clone.get()))
-                {
-                    auto* pointer = static_cast<PointerType*>(clone.get());
-                    clone = std::make_unique<PointerType>(pointer->getType().clone(),true);
-                }
-                else
-                {
-                    throw std::runtime_error("Not implemented yet");
-                }
+                clone = makeConst(clone);
             }
             if (isPointer)
             {
@@ -461,7 +474,7 @@ namespace
             {
                 clone = std::make_unique<ArrayType>(std::move(clone), value);
             });
-            typedefs.emplace_back(std::move(clone),std::move(name));
+            context.typedefs.emplace(std::move(name),std::move(clone));
             if(tokens.back().getTokenType() == TokenType::Comma)
             {
                 tokens.pop_back();
@@ -476,7 +489,7 @@ namespace
             throw std::runtime_error("Expected ; at the end of typedef");
         }
         tokens.pop_back();
-        return TypedefDeclaration(std::move(typedefs),std::move(optionalDeclaration));
+        return TypedefDeclaration(std::move(optionalDeclaration));
     }
 
     OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
@@ -660,6 +673,45 @@ namespace
                 iter = tokens.rbegin();
                 break;
             }
+            case TokenType::Identifier:
+            {
+                if(types.size() == 1)
+                {
+                    return std::move(types.top());
+                }
+                bool isConst = false;
+                if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+                {
+                    isConst = true;
+                    tokens.pop_back();
+                }
+                if(!context.isInScope(std::get<std::string>(tokens.back().getValue())))
+                {
+                    auto& type = context.typedefs[std::get<std::string>(tokens.back().getValue())];
+                    if(!type)
+                    {
+                        throw std::runtime_error("No typedef with the name " + std::get<std::string>(tokens.back().getValue()) + " found");
+                    }
+                    tokens.pop_back();
+                    if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+                    {
+                        isConst = true;
+                        tokens.pop_back();
+                    }
+                    auto clone = type->clone();
+                    if(isConst)
+                    {
+                        clone = makeConst(clone);
+                    }
+                    types.push(std::move(clone));
+                    iter = tokens.rbegin();
+                    break;
+                }
+                else
+                {
+                    throw std::runtime_error("Identifier refers to scoped variable instead of type");
+                }
+            }
             default:
                 if(types.size() != 1)
                 {
@@ -680,7 +732,7 @@ namespace
         (void)context;
         std::vector<PrimitiveType::Types> types;
         auto currToken = tokens.back();
-        while (isType(currToken,context))
+        while (isType(currToken,context) && currToken.getTokenType() != TokenType::Identifier)
         {
             tokens.pop_back();
             switch (currToken.getTokenType())

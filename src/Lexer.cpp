@@ -683,7 +683,11 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             column = 0;
             line++;
-            processLastWord();
+            if(!processLastWord())
+            {
+                isComment = false;
+                lastText.clear();
+            }
             break;
         }
         case '\t':column += 7;

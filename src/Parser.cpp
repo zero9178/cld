@@ -936,16 +936,9 @@ const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::
     return m_nonCommaExpressions;
 }
 
-OpenCL::Parser::TypedefDeclaration::TypedefDeclaration(std::vector<std::pair<std::shared_ptr<Type>, std::string>> typedefs,
-                                                       std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion)
-    : m_typedefs(std::move(typedefs)),m_optionalStructOrUnion(std::move(optionalStructOrUnion))
+OpenCL::Parser::TypedefDeclaration::TypedefDeclaration(std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion)
+    : m_optionalStructOrUnion(std::move(optionalStructOrUnion))
 {}
-
-const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,
-                            std::string>>& OpenCL::Parser::TypedefDeclaration::getTypedefs() const
-{
-    return m_typedefs;
-}
 
 const std::unique_ptr<OpenCL::Parser::StructOrUnionDeclaration>& OpenCL::Parser::TypedefDeclaration::getOptionalStructOrUnion() const
 {

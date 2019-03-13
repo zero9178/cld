@@ -277,7 +277,7 @@ std::pair<llvm::Value*,
     {
         castPrimitive(constant, sign->isSigned(), getType()->type(context), getType()->isSigned(), context);
     }
-    auto getZeroFor = [&context](llvm::Type* type, auto&& func) -> llvm::Constant*
+    auto getZeroFor = [](llvm::Type* type, auto&& func) -> llvm::Constant*
     {
         if (type->isIntegerTy())
         {
@@ -676,6 +676,14 @@ std::pair<llvm::Value*,
     {
         value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
     }
+    else if(value->getType()->isPointerTy())
+    {
+        value = context.builder.CreateICmpNE(value,llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value->getType())));
+    }
+    else
+    {
+        throw std::runtime_error("Can't convert value to int");
+    }
     context.builder.CreateCondBr(value, blockBB, endBB);
 
     function->getBasicBlockList().push_back(blockBB);
@@ -721,6 +729,14 @@ std::pair<llvm::Value*,
     else if (value->getType()->isFloatingPointTy())
     {
         value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
+    }
+    else if(value->getType()->isPointerTy())
+    {
+        value = context.builder.CreateICmpNE(value,llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value->getType())));
+    }
+    else
+    {
+        throw std::runtime_error("Can't convert value to int");
     }
     context.builder.CreateCondBr(value, blockBB, endBB);
 
@@ -1831,6 +1847,7 @@ std::pair<llvm::Value*,
 {
     OpenCL::Parser::Context::StructOrUnion structType;
     std::vector<llvm::Type*> types;
+    auto* llvmStruct = llvm::StructType::create(context.context,(isUnion() ? "union." : "struct.") + getName());
     std::transform(getTypes().begin(), getTypes().end(), std::back_inserter(types), [&](const auto& pair)
     {
         structType.order.insert({pair.second, structType.types.size()});
@@ -1839,7 +1856,7 @@ std::pair<llvm::Value*,
     });
     if (!isUnion())
     {
-        llvm::StructType::create(context.context, types,"struct." + getName());
+        llvmStruct->setBody(types);
     }
     else
     {
@@ -1849,7 +1866,7 @@ std::pair<llvm::Value*,
              auto rhsSize = context.module->getDataLayout().getTypeAllocSize(rhs);
              return lhsSize < rhsSize;
         });
-        llvm::StructType::create(context.context,{maxElement},"union." + getName());
+        llvmStruct->setBody(maxElement);
     }
     structType.isUnion = isUnion();
     context.structs[(isUnion() ? "union." : "struct.") + getName()] = structType;
@@ -2041,7 +2058,11 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::TypedefDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, std::shared_ptr<Type>>();
+    if(getOptionalStructOrUnion())
+    {
+        return getOptionalStructOrUnion()->codegen(context);
+    }
+    return {};
 }
 
 
