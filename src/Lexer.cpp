@@ -132,6 +132,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             result.emplace_back(line, column, TokenType::ContinueKeyword);
         }
+        else if (lastText == "union")
+        {
+            result.emplace_back(line,column,TokenType::UnionKeyword);
+        }
         else if (lastText == "do")
         {
             result.emplace_back(line, column, TokenType::DoKeyword);

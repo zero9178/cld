@@ -193,6 +193,58 @@ namespace
             throw std::runtime_error("Can't cast to common type");
         }
     }
+
+    std::size_t getAlignment(llvm::Type* type)
+    {
+        if(type->isPointerTy())
+        {
+            return 8;
+        }
+        else if(type->isIntegerTy())
+        {
+            if(type->getIntegerBitWidth() <= 64)
+            {
+                return type->getIntegerBitWidth() / 8;
+            }
+            else
+            {
+                return 16;
+            }
+        }
+        else if(type->isFloatingPointTy())
+        {
+            if(type->isFloatTy())
+            {
+                return 4;
+            }
+            else if(type->isDoubleTy())
+            {
+                return 8;
+            }
+            else
+            {
+                throw std::runtime_error("Not implemented yet");
+            }
+        }
+        else if(type->isStructTy())
+        {
+            auto* structType = llvm::cast<llvm::StructType>(type);
+            std::size_t alignment = 0;
+            for(std::size_t i = 0; i < structType->getStructNumElements(); i++)
+            {
+                alignment = std::max(alignment,getAlignment(structType->getStructElementType(i)));
+            }
+            return alignment;
+        }
+        else if(type->isArrayTy())
+        {
+            return getAlignment(type->getArrayElementType());
+        }
+        else
+        {
+            throw std::runtime_error("Not implemented yet");
+        }
+    }
 }
 
 std::pair<llvm::Value*,
@@ -356,6 +408,7 @@ std::pair<llvm::Value*,
         if (!iter.hasByValAttr())
         {
             auto* alloca = tmpB.CreateAlloca(iter.getType(), nullptr, iter.getName());
+            alloca->setAlignment(getAlignment(iter.getType()));
             context.builder.CreateStore(&iter, alloca);
             context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first});
         }
@@ -406,17 +459,7 @@ std::pair<llvm::Value*,
     {
         auto* allocaType = type->type(context);
         auto* alloca = tmpB.CreateAlloca(allocaType, nullptr, name);
-        if(allocaType->isPointerTy())
-        {
-            alloca->setAlignment(8);
-        }
-        else if(allocaType->isIntegerTy() || allocaType->isFloatingPointTy())
-        {
-            if(allocaType->isFloatingPointTy() || allocaType->getIntegerBitWidth() <= 64)
-            {
-                alloca->setAlignment(allocaType->getIntegerBitWidth() / 8);
-            }
-        }
+        alloca->setAlignment(getAlignment(allocaType));
         if (optionalExpression)
         {
             auto[value, otherType] = optionalExpression->codegen(context);
@@ -1470,11 +1513,21 @@ std::pair<llvm::Value*,
         throw std::runtime_error("Can only apply . to struct or union");
     }
     auto* zero = context.builder.getInt32(0);
-    auto& structInfo = context.structs[structValue->getType()->getStructName()];
-    auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
-    auto memberType = structInfo.types[index->getValue().getLimitedValue()];
-    auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, index});
-    return {context.builder.CreateLoad(pointer), memberType};
+    auto& structInfo = context.structs.at(structValue->getType()->getStructName());
+    if(!structInfo.isUnion)
+    {
+        auto* index = context.builder.getInt32(structInfo.order.at(getIdentifier()));
+        auto memberType = structInfo.types.at(index->getValue().getLimitedValue());
+        auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, index});
+        return {context.builder.CreateLoad(pointer), memberType};
+    }
+    else
+    {
+        auto memberType = structInfo.types.at(structInfo.order.at(getIdentifier()));
+        auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(),{zero,zero});
+        auto* cast = context.builder.CreateBitCast(pointer,llvm::PointerType::getUnqual(memberType->type(context)));
+        return {context.builder.CreateLoad(cast),memberType};
+    }
 }
 
 std::pair<llvm::Value*,
@@ -1676,6 +1729,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
             llvm::IRBuilder<>
                 tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
             auto* alloca = tmpB.CreateAlloca(load->getType());
+            alloca->setAlignment(getAlignment(load->getType()));
             auto* cast = context.builder.CreateBitCast(alloca, context.builder.getInt8PtrTy());
             auto* castSource = context.builder.CreateBitCast(load->getPointerOperand(), context.builder.getInt8PtrTy());
             auto* one = context.builder.getInt32(1);
@@ -1700,6 +1754,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
         llvm::IRBuilder<>
             tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
         auto* alloca = tmpB.CreateAlloca(function.retType->type(context));
+        alloca->setAlignment(getAlignment(function.retType->type(context)));
         arguments.insert(arguments.begin(), alloca);
         context.builder.CreateCall(value, arguments);
         return {context.builder.CreateLoad(alloca), function.retType};
@@ -1772,9 +1827,9 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
 }
 
 std::pair<llvm::Value*,
-          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::StructDeclaration::codegen(OpenCL::Parser::Context& context) const
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::StructOrUnionDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
-    OpenCL::Parser::Context::Struct structType;
+    OpenCL::Parser::Context::StructOrUnion structType;
     std::vector<llvm::Type*> types;
     std::transform(getTypes().begin(), getTypes().end(), std::back_inserter(types), [&](const auto& pair)
     {
@@ -1782,14 +1837,33 @@ std::pair<llvm::Value*,
         structType.types.push_back(pair.first);
         return pair.first->type(context);
     });
-    llvm::StructType::create(context.context, types, getName());
-    context.structs[getName()] = structType;
+    if (!isUnion())
+    {
+        llvm::StructType::create(context.context, types,"struct." + getName());
+    }
+    else
+    {
+        llvm::Type* maxElement = *std::max_element(types.begin(),types.end(),[&context](llvm::Type* lhs,llvm::Type* rhs)
+        {
+             auto lhsSize =  context.module->getDataLayout().getTypeAllocSize(lhs);
+             auto rhsSize = context.module->getDataLayout().getTypeAllocSize(rhs);
+             return lhsSize < rhsSize;
+        });
+        llvm::StructType::create(context.context,{maxElement},"union." + getName());
+    }
+    structType.isUnion = isUnion();
+    context.structs[(isUnion() ? "union." : "struct.") + getName()] = structType;
     return {};
 }
 
 llvm::Type* OpenCL::Parser::StructType::type(OpenCL::Parser::Context& context) const
 {
-    return context.module->getTypeByName(getName());
+    return context.module->getTypeByName("struct." + getName());
+}
+
+llvm::Type* OpenCL::Parser::UnionType::type(OpenCL::Parser::Context& context) const
+{
+    return context.module->getTypeByName("union." + getName());
 }
 
 std::pair<llvm::Value*,
@@ -1802,11 +1876,21 @@ std::pair<llvm::Value*,
         throw std::runtime_error("Can only apply -> to pointer to struct or union");
     }
     auto* zero = context.builder.getInt32(0);
-    auto& structInfo = context.structs[type->getName()];
-    auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
-    auto memberType = structInfo.types[index->getValue().getLimitedValue()];
-    auto* pointer = context.builder.CreateInBoundsGEP(structValue, {zero, index});
-    return {context.builder.CreateLoad(pointer), memberType};
+    auto& structInfo = context.structs.at(type->getName());
+    if(!structInfo.isUnion)
+    {
+        auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
+        auto memberType = structInfo.types[index->getValue().getLimitedValue()];
+        auto* pointer = context.builder.CreateInBoundsGEP(structValue, {zero, index});
+        return {context.builder.CreateLoad(pointer), memberType};
+    }
+    else
+    {
+        auto memberType = structInfo.types.at(structInfo.order.at(getIdentifier()));
+        auto* pointer = context.builder.CreateInBoundsGEP(structValue,{zero,zero});
+        auto* cast = context.builder.CreateBitCast(pointer,llvm::PointerType::getUnqual(memberType->type(context)));
+        return {context.builder.CreateLoad(cast),memberType};
+    }
 }
 
 std::pair<llvm::Value*,
@@ -1913,4 +1997,51 @@ std::pair<llvm::Value*,
 
     return {};
 }
+
+std::pair<llvm::Value*,
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionTypeInitializer::codegen(OpenCL::Parser::Context& context) const
+{
+    auto* type = getType()->type(context);
+    llvm::IRBuilder<>
+        tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
+    auto* alloca = tmpB.CreateAlloca(type);
+    alloca->setAlignment(getAlignment(type));
+    if(type->isStructTy())
+    {
+        auto* zero = context.builder.getInt32(0);
+        auto& structInfo = context.structs.at(type->getStructName());
+        if(getNonCommaExpressions().size() < type->getStructNumElements())
+        {
+            throw std::runtime_error("Amount of values in intializer not equal to fields in struct");
+        }
+        for(std::size_t i = 0; i < type->getStructNumElements(); i++)
+        {
+            auto [value,ntype] = getNonCommaExpressions().at(i)->codegen(context);
+            if(ntype->type(context) != type->getStructElementType(i))
+            {
+                castPrimitive(value,ntype->isSigned(),type->getStructElementType(i),structInfo.types.at(i)->isSigned(),context);
+            }
+            auto* index = context.builder.getInt32(i);
+            auto* field = context.builder.CreateInBoundsGEP(alloca,{zero,index});
+            context.builder.CreateStore(value,field);
+        }
+    }
+    else
+    {
+        if(getNonCommaExpressions().empty())
+        {
+            throw std::runtime_error("Amount of values unequal to 1");
+        }
+        auto [value,ntype] = getNonCommaExpressions()[0]->codegen(context);
+        context.builder.CreateStore(value,alloca);
+    }
+    return {context.builder.CreateLoad(alloca),getType()};
+}
+
+std::pair<llvm::Value*,
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::TypedefDeclaration::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, std::shared_ptr<Type>>();
+}
+
 

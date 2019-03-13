@@ -36,13 +36,14 @@ namespace OpenCL::Parser
         std::vector<llvm::BasicBlock*> breakBlocks;
         std::vector<std::pair<llvm::SwitchInst*,bool>> switchStack;
 
-        struct Struct
+        struct StructOrUnion
         {
             std::map<std::string,std::uint64_t> order;
             std::vector<std::shared_ptr<Type>> types;
+            bool isUnion = false;
         };
 
-        std::map<std::string,Struct> structs;
+        std::map<std::string,StructOrUnion> structs;
 
         bool hasFunction(const std::string& name) const
         {
@@ -275,6 +276,28 @@ namespace OpenCL::Parser
          std::unique_ptr<Type> clone() const override;
      };
 
+     /**
+      * <UnionType> ::= [ <TokenType::ConstKeyword> ] <TokenType::UnionKeyword> <TokenType::Identifer>
+      *                  [ <TokenType::ConstKeyword> ]
+      */
+     class UnionType final : public Type
+     {
+         std::string m_name;
+         bool m_isConst;
+
+     public:
+
+         UnionType(std::string name, bool isConst);
+
+         const std::string& getName() const;
+
+         bool isConst() const override;
+
+         llvm::Type* type(Context& context) const override;
+
+         std::unique_ptr<Type> clone() const override;
+     };
+
     /**
      * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
      */
@@ -386,6 +409,7 @@ namespace OpenCL::Parser
      *                       | <PostFixExpressionArrow>
      *                       | <PostFixExpressionIncrement>
      *                       | <PostFixExpressionDecrement>
+     *                       | <PostFixExpressionTypeInitializer>
      */
     class PostFixExpression : public Node
     {
@@ -503,10 +527,10 @@ namespace OpenCL::Parser
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
-    class AssignmentExpression;
-
     /**
-     * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParenthese> <ArgumentExpressionList> <TokenType::CloseParenthese>
+     * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParenthese> <NonCommaExpression>
+     *                                     { <TokenType::Comma> <NonCommaExpression> }
+     *                                     <TokenType::CloseParenthese>
      */
     class PostFixExpressionFunctionCall final : public PostFixExpression
     {
@@ -520,6 +544,28 @@ namespace OpenCL::Parser
         const PostFixExpression& getPostFixExpression() const;
 
         const std::vector<std::unique_ptr<NonCommaExpression>>& getOptionalAssignmentExpressions() const;
+
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+    };
+
+    /**
+     * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
+     *                                        <TokenType::OpenBrace> <NonCommaExpression>
+     *                                        { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseBrace>
+     */
+    class PostFixExpressionTypeInitializer final : public PostFixExpression
+    {
+        std::shared_ptr<Type> m_type;
+        std::vector<std::unique_ptr<NonCommaExpression>> m_nonCommaExpressions;
+
+    public:
+
+        PostFixExpressionTypeInitializer(std::shared_ptr<Type> type,
+                                         std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions);
+
+        const std::shared_ptr<Type>& getType() const;
+
+        const std::vector<std::unique_ptr<NonCommaExpression>>& getNonCommaExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
@@ -1282,23 +1328,57 @@ namespace OpenCL::Parser
     };
 
     /**
-      * <StructType> ::= <TokenType::StructKeyword> <TokenType::Identifier> <TokenType::OpenBrace>
+      * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
+      *
+      * <StructOrUnionDeclaration> ::= <StructOrUnion> <TokenType::Identifier> <TokenType::OpenBrace>
       *                 <Type> <TokenType::Identifier> <TokenType::Semicolon>
       *                { <Type> <TokenType::Identifier> <TokenType::Semicolon> }
       *                <TokenType::CloseBrace>
       */
-    class StructDeclaration final : public Global
+    class StructOrUnionDeclaration final : public Global
     {
+        bool m_isUnion;
         std::string m_name;
         std::vector<std::pair<std::shared_ptr<Type>,std::string>> m_types;
 
     public:
 
-        StructDeclaration(std::string name, std::vector<std::pair<std::shared_ptr<Type>, std::string>>&& types);
+        StructOrUnionDeclaration(bool isUnion,
+                                         std::string name,
+                                         std::vector<std::pair<std::shared_ptr<Type>,
+                                                           std::string>>&& types);
+
+        bool isUnion() const;
 
         const std::string& getName() const;
 
         const std::vector<std::pair<std::shared_ptr<Type>,std::string>>& getTypes() const;
+
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+    };
+
+    /**
+     * <TypeOrStructOrUnionDeclaration> ::= <Type> | <StructOrUnionDeclaration>
+     *
+     * <TypedefDeclaration> ::= <TokenType::TypedefKeyword> <TypeOrStructOrUnionDeclaration> [ <TokenType::Asterisk> ] <TokenType::Identifier>
+     * [ {<TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket> }]
+     * { <TokenType::Comma> [ <TokenType::Asterisk> ] <TokenType::Identifier>
+     * [ {<TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket> }] }
+     * <TokenType::SemiColon>
+     */
+    class TypedefDeclaration final : public Global
+    {
+        std::vector<std::pair<std::shared_ptr<Type>,std::string>> m_typedefs;
+        std::unique_ptr<StructOrUnionDeclaration> m_optionalStructOrUnion;
+
+    public:
+
+        explicit TypedefDeclaration(std::vector<std::pair<std::shared_ptr<Type>, std::string>> typedefs,
+                                            std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
+
+        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypedefs() const;
+
+        const std::unique_ptr<StructOrUnionDeclaration>& getOptionalStructOrUnion() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };

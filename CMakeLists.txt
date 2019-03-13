@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 project(OpenCLParser)
 list(APPEND CMAKE_PREFIX_PATH C:/MGPKG/LLVM-7.0.0)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 99)
 find_package(LLVM REQUIRED)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})

@@ -1,70 +1,128 @@
 #include "Parser.hpp"
 
 #include <stack>
+#include <set>
 
 using Tokens = std::vector<OpenCL::Lexer::Token>;
 
 namespace
 {
-    OpenCL::Parser::Program parseProgram(Tokens& tokens);
+    class ParsingContext final
+    {
+        std::vector<std::set<std::string>> m_currentScope;
 
-    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens);
+    public:
 
-    OpenCL::Parser::StructDeclaration parseStruct(Tokens& tokens);
+        ParsingContext()
+        {
+            m_currentScope.emplace_back();
+        }
+
+        ~ParsingContext() = default;
+
+        ParsingContext(const ParsingContext&) = delete;
+        ParsingContext(ParsingContext&&) = delete;
+        ParsingContext&operator=(const ParsingContext&) = delete;
+        ParsingContext&operator=(ParsingContext&&) = delete;
+
+        void addToScope(std::string name)
+        {
+            if(!m_currentScope.back().insert(std::move(name)).second)
+            {
+                throw std::runtime_error(name + " already exists in this scope");
+            }
+        }
+
+        bool isInScope(const std::string& name)
+        {
+            for(auto& iter : m_currentScope)
+            {
+                if(iter.count(name))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void pushScope()
+        {
+            m_currentScope.emplace_back();
+        }
+
+        void popScope()
+        {
+            m_currentScope.pop_back();
+        }
+    };
+
+    OpenCL::Parser::Program parseProgram(Tokens& tokens, ParsingContext& context);
+
+    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens, ParsingContext& context);
+
+    OpenCL::Parser::StructOrUnionDeclaration parseStructOrUnion(Tokens& tokens, ParsingContext& context);
+
+    OpenCL::Parser::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type,
-                                                             Tokens& tokens);
+                                                                 Tokens& tokens,
+                                                                 ParsingContext& context);
 
-    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype, Tokens& tokens);
+    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
+                                               Tokens& tokens,
+                                               ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::Statement> parseStatement(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::Statement> parseStatement(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::Expression parseExpression(Tokens& tokens);
+    OpenCL::Parser::Expression parseExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens);
+    OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens);
+    OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens);
+    OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens);
+    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens);
+    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens);
+    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens);
+    OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::RelationalExpression parseRelationalExpression(Tokens& tokens);
+    OpenCL::Parser::RelationalExpression parseRelationalExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::ShiftExpression parseShiftExpression(Tokens& tokens);
+    OpenCL::Parser::ShiftExpression parseShiftExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::AdditiveExpression parseAdditiveExpression(Tokens& tokens);
+    OpenCL::Parser::AdditiveExpression parseAdditiveExpression(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::Term parseTerm(Tokens& tokens);
+    OpenCL::Parser::Term parseTerm(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens);
+    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::PostFixExpression> parsePostFixExpression(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::PostFixExpression> parsePostFixExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::PrimaryExpression> parsePrimaryExpression(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::PrimaryExpression> parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens);
+    std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens);
+    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::StructType parseStructType(Tokens& tokens);
+    OpenCL::Parser::StructType parseStructType(Tokens& tokens, ParsingContext& context);
+
+    OpenCL::Parser::UnionType parseUnionType(Tokens& tokens, ParsingContext& context);
 }
 
 OpenCL::Parser::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
 {
-    return parseProgram(tokens);
+    ParsingContext context;
+    return parseProgram(tokens, context);
 }
 
 namespace
@@ -87,44 +145,56 @@ namespace
             || type == TokenType::BitXorAssign;
     }
 
-    bool isType(TokenType type)
+    bool isType(Token type,ParsingContext& context)
     {
-        return type == TokenType::VoidKeyword
-            || type == TokenType::CharKeyword
-            || type == TokenType::ShortKeyword
-            || type == TokenType::IntKeyword
-            || type == TokenType::LongKeyword
-            || type == TokenType::FloatKeyword
-            || type == TokenType::DoubleKeyword
-            || type == TokenType::SignedKeyword
-            || type == TokenType::UnsignedKeyword
-            || type == TokenType::StructKeyword
-            || type == TokenType::ConstKeyword;
+        return type.getTokenType() == TokenType::VoidKeyword
+            || type.getTokenType() == TokenType::CharKeyword
+            || type.getTokenType() == TokenType::ShortKeyword
+            || type.getTokenType() == TokenType::IntKeyword
+            || type.getTokenType() == TokenType::LongKeyword
+            || type.getTokenType() == TokenType::FloatKeyword
+            || type.getTokenType() == TokenType::DoubleKeyword
+            || type.getTokenType() == TokenType::SignedKeyword
+            || type.getTokenType() == TokenType::UnsignedKeyword
+            || type.getTokenType() == TokenType::StructKeyword
+            || type.getTokenType() == TokenType::ConstKeyword
+            || type.getTokenType() == TokenType::UnionKeyword
+            || (type.getTokenType() == TokenType::Identifier && !context.isInScope(std::get<std::string>(type.getValue())));
     }
 
-    OpenCL::Parser::Program parseProgram(Tokens& tokens)
+    OpenCL::Parser::Program parseProgram(Tokens& tokens, ParsingContext& context)
     {
         std::vector<std::unique_ptr<Global>> global;
         while (!tokens.empty())
         {
-            global.push_back(parseGlobal(tokens));
+            global.push_back(parseGlobal(tokens, context));
         }
         return Program(std::move(global));
     }
 
-    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens, ParsingContext& context)
     {
-        if (tokens.back().getTokenType() == TokenType::StructKeyword && tokens.size() > 2
+        if ((tokens.back().getTokenType() == TokenType::StructKeyword
+        || tokens.back().getTokenType() == TokenType::UnionKeyword) && tokens.size() > 2
             && tokens.at(tokens.size() - 3).getTokenType() == TokenType::OpenBrace)
         {
-            return std::make_unique<StructDeclaration>(parseStruct(tokens));
+            auto structOrUnion = parseStructOrUnion(tokens, context);
+            if(tokens.back().getTokenType() != TokenType::SemiColon)
+            {
+                throw std::runtime_error("Expected ; after struct or union declaration");
+            }
+            return std::make_unique<StructOrUnionDeclaration>(std::move(structOrUnion));
+        }
+        else if(tokens.back().getTokenType() == TokenType::TypedefKeyword)
+        {
+            return std::make_unique<TypedefDeclaration>(parseTypedefDeclaration(tokens,context));
         }
         auto currToken = tokens.back();
-        if (!isType(currToken.getTokenType()))
+        if (!isType(currToken,context))
         {
             throw std::runtime_error("Expected type for global declaration");
         }
-        auto type = parseType(tokens);
+        auto type = parseType(tokens,context);
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::Identifier)
         {
@@ -137,12 +207,12 @@ namespace
         currToken = tokens.at(tokens.size() - 2);
         if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
-            return std::make_unique<Function>(parseFunction(std::move(type), tokens));
+            return std::make_unique<Function>(parseFunction(std::move(type), tokens, context));
         }
         else if (currToken.getTokenType() == TokenType::SemiColon
             || currToken.getTokenType() == TokenType::Assignment)
         {
-            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(std::move(type), tokens));
+            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(std::move(type), tokens, context));
         }
         else
         {
@@ -150,13 +220,15 @@ namespace
         }
     }
 
-    OpenCL::Parser::StructDeclaration parseStruct(Tokens& tokens)
+    OpenCL::Parser::StructOrUnionDeclaration parseStructOrUnion(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.back();
-        if (currToken.getTokenType() != TokenType::StructKeyword)
+        if (currToken.getTokenType() != TokenType::StructKeyword
+         && currToken.getTokenType() != TokenType::UnionKeyword)
         {
-            throw std::runtime_error("Expected struct keyword");
+            throw std::runtime_error("Expected struct or union keyword");
         }
+        bool isUnion = currToken.getTokenType() == TokenType::UnionKeyword;
         tokens.pop_back();
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::Identifier)
@@ -174,7 +246,7 @@ namespace
         std::vector<std::pair<std::shared_ptr<Type>, std::string>> fields;
         while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
         {
-            auto type = parseType(tokens);
+            auto type = parseType(tokens, context);
             currToken = tokens.back();
             if (currToken.getTokenType() != TokenType::Identifier)
             {
@@ -188,7 +260,7 @@ namespace
                 while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
                     tokens.pop_back();
-                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto primaryConstant = parsePrimaryExpression(tokens, context);
                     auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
                     if (!result)
                     {
@@ -218,7 +290,7 @@ namespace
                 {
                     clone = std::make_unique<ArrayType>(std::move(clone), value);
                 });
-                fields.emplace_back(std::shared_ptr<Type>(clone.release()), fieldName);
+                fields.emplace_back(std::move(clone), fieldName);
                 if(tokens.back().getTokenType() != TokenType::Comma)
                 {
                     break;
@@ -233,16 +305,12 @@ namespace
             tokens.pop_back();
         }
         tokens.pop_back();
-        if (tokens.back().getTokenType() != TokenType::SemiColon)
-        {
-            throw std::runtime_error("Expected ; at the end of struct definition");
-        }
-        tokens.pop_back();
-        return StructDeclaration(std::move(name), std::move(fields));
+        return StructOrUnionDeclaration(isUnion, std::move(name), std::move(fields));
     }
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type,
-                                                             Tokens& tokens)
+                                                                 Tokens& tokens,
+                                                                 ParsingContext& context)
     {
         auto currToken = tokens.back();
         tokens.pop_back();
@@ -251,6 +319,7 @@ namespace
             throw std::runtime_error("Invalid identifier for Global declaration");
         }
         auto name = std::get<std::string>(currToken.getValue());
+        context.addToScope(name);
         currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() == TokenType::Assignment)
@@ -289,7 +358,130 @@ namespace
         }
     }
 
-    OpenCL::Parser::Function parseFunction(std::unique_ptr<Type>&& rettype, Tokens& tokens)
+    OpenCL::Parser::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context)
+    {
+        if(tokens.back().getTokenType() != TokenType::TypedefKeyword)
+        {
+            throw std::runtime_error("Expected typedef keyword at beginning of typedef declaration");
+        }
+        tokens.pop_back();
+        std::unique_ptr<StructOrUnionDeclaration> optionalDeclaration;
+        std::unique_ptr<Type> type;
+        if(tokens.back().getTokenType() == TokenType::StructKeyword
+        || tokens.back().getTokenType() == TokenType::UnionKeyword)
+        {
+            optionalDeclaration = std::make_unique<StructOrUnionDeclaration>(parseStructOrUnion(tokens,context));
+            if(optionalDeclaration->isUnion())
+            {
+                type = std::make_unique<UnionType>(optionalDeclaration->getName(),false);
+            }
+            else
+            {
+                type = std::make_unique<StructType>(optionalDeclaration->getName(),false);
+            }
+        }
+        else
+        {
+            type = parseType(tokens, context);
+        }
+
+        std::vector<std::pair<std::shared_ptr<Type>,std::string>> typedefs;
+        while(!tokens.empty())
+        {
+            bool isPointer = false;
+            if(tokens.back().getTokenType() == TokenType::Asterisk)
+            {
+                isPointer = true;
+                tokens.pop_back();
+            }
+            bool isConst = false;
+            if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+            {
+                isConst = true;
+                tokens.pop_back();
+            }
+            if(tokens.back().getTokenType() != TokenType::Identifier)
+            {
+                throw std::runtime_error("Expected identifier following type in typedef declaration");
+            }
+            std::string name = std::get<std::string>(tokens.back().getValue());
+            tokens.pop_back();
+            std::vector<std::size_t> sizes;
+            while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
+            {
+                tokens.pop_back();
+                auto primaryConstant = parsePrimaryExpression(tokens, context);
+                auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
+                if (!result)
+                {
+                    throw std::runtime_error("Expected primary constant expression for array size");
+                }
+                sizes.push_back(std::visit([](auto&& value) -> std::size_t
+                                           {
+                                               using T = std::decay_t<decltype(value)>;
+                                               if constexpr(std::is_integral_v<T>)
+                                               {
+                                                   return value;
+                                               }
+                                               else
+                                               {
+                                                   throw std::runtime_error(
+                                                       "Only integral type supported for array size");
+                                               }
+                                           }, result->getValue()));
+                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                {
+                    throw std::runtime_error("Expected ] after array declaration");
+                }
+                tokens.pop_back();
+            }
+            auto clone = type->clone();
+            if(isConst && !isPointer)
+            {
+                if(dynamic_cast<PrimitiveType*>(clone.get()))
+                {
+                    auto* prim = static_cast<PrimitiveType*>(clone.get());
+                    clone = std::make_unique<PrimitiveType>(prim->getBitCount(),true,prim->isFloatingPoint(),prim->isSigned());
+                }
+                else if(dynamic_cast<PointerType*>(clone.get()))
+                {
+                    auto* pointer = static_cast<PointerType*>(clone.get());
+                    clone = std::make_unique<PointerType>(pointer->getType().clone(),true);
+                }
+                else
+                {
+                    throw std::runtime_error("Not implemented yet");
+                }
+            }
+            if (isPointer)
+            {
+                clone = std::make_unique<PointerType>(std::move(clone),isConst);
+            }
+            std::for_each(sizes.rbegin(), sizes.rend(), [&clone](std::size_t value)
+            {
+                clone = std::make_unique<ArrayType>(std::move(clone), value);
+            });
+            typedefs.emplace_back(std::move(clone),std::move(name));
+            if(tokens.back().getTokenType() == TokenType::Comma)
+            {
+                tokens.pop_back();
+            }
+            else
+            {
+                break;
+            }
+        }
+        if(tokens.back().getTokenType() != TokenType::SemiColon)
+        {
+            throw std::runtime_error("Expected ; at the end of typedef");
+        }
+        tokens.pop_back();
+        return TypedefDeclaration(std::move(typedefs),std::move(optionalDeclaration));
+    }
+
+    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
+                                               Tokens& tokens,
+                                               ParsingContext& context)
     {
         auto currToken = tokens.back();
         tokens.pop_back();
@@ -311,11 +503,11 @@ namespace
             while (true)
             {
                 currToken = tokens.back();
-                if (!isType(currToken.getTokenType()))
+                if (!isType(currToken,context))
                 {
                     throw std::runtime_error("Unsupported argument type");
                 }
-                auto type = parseType(tokens);
+                auto type = parseType(tokens, context);
                 currToken = tokens.back();
                 std::string argname;
                 if (currToken.getTokenType() == TokenType::Identifier)
@@ -327,7 +519,7 @@ namespace
                 while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
                     tokens.pop_back();
-                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto primaryConstant = parsePrimaryExpression(tokens, context);
                     auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
                     if (!result)
                     {
@@ -380,6 +572,7 @@ namespace
         }
 
         currToken = tokens.back();
+        context.pushScope();
         if (currToken.getTokenType() == TokenType::OpenBrace)
         {
             for (auto&[type, name] : arguments)
@@ -388,8 +581,10 @@ namespace
                 {
                     throw std::runtime_error("Omitted parameter name");
                 }
+                context.addToScope(name);
             }
-            auto statement = parseStatement(tokens);
+            auto statement = parseStatement(tokens, context);
+            context.popScope();
             auto pointer = dynamic_cast<BlockStatement*>(statement.get());
             if (!pointer)
             {
@@ -412,7 +607,7 @@ namespace
         }
     }
 
-    std::unique_ptr<Type> parseType(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::Type> parseType(Tokens& tokens, ParsingContext& context)
     {
         std::stack<std::unique_ptr<Type>> types;
         for (auto iter = tokens.rbegin(); iter != tokens.rend();)
@@ -429,7 +624,7 @@ namespace
             case TokenType::SignedKeyword:
             case TokenType::UnsignedKeyword:
             {
-                types.push(std::make_unique<PrimitiveType>(parsePrimitiveType(tokens)));
+                types.push(std::make_unique<PrimitiveType>(parsePrimitiveType(tokens, context)));
                 iter = tokens.rbegin();
                 break;
             }
@@ -440,7 +635,13 @@ namespace
             }
             case TokenType::StructKeyword:
             {
-                types.push(std::make_unique<StructType>(parseStructType(tokens)));
+                types.push(std::make_unique<StructType>(parseStructType(tokens, context)));
+                iter = tokens.rbegin();
+                break;
+            }
+            case TokenType::UnionKeyword:
+            {
+                types.push(std::make_unique<UnionType>(parseUnionType(tokens, context)));
                 iter = tokens.rbegin();
                 break;
             }
@@ -472,117 +673,14 @@ namespace
             throw std::runtime_error("Invalid type token count");
         }
         return std::move(types.top());
-        //        Tokens typeTokens;
-        //        {
-        //            bool wasStruct = false;
-        //            auto currToken = tokens.back();
-        //            do
-        //            {
-        //                if (wasStruct)
-        //                {
-        //                    wasStruct = false;
-        //                }
-        //                tokens.pop_back();
-        //                typeTokens.push_back(currToken);
-        //                if (tokens.empty())
-        //                {
-        //                    break;
-        //                }
-        //                if (typeTokens.back().getTokenType() == TokenType::StructKeyword)
-        //                {
-        //                    wasStruct = true;
-        //                }
-        //                currToken = tokens.back();
-        //            } while (isType(currToken.getTokenType())
-        //                || (wasStruct && currToken.getTokenType() == TokenType::Identifier));
-        //        }
-        //
-        //        if (typeTokens.back().getTokenType() == TokenType::Asterisk)
-        //        {
-        //            typeTokens.pop_back();
-        //            std::reverse(typeTokens.begin(), typeTokens.end());
-        //            return std::make_unique<PointerType>(parseType(typeTokens));
-        //        }
-        //        else if (typeTokens.front().getTokenType() == TokenType::StructKeyword)
-        //        {
-        //            std::reverse(typeTokens.begin(), typeTokens.end());
-        //            typeTokens.pop_back();
-        //            if (typeTokens.back().getTokenType() != TokenType::Identifier)
-        //            {
-        //                throw std::runtime_error("Expected identifier after struct");
-        //            }
-        //            const auto& name = std::get<std::string>(typeTokens.back().getValue());
-        //            typeTokens.pop_back();
-        //            return std::make_unique<StructType>(name);
-        //        }
-        //        else if (typeTokens.back().getTokenType() == TokenType::OpenSquareBracket)
-        //        {
-        //            typeTokens.pop_back();
-        //            std::reverse(typeTokens.begin(), typeTokens.end());
-        //            auto type = parseType(typeTokens);
-        //            auto primary = parsePrimaryExpression(tokens);
-        //            if (auto result = dynamic_cast<const PrimaryExpressionConstant*>(primary.get());!result)
-        //            {
-        //                throw std::runtime_error("Expected constant expression in array type");
-        //            }
-        //            else
-        //            {
-        //                auto array = std::visit([type = std::move(type)](auto&& value)mutable -> std::unique_ptr<ArrayType>
-        //                                        {
-        //                                            using T = std::decay_t<decltype(value)>;
-        //                                            if constexpr (std::is_integral_v<T>)
-        //                                            {
-        //                                                return std::make_unique<ArrayType>(std::move(type), value);
-        //                                            }
-        //                                            else
-        //                                            {
-        //                                                throw std::runtime_error("Can't use type as size of array");
-        //                                            }
-        //                                        }, result->getValue());
-        //                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
-        //                {
-        //                    throw std::runtime_error("Expected ] after array declaration");
-        //                }
-        //                tokens.pop_back();
-        //                return array;
-        //            }
-        //        }
-        //        else
-        //        {
-        //            std::vector<PrimitiveType::Types> types;
-        //            for (auto& currToken : typeTokens)
-        //            {
-        //                switch (currToken.getTokenType())
-        //                {
-        //                case TokenType::VoidKeyword:return std::make_unique<PrimitiveType>(std::move(types));
-        //                case TokenType::CharKeyword:types.push_back(PrimitiveType::Types::Char);
-        //                    break;
-        //                case TokenType::ShortKeyword:types.push_back(PrimitiveType::Types::Short);
-        //                    break;
-        //                case TokenType::IntKeyword:types.push_back(PrimitiveType::Types::Int);
-        //                    break;
-        //                case TokenType::LongKeyword:types.push_back(PrimitiveType::Types::Long);
-        //                    break;
-        //                case TokenType::FloatKeyword:types.push_back(PrimitiveType::Types::Float);
-        //                    break;
-        //                case TokenType::DoubleKeyword:types.push_back(PrimitiveType::Types::Double);
-        //                    break;
-        //                case TokenType::SignedKeyword:types.push_back(PrimitiveType::Types::Signed);
-        //                    break;
-        //                case TokenType::UnsignedKeyword:types.push_back(PrimitiveType::Types::Unsigned);
-        //                    break;
-        //                default:throw std::runtime_error("Invalid token");
-        //                }
-        //            }
-        //            return std::make_unique<PrimitiveType>(std::move(types));
-        //        }
     }
 
-    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens)
+    OpenCL::Parser::PrimitiveType parsePrimitiveType(Tokens& tokens, ParsingContext& context)
     {
+        (void)context;
         std::vector<PrimitiveType::Types> types;
         auto currToken = tokens.back();
-        while (isType(currToken.getTokenType()))
+        while (isType(currToken,context))
         {
             tokens.pop_back();
             switch (currToken.getTokenType())
@@ -613,8 +711,9 @@ namespace
         return PrimitiveType(std::move(types));
     }
 
-    OpenCL::Parser::StructType parseStructType(Tokens& tokens)
+    OpenCL::Parser::StructType parseStructType(Tokens& tokens, ParsingContext& context)
     {
+        (void)context;
         bool isConst = false;
         if(tokens.back().getTokenType() == TokenType::ConstKeyword)
         {
@@ -640,12 +739,40 @@ namespace
         return StructType(std::move(name), isConst);
     }
 
-    std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens)
+    OpenCL::Parser::UnionType parseUnionType(Tokens& tokens, ParsingContext& context)
+    {
+        (void)context;
+        bool isConst = false;
+        if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+        {
+            isConst = true;
+            tokens.pop_back();
+        }
+        if(tokens.back().getTokenType() != TokenType::UnionKeyword)
+        {
+            throw std::runtime_error("Expected struct keyword in struct type instantiation");
+        }
+        tokens.pop_back();
+        if(tokens.back().getTokenType() != TokenType::Identifier)
+        {
+            throw std::runtime_error("Expected identifier after struct keyword");
+        }
+        std::string name = std::get<std::string>(tokens.back().getValue());
+        tokens.pop_back();
+        if(tokens.back().getTokenType() == TokenType::ConstKeyword)
+        {
+            isConst = true;
+            tokens.pop_back();
+        }
+        return UnionType(std::move(name), isConst);
+    }
+
+    std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.back();
-        if (isType(currToken.getTokenType()) && currToken.getTokenType() != TokenType::Asterisk)
+        if (isType(currToken,context) && currToken.getTokenType() != TokenType::Asterisk)
         {
-            auto type = parseType(tokens);
+            auto type = parseType(tokens, context);
             std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<Expression>>> declarations;
             while (true)
             {
@@ -659,7 +786,7 @@ namespace
                 while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
                 {
                     tokens.pop_back();
-                    auto primaryConstant = parsePrimaryExpression(tokens);
+                    auto primaryConstant = parsePrimaryExpression(tokens, context);
                     auto* result = dynamic_cast<const PrimaryExpressionConstant*>(primaryConstant.get());
                     if (!result)
                     {
@@ -690,12 +817,16 @@ namespace
                     thisType = std::make_unique<ArrayType>(std::move(thisType), value);
                 });
                 auto name = std::get<std::string>(currToken.getValue());
+                context.addToScope(name);
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::Assignment)
                 {
                     tokens.pop_back();
                     declarations
-                        .emplace_back(std::shared_ptr<Type>(thisType.release()), name, std::make_unique<Expression>(parseExpression(tokens)));
+                        .emplace_back(std::shared_ptr<Type>(thisType.release()), name, std::make_unique<Expression>(
+                            parseExpression(
+                                tokens,
+                                context)));
                 }
                 else
                 {
@@ -720,13 +851,13 @@ namespace
         }
         else
         {
-            return parseStatement(tokens);
+            return parseStatement(tokens, context);
         }
     }
 
-    std::unique_ptr<OpenCL::Parser::Statement> parseStatement(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::Statement> parseStatement(Tokens& tokens, ParsingContext& context)
     {
-        auto result = [&tokens]() -> std::unique_ptr<Statement>
+        auto result = [&tokens,&context]() -> std::unique_ptr<Statement>
         {
             auto curentToken = tokens.back();
             switch (curentToken.getTokenType())
@@ -734,7 +865,7 @@ namespace
             case TokenType::ReturnKeyword:
             {
                 tokens.pop_back();
-                return std::make_unique<ReturnStatement>(parseExpression(tokens));
+                return std::make_unique<ReturnStatement>(parseExpression(tokens, context));
             }
             case TokenType::IfKeyword:
             {
@@ -745,21 +876,21 @@ namespace
                 {
                     throw std::runtime_error("Expected ( after if");
                 }
-                auto expression = parseExpression(tokens);
+                auto expression = parseExpression(tokens, context);
                 curentToken = tokens.back();
                 tokens.pop_back();
                 if (curentToken.getTokenType() != TokenType::CloseParenthese)
                 {
                     throw std::runtime_error("Expected ) at the end of if statement");
                 }
-                auto statement = parseStatement(tokens);
+                auto statement = parseStatement(tokens, context);
                 curentToken = tokens.back();
                 if (!tokens.empty() && curentToken.getTokenType() == TokenType::ElseKeyword)
                 {
                     tokens.pop_back();
                     return std::make_unique<IfStatement>(std::move(expression),
                                                          std::move(statement),
-                                                         parseStatement(tokens));
+                                                         parseStatement(tokens, context));
                 }
                 else
                 {
@@ -769,16 +900,18 @@ namespace
             case TokenType::OpenBrace:
             {
                 tokens.pop_back();
+                context.pushScope();
                 std::vector<std::unique_ptr<BlockItem>> blockItems;
                 while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
                 {
-                    blockItems.push_back(parseBlockItem(tokens));
+                    blockItems.push_back(parseBlockItem(tokens, context));
                 }
                 if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseBrace)
                 {
                     throw std::runtime_error("Expected } to close Block");
                 }
                 tokens.pop_back();
+                context.popScope();
                 return std::make_unique<BlockStatement>(std::move(blockItems));
             }
             case TokenType::ForKeyword:
@@ -790,14 +923,14 @@ namespace
                 {
                     throw std::runtime_error("Expected ( after for");
                 }
-                auto blockitem = parseBlockItem(tokens);
+                auto blockitem = parseBlockItem(tokens, context);
 
                 auto control = [&]() -> std::unique_ptr<Expression>
                 {
                     if (dynamic_cast<Declarations*>(blockitem.get())
                         || tokens.back().getTokenType() != TokenType::SemiColon)
                     {
-                        auto expression = parseExpression(tokens);
+                        auto expression = parseExpression(tokens, context);
                         if (tokens.back().getTokenType() != TokenType::SemiColon)
                         {
                             throw std::runtime_error("Expected ; after control part of for loop header");
@@ -816,7 +949,7 @@ namespace
                 {
                     if (tokens.back().getTokenType() != TokenType::CloseParenthese)
                     {
-                        auto expression = parseExpression(tokens);
+                        auto expression = parseExpression(tokens, context);
                         if (tokens.back().getTokenType() != TokenType::CloseParenthese)
                         {
                             throw std::runtime_error("Expected ) after control part of for loop header");
@@ -831,7 +964,7 @@ namespace
                     }
                 }();
 
-                auto statement = parseStatement(tokens);
+                auto statement = parseStatement(tokens, context);
 
                 if (auto declaration = dynamic_cast<Declarations*>(blockitem.get());declaration)
                 {
@@ -861,20 +994,20 @@ namespace
                 {
                     throw std::runtime_error("Expected ( after while");
                 }
-                auto expression = parseExpression(tokens);
+                auto expression = parseExpression(tokens, context);
                 curentToken = tokens.back();
                 tokens.pop_back();
                 if (curentToken.getTokenType() != TokenType::CloseParenthese)
                 {
                     throw std::runtime_error("Expected ) after expression in while");
                 }
-                auto statement = parseStatement(tokens);
+                auto statement = parseStatement(tokens, context);
                 return std::make_unique<HeadWhileStatement>(std::move(expression), std::move(statement));
             }
             case TokenType::DoKeyword:
             {
                 tokens.pop_back();
-                auto statement = parseStatement(tokens);
+                auto statement = parseStatement(tokens, context);
                 curentToken = tokens.back();
                 tokens.pop_back();
                 if (curentToken.getTokenType() != TokenType::WhileKeyword)
@@ -887,7 +1020,7 @@ namespace
                 {
                     throw std::runtime_error("Expected ( after while");
                 }
-                auto expression = parseExpression(tokens);
+                auto expression = parseExpression(tokens, context);
                 curentToken = tokens.back();
                 tokens.pop_back();
                 if (curentToken.getTokenType() != TokenType::CloseParenthese)
@@ -915,14 +1048,14 @@ namespace
                     throw std::runtime_error("Expected ( after switch keyword");
                 }
                 tokens.pop_back();
-                auto expression = parseExpression(tokens);
+                auto expression = parseExpression(tokens, context);
                 curentToken = tokens.back();
                 if (curentToken.getTokenType() != TokenType::CloseParenthese)
                 {
                     throw std::runtime_error("Expected ) after expression in switch ");
                 }
                 tokens.pop_back();
-                return std::make_unique<SwitchStatement>(std::move(expression), parseStatement(tokens));
+                return std::make_unique<SwitchStatement>(std::move(expression), parseStatement(tokens, context));
             }
             case TokenType::DefaultKeyword:
             {
@@ -933,12 +1066,12 @@ namespace
                     throw std::runtime_error("Expected : after default");
                 }
                 tokens.pop_back();
-                return std::make_unique<DefaultStatement>(parseStatement(tokens));
+                return std::make_unique<DefaultStatement>(parseStatement(tokens, context));
             }
             case TokenType::CaseKeyword:
             {
                 tokens.pop_back();
-                auto expression = parseExpression(tokens);
+                auto expression = parseExpression(tokens, context);
                 curentToken = tokens.back();
                 if (curentToken.getTokenType() != TokenType::Colon)
                 {
@@ -947,13 +1080,14 @@ namespace
                 tokens.pop_back();
                 return std::make_unique<CaseStatement>(std::move(expression),
                                                        tokens.back().getTokenType() != TokenType::CaseKeyword
-                                                       ? parseStatement(tokens) : nullptr);
+                                                       ? parseStatement(tokens, context) : nullptr);
             }
             default:
             {
                 if (!tokens.empty() && tokens.back().getTokenType() != TokenType::SemiColon)
                 {
-                    return std::make_unique<ExpressionStatement>(std::make_unique<Expression>(parseExpression(tokens)));
+                    return std::make_unique<ExpressionStatement>(std::make_unique<Expression>(parseExpression(tokens,
+                                                                                                              context)));
                 }
                 else
                 {
@@ -983,9 +1117,9 @@ namespace
         return result;
     }
 
-    OpenCL::Parser::Expression parseExpression(Tokens& tokens)
+    OpenCL::Parser::Expression parseExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto expression = parseNonCommaExpression(tokens);
+        auto expression = parseNonCommaExpression(tokens, context);
 
         std::unique_ptr<NonCommaExpression> optional;
         if (!tokens.empty())
@@ -994,13 +1128,13 @@ namespace
             if (currToken.getTokenType() == TokenType::Comma)
             {
                 tokens.pop_back();
-                optional = parseNonCommaExpression(tokens);
+                optional = parseNonCommaExpression(tokens, context);
             }
         }
         return Expression(std::move(expression), std::move(optional));
     }
 
-    std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens, ParsingContext& context)
     {
         std::size_t braceCount = 0;
         std::size_t squareCount = 0;
@@ -1045,10 +1179,10 @@ namespace
         bool assignment = result != tokens.rend() && isAssignment(result->getTokenType());
         if (assignment)
         {
-            auto unary = parseUnaryExpression(tokens);
+            auto unary = parseUnaryExpression(tokens, context);
             auto currentToken = tokens.back();
             tokens.pop_back();
-            auto nonCommaExpression = parseNonCommaExpression(tokens);
+            auto nonCommaExpression = parseNonCommaExpression(tokens, context);
             return std::make_unique<AssignmentExpression>(std::move(unary),
                                                           [assignment = currentToken.getTokenType()]
                                                           {
@@ -1073,27 +1207,27 @@ namespace
         }
         else
         {
-            return std::make_unique<ConditionalExpression>(parseConditionalExpression(tokens));
+            return std::make_unique<ConditionalExpression>(parseConditionalExpression(tokens, context));
         }
     }
 
-    OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens)
+    OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto logicalOrExperssion = parseLogicalOrExpression(tokens);
+        auto logicalOrExperssion = parseLogicalOrExpression(tokens, context);
         if (!tokens.empty())
         {
             auto currToken = tokens.back();
             if (currToken.getTokenType() == TokenType::QuestionMark)
             {
                 tokens.pop_back();
-                auto optionalExpression = parseExpression(tokens);
+                auto optionalExpression = parseExpression(tokens, context);
                 currToken = tokens.back();
                 if (currToken.getTokenType() != TokenType::Colon)
                 {
                     throw std::runtime_error("Expected : to match ?");
                 }
                 tokens.pop_back();
-                auto optionalConditional = parseConditionalExpression(tokens);
+                auto optionalConditional = parseConditionalExpression(tokens, context);
                 return ConditionalExpression(std::move(logicalOrExperssion),
                                              std::make_unique<Expression>(std::move(optionalExpression)),
                                              std::make_unique<ConditionalExpression>(std::move(optionalConditional)));
@@ -1102,9 +1236,9 @@ namespace
         return ConditionalExpression(std::move(logicalOrExperssion));
     }
 
-    OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens)
+    OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto logicalAnd = parseLogicalAndExpression(tokens);
+        auto logicalAnd = parseLogicalAndExpression(tokens, context);
 
         std::vector<LogicalAndExpression> optionalLogicalAnds;
         if (!tokens.empty())
@@ -1113,7 +1247,7 @@ namespace
             while (curentToken.getTokenType() == TokenType::LogicOr)
             {
                 tokens.pop_back();
-                optionalLogicalAnds.push_back(parseLogicalAndExpression(tokens));
+                optionalLogicalAnds.push_back(parseLogicalAndExpression(tokens, context));
                 curentToken = tokens.back();
             }
         }
@@ -1121,9 +1255,9 @@ namespace
         return LogicalOrExpression(std::move(logicalAnd), std::move(optionalLogicalAnds));
     }
 
-    OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens)
+    OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseBitOrExpression(tokens);
+        auto result = parseBitOrExpression(tokens, context);
 
         std::vector<BitOrExpression> list;
         if (!tokens.empty())
@@ -1132,7 +1266,7 @@ namespace
             while (currToken.getTokenType() == TokenType::LogicAnd)
             {
                 tokens.pop_back();
-                list.push_back(parseBitOrExpression(tokens));
+                list.push_back(parseBitOrExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1140,9 +1274,9 @@ namespace
         return LogicalAndExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens)
+    OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseBitXorExpression(tokens);
+        auto result = parseBitXorExpression(tokens, context);
 
         std::vector<BitXorExpression> list;
         if (!tokens.empty())
@@ -1151,7 +1285,7 @@ namespace
             while (currToken.getTokenType() == TokenType::BitOr)
             {
                 tokens.pop_back();
-                list.push_back(parseBitXorExpression(tokens));
+                list.push_back(parseBitXorExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1159,9 +1293,9 @@ namespace
         return BitOrExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens)
+    OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseBitAndExpression(tokens);
+        auto result = parseBitAndExpression(tokens, context);
 
         std::vector<BitAndExpression> list;
         if (!tokens.empty())
@@ -1170,7 +1304,7 @@ namespace
             while (currToken.getTokenType() == TokenType::BitXor)
             {
                 tokens.pop_back();
-                list.push_back(parseBitAndExpression(tokens));
+                list.push_back(parseBitAndExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1178,9 +1312,9 @@ namespace
         return BitXorExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens)
+    OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseEqualityExpression(tokens);
+        auto result = parseEqualityExpression(tokens, context);
 
         std::vector<EqualityExpression> list;
         if (!tokens.empty())
@@ -1189,7 +1323,7 @@ namespace
             while (currToken.getTokenType() == TokenType::Ampersand)
             {
                 tokens.pop_back();
-                list.push_back(parseEqualityExpression(tokens));
+                list.push_back(parseEqualityExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1197,9 +1331,9 @@ namespace
         return BitAndExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens)
+    OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseRelationalExpression(tokens);
+        auto result = parseRelationalExpression(tokens, context);
 
         std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> relationalExpressions;
         if (!tokens.empty())
@@ -1212,7 +1346,7 @@ namespace
                     .emplace_back(
                         currToken.getTokenType() == TokenType::Equal ? EqualityExpression::EqualityOperator::Equal
                                                                      : EqualityExpression::EqualityOperator::NotEqual,
-                        parseRelationalExpression(tokens));
+                        parseRelationalExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1220,9 +1354,9 @@ namespace
         return EqualityExpression(std::move(result), std::move(relationalExpressions));
     }
 
-    OpenCL::Parser::RelationalExpression parseRelationalExpression(Tokens& tokens)
+    OpenCL::Parser::RelationalExpression parseRelationalExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseShiftExpression(tokens);
+        auto result = parseShiftExpression(tokens, context);
 
         std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
         if (!tokens.empty())
@@ -1245,7 +1379,7 @@ namespace
                                       default:
                                           throw std::runtime_error("Invalid token for relational LogicalOrExpression");
                                       }
-                                  }(), parseShiftExpression(tokens));
+                                  }(), parseShiftExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1253,9 +1387,9 @@ namespace
         return RelationalExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::ShiftExpression parseShiftExpression(Tokens& tokens)
+    OpenCL::Parser::ShiftExpression parseShiftExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseAdditiveExpression(tokens);
+        auto result = parseAdditiveExpression(tokens, context);
 
         std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
         if (!tokens.empty())
@@ -1268,7 +1402,7 @@ namespace
                 list.emplace_back(
                     currToken.getTokenType() == TokenType::ShiftRight ? ShiftExpression::ShiftOperator::Right
                                                                       : ShiftExpression::ShiftOperator::Left,
-                    parseAdditiveExpression(tokens));
+                    parseAdditiveExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1276,9 +1410,9 @@ namespace
         return ShiftExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::AdditiveExpression parseAdditiveExpression(Tokens& tokens)
+    OpenCL::Parser::AdditiveExpression parseAdditiveExpression(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseTerm(tokens);
+        auto result = parseTerm(tokens, context);
 
         std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
         if (!tokens.empty())
@@ -1291,7 +1425,7 @@ namespace
                 list.emplace_back(
                     currToken.getTokenType() == TokenType::Addition ? AdditiveExpression::BinaryDashOperator::BinaryPlus
                                                                     : AdditiveExpression::BinaryDashOperator::BinaryMinus,
-                    parseTerm(tokens));
+                    parseTerm(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1299,9 +1433,9 @@ namespace
         return AdditiveExpression(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::Term parseTerm(Tokens& tokens)
+    OpenCL::Parser::Term parseTerm(Tokens& tokens, ParsingContext& context)
     {
-        auto result = parseCastExpression(tokens);
+        auto result = parseCastExpression(tokens, context);
 
         std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
         if (!tokens.empty())
@@ -1321,7 +1455,7 @@ namespace
                                       case TokenType::Modulo:return Term::BinaryDotOperator::BinaryRemainder;
                                       default:throw std::runtime_error("Invalid token");
                                       }
-                                  }(), parseCastExpression(tokens));
+                                  }(), parseCastExpression(tokens, context));
                 currToken = tokens.back();
             }
         }
@@ -1329,13 +1463,22 @@ namespace
         return Term(std::move(result), std::move(list));
     }
 
-    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens)
+    OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.rbegin();
         if (currToken->getTokenType() == TokenType::OpenParenthese)
         {
             currToken++;
-            if (isType(currToken->getTokenType()) && currToken->getTokenType() != TokenType::Asterisk)
+            auto closing = std::find_if(currToken,tokens.rend(),[](const Token& tokens)
+            {
+                return tokens.getTokenType() == TokenType::CloseParenthese;
+            });
+            if(closing == tokens.rend())
+            {
+                throw std::runtime_error("Unexpected end of tokens");
+            }
+            closing++;
+            if (isType(*currToken,context) && closing->getTokenType() != TokenType::OpenBrace)
             {
                 auto result = std::find_if(currToken + 1, tokens.rend(), [](const Token& token)
                 {
@@ -1349,21 +1492,21 @@ namespace
                 if (result->getTokenType() == TokenType::CloseParenthese)
                 {
                     tokens.pop_back();
-                    auto type = parseType(tokens);
+                    auto type = parseType(tokens, context);
                     if (tokens.back().getTokenType() != TokenType::CloseParenthese)
                     {
                         throw std::runtime_error("Expected Close Parenthese after type cast");
                     }
                     tokens.pop_back();
                     return CastExpression(std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>{
-                        std::move(type), std::make_unique<CastExpression>(parseCastExpression(tokens))});
+                        std::move(type), std::make_unique<CastExpression>(parseCastExpression(tokens, context))});
                 }
             }
         }
-        return CastExpression(parseUnaryExpression(tokens));
+        return CastExpression(parseUnaryExpression(tokens, context));
     }
 
-    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.back();
         if (currToken.getTokenType() == TokenType::SizeofKeyword)
@@ -1373,7 +1516,7 @@ namespace
             if (currToken.getTokenType() == TokenType::OpenParenthese)
             {
                 tokens.pop_back();
-                auto type = parseType(tokens);
+                auto type = parseType(tokens, context);
                 currToken = tokens.back();
                 if (currToken.getTokenType() != TokenType::CloseParenthese)
                 {
@@ -1384,7 +1527,7 @@ namespace
             }
             else
             {
-                auto unary = parseUnaryExpression(tokens);
+                auto unary = parseUnaryExpression(tokens, context);
                 return std::make_unique<UnaryExpressionSizeOf>(std::move(unary));
             }
         }
@@ -1413,9 +1556,9 @@ namespace
                 default:throw std::runtime_error("Invalid token");
                 }
             }();
-            return std::make_unique<UnaryExpressionUnaryOperator>(op, parseUnaryExpression(tokens));
+            return std::make_unique<UnaryExpressionUnaryOperator>(op, parseUnaryExpression(tokens, context));
         }
-        return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens));
+        return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens, context));
     }
 
     bool isPostFixExpression(Tokens& token)
@@ -1435,17 +1578,73 @@ namespace
         return false;
     }
 
-    std::unique_ptr<PostFixExpression> parsePostFixExpression(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::PostFixExpression> parsePostFixExpression(Tokens& tokens, ParsingContext& context)
     {
         std::stack<std::unique_ptr<PostFixExpression>> stack;
         while (!tokens.empty() && isPostFixExpression(tokens))
         {
             auto currToken = tokens.back();
             if (currToken.getTokenType() == TokenType::Identifier
-                || currToken.getTokenType() == TokenType::Literal
-                || (stack.empty() && currToken.getTokenType() == TokenType::OpenParenthese))
+                || currToken.getTokenType() == TokenType::Literal)
             {
-                stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens)));
+                if(!stack.empty())
+                {
+                    throw std::runtime_error("Can't combine post fix expressions");
+                }
+                stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens,
+                                                                                                       context)));
+            }
+            else if(currToken.getTokenType() == TokenType::OpenParenthese && stack.empty())
+            {
+                if(tokens.size() == 1)
+                {
+                    throw std::runtime_error("Unexpected end of token");
+                }
+                if(isType(tokens.at(tokens.size()-2),context))
+                {
+                    if(!stack.empty())
+                    {
+                        throw std::runtime_error("Can't combine post fix expressions");
+                    }
+                    tokens.pop_back();
+                    auto type = parseType(tokens, context);
+                    currToken = tokens.back();
+                    if(currToken.getTokenType() != TokenType::CloseParenthese)
+                    {
+                        throw std::runtime_error("Expected ) after type in type initialization");
+                    }
+                    tokens.pop_back();
+                    currToken = tokens.back();
+                    if(currToken.getTokenType() != TokenType::OpenBrace)
+                    {
+                        throw std::runtime_error("Expected { after type around parenthesis");
+                    }
+                    tokens.pop_back();
+                    std::vector<std::unique_ptr<NonCommaExpression>> nonCommaExpressions;
+                    while(true)
+                    {
+                        nonCommaExpressions.push_back(parseNonCommaExpression(tokens, context));
+                        if(tokens.back().getTokenType() == TokenType::Comma)
+                        {
+                            tokens.pop_back();
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    if(tokens.back().getTokenType() != TokenType::CloseBrace)
+                    {
+                        throw std::runtime_error("Expected { after type around parenthesis");
+                    }
+                    tokens.pop_back();
+                    stack.push(std::make_unique<PostFixExpressionTypeInitializer>(std::move(type),std::move(nonCommaExpressions)));
+                }
+                else
+                {
+                    stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens,
+                                                                                                           context)));
+                }
             }
             else if (currToken.getTokenType() == TokenType::OpenParenthese)
             {
@@ -1453,7 +1652,7 @@ namespace
                 std::vector<std::unique_ptr<NonCommaExpression>> nonCommaExpressions;
                 while (tokens.back().getTokenType() != TokenType::CloseParenthese)
                 {
-                    nonCommaExpressions.push_back(parseNonCommaExpression(tokens));
+                    nonCommaExpressions.push_back(parseNonCommaExpression(tokens, context));
                     if (tokens.back().getTokenType() == TokenType::CloseParenthese)
                     {
                         break;
@@ -1495,7 +1694,7 @@ namespace
                     throw std::runtime_error("Unexpected end of tokens");
                 }
                 Tokens newTokens(tokens.rbegin(), result);
-                auto expression = parseExpression(newTokens);
+                auto expression = parseExpression(newTokens, context);
                 tokens.erase(result.base(), tokens.end());
                 if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
                 {
@@ -1559,7 +1758,7 @@ namespace
         return ret;
     }
 
-    std::unique_ptr<PrimaryExpression> parsePrimaryExpression(Tokens& tokens)
+    std::unique_ptr<OpenCL::Parser::PrimaryExpression> parsePrimaryExpression(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.back();
         tokens.pop_back();
@@ -1588,7 +1787,7 @@ namespace
         }
         else if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
-            auto expression = parseExpression(tokens);
+            auto expression = parseExpression(tokens, context);
             if (tokens.back().getTokenType() != TokenType::CloseParenthese)
             {
                 throw std::runtime_error("Expected Close Parenthese after expression in primary expression");

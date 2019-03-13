@@ -84,6 +84,7 @@ namespace OpenCL::Lexer
         SwitchKeyword,
         CaseKeyword,
         DefaultKeyword,
+        UnionKeyword
     };
 
     class Token

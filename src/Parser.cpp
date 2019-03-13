@@ -1,5 +1,9 @@
 #include <utility>
 
+#include <utility>
+
+#include <utility>
+
 #include "Parser.hpp"
 
 #include <utility>
@@ -512,6 +516,11 @@ OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::Primiti
              m_isSigned(m_isFloatingPoint || (types.empty() ? false : types[0] != PrimitiveType::Types::Unsigned))
 {}
 
+bool OpenCL::Parser::StructOrUnionDeclaration::isUnion() const
+{
+    return m_isUnion;
+}
+
 OpenCL::Parser::PrimitiveType::PrimitiveType(std::uint64_t bitCount, bool isConst, bool isFloatingPoint, bool isSigned)
 : m_bitCount(bitCount), m_isConst(isConst), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned)
 {
@@ -796,19 +805,22 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDecrem
     return *m_postFixExpression;
 }
 
-OpenCL::Parser::StructDeclaration::StructDeclaration(std::string name, std::vector<std::pair<std::shared_ptr<Type>, std::string>>&& types)
-: m_name(std::move(name)), m_types(std::move(types))
+OpenCL::Parser::StructOrUnionDeclaration::StructOrUnionDeclaration(bool isUnion,
+                                                                   std::string name,
+                                                                   std::vector<std::pair<std::shared_ptr<Type>,
+                                                   std::string>>&& types)
+: m_isUnion(isUnion),m_name(std::move(name)), m_types(std::move(types))
 {
     assert(!m_types.empty());
     assert(std::all_of(m_types.begin(),m_types.end(),[](const auto& pair){return pair.first.get();}));
 }
 
-const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructDeclaration::getTypes() const
+const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructOrUnionDeclaration::getTypes() const
 {
     return m_types;
 }
 
-const std::string& OpenCL::Parser::StructDeclaration::getName() const
+const std::string& OpenCL::Parser::StructOrUnionDeclaration::getName() const
 {
     return m_name;
 }
@@ -889,4 +901,53 @@ bool OpenCL::Parser::Type::isVoid() const
 bool OpenCL::Parser::Type::isConst() const
 {
     return false;
+}
+
+OpenCL::Parser::UnionType::UnionType(std::string name, bool isConst) : m_name(std::move(name)), m_isConst(isConst)
+{}
+
+const std::string& OpenCL::Parser::UnionType::getName() const
+{
+    return m_name;
+}
+
+bool OpenCL::Parser::UnionType::isConst() const
+{
+    return m_isConst;
+}
+
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::UnionType::clone() const
+{
+    return std::make_unique<UnionType>(getName(),isConst());
+}
+
+OpenCL::Parser::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(std::shared_ptr<OpenCL::Parser::Type> type,
+                                                                                   std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions)
+    : m_type(std::move(type)), m_nonCommaExpressions(std::move(nonCommaExpressions))
+{}
+
+const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::PostFixExpressionTypeInitializer::getType() const
+{
+    return m_type;
+}
+
+const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::Parser::PostFixExpressionTypeInitializer::getNonCommaExpressions() const
+{
+    return m_nonCommaExpressions;
+}
+
+OpenCL::Parser::TypedefDeclaration::TypedefDeclaration(std::vector<std::pair<std::shared_ptr<Type>, std::string>> typedefs,
+                                                       std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion)
+    : m_typedefs(std::move(typedefs)),m_optionalStructOrUnion(std::move(optionalStructOrUnion))
+{}
+
+const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,
+                            std::string>>& OpenCL::Parser::TypedefDeclaration::getTypedefs() const
+{
+    return m_typedefs;
+}
+
+const std::unique_ptr<OpenCL::Parser::StructOrUnionDeclaration>& OpenCL::Parser::TypedefDeclaration::getOptionalStructOrUnion() const
+{
+    return m_optionalStructOrUnion;
 }

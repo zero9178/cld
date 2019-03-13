@@ -1,10 +1,10 @@
 
-struct Point
+typedef struct Point
 {
-    double x, y;
-};
+    double x,y;
+} Point;
 
 int main()
 {
-    return sizeof(struct Point);
+    Point p;
 }
