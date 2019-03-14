@@ -409,6 +409,15 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
 
     for (auto iter : source)
     {
+        if(iter == '\n' || iter == '\r')
+        {
+            line++;
+            column = 0;
+        }
+        else
+        {
+            column++;
+        }
         if (isComment)
         {
             if (iter == '\n')
@@ -681,8 +690,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         case '\r':
         case '\n':
         {
-            column = 0;
-            line++;
             if(!processLastWord())
             {
                 isComment = false;
@@ -690,7 +697,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             }
             break;
         }
-        case '\t':column += 7;
+        case '\t':
             [[fallthrough]];
         case ' ':
         {

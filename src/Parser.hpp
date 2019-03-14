@@ -6,6 +6,7 @@
 #include <vector>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/DIBuilder.h>
 
 namespace OpenCL::Parser
 {
@@ -29,6 +30,8 @@ namespace OpenCL::Parser
 
         llvm::LLVMContext context;
         llvm::IRBuilder<> builder{context};
+        llvm::DIBuilder* debugBuilder;
+        llvm::DIFile* debugUnit = nullptr;
         std::unique_ptr<llvm::Module> module;
         llvm::Function* currentFunction;
         const Type* functionRetType = nullptr;
@@ -106,9 +109,12 @@ namespace OpenCL::Parser
 
     class Node
     {
+        std::uint64_t m_line;
+        std::uint64_t m_column;
+
     public:
 
-        Node() = default;
+        Node(uint64_t line, uint64_t column);
 
         virtual ~Node() = default;
 
@@ -304,7 +310,8 @@ namespace OpenCL::Parser
     class NonCommaExpression : public Node
     {
     protected:
-        NonCommaExpression() = default;
+
+        NonCommaExpression(std::uint64_t line,std::uint64_t column);
     };
 
     /**
@@ -317,8 +324,10 @@ namespace OpenCL::Parser
 
     public:
 
-        Expression(std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
-                   std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression);
+        Expression(std::uint64_t line,
+                           std::uint64_t column,
+                           std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
+                           std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression);
 
         const NonCommaExpression& getNonCommaExpression() const;
 
@@ -337,7 +346,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        PrimaryExpression() = default;
+        PrimaryExpression(std::uint64_t line,std::uint64_t column);
     };
 
     /**
@@ -349,7 +358,9 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PrimaryExpressionIdentifier(std::string identifier);
+        PrimaryExpressionIdentifier(std::uint64_t line,
+                                            std::uint64_t column,
+                                            std::string identifier);
 
         const std::string& getIdentifier() const;
 
@@ -378,7 +389,7 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PrimaryExpressionConstant(variant value);
+        PrimaryExpressionConstant(std::uint64_t line, std::uint64_t column, variant value);
 
         const variant& getValue() const;
 
@@ -394,7 +405,9 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PrimaryExpressionParenthese(Expression&& expression);
+        PrimaryExpressionParenthese(std::uint64_t line,
+                                            std::uint64_t column,
+                                            Expression&& expression);
 
         const Expression& getExpression() const;
 
@@ -415,7 +428,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        PostFixExpression() = default;
+        PostFixExpression(std::uint64_t line,std::uint64_t column);
     };
 
     /**
@@ -427,7 +440,9 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PostFixExpressionPrimaryExpression(std::unique_ptr<PrimaryExpression>&& primaryExpression);
+        PostFixExpressionPrimaryExpression(std::uint64_t line,
+                                                   std::uint64_t column,
+                                                   std::unique_ptr<PrimaryExpression>&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
 
@@ -445,8 +460,10 @@ namespace OpenCL::Parser
 
     public:
 
-        PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                   Expression&& expression);
+        PostFixExpressionSubscript(std::uint64_t line,
+                                           std::uint64_t column,
+                                           std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                           Expression&& expression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -464,7 +481,9 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PostFixExpressionIncrement(std::unique_ptr<PostFixExpression>&& postFixExpression);
+        PostFixExpressionIncrement(std::uint64_t line,
+                                           std::uint64_t column,
+                                           std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -480,7 +499,9 @@ namespace OpenCL::Parser
 
     public:
 
-        explicit PostFixExpressionDecrement(std::unique_ptr<PostFixExpression>&& postFixExpression);
+        PostFixExpressionDecrement(std::uint64_t line,
+                                           std::uint64_t column,
+                                           std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -497,8 +518,10 @@ namespace OpenCL::Parser
 
     public:
 
-        PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                             std::string identifier);
+        PostFixExpressionDot(std::uint64_t line,
+                                     std::uint64_t column,
+                                     std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                     std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -517,8 +540,10 @@ namespace OpenCL::Parser
 
     public:
 
-        PostFixExpressionArrow(std::unique_ptr<PostFixExpression>&& postFixExpression,
-        std::string identifier);
+        PostFixExpressionArrow(std::uint64_t line,
+                                       std::uint64_t column,
+                                       std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                       std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -538,8 +563,11 @@ namespace OpenCL::Parser
         std::vector<std::unique_ptr<NonCommaExpression>> m_optionalAssignmanetExpressions;
 
     public:
-        PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                      std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
+
+        PostFixExpressionFunctionCall(std::uint64_t line,
+                                              std::uint64_t column,
+                                              std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                              std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -1030,7 +1058,8 @@ namespace OpenCL::Parser
     class BlockItem : public Node
     {
     protected:
-        BlockItem() = default;
+
+        BlockItem(std::uint64_t line,std::uint64_t column);
     };
 
     /**
@@ -1052,7 +1081,8 @@ namespace OpenCL::Parser
     class Statement : public BlockItem
     {
     protected:
-        Statement() = default;
+
+        Statement(std::uint64_t line,std::uint64_t column);
     };
 
     /**
@@ -1309,6 +1339,9 @@ namespace OpenCL::Parser
     class BreakStatement final : public Statement
     {
     public:
+
+        BreakStatement(std::uint64_t line,std::uint64_t column);
+
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 

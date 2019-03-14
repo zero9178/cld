@@ -1183,7 +1183,7 @@ namespace
                 optional = parseNonCommaExpression(tokens, context);
             }
         }
-        return Expression(std::move(expression), std::move(optional));
+        return Expression(0, 0, std::move(expression), std::move(optional));
     }
 
     std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens, ParsingContext& context)

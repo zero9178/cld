@@ -196,13 +196,13 @@ namespace
 
     std::size_t getAlignment(llvm::Type* type)
     {
-        if(type->isPointerTy())
+        if (type->isPointerTy())
         {
             return 8;
         }
-        else if(type->isIntegerTy())
+        else if (type->isIntegerTy())
         {
-            if(type->getIntegerBitWidth() <= 64)
+            if (type->getIntegerBitWidth() <= 64)
             {
                 return type->getIntegerBitWidth() / 8;
             }
@@ -211,13 +211,13 @@ namespace
                 return 16;
             }
         }
-        else if(type->isFloatingPointTy())
+        else if (type->isFloatingPointTy())
         {
-            if(type->isFloatTy())
+            if (type->isFloatTy())
             {
                 return 4;
             }
-            else if(type->isDoubleTy())
+            else if (type->isDoubleTy())
             {
                 return 8;
             }
@@ -226,17 +226,17 @@ namespace
                 throw std::runtime_error("Not implemented yet");
             }
         }
-        else if(type->isStructTy())
+        else if (type->isStructTy())
         {
             auto* structType = llvm::cast<llvm::StructType>(type);
             std::size_t alignment = 0;
-            for(std::size_t i = 0; i < structType->getStructNumElements(); i++)
+            for (std::size_t i = 0; i < structType->getStructNumElements(); i++)
             {
-                alignment = std::max(alignment,getAlignment(structType->getStructElementType(i)));
+                alignment = std::max(alignment, getAlignment(structType->getStructElementType(i)));
             }
             return alignment;
         }
-        else if(type->isArrayTy())
+        else if (type->isArrayTy())
         {
             return getAlignment(type->getArrayElementType());
         }
@@ -252,14 +252,19 @@ std::pair<llvm::Value*,
 {
     context.module = std::make_unique<llvm::Module>("main", context.context);
     std::string error;
-    auto target = llvm::TargetRegistry::lookupTarget(llvm::sys::getProcessTriple(),error);
-    if(!target)
+    auto target = llvm::TargetRegistry::lookupTarget(llvm::sys::getProcessTriple(), error);
+    if (!target)
     {
         throw std::runtime_error(error);
     }
-    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(),"generic","",{},{});
+    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(), "generic", "", {}, {});
     context.module->setDataLayout(targetMachine->createDataLayout());
     context.module->setTargetTriple(llvm::sys::getProcessTriple());
+    context.debugBuilder = new llvm::DIBuilder(*context.module);
+    context.debugUnit = context.debugBuilder->createFile("input.c", ".");
+    context.debugBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99, context.debugUnit,
+                                            "OpenCL Compiler", false, "", 0);
+    context.debugBuilder->finalize();
     for (auto& iter : getGlobals())
     {
         iter->codegen(context);
@@ -389,6 +394,10 @@ std::pair<llvm::Value*,
         }
     }
 
+
+//    auto* spType = context.debugBuilder->createSubroutineType({});
+//    auto* sp = context.debugBuilder->createFunction(context.debugUnit, getName(), {}, context.debugUnit, 0,spType,false,true,0);
+//    context.currentFunction->setSubprogram(sp);
     auto* bb = llvm::BasicBlock::Create(context.context, "entry", context.currentFunction);
     context.builder.SetInsertPoint(bb);
     context.clearScope();
@@ -676,9 +685,11 @@ std::pair<llvm::Value*,
     {
         value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
     }
-    else if(value->getType()->isPointerTy())
+    else if (value->getType()->isPointerTy())
     {
-        value = context.builder.CreateICmpNE(value,llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value->getType())));
+        value = context.builder.CreateICmpNE(value,
+                                             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
+                                                                                                              ->getType())));
     }
     else
     {
@@ -730,9 +741,11 @@ std::pair<llvm::Value*,
     {
         value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
     }
-    else if(value->getType()->isPointerTy())
+    else if (value->getType()->isPointerTy())
     {
-        value = context.builder.CreateICmpNE(value,llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value->getType())));
+        value = context.builder.CreateICmpNE(value,
+                                             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
+                                                                                                              ->getType())));
     }
     else
     {
@@ -1530,7 +1543,7 @@ std::pair<llvm::Value*,
     }
     auto* zero = context.builder.getInt32(0);
     auto& structInfo = context.structs.at(structValue->getType()->getStructName());
-    if(!structInfo.isUnion)
+    if (!structInfo.isUnion)
     {
         auto* index = context.builder.getInt32(structInfo.order.at(getIdentifier()));
         auto memberType = structInfo.types.at(index->getValue().getLimitedValue());
@@ -1540,9 +1553,9 @@ std::pair<llvm::Value*,
     else
     {
         auto memberType = structInfo.types.at(structInfo.order.at(getIdentifier()));
-        auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(),{zero,zero});
-        auto* cast = context.builder.CreateBitCast(pointer,llvm::PointerType::getUnqual(memberType->type(context)));
-        return {context.builder.CreateLoad(cast),memberType};
+        auto* pointer = context.builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, zero});
+        auto* cast = context.builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(context)));
+        return {context.builder.CreateLoad(cast), memberType};
     }
 }
 
@@ -1690,7 +1703,8 @@ std::pair<llvm::Value*,
                           else
                           {
                               auto size = context.module->getDataLayout().getTypeAllocSize(value->type(context));
-                              return {context.builder.getIntN(64,size),std::make_unique<PrimitiveType>(64, false, false, false)};
+                              return {context.builder.getIntN(64, size),
+                                      std::make_unique<PrimitiveType>(64, false, false, false)};
                           }
                       }, getUnaryOrType());
 }
@@ -1847,7 +1861,7 @@ std::pair<llvm::Value*,
 {
     OpenCL::Parser::Context::StructOrUnion structType;
     std::vector<llvm::Type*> types;
-    auto* llvmStruct = llvm::StructType::create(context.context,(isUnion() ? "union." : "struct.") + getName());
+    auto* llvmStruct = llvm::StructType::create(context.context, (isUnion() ? "union." : "struct.") + getName());
     std::transform(getTypes().begin(), getTypes().end(), std::back_inserter(types), [&](const auto& pair)
     {
         structType.order.insert({pair.second, structType.types.size()});
@@ -1860,11 +1874,12 @@ std::pair<llvm::Value*,
     }
     else
     {
-        llvm::Type* maxElement = *std::max_element(types.begin(),types.end(),[&context](llvm::Type* lhs,llvm::Type* rhs)
+        llvm::Type
+            * maxElement = *std::max_element(types.begin(), types.end(), [&context](llvm::Type* lhs, llvm::Type* rhs)
         {
-             auto lhsSize =  context.module->getDataLayout().getTypeAllocSize(lhs);
-             auto rhsSize = context.module->getDataLayout().getTypeAllocSize(rhs);
-             return lhsSize < rhsSize;
+            auto lhsSize = context.module->getDataLayout().getTypeAllocSize(lhs);
+            auto rhsSize = context.module->getDataLayout().getTypeAllocSize(rhs);
+            return lhsSize < rhsSize;
         });
         llvmStruct->setBody(maxElement);
     }
@@ -1894,7 +1909,7 @@ std::pair<llvm::Value*,
     }
     auto* zero = context.builder.getInt32(0);
     auto& structInfo = context.structs.at(type->getName());
-    if(!structInfo.isUnion)
+    if (!structInfo.isUnion)
     {
         auto* index = context.builder.getInt32(structInfo.order[getIdentifier()]);
         auto memberType = structInfo.types[index->getValue().getLimitedValue()];
@@ -1904,9 +1919,9 @@ std::pair<llvm::Value*,
     else
     {
         auto memberType = structInfo.types.at(structInfo.order.at(getIdentifier()));
-        auto* pointer = context.builder.CreateInBoundsGEP(structValue,{zero,zero});
-        auto* cast = context.builder.CreateBitCast(pointer,llvm::PointerType::getUnqual(memberType->type(context)));
-        return {context.builder.CreateLoad(cast),memberType};
+        auto* pointer = context.builder.CreateInBoundsGEP(structValue, {zero, zero});
+        auto* cast = context.builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(context)));
+        return {context.builder.CreateLoad(cast), memberType};
     }
 }
 
@@ -1917,7 +1932,7 @@ std::pair<llvm::Value*,
     auto* defaultBlock = llvm::BasicBlock::Create(context.context, "default");
     auto* thenBlock = llvm::BasicBlock::Create(context.context, "then");
     context.breakBlocks.push_back(thenBlock);
-    context.switchStack.emplace_back(context.builder.CreateSwitch(value, defaultBlock),sign->isSigned());
+    context.switchStack.emplace_back(context.builder.CreateSwitch(value, defaultBlock), sign->isSigned());
     getStatement().codegen(context);
     auto* function = context.builder.GetInsertBlock()->getParent();
     if (!std::any_of(function->getBasicBlockList().begin(),
@@ -1954,7 +1969,8 @@ std::pair<llvm::Value*,
     auto* block = context.switchStack.back().first->getDefaultDest();
     if (context.switchStack.back().first->getNumCases() > 0)
     {
-        auto* successor = (context.switchStack.back().first->case_begin() + (context.switchStack.back().first->getNumCases() - 1))
+        auto* successor = (context.switchStack.back().first->case_begin()
+            + (context.switchStack.back().first->getNumCases() - 1))
             ->getCaseSuccessor();
         if (!successor->getTerminator())
         {
@@ -1962,11 +1978,11 @@ std::pair<llvm::Value*,
         }
     }
     if (std::any_of(function->getBasicBlockList().begin(),
-                     function->getBasicBlockList().end(),
-                     [block](const llvm::BasicBlock& dblock)
-                     {
-                         return block == &dblock;
-                     }))
+                    function->getBasicBlockList().end(),
+                    [block](const llvm::BasicBlock& dblock)
+                    {
+                        return block == &dblock;
+                    }))
     {
         throw std::runtime_error("There can only be a single default statement");
     }
@@ -1984,15 +2000,20 @@ std::pair<llvm::Value*,
         throw std::runtime_error("case without switch statement");
     }
     auto[value, sign] = getConstant().codegen(context);
-    if(value->getType() != context.switchStack.back().first->getCondition()->getType())
+    if (value->getType() != context.switchStack.back().first->getCondition()->getType())
     {
-        castPrimitive(value,sign->isSigned(),context.switchStack.back().first->getCondition()->getType(),context.switchStack.back().second,context);
+        castPrimitive(value,
+                      sign->isSigned(),
+                      context.switchStack.back().first->getCondition()->getType(),
+                      context.switchStack.back().second,
+                      context);
     }
     auto* function = context.builder.GetInsertBlock()->getParent();
     auto* newBlock = llvm::BasicBlock::Create(context.context);
     if (context.switchStack.back().first->getNumCases() > 0)
     {
-        auto* successor = (context.switchStack.back().first->case_begin() + (context.switchStack.back().first->getNumCases() - 1))
+        auto* successor = (context.switchStack.back().first->case_begin()
+            + (context.switchStack.back().first->getNumCases() - 1))
             ->getCaseSuccessor();
         if (!successor->getTerminator())
         {
@@ -2023,42 +2044,46 @@ std::pair<llvm::Value*,
         tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
     auto* alloca = tmpB.CreateAlloca(type);
     alloca->setAlignment(getAlignment(type));
-    if(type->isStructTy())
+    if (type->isStructTy())
     {
         auto* zero = context.builder.getInt32(0);
         auto& structInfo = context.structs.at(type->getStructName());
-        if(getNonCommaExpressions().size() < type->getStructNumElements())
+        if (getNonCommaExpressions().size() < type->getStructNumElements())
         {
             throw std::runtime_error("Amount of values in intializer not equal to fields in struct");
         }
-        for(std::size_t i = 0; i < type->getStructNumElements(); i++)
+        for (std::size_t i = 0; i < type->getStructNumElements(); i++)
         {
-            auto [value,ntype] = getNonCommaExpressions().at(i)->codegen(context);
-            if(ntype->type(context) != type->getStructElementType(i))
+            auto[value, ntype] = getNonCommaExpressions().at(i)->codegen(context);
+            if (ntype->type(context) != type->getStructElementType(i))
             {
-                castPrimitive(value,ntype->isSigned(),type->getStructElementType(i),structInfo.types.at(i)->isSigned(),context);
+                castPrimitive(value,
+                              ntype->isSigned(),
+                              type->getStructElementType(i),
+                              structInfo.types.at(i)->isSigned(),
+                              context);
             }
             auto* index = context.builder.getInt32(i);
-            auto* field = context.builder.CreateInBoundsGEP(alloca,{zero,index});
-            context.builder.CreateStore(value,field);
+            auto* field = context.builder.CreateInBoundsGEP(alloca, {zero, index});
+            context.builder.CreateStore(value, field);
         }
     }
     else
     {
-        if(getNonCommaExpressions().empty())
+        if (getNonCommaExpressions().empty())
         {
             throw std::runtime_error("Amount of values unequal to 1");
         }
-        auto [value,ntype] = getNonCommaExpressions()[0]->codegen(context);
-        context.builder.CreateStore(value,alloca);
+        auto[value, ntype] = getNonCommaExpressions()[0]->codegen(context);
+        context.builder.CreateStore(value, alloca);
     }
-    return {context.builder.CreateLoad(alloca),getType()};
+    return {context.builder.CreateLoad(alloca), getType()};
 }
 
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::TypedefDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
-    if(getOptionalStructOrUnion())
+    if (getOptionalStructOrUnion())
     {
         return getOptionalStructOrUnion()->codegen(context);
     }

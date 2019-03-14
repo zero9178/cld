@@ -51,11 +51,12 @@ OpenCL::Parser::Function::Function(std::shared_ptr<Type> returnType,
 }
 
 OpenCL::Parser::Declarations::Declarations(std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
-                                                                        std::string,
-                                                                        std::unique_ptr<OpenCL::Parser::Expression>>>&& declarations)
+                                                                  std::string,
+                                                                  std::unique_ptr<OpenCL::Parser::Expression>>>&& declarations)
     : m_declarations(std::move(declarations))
 {
-    assert(std::all_of(m_declarations.begin(),m_declarations.end(),[](const auto& tuple){return std::get<0>(tuple).get();}));
+    assert(std::all_of(m_declarations.begin(), m_declarations.end(), [](const auto& tuple)
+    { return std::get<0>(tuple).get(); }));
 }
 
 const std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
@@ -209,9 +210,11 @@ const OpenCL::Parser::Expression& OpenCL::Parser::FootWhileStatement::getExpress
     return m_expression;
 }
 
-OpenCL::Parser::Expression::Expression(std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
+OpenCL::Parser::Expression::Expression(std::uint64_t line,
+                                       std::uint64_t column,
+                                       std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
                                        std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression)
-    : m_nonCommaExpression(std::move(nonCommaExpression)),
+    : Node(line, column), m_nonCommaExpression(std::move(nonCommaExpression)),
       m_optionalNonCommaExpression(std::move(optionalNonCommaExpression))
 {
     assert(m_nonCommaExpression);
@@ -437,83 +440,84 @@ const OpenCL::Parser::PrimaryExpressionConstant* OpenCL::Parser::GlobalDeclarati
 }
 
 OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types)
-: m_bitCount([&types]
-             {
-    auto copy = types;
-    auto result = std::remove_if(copy.begin(),copy.end(),[](PrimitiveType::Types types)
-    {
-        return types == PrimitiveType::Types::Const || types == PrimitiveType::Types::Signed || types == PrimitiveType::Types::Unsigned;
-    });
-    if(result != copy.end())
-    {
-        copy.erase(result,copy.end());
-    }
-    if(copy.empty())
-    {
-        return std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
-        {
-            return types == PrimitiveType::Types::Signed || types == PrimitiveType::Types::Unsigned;
-        }) ? 32 : 0;
-    }
-    switch(copy[0])
-    {
-    case Types::Char:
-        if(copy.size() != 1)
-        {
-            throw std::runtime_error("Cannot combine char with other");
-        }
-        return 8;
-    case Types::Short:
-        if(copy.size() != 1)
-        {
-            throw std::runtime_error("Cannot combine short with other");
-        }
-        return 16;
-    case Types::Int:
-        if(copy.size() != 1)
-        {
-            throw std::runtime_error("Cannot combine int with other");
-        }
-        return 32;
-    case Types::Long:
-    {
-        if(copy.size() == 1)
-        {
-            return 32;
-        }
-        else if(copy.size() == 2 && copy[1] ==Types::Long)
-        {
-            return 64;
-        }
-        else
-        {
-            throw std::runtime_error("Cannot combine long with other");
-        }
-    }
-    case Types::Float:
-        if(copy.size() != 1)
-        {
-            throw std::runtime_error("Cannot combine float with other");
-        }
-        return 32;
-    case Types::Double:
-        if(copy.size() != 1)
-        {
-            throw std::runtime_error("Cannot combine double with other");
-        }
-        return 64;
-    default:throw std::runtime_error("Invalid token");
-    }
-             }()),
-             m_isConst(std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
-             {
-                 return types == PrimitiveType::Types::Const;
-             })),
-             m_isFloatingPoint(std::any_of(types.begin(),types.end(),[](PrimitiveType::Types types)
-             {
-                 return types == PrimitiveType::Types::Float || types == PrimitiveType::Types::Double;
-             })),
-             m_isSigned(m_isFloatingPoint || (types.empty() ? false : types[0] != PrimitiveType::Types::Unsigned))
+    : m_bitCount([&types]
+                 {
+                     auto copy = types;
+                     auto result = std::remove_if(copy.begin(), copy.end(), [](PrimitiveType::Types types)
+                     {
+                         return types == PrimitiveType::Types::Const || types == PrimitiveType::Types::Signed
+                             || types == PrimitiveType::Types::Unsigned;
+                     });
+                     if (result != copy.end())
+                     {
+                         copy.erase(result, copy.end());
+                     }
+                     if (copy.empty())
+                     {
+                         return std::any_of(types.begin(), types.end(), [](PrimitiveType::Types types)
+                         {
+                             return types == PrimitiveType::Types::Signed || types == PrimitiveType::Types::Unsigned;
+                         }) ? 32 : 0;
+                     }
+                     switch (copy[0])
+                     {
+                     case Types::Char:
+                         if (copy.size() != 1)
+                         {
+                             throw std::runtime_error("Cannot combine char with other");
+                         }
+                         return 8;
+                     case Types::Short:
+                         if (copy.size() != 1)
+                         {
+                             throw std::runtime_error("Cannot combine short with other");
+                         }
+                         return 16;
+                     case Types::Int:
+                         if (copy.size() != 1)
+                         {
+                             throw std::runtime_error("Cannot combine int with other");
+                         }
+                         return 32;
+                     case Types::Long:
+                     {
+                         if (copy.size() == 1)
+                         {
+                             return 32;
+                         }
+                         else if (copy.size() == 2 && copy[1] == Types::Long)
+                         {
+                             return 64;
+                         }
+                         else
+                         {
+                             throw std::runtime_error("Cannot combine long with other");
+                         }
+                     }
+                     case Types::Float:
+                         if (copy.size() != 1)
+                         {
+                             throw std::runtime_error("Cannot combine float with other");
+                         }
+                         return 32;
+                     case Types::Double:
+                         if (copy.size() != 1)
+                         {
+                             throw std::runtime_error("Cannot combine double with other");
+                         }
+                         return 64;
+                     default:throw std::runtime_error("Invalid token");
+                     }
+                 }()),
+      m_isConst(std::any_of(types.begin(), types.end(), [](PrimitiveType::Types types)
+      {
+          return types == PrimitiveType::Types::Const;
+      })),
+      m_isFloatingPoint(std::any_of(types.begin(), types.end(), [](PrimitiveType::Types types)
+      {
+          return types == PrimitiveType::Types::Float || types == PrimitiveType::Types::Double;
+      })),
+      m_isSigned(m_isFloatingPoint || (types.empty() ? false : types[0] != PrimitiveType::Types::Unsigned))
 {}
 
 bool OpenCL::Parser::StructOrUnionDeclaration::isUnion() const
@@ -522,7 +526,7 @@ bool OpenCL::Parser::StructOrUnionDeclaration::isUnion() const
 }
 
 OpenCL::Parser::PrimitiveType::PrimitiveType(std::uint64_t bitCount, bool isConst, bool isFloatingPoint, bool isSigned)
-: m_bitCount(bitCount), m_isConst(isConst), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned)
+    : m_bitCount(bitCount), m_isConst(isConst), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned)
 {
 
 }
@@ -549,7 +553,7 @@ bool OpenCL::Parser::PrimitiveType::isVoid() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PrimitiveType::clone() const
 {
-    return std::make_unique<PrimitiveType>(getBitCount(),isConst(),isFloatingPoint(),isSigned());
+    return std::make_unique<PrimitiveType>(getBitCount(), isConst(), isFloatingPoint(), isSigned());
 }
 
 bool OpenCL::Parser::PrimitiveType::isConst() const
@@ -562,7 +566,8 @@ const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::Function::getReturn
     return m_returnType;
 }
 
-OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type, bool isConst) : m_type(std::move(type)), m_isConst(isConst)
+OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type, bool isConst)
+    : m_type(std::move(type)), m_isConst(isConst)
 {}
 
 const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
@@ -572,7 +577,7 @@ const OpenCL::Parser::Type& OpenCL::Parser::PointerType::getType() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::PointerType::clone() const
 {
-    return std::make_unique<PointerType>(m_type->clone(),m_isConst);
+    return std::make_unique<PointerType>(m_type->clone(), m_isConst);
 }
 
 bool OpenCL::Parser::PointerType::isConst() const
@@ -580,8 +585,10 @@ bool OpenCL::Parser::PointerType::isConst() const
     return m_isConst;
 }
 
-OpenCL::Parser::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::string identifier) : m_identifier(std::move(
-    identifier))
+OpenCL::Parser::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::uint64_t line,
+                                                                         std::uint64_t column,
+                                                                         std::string identifier) :
+    PrimaryExpression(line, column), m_identifier(std::move(identifier))
 {}
 
 const std::string& OpenCL::Parser::PrimaryExpressionIdentifier::getIdentifier() const
@@ -589,8 +596,10 @@ const std::string& OpenCL::Parser::PrimaryExpressionIdentifier::getIdentifier() 
     return m_identifier;
 }
 
-OpenCL::Parser::PrimaryExpressionConstant::PrimaryExpressionConstant(OpenCL::Parser::PrimaryExpressionConstant::variant value)
-    : m_value(std::move(value))
+OpenCL::Parser::PrimaryExpressionConstant::PrimaryExpressionConstant(std::uint64_t line,
+                                                                     std::uint64_t column,
+                                                                     variant value)
+    : PrimaryExpression(line, column), m_value(std::move(value))
 {}
 
 const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::PrimaryExpressionConstant::getValue() const
@@ -598,8 +607,10 @@ const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::Primar
     return m_value;
 }
 
-OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(Expression&& expression)
-    : m_expression(std::move(expression))
+OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::uint64_t line,
+                                                                         std::uint64_t column,
+                                                                         Expression&& expression)
+    : PrimaryExpression(line, column), m_expression(std::move(expression))
 {}
 
 const OpenCL::Parser::Expression& OpenCL::Parser::PrimaryExpressionParenthese::getExpression() const
@@ -607,8 +618,10 @@ const OpenCL::Parser::Expression& OpenCL::Parser::PrimaryExpressionParenthese::g
     return m_expression;
 }
 
-OpenCL::Parser::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::unique_ptr<PrimaryExpression>&& primaryExpression)
-    : m_primaryExpression(std::move(primaryExpression))
+OpenCL::Parser::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::uint64_t line,
+                                                                                       std::uint64_t column,
+                                                                                       std::unique_ptr<PrimaryExpression>&& primaryExpression)
+    : PostFixExpression(line, column), m_primaryExpression(std::move(primaryExpression))
 {}
 
 const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimaryExpression::getPrimaryExpression() const
@@ -616,9 +629,12 @@ const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimar
     return *m_primaryExpression;
 }
 
-OpenCL::Parser::PostFixExpressionSubscript::PostFixExpressionSubscript(std::unique_ptr<PostFixExpression>&& postFixExpression,
+OpenCL::Parser::PostFixExpressionSubscript::PostFixExpressionSubscript(std::uint64_t line,
+                                                                       std::uint64_t column,
+                                                                       std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                                        Expression&& expression)
-    : m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
+    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+      m_expression(std::move(expression))
 {}
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionSubscript::getPostFixExpression() const
@@ -631,9 +647,12 @@ const OpenCL::Parser::Expression& OpenCL::Parser::PostFixExpressionSubscript::ge
     return m_expression;
 }
 
-OpenCL::Parser::PostFixExpressionDot::PostFixExpressionDot(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                                           std::string identifier) : m_postFixExpression(
-    std::move(postFixExpression)), m_identifier(std::move(identifier))
+OpenCL::Parser::PostFixExpressionDot::PostFixExpressionDot(std::uint64_t line,
+                                                           std::uint64_t column,
+                                                           std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                           std::string identifier)
+    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+      m_identifier(std::move(identifier))
 {}
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDot::getPostFixExpression() const
@@ -646,9 +665,11 @@ const std::string& OpenCL::Parser::PostFixExpressionDot::getIdentifier() const
     return m_identifier;
 }
 
-OpenCL::Parser::PostFixExpressionArrow::PostFixExpressionArrow(std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                                           std::string identifier) : m_postFixExpression(
-    std::move(postFixExpression)), m_identifier(std::move(identifier))
+OpenCL::Parser::PostFixExpressionArrow::PostFixExpressionArrow(std::uint64_t line,
+                                                               std::uint64_t column,
+                                                               std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                                               std::string identifier)
+    : PostFixExpression(line,column), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {}
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionArrow::getPostFixExpression() const
@@ -686,7 +707,7 @@ const OpenCL::Parser::UnaryExpression& OpenCL::Parser::UnaryExpressionUnaryOpera
 }
 
 OpenCL::Parser::UnaryExpressionSizeOf::UnaryExpressionSizeOf(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                                                                                std::shared_ptr<OpenCL::Parser::Type>>&& unaryOrType)
+                                                                          std::shared_ptr<OpenCL::Parser::Type>>&& unaryOrType)
     : m_unaryOrType(std::move(unaryOrType))
 {}
 
@@ -697,8 +718,8 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
 }
 
 OpenCL::Parser::CastExpression::CastExpression(std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
-                                                                  std::pair<std::shared_ptr<OpenCL::Parser::Type>,
-                                                                            std::unique_ptr<OpenCL::Parser::CastExpression>>>&& unaryOrCast)
+                                                            std::pair<std::shared_ptr<OpenCL::Parser::Type>,
+                                                                      std::unique_ptr<OpenCL::Parser::CastExpression>>>&& unaryOrCast)
     : m_unaryOrCast(std::move(unaryOrCast))
 {}
 
@@ -710,7 +731,8 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
 }
 
 OpenCL::Parser::Term::Term(CastExpression&& castExpressions,
-                           std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions) : m_castExpression(
+                           std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions)
+    : m_castExpression(
     std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
 {}
 
@@ -725,11 +747,11 @@ const std::vector<std::pair<OpenCL::Parser::Term::BinaryDotOperator,
     return m_optionalCastExpressions;
 }
 
-
 OpenCL::Parser::AssignmentExpression::AssignmentExpression(std::unique_ptr<OpenCL::Parser::UnaryExpression>&& unaryFactor,
                                                            OpenCL::Parser::AssignmentExpression::AssignOperator assignOperator,
                                                            std::unique_ptr<OpenCL::Parser::NonCommaExpression>&& nonCommaExpression)
-    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator), m_nonCommaExpression(std::move(nonCommaExpression))
+    : m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
+      m_nonCommaExpression(std::move(nonCommaExpression))
 {
     assert(m_unaryFactor);
 }
@@ -744,12 +766,18 @@ const OpenCL::Parser::NonCommaExpression& OpenCL::Parser::AssignmentExpression::
     return *m_nonCommaExpression;
 }
 
-OpenCL::Parser::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std::unique_ptr<PostFixExpression>&& postFixExpression,
+OpenCL::Parser::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std::uint64_t line,
+                                                                             std::uint64_t column,
+                                                                             std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                                              std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions)
-    : m_postFixExpression(std::move(postFixExpression)), m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
+    : PostFixExpression(line,column),m_postFixExpression(std::move(postFixExpression)),
+      m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
 {
     assert(m_postFixExpression);
-    assert(std::all_of(m_optionalAssignmanetExpressions.begin(),m_optionalAssignmanetExpressions.end(),[](const auto& ptr){return ptr.get();}));
+    assert(std::all_of(m_optionalAssignmanetExpressions.begin(),
+                       m_optionalAssignmanetExpressions.end(),
+                       [](const auto& ptr)
+                       { return ptr.get(); }));
 }
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionFunctionCall::getPostFixExpression() const
@@ -762,11 +790,11 @@ const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::
     return m_optionalAssignmanetExpressions;
 }
 
-OpenCL::Parser::ArrayType::ArrayType(std::unique_ptr<Type>&& type,std::size_t size)
+OpenCL::Parser::ArrayType::ArrayType(std::unique_ptr<Type>&& type, std::size_t size)
     : m_type(std::move(type)), m_size(size)
 {
     assert(m_type);
-    if(size <= 0)
+    if (size <= 0)
     {
         throw std::runtime_error("Array must have a size greater than 0");
     }
@@ -784,11 +812,13 @@ size_t OpenCL::Parser::ArrayType::getSize() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::ArrayType::clone() const
 {
-    return std::make_unique<ArrayType>(m_type->clone(),m_size);
+    return std::make_unique<ArrayType>(m_type->clone(), m_size);
 }
 
-OpenCL::Parser::PostFixExpressionIncrement::PostFixExpressionIncrement(std::unique_ptr<PostFixExpression>&& postFixExpression)
-    : m_postFixExpression(std::move(postFixExpression))
+OpenCL::Parser::PostFixExpressionIncrement::PostFixExpressionIncrement(std::uint64_t line,
+                                                                       std::uint64_t column,
+                                                                       std::unique_ptr<PostFixExpression>&& postFixExpression)
+    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionIncrement::getPostFixExpression() const
@@ -796,8 +826,10 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionIncrem
     return *m_postFixExpression;
 }
 
-OpenCL::Parser::PostFixExpressionDecrement::PostFixExpressionDecrement(std::unique_ptr<PostFixExpression>&& postFixExpression)
-    : m_postFixExpression(std::move(postFixExpression))
+OpenCL::Parser::PostFixExpressionDecrement::PostFixExpressionDecrement(std::uint64_t line,
+                                                                       std::uint64_t column,
+                                                                       std::unique_ptr<PostFixExpression>&& postFixExpression)
+    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDecrement::getPostFixExpression() const
@@ -808,14 +840,16 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::PostFixExpressionDecrem
 OpenCL::Parser::StructOrUnionDeclaration::StructOrUnionDeclaration(bool isUnion,
                                                                    std::string name,
                                                                    std::vector<std::pair<std::shared_ptr<Type>,
-                                                   std::string>>&& types)
-: m_isUnion(isUnion),m_name(std::move(name)), m_types(std::move(types))
+                                                                                         std::string>>&& types)
+    : m_isUnion(isUnion), m_name(std::move(name)), m_types(std::move(types))
 {
     assert(!m_types.empty());
-    assert(std::all_of(m_types.begin(),m_types.end(),[](const auto& pair){return pair.first.get();}));
+    assert(std::all_of(m_types.begin(), m_types.end(), [](const auto& pair)
+    { return pair.first.get(); }));
 }
 
-const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,std::string>>& OpenCL::Parser::StructOrUnionDeclaration::getTypes() const
+const std::vector<std::pair<std::shared_ptr<OpenCL::Parser::Type>,
+                            std::string>>& OpenCL::Parser::StructOrUnionDeclaration::getTypes() const
 {
     return m_types;
 }
@@ -835,7 +869,7 @@ const std::string& OpenCL::Parser::StructType::getName() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::StructType::clone() const
 {
-    return std::make_unique<StructType>(m_name,m_isConst);
+    return std::make_unique<StructType>(m_name, m_isConst);
 }
 
 bool OpenCL::Parser::StructType::isConst() const
@@ -918,11 +952,12 @@ bool OpenCL::Parser::UnionType::isConst() const
 
 std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::UnionType::clone() const
 {
-    return std::make_unique<UnionType>(getName(),isConst());
+    return std::make_unique<UnionType>(getName(), isConst());
 }
 
 OpenCL::Parser::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(std::shared_ptr<OpenCL::Parser::Type> type,
-                                                                                   std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions)
+                                                                                   std::vector<std::unique_ptr<
+                                                                                       NonCommaExpression>>&& nonCommaExpressions)
     : m_type(std::move(type)), m_nonCommaExpressions(std::move(nonCommaExpressions))
 {}
 
@@ -944,3 +979,24 @@ const std::unique_ptr<OpenCL::Parser::StructOrUnionDeclaration>& OpenCL::Parser:
 {
     return m_optionalStructOrUnion;
 }
+
+OpenCL::Parser::Node::Node(uint64_t line, uint64_t column) : m_line(line), m_column(column)
+{}
+
+OpenCL::Parser::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{}
+
+OpenCL::Parser::Statement::Statement(std::uint64_t line, std::uint64_t column) : BlockItem(line, column)
+{}
+
+OpenCL::Parser::BreakStatement::BreakStatement(std::uint64_t line, std::uint64_t column) : Statement(line, column)
+{}
+
+OpenCL::Parser::NonCommaExpression::NonCommaExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{}
+
+OpenCL::Parser::PrimaryExpression::PrimaryExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{}
+
+OpenCL::Parser::PostFixExpression::PostFixExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{}
