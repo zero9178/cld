@@ -125,6 +125,8 @@ namespace OpenCL::Lexer
         {
             return m_column;
         }
+
+        std::string emitBack() const;
     };
 
     std::vector<Token> tokenize(const std::string& source);

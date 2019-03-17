@@ -729,3 +729,104 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
     std::reverse(result.begin(), result.end());
     return result;
 }
+
+std::string OpenCL::Lexer::Token::emitBack() const
+{
+    switch (getTokenType())
+    {
+    case TokenType::Identifier:return std::get<std::string>(getValue());
+    case TokenType::OpenParenthese:return "(";
+    case TokenType::CloseParenthese:return ")";
+    case TokenType::OpenBrace:return "{";
+    case TokenType::CloseBrace:return "}";
+    case TokenType::Literal:return std::visit([](auto&& value)->std::string
+                                              {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<std::string,T>)
+        {
+            return value;
+        }
+        else if constexpr(!std::is_same_v<std::monostate,T>)
+        {
+            std::ostringstream ss;
+            ss<<value;
+            return ss.str();
+        }
+        else
+        {
+            return "";
+        }
+        },getValue());
+    case TokenType::SemiColon:return ";";
+    case TokenType::Comma:return ",";
+    case TokenType::Negation:return "-";
+    case TokenType::BitWiseNegation:return "~";
+    case TokenType::LogicalNegation:return "!";
+    case TokenType::Addition:return "+";
+    case TokenType::Asterisk:return "*";
+    case TokenType::Division:return "/";
+    case TokenType::Modulo:return "%";
+    case TokenType::LogicAnd:return "&&";
+    case TokenType::LogicOr:return "||";
+    case TokenType::Ampersand:return "&";
+    case TokenType::BitOr:return "|";
+    case TokenType::BitXor:return "^";
+    case TokenType::Equal:return "==";
+    case TokenType::NotEqual:return "!=";
+    case TokenType::LessThan:return "<";
+    case TokenType::LessThanOrEqual:return "<=";
+    case TokenType::GreaterThan:return ">";
+    case TokenType::GreaterThanOrEqual:return ">=";
+    case TokenType::Assignment:return "=";
+    case TokenType::PlusAssign:return "+=";
+    case TokenType::MinusAssign:return "-=";
+    case TokenType::DivideAssign:return "/=";
+    case TokenType::MultiplyAssign:return "*=";
+    case TokenType::ModuloAssign:return "%=";
+    case TokenType::ShiftLeftAssign:return "<<=";
+    case TokenType::ShiftRightAssign:return ">>=";
+    case TokenType::BitAndAssign:return "&=";
+    case TokenType::BitOrAssign:return "|=";
+    case TokenType::BitXorAssign:return "^=";
+    case TokenType::ShiftRight:return ">>";
+    case TokenType::ShiftLeft:return "<<";
+    case TokenType::Increment:return "++";
+    case TokenType::Decrement:return "--";
+    case TokenType::Colon:return ":";
+    case TokenType::QuestionMark:return "?";
+    case TokenType::VoidKeyword:return "void";
+    case TokenType::CharKeyword:return "char";
+    case TokenType::ShortKeyword:return "short";
+    case TokenType::IntKeyword:return "int";
+    case TokenType::LongKeyword:return "long";
+    case TokenType::FloatKeyword:return "float";
+    case TokenType::DoubleKeyword:return "double";
+    case TokenType::SignedKeyword:return "signed";
+    case TokenType::UnsignedKeyword:return "unsigned";
+    case TokenType::TypedefKeyword:return "typedef";
+    case TokenType::ExternKeyword:return "extern";
+    case TokenType::StaticKeyword:return "static";
+    case TokenType::AutoKeyword:return "auto";
+    case TokenType::RegisterKeyword:return "register";
+    case TokenType::ConstKeyword:return "const";
+    case TokenType::SizeofKeyword:return "sizeof";
+    case TokenType::ReturnKeyword:return "return";
+    case TokenType::BreakKeyword:return "break";
+    case TokenType::ContinueKeyword:return "continue";
+    case TokenType::DoKeyword:return "do";
+    case TokenType::ElseKeyword:return "else";
+    case TokenType::ForKeyword:return "for";
+    case TokenType::IfKeyword:return "if";
+    case TokenType::WhileKeyword:return "while";
+    case TokenType::OpenSquareBracket:return "[";
+    case TokenType::CloseSquareBracket:return "]";
+    case TokenType::StructKeyword:return "struct";
+    case TokenType::Dot:return ".";
+    case TokenType::Arrow:return "->";
+    case TokenType::SwitchKeyword:return "switch";
+    case TokenType::CaseKeyword:return "case";
+    case TokenType::DefaultKeyword:return "default";
+    case TokenType::UnionKeyword:return "union";
+    }
+    return "";
+}
