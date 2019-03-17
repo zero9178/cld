@@ -245,31 +245,127 @@ namespace
             throw std::runtime_error("Not implemented yet");
         }
     }
+
+    std::unordered_map<void*, llvm::DIType*> cache;
+
+    llvm::DIType* toDwarfType(std::shared_ptr<OpenCL::Parser::Type> type, OpenCL::Parser::Context& context)
+    {
+        auto* llvmType = type->type(context);
+        if (auto result = cache.find(llvmType); result != cache.end())
+        {
+            return result->second;
+        }
+        if (llvmType->isIntegerTy() || llvmType->isFloatingPointTy())
+        {
+            auto primitive = std::dynamic_pointer_cast<OpenCL::Parser::PrimitiveType>(type);
+            auto result = context.debugBuilder
+                                 ->createBasicType(type->name(), primitive->getBitCount(), [llvmType, &type]
+                                 {
+                                     if (llvmType->isIntegerTy())
+                                     {
+                                         if (llvmType->getIntegerBitWidth() == 8)
+                                         {
+                                             if (type->isSigned())
+                                             {
+                                                 return llvm::dwarf::DW_ATE_signed_char;
+                                             }
+                                             else
+                                             {
+                                                 return llvm::dwarf::DW_ATE_unsigned_char;
+                                             }
+                                         }
+                                         else
+                                         {
+                                             if (type->isSigned())
+                                             {
+                                                 return llvm::dwarf::DW_ATE_signed;
+                                             }
+                                             else
+                                             {
+                                                 return llvm::dwarf::DW_ATE_unsigned;
+                                             }
+                                         }
+                                     }
+                                     else if (llvmType->isFloatingPointTy())
+                                     {
+                                         return llvm::dwarf::DW_ATE_float;
+                                     }
+                                     else
+                                     {
+                                         throw std::runtime_error("Not implemented yet");
+                                     }
+                                 }());
+            cache[llvmType] = result;
+            return result;
+        }
+        else if (llvmType->isPointerTy())
+        {
+            auto pointer = std::dynamic_pointer_cast<OpenCL::Parser::PointerType>(type);
+            auto result = context.debugBuilder
+                                 ->createPointerType(toDwarfType(pointer->getType().clone(), context), 64, 64);
+            cache[llvmType] = result;
+            return result;
+        }
+        else if (llvmType->isArrayTy())
+        {
+            auto array = std::dynamic_pointer_cast<OpenCL::Parser::ArrayType>(type);
+            auto arrayedType = toDwarfType(array->getType()->clone(), context);
+            auto* llvmArrayType = array->type(context);
+            auto result = context.debugBuilder
+                                 ->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
+                                                   getAlignment(llvmArrayType),
+                                                   arrayedType,llvm::MDTuple::get(context.context,context.debugBuilder->getOrCreateSubrange(0,array->getSize())));
+            cache[llvmType] = result;
+            return result;
+        }
+        throw std::runtime_error("Not implemented yet");
+    }
+
+    void emitLocation(const OpenCL::Parser::Node* node, OpenCL::Parser::Context& context)
+    {
+        if (!node)
+        {
+            context.builder.SetCurrentDebugLocation(llvm::DebugLoc());
+            return;
+        }
+        auto* scope = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
+        context.builder.SetCurrentDebugLocation(llvm::DebugLoc::get(node->getLine(), node->getColumn(), scope));
+    }
 }
 
-std::pair<llvm::Value*,
-          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
+void OpenCL::Parser::Context::addValueToScope(const std::string& name, const OpenCL::Parser::Context::tuple& value)
+{
+    m_namedValues.back()[name] = value;
+}
+
+void OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
 {
     context.module = std::make_unique<llvm::Module>("main", context.context);
     std::string error;
-    auto target = llvm::TargetRegistry::lookupTarget(llvm::sys::getProcessTriple(), error);
+    const std::string tripleStr = llvm::sys::getProcessTriple();
+    llvm::Triple t(tripleStr);
+    if (t.isOSBinFormatCOFF())
+    {
+        t.setObjectFormat(llvm::Triple::ELF);
+    }
+    auto target = llvm::TargetRegistry::lookupTarget(t.str(), error);
     if (!target)
     {
         throw std::runtime_error(error);
     }
-    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(), "generic", "", {}, {});
+    auto targetMachine = target->createTargetMachine(t.str(), "generic", "", {}, {});
     context.module->setDataLayout(targetMachine->createDataLayout());
-    context.module->setTargetTriple(llvm::sys::getProcessTriple());
+    context.module->setTargetTriple(t.str());
     context.debugBuilder = new llvm::DIBuilder(*context.module);
-    context.debugUnit = context.debugBuilder->createFile("input.c", ".");
+    context.debugBuilder->finalize();
+    context.debugUnit = context.debugBuilder->createFile("input.c", "C:/Users/Markus/Documents/CLion/OpenCLParser/src");
     context.debugBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99, context.debugUnit,
                                             "OpenCL Compiler", false, "", 0);
-    context.debugBuilder->finalize();
     for (auto& iter : getGlobals())
     {
         iter->codegen(context);
     }
-    return {};
+    context.debugBuilder->finalize();
 }
 
 std::pair<llvm::Value*,
@@ -343,6 +439,7 @@ std::pair<llvm::Value*,
             std::set<std::size_t> needsByVal;
             std::vector<llvm::Type*> types;
             std::size_t i = 0;
+            bool isStruct = dynamic_cast<const StructType*>(getReturnType().get());
             for (auto&[type, name] : getArguments())
             {
                 if (!dynamic_cast<const StructType*>(type.get()))
@@ -352,11 +449,10 @@ std::pair<llvm::Value*,
                 else
                 {
                     types.emplace_back(llvm::PointerType::getUnqual(type->type(context)));
-                    needsByVal.insert(i + (getReturnType()->isVoid() ? 1 : 2));
+                    needsByVal.insert(i + (isStruct ? 2 : 1));
                 }
                 i++;
             }
-            bool isStruct = dynamic_cast<const StructType*>(getReturnType().get());
             if (isStruct)
             {
                 types.insert(types.begin(), llvm::PointerType::getUnqual(getReturnType()->type(context)));
@@ -394,14 +490,30 @@ std::pair<llvm::Value*,
         }
     }
 
-
-//    auto* spType = context.debugBuilder->createSubroutineType({});
-//    auto* sp = context.debugBuilder->createFunction(context.debugUnit, getName(), {}, context.debugUnit, 0,spType,false,true,0);
-//    context.currentFunction->setSubprogram(sp);
+    std::vector<llvm::Metadata*> types;
+    types.push_back(toDwarfType(getReturnType(), context));
+    for (auto& iter : getArguments())
+    {
+        types.push_back(toDwarfType(iter.first, context));
+    }
+    auto* spType = context.debugBuilder->createSubroutineType({llvm::MDTuple::get(context.context, types)});
+    auto* sp = context.debugBuilder
+                      ->createFunction(context.debugUnit,
+                                       getName(),
+                                       {},
+                                       context.debugUnit,
+                                       getLine(),
+                                       spType,
+                                       false,
+                                       true,
+                                       getLine());
+    context.currentFunction->setSubprogram(sp);
+    context.debugScope.push_back(sp);
     auto* bb = llvm::BasicBlock::Create(context.context, "entry", context.currentFunction);
     context.builder.SetInsertPoint(bb);
     context.clearScope();
     i = 0;
+    emitLocation(nullptr, context);
     for (auto& iter : context.currentFunction->args())
     {
         if (iter.hasAttribute(llvm::Attribute::StructRet))
@@ -412,21 +524,45 @@ std::pair<llvm::Value*,
         {
             continue;
         }
+        llvm::AllocaInst* alloca;
+        auto createDebug = [&]
+        {
+            auto* local = context.debugBuilder->createParameterVariable(sp,
+                                                                        iter.getName(),
+                                                                        i,
+                                                                        context.debugUnit,
+                                                                        getLine(),
+                                                                        toDwarfType(getArguments()[i].first, context));
+            context.debugBuilder->insertDeclare(alloca,
+                                                local,
+                                                context.debugBuilder->createExpression(),
+                                                llvm::DebugLoc::get(getLine(), 0, sp),
+                                                context.builder.GetInsertBlock());
+        };
         llvm::IRBuilder<>
             tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
         if (!iter.hasByValAttr())
         {
-            auto* alloca = tmpB.CreateAlloca(iter.getType(), nullptr, iter.getName());
+            alloca = tmpB.CreateAlloca(iter.getType());
+            createDebug();
             alloca->setAlignment(getAlignment(iter.getType()));
             context.builder.CreateStore(&iter, alloca);
             context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first});
         }
         else
         {
-            context.addValueToScope(iter.getName(), {&iter, getArguments()[i++].first});
+            auto* ptrType = llvm::cast<llvm::PointerType>(iter.getType());
+            alloca = tmpB.CreateAlloca(ptrType->getPointerElementType());
+            createDebug();
+            alloca->setAlignment(getAlignment(ptrType->getPointerElementType()));
+            auto* zero = context.builder.getInt32(0);
+            auto* value = context.builder.CreateInBoundsGEP(alloca, {zero, zero});
+            context.builder.CreateStore(&iter, value);
+            context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first});
         }
     }
 
+    emitLocation(getBlockStatement(), context);
     getBlockStatement()->codegen(context);
     auto& block = context.currentFunction->back();
     if (block.empty() || !block.back().isTerminator())
@@ -451,6 +587,9 @@ std::pair<llvm::Value*,
         }
     }
 
+    context.debugScope.pop_back();
+
+    context.debugBuilder->finalize();
     if (llvm::verifyFunction(*context.currentFunction, &llvm::errs()))
     {
         context.currentFunction->print(llvm::outs());
@@ -463,11 +602,25 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Declarations::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     llvm::IRBuilder<> tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
     for (auto&[type, name, optionalExpression] : getDeclarations())
     {
         auto* allocaType = type->type(context);
-        auto* alloca = tmpB.CreateAlloca(allocaType, nullptr, name);
+        auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
+        auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope
+                                                                           .back();
+        auto* di = context.debugBuilder
+                          ->createAutoVariable(sp,
+                                               name,
+                                               context.debugUnit,
+                                               getLine(),
+                                               toDwarfType(type, context));
+        context.debugBuilder->insertDeclare(alloca,
+                                            di,
+                                            context.debugBuilder->createExpression(),
+                                            llvm::DebugLoc::get(getLine(), getColumn(), sp),
+                                            context.builder.GetInsertBlock());
         alloca->setAlignment(getAlignment(allocaType));
         if (optionalExpression)
         {
@@ -483,6 +636,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ReturnStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     bool isStruct = dynamic_cast<const StructType*>(context.functionRetType);
     if (!isStruct)
     {
@@ -509,6 +663,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ExpressionStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     if (getOptionalExpression())
     {
         return getOptionalExpression()->codegen(context);
@@ -519,6 +674,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::IfStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = getExpression().codegen(context);
     if (value->getType()->isIntegerTy())
     {
@@ -569,6 +725,10 @@ std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::BlockStatement::codegen(OpenCL::Parser::Context& context) const
 {
     context.pushScope();
+    context.debugScope.push_back(context.debugBuilder->createLexicalBlock(context.debugScope.back(),
+                                                                          context.debugUnit,
+                                                                          getLine(),
+                                                                          getColumn()));
     for (auto& iter : getBlockItems())
     {
         iter->codegen(context);
@@ -579,6 +739,7 @@ std::pair<llvm::Value*,
             break;
         }
     }
+    context.debugScope.pop_back();
     context.popScope();
     return {};
 }
@@ -640,6 +801,7 @@ namespace
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ForStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     if (getInitial())
     {
         getInitial()->codegen(context);
@@ -651,9 +813,15 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ForDeclarationStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     context.pushScope();
+    context.debugScope.push_back(context.debugBuilder->createLexicalBlock(context.debugScope.back(),
+                                                                          context.debugUnit,
+                                                                          getLine(),
+                                                                          getColumn()));
     getInitial().codegen(context);
     doForLoop(getControlling(), getPost(), getStatement(), context);
+    context.debugScope.pop_back();
     context.popScope();
     return {};
 }
@@ -661,6 +829,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::HeadWhileStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto* function = context.builder.GetInsertBlock()->getParent();
 
     auto* condBB = llvm::BasicBlock::Create(context.context, "cond", function);
@@ -712,6 +881,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::FootWhileStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto* function = context.builder.GetInsertBlock()->getParent();
 
     auto* blockBB = llvm::BasicBlock::Create(context.context, "block", function);
@@ -763,6 +933,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Expression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto left = getNonCommaExpression().codegen(context);
     auto right = getOptionalNonCommaExpression() ? getOptionalNonCommaExpression()->codegen(context)
                                                  : decltype(getOptionalNonCommaExpression()->codegen(context)){};
@@ -772,6 +943,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::AssignmentExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getUnaryFactor().codegen(context);
     if (sign->isConst())
     {
@@ -921,6 +1093,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Term::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getCastExpression().codegen(context);
     for (auto&[op, cast] : getOptionalCastExpressions())
     {
@@ -986,6 +1159,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::AdditiveExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getTerm().codegen(context);
     for (auto&[op, term] : getOptionalTerms())
     {
@@ -1031,6 +1205,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ShiftExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getAdditiveExpression().codegen(context);
     for (auto&[op, rel] : getOptionalAdditiveExpressions())
     {
@@ -1058,6 +1233,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::RelationalExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getShiftExpression().codegen(context);
     for (auto&[op, rel] : getOptionalRelationalExpressions())
     {
@@ -1144,6 +1320,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::EqualityExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getRelationalExpression().codegen(context);
     for (auto&[op, factor] : getOptionalRelationalExpressions())
     {
@@ -1182,6 +1359,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::LogicalAndExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getBitOrExpression().codegen(context);
     for (auto& factor : getOptionalBitOrExpressions())
     {
@@ -1234,6 +1412,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::LogicalOrExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getAndExpression().codegen(context);
     for (auto& factor : getOptionalAndExpressions())
     {
@@ -1286,6 +1465,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ConditionalExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, vsign] = getLogicalOrExpression().codegen(context);
     if (getOptionalExpression() && getOptionalConditionalExpression())
     {
@@ -1333,6 +1513,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::BreakStatement::codegen(Context& context) const
 {
+    emitLocation(this, context);
     context.builder.CreateBr(context.breakBlocks.back());
     return {};
 }
@@ -1340,6 +1521,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::ContinueStatement::codegen(Context& context) const
 {
+    emitLocation(this, context);
     context.builder.CreateBr(context.continueBlocks.back());
     return {};
 }
@@ -1347,6 +1529,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::BitAndExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getEqualityExpression().codegen(context);
     for (auto& factor : getOptionalEqualityExpressions())
     {
@@ -1365,6 +1548,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::BitXorExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getBitAndExpression().codegen(context);
     for (auto& factor : getOptionalBitAndExpressions())
     {
@@ -1383,6 +1567,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::BitOrExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[left, sign] = getBitXorExpression().codegen(context);
     for (auto& factor : getOptionalBitXorExpressions())
     {
@@ -1437,6 +1622,7 @@ llvm::Type* OpenCL::Parser::PointerType::type(OpenCL::Parser::Context& context) 
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PrimaryExpressionIdentifier::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = context.getNamedValue(getIdentifier());
     if (!value)
     {
@@ -1448,6 +1634,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PrimaryExpressionConstant::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>>
                       {
                           using T = std::decay_t<decltype(value)>;
@@ -1499,6 +1686,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PrimaryExpressionParenthese::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return getExpression().codegen(context);
 }
 
@@ -1506,12 +1694,14 @@ std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionPrimaryExpression::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return getPrimaryExpression().codegen(context);
 }
 
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionSubscript::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = getPostFixExpression().codegen(context);
     if (llvm::isa<llvm::ArrayType>(value->getType()))
     {
@@ -1534,6 +1724,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionDot::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto* structValue = getPostFixExpression().codegen(context).first;
     auto* structLoad = llvm::cast<llvm::LoadInst>(structValue);
     auto* type = llvm::dyn_cast<llvm::StructType>(structValue->getType());
@@ -1563,12 +1754,14 @@ std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::UnaryExpressionPostFixExpression::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return getPostFixExpression().codegen(context);
 }
 
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::UnaryExpressionUnaryOperator::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[rhs, sign] = getUnaryExpression().codegen(context);
     switch (getAnOperator())
     {
@@ -1693,6 +1886,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::U
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::UnaryExpressionSizeOf::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Type>>
                       {
                           using T = std::decay_t<decltype(value)>;
@@ -1712,6 +1906,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::CastExpression::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Type>>
                       {
                           using T = std::decay_t<decltype(value)>;
@@ -1732,6 +1927,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionFunctionCall::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto value = getPostFixExpression().codegen(context).first;
     if (!value->getType()->isFunctionTy() && !value->getType()->isPointerTy()
         && llvm::cast<llvm::PointerType>(value->getType())->getElementType()->isFunctionTy())
@@ -1799,6 +1995,7 @@ llvm::Type* OpenCL::Parser::ArrayType::type(OpenCL::Parser::Context& context) co
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionIncrement::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = getPostFixExpression().codegen(context);
     auto* load = llvm::cast_or_null<llvm::LoadInst>(value);
     if (!load)
@@ -1829,6 +2026,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
 std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionDecrement::codegen(
     OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = getPostFixExpression().codegen(context);
     auto* load = llvm::cast_or_null<llvm::LoadInst>(value);
     if (!load)
@@ -1859,8 +2057,10 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::StructOrUnionDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     OpenCL::Parser::Context::StructOrUnion structType;
     std::vector<llvm::Type*> types;
+    auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
     auto* llvmStruct = llvm::StructType::create(context.context, (isUnion() ? "union." : "struct.") + getName());
     std::transform(getTypes().begin(), getTypes().end(), std::back_inserter(types), [&](const auto& pair)
     {
@@ -1883,6 +2083,68 @@ std::pair<llvm::Value*,
         });
         llvmStruct->setBody(maxElement);
     }
+    llvm::DICompositeType* fw_decl, * res;
+    cache[llvmStruct] = fw_decl = context.debugBuilder
+                                         ->createReplaceableCompositeType(isUnion() ? llvm::dwarf::DW_TAG_union_type
+                                                                                    : llvm::dwarf::DW_TAG_structure_type,
+                                                                          getName(),
+                                                                          sp,
+                                                                          context.debugUnit,
+                                                                          getLine());
+    std::vector<llvm::Metadata*> subTypes;
+    std::size_t i = 0;
+    for (auto& iter : structType.types)
+    {
+        auto* member = toDwarfType(iter, context);
+        auto* memberType = iter->type(context);
+        subTypes.push_back(context.debugBuilder->createMemberType(sp,
+                                                                  std::find_if(structType.order.begin(),
+                                                                               structType.order.end(),
+                                                                               [i](const std::pair<const std::string,
+                                                                                                   std::uint64_t>& pair)
+                                                                               {
+                                                                                   return pair.second == i;
+                                                                               })->first,
+                                                                  context.debugUnit,
+                                                                  getLine(),
+                                                                  context.module->getDataLayout()
+                                                                         .getTypeSizeInBits(memberType),
+                                                                  getAlignment(memberType),
+                                                                  context.module->getDataLayout()
+                                                                         .getStructLayout(llvmStruct)
+                                                                         ->getElementOffsetInBits(i),
+                                                                  llvm::DINode::DIFlags::FlagAccessibility,
+                                                                  member));
+        i++;
+    }
+    if (!isUnion())
+    {
+        res = context.debugBuilder->createStructType(sp,
+                                                     getName(),
+                                                     context.debugUnit,
+                                                     getLine(),
+                                                     context.module->getDataLayout()
+                                                            .getTypeAllocSizeInBits(llvmStruct),
+                                                     getAlignment(llvmStruct) * 8,
+                                                     llvm::DINode::DIFlags::FlagAccessibility,
+                                                     nullptr,
+                                                     llvm::MDTuple::get(context.context, subTypes));
+    }
+    else
+    {
+        res = context.debugBuilder->createUnionType(sp,
+                                                    getName(),
+                                                    context.debugUnit,
+                                                    getLine(),
+                                                    context.module->getDataLayout()
+                                                           .getTypeAllocSizeInBits(llvmStruct),
+                                                    getAlignment(llvmStruct) * 8,
+                                                    llvm::DINode::DIFlags::FlagAccessibility,
+                                                    llvm::MDTuple::get(context.context, subTypes));
+    }
+    llvm::TempMDNode fwd_decl(fw_decl);
+    context.debugBuilder->replaceTemporary(std::move(fwd_decl), res);
+    cache[llvmStruct] = res;
     structType.isUnion = isUnion();
     context.structs[(isUnion() ? "union." : "struct.") + getName()] = structType;
     return {};
@@ -1901,6 +2163,7 @@ llvm::Type* OpenCL::Parser::UnionType::type(OpenCL::Parser::Context& context) co
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionArrow::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto* structValue = getPostFixExpression().codegen(context).first;
     auto* type = llvm::dyn_cast<llvm::StructType>(structValue->getType()->getPointerElementType());
     if (!type)
@@ -1928,6 +2191,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::SwitchStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto[value, sign] = getExpression().codegen(context);
     auto* defaultBlock = llvm::BasicBlock::Create(context.context, "default");
     auto* thenBlock = llvm::BasicBlock::Create(context.context, "then");
@@ -1961,6 +2225,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::DefaultStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     if (context.switchStack.empty())
     {
         throw std::runtime_error("default without switch statement");
@@ -1995,6 +2260,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::CaseStatement::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     if (context.switchStack.empty())
     {
         throw std::runtime_error("case without switch statement");
@@ -2039,6 +2305,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionTypeInitializer::codegen(OpenCL::Parser::Context& context) const
 {
+    emitLocation(this, context);
     auto* type = getType()->type(context);
     llvm::IRBuilder<>
         tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());

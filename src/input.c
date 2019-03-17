@@ -2,6 +2,7 @@
 typedef struct Point
 {
     struct Point* next;
+    int array[5];
 } Point;
 
 unsigned long long getListCount(const Point* first)
@@ -18,11 +19,9 @@ unsigned long long getListCount(const Point* first)
 
 int main()
 {
-    Point first;
-    Point second;
-    Point third;
-    first.next = &second;
-    second.next = &third;
-    third.next = 0;
-    return getListCount(&first);
+    Point one,two,three;
+    one.next = &two;
+    two.next = &three;
+    three.next = 0;
+    return getListCount(&one);
 }

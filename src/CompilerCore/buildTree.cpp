@@ -255,6 +255,8 @@ namespace
         {
             throw std::runtime_error("Expected struct or union keyword");
         }
+        auto line = currToken.getLine();
+        auto column = currToken.getColumn();
         bool isUnion = currToken.getTokenType() == TokenType::UnionKeyword;
         tokens.pop_back();
         currToken = tokens.back();
@@ -332,7 +334,7 @@ namespace
             tokens.pop_back();
         }
         tokens.pop_back();
-        return StructOrUnionDeclaration(isUnion, std::move(name), std::move(fields));
+        return StructOrUnionDeclaration(line, column, isUnion, std::move(name), std::move(fields));
     }
 
     OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type,
@@ -345,6 +347,8 @@ namespace
         {
             throw std::runtime_error("Invalid identifier for Global declaration");
         }
+        auto line = currToken.getLine();
+        auto column = currToken.getColumn();
         auto name = std::get<std::string>(currToken.getValue());
         context.addToScope(name);
         currToken = tokens.back();
@@ -357,6 +361,8 @@ namespace
             {
                 throw std::runtime_error("Can only use Constant expression to initialize global declaration");
             }
+            auto primLine = currToken.getLine();
+            auto primCol = currToken.getColumn();
             auto variant = std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
                                       {
                                           if constexpr(std::is_constructible_v<typename PrimaryExpressionConstant::variant,
@@ -375,13 +381,13 @@ namespace
                 throw std::runtime_error("Expected ; after initialization of global declaration");
             }
             tokens.pop_back();
-            return GlobalDeclaration(std::move(type),
+            return GlobalDeclaration(line, column, std::move(type),
                                      name,
-                                     std::make_unique<PrimaryExpressionConstant>(std::move(variant)));
+                                     std::make_unique<PrimaryExpressionConstant>(primLine,primCol,std::move(variant)));
         }
         else
         {
-            return GlobalDeclaration(std::move(type), name);
+            return GlobalDeclaration(line, column, std::move(type), name);
         }
     }
 
@@ -391,6 +397,8 @@ namespace
         {
             throw std::runtime_error("Expected typedef keyword at beginning of typedef declaration");
         }
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         tokens.pop_back();
         std::unique_ptr<StructOrUnionDeclaration> optionalDeclaration;
         std::unique_ptr<Type> type;
@@ -489,7 +497,7 @@ namespace
             throw std::runtime_error("Expected ; at the end of typedef");
         }
         tokens.pop_back();
-        return TypedefDeclaration(std::move(optionalDeclaration));
+        return TypedefDeclaration(line, column, std::move(optionalDeclaration));
     }
 
     OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
@@ -497,6 +505,8 @@ namespace
                                                ParsingContext& context)
     {
         auto currToken = tokens.back();
+        auto line = currToken.getLine();
+        auto column = currToken.getColumn();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::Identifier)
         {
@@ -604,7 +614,9 @@ namespace
                 throw std::runtime_error("Expected Block statement after function");
             }
 
-            return Function(std::shared_ptr<Type>(rettype.release()),
+            return Function(line,
+                            column,
+                            std::shared_ptr<Type>(rettype.release()),
                             std::move(name),
                             std::move(arguments),
                             std::make_unique<BlockStatement>(std::move(*pointer)));
@@ -612,7 +624,11 @@ namespace
         else if (currToken.getTokenType() == TokenType::SemiColon)
         {
             tokens.pop_back();
-            return Function(std::shared_ptr<Type>(rettype.release()), std::move(name), std::move(arguments));
+            return Function(line,
+                            column,
+                            std::shared_ptr<Type>(rettype.release()),
+                            std::move(name),
+                            std::move(arguments));
         }
         else
         {
@@ -824,6 +840,8 @@ namespace
         auto currToken = tokens.back();
         if (isType(currToken,context) && currToken.getTokenType() != TokenType::Asterisk)
         {
+            auto line = currToken.getLine();
+            auto column = currToken.getColumn();
             auto type = parseType(tokens, context);
             std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<Expression>>> declarations;
             while (true)
@@ -899,7 +917,7 @@ namespace
                     tokens.pop_back();
                 }
             }
-            return std::make_unique<Declarations>(std::move(declarations));
+            return std::make_unique<Declarations>(line,column,std::move(declarations));
         }
         else
         {
@@ -912,12 +930,14 @@ namespace
         auto result = [&tokens,&context]() -> std::unique_ptr<Statement>
         {
             auto curentToken = tokens.back();
+            auto line = curentToken.getLine();
+            auto column = curentToken.getColumn();
             switch (curentToken.getTokenType())
             {
             case TokenType::ReturnKeyword:
             {
                 tokens.pop_back();
-                return std::make_unique<ReturnStatement>(parseExpression(tokens, context));
+                return std::make_unique<ReturnStatement>(curentToken.getLine(),curentToken.getColumn(),parseExpression(tokens, context));
             }
             case TokenType::IfKeyword:
             {
@@ -940,13 +960,13 @@ namespace
                 if (!tokens.empty() && curentToken.getTokenType() == TokenType::ElseKeyword)
                 {
                     tokens.pop_back();
-                    return std::make_unique<IfStatement>(std::move(expression),
+                    return std::make_unique<IfStatement>(line,column,std::move(expression),
                                                          std::move(statement),
                                                          parseStatement(tokens, context));
                 }
                 else
                 {
-                    return std::make_unique<IfStatement>(std::move(expression), std::move(statement));
+                    return std::make_unique<IfStatement>(line,column,std::move(expression), std::move(statement));
                 }
             }
             case TokenType::OpenBrace:
@@ -964,7 +984,7 @@ namespace
                 }
                 tokens.pop_back();
                 context.popScope();
-                return std::make_unique<BlockStatement>(std::move(blockItems));
+                return std::make_unique<BlockStatement>(line,column,std::move(blockItems));
             }
             case TokenType::ForKeyword:
             {
@@ -1020,14 +1040,14 @@ namespace
 
                 if (auto declaration = dynamic_cast<Declarations*>(blockitem.get());declaration)
                 {
-                    return std::make_unique<ForDeclarationStatement>(std::move(statement), std::move(*declaration),
+                    return std::make_unique<ForDeclarationStatement>(line,column,std::move(statement), std::move(*declaration),
                                                                      std::move(control),
                                                                      std::move(post));
                 }
                 else if (auto
                         expressionStatement = dynamic_cast<ExpressionStatement*>(blockitem.get());expressionStatement)
                 {
-                    return std::make_unique<ForStatement>(std::move(statement),
+                    return std::make_unique<ForStatement>(line,column,std::move(statement),
                                                           expressionStatement->moveOptionalExpression(),
                                                           std::move(control),
                                                           std::move(post));
@@ -1054,7 +1074,7 @@ namespace
                     throw std::runtime_error("Expected ) after expression in while");
                 }
                 auto statement = parseStatement(tokens, context);
-                return std::make_unique<HeadWhileStatement>(std::move(expression), std::move(statement));
+                return std::make_unique<HeadWhileStatement>(line,column,std::move(expression), std::move(statement));
             }
             case TokenType::DoKeyword:
             {
@@ -1079,17 +1099,17 @@ namespace
                 {
                     throw std::runtime_error("Expected ) after expression in while");
                 }
-                return std::make_unique<FootWhileStatement>(std::move(statement), std::move(expression));
+                return std::make_unique<FootWhileStatement>(line,column,std::move(statement), std::move(expression));
             }
             case TokenType::BreakKeyword:
             {
                 tokens.pop_back();
-                return std::make_unique<BreakStatement>();
+                return std::make_unique<BreakStatement>(line,column);
             }
             case TokenType::ContinueKeyword:
             {
                 tokens.pop_back();
-                return std::make_unique<ContinueStatement>();
+                return std::make_unique<ContinueStatement>(line,column);
             }
             case TokenType::SwitchKeyword:
             {
@@ -1107,7 +1127,7 @@ namespace
                     throw std::runtime_error("Expected ) after expression in switch ");
                 }
                 tokens.pop_back();
-                return std::make_unique<SwitchStatement>(std::move(expression), parseStatement(tokens, context));
+                return std::make_unique<SwitchStatement>(line,column,std::move(expression), parseStatement(tokens, context));
             }
             case TokenType::DefaultKeyword:
             {
@@ -1118,7 +1138,7 @@ namespace
                     throw std::runtime_error("Expected : after default");
                 }
                 tokens.pop_back();
-                return std::make_unique<DefaultStatement>(parseStatement(tokens, context));
+                return std::make_unique<DefaultStatement>(line,column,parseStatement(tokens, context));
             }
             case TokenType::CaseKeyword:
             {
@@ -1130,7 +1150,7 @@ namespace
                     throw std::runtime_error("Expected : after constant expression of case");
                 }
                 tokens.pop_back();
-                return std::make_unique<CaseStatement>(std::move(expression),
+                return std::make_unique<CaseStatement>(line,column,std::move(expression),
                                                        tokens.back().getTokenType() != TokenType::CaseKeyword
                                                        ? parseStatement(tokens, context) : nullptr);
             }
@@ -1138,12 +1158,12 @@ namespace
             {
                 if (!tokens.empty() && tokens.back().getTokenType() != TokenType::SemiColon)
                 {
-                    return std::make_unique<ExpressionStatement>(std::make_unique<Expression>(parseExpression(tokens,
+                    return std::make_unique<ExpressionStatement>(line,column,std::make_unique<Expression>(parseExpression(tokens,
                                                                                                               context)));
                 }
                 else
                 {
-                    return std::make_unique<ExpressionStatement>();
+                    return std::make_unique<ExpressionStatement>(line,column);
                 }
             }
             }
@@ -1171,6 +1191,8 @@ namespace
 
     OpenCL::Parser::Expression parseExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto expression = parseNonCommaExpression(tokens, context);
 
         std::unique_ptr<NonCommaExpression> optional;
@@ -1183,7 +1205,7 @@ namespace
                 optional = parseNonCommaExpression(tokens, context);
             }
         }
-        return Expression(0, 0, std::move(expression), std::move(optional));
+        return Expression(line, column, std::move(expression), std::move(optional));
     }
 
     std::unique_ptr<OpenCL::Parser::NonCommaExpression> parseNonCommaExpression(Tokens& tokens, ParsingContext& context)
@@ -1231,11 +1253,13 @@ namespace
         bool assignment = result != tokens.rend() && isAssignment(result->getTokenType());
         if (assignment)
         {
+            auto line = tokens.back().getLine();
+            auto column = tokens.back().getColumn();
             auto unary = parseUnaryExpression(tokens, context);
             auto currentToken = tokens.back();
             tokens.pop_back();
             auto nonCommaExpression = parseNonCommaExpression(tokens, context);
-            return std::make_unique<AssignmentExpression>(std::move(unary),
+            return std::make_unique<AssignmentExpression>(line,column,std::move(unary),
                                                           [assignment = currentToken.getTokenType()]
                                                           {
                                                               switch (assignment)
@@ -1265,6 +1289,8 @@ namespace
 
     OpenCL::Parser::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto logicalOrExperssion = parseLogicalOrExpression(tokens, context);
         if (!tokens.empty())
         {
@@ -1280,16 +1306,18 @@ namespace
                 }
                 tokens.pop_back();
                 auto optionalConditional = parseConditionalExpression(tokens, context);
-                return ConditionalExpression(std::move(logicalOrExperssion),
+                return ConditionalExpression(line, column, std::move(logicalOrExperssion),
                                              std::make_unique<Expression>(std::move(optionalExpression)),
                                              std::make_unique<ConditionalExpression>(std::move(optionalConditional)));
             }
         }
-        return ConditionalExpression(std::move(logicalOrExperssion));
+        return ConditionalExpression(line, column, std::move(logicalOrExperssion));
     }
 
     OpenCL::Parser::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto logicalAnd = parseLogicalAndExpression(tokens, context);
 
         std::vector<LogicalAndExpression> optionalLogicalAnds;
@@ -1304,11 +1332,13 @@ namespace
             }
         }
 
-        return LogicalOrExpression(std::move(logicalAnd), std::move(optionalLogicalAnds));
+        return LogicalOrExpression(line, column, std::move(logicalAnd), std::move(optionalLogicalAnds));
     }
 
     OpenCL::Parser::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseBitOrExpression(tokens, context);
 
         std::vector<BitOrExpression> list;
@@ -1323,11 +1353,13 @@ namespace
             }
         }
 
-        return LogicalAndExpression(std::move(result), std::move(list));
+        return LogicalAndExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::BitOrExpression parseBitOrExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseBitXorExpression(tokens, context);
 
         std::vector<BitXorExpression> list;
@@ -1342,11 +1374,13 @@ namespace
             }
         }
 
-        return BitOrExpression(std::move(result), std::move(list));
+        return BitOrExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::BitXorExpression parseBitXorExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseBitAndExpression(tokens, context);
 
         std::vector<BitAndExpression> list;
@@ -1361,11 +1395,13 @@ namespace
             }
         }
 
-        return BitXorExpression(std::move(result), std::move(list));
+        return BitXorExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::BitAndExpression parseBitAndExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseEqualityExpression(tokens, context);
 
         std::vector<EqualityExpression> list;
@@ -1380,11 +1416,13 @@ namespace
             }
         }
 
-        return BitAndExpression(std::move(result), std::move(list));
+        return BitAndExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::EqualityExpression parseEqualityExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseRelationalExpression(tokens, context);
 
         std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> relationalExpressions;
@@ -1403,11 +1441,13 @@ namespace
             }
         }
 
-        return EqualityExpression(std::move(result), std::move(relationalExpressions));
+        return EqualityExpression(line, column, std::move(result), std::move(relationalExpressions));
     }
 
     OpenCL::Parser::RelationalExpression parseRelationalExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseShiftExpression(tokens, context);
 
         std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
@@ -1436,11 +1476,13 @@ namespace
             }
         }
 
-        return RelationalExpression(std::move(result), std::move(list));
+        return RelationalExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::ShiftExpression parseShiftExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseAdditiveExpression(tokens, context);
 
         std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
@@ -1459,11 +1501,13 @@ namespace
             }
         }
 
-        return ShiftExpression(std::move(result), std::move(list));
+        return ShiftExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::AdditiveExpression parseAdditiveExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseTerm(tokens, context);
 
         std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
@@ -1482,11 +1526,13 @@ namespace
             }
         }
 
-        return AdditiveExpression(std::move(result), std::move(list));
+        return AdditiveExpression(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::Term parseTerm(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto result = parseCastExpression(tokens, context);
 
         std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
@@ -1512,11 +1558,13 @@ namespace
             }
         }
 
-        return Term(std::move(result), std::move(list));
+        return Term(line, column, std::move(result), std::move(list));
     }
 
     OpenCL::Parser::CastExpression parseCastExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto currToken = tokens.rbegin();
         if (currToken->getTokenType() == TokenType::OpenParenthese)
         {
@@ -1550,16 +1598,18 @@ namespace
                         throw std::runtime_error("Expected Close Parenthese after type cast");
                     }
                     tokens.pop_back();
-                    return CastExpression(std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>{
+                    return CastExpression(line, column, std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>{
                         std::move(type), std::make_unique<CastExpression>(parseCastExpression(tokens, context))});
                 }
             }
         }
-        return CastExpression(parseUnaryExpression(tokens, context));
+        return CastExpression(line, column, parseUnaryExpression(tokens, context));
     }
 
     std::unique_ptr<OpenCL::Parser::UnaryExpression> parseUnaryExpression(Tokens& tokens, ParsingContext& context)
     {
+        auto line = tokens.back().getLine();
+        auto column = tokens.back().getColumn();
         auto currToken = tokens.back();
         if (currToken.getTokenType() == TokenType::SizeofKeyword)
         {
@@ -1575,12 +1625,12 @@ namespace
                     throw std::runtime_error("Expected Close Parenthese after type in sizeof");
                 }
                 tokens.pop_back();
-                return std::make_unique<UnaryExpressionSizeOf>(std::move(type));
+                return std::make_unique<UnaryExpressionSizeOf>(line,column,std::move(type));
             }
             else
             {
                 auto unary = parseUnaryExpression(tokens, context);
-                return std::make_unique<UnaryExpressionSizeOf>(std::move(unary));
+                return std::make_unique<UnaryExpressionSizeOf>(line,column,std::move(unary));
             }
         }
         else if (currToken.getTokenType() == TokenType::Increment
@@ -1608,9 +1658,9 @@ namespace
                 default:throw std::runtime_error("Invalid token");
                 }
             }();
-            return std::make_unique<UnaryExpressionUnaryOperator>(op, parseUnaryExpression(tokens, context));
+            return std::make_unique<UnaryExpressionUnaryOperator>(line,column,op, parseUnaryExpression(tokens, context));
         }
-        return std::make_unique<UnaryExpressionPostFixExpression>(parsePostFixExpression(tokens, context));
+        return std::make_unique<UnaryExpressionPostFixExpression>(line,column,parsePostFixExpression(tokens, context));
     }
 
     bool isPostFixExpression(Tokens& token)
@@ -1643,7 +1693,9 @@ namespace
                 {
                     throw std::runtime_error("Can't combine post fix expressions");
                 }
-                stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens,
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(line,column,parsePrimaryExpression(tokens,
                                                                                                        context)));
             }
             else if(currToken.getTokenType() == TokenType::OpenParenthese && stack.empty())
@@ -1654,6 +1706,8 @@ namespace
                 }
                 if(isType(tokens.at(tokens.size()-2),context))
                 {
+                    auto line = currToken.getLine();
+                    auto column = currToken.getColumn();
                     if(!stack.empty())
                     {
                         throw std::runtime_error("Can't combine post fix expressions");
@@ -1690,11 +1744,13 @@ namespace
                         throw std::runtime_error("Expected { after type around parenthesis");
                     }
                     tokens.pop_back();
-                    stack.push(std::make_unique<PostFixExpressionTypeInitializer>(std::move(type),std::move(nonCommaExpressions)));
+                    stack.push(std::make_unique<PostFixExpressionTypeInitializer>(line,column,std::move(type),std::move(nonCommaExpressions)));
                 }
                 else
                 {
-                    stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(parsePrimaryExpression(tokens,
+                    auto line = currToken.getLine();
+                    auto column = currToken.getColumn();
+                    stack.push(std::make_unique<PostFixExpressionPrimaryExpression>(line,column,parsePrimaryExpression(tokens,
                                                                                                            context)));
                 }
             }
@@ -1718,7 +1774,9 @@ namespace
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionFunctionCall>(std::move(postExpression),
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionFunctionCall>(line,column,std::move(postExpression),
                                                                            std::move(nonCommaExpressions)));
             }
             else if (currToken.getTokenType() == TokenType::OpenSquareBracket)
@@ -1755,7 +1813,9 @@ namespace
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionSubscript>(std::move(postExpression),
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionSubscript>(line,column,std::move(postExpression),
                                                                         std::move(expression)));
             }
             else if (currToken.getTokenType() == TokenType::Increment)
@@ -1763,14 +1823,18 @@ namespace
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionIncrement>(std::move(postExpression)));
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionIncrement>(line,column,std::move(postExpression)));
             }
             else if (currToken.getTokenType() == TokenType::Decrement)
             {
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionDecrement>(std::move(postExpression)));
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionDecrement>(line,column,std::move(postExpression)));
             }
             else if (currToken.getTokenType() == TokenType::Dot)
             {
@@ -1783,7 +1847,9 @@ namespace
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionDot>(std::move(postExpression),
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionDot>(line,column,std::move(postExpression),
                                                                   std::get<std::string>(currToken.getValue())));
             }
             else if (currToken.getTokenType() == TokenType::Arrow)
@@ -1797,7 +1863,9 @@ namespace
                 tokens.pop_back();
                 auto postExpression = std::move(stack.top());
                 stack.pop();
-                stack.push(std::make_unique<PostFixExpressionArrow>(std::move(postExpression),
+                auto line = currToken.getLine();
+                auto column = currToken.getColumn();
+                stack.push(std::make_unique<PostFixExpressionArrow>(line,column,std::move(postExpression),
                                                                     std::get<std::string>(currToken.getValue())));
             }
         }
@@ -1814,13 +1882,15 @@ namespace
     {
         auto currToken = tokens.back();
         tokens.pop_back();
+        auto line = currToken.getLine();
+        auto column = currToken.getColumn();
         if (currToken.getTokenType() == TokenType::Identifier)
         {
-            return std::make_unique<PrimaryExpressionIdentifier>(std::get<std::string>(currToken.getValue()));
+            return std::make_unique<PrimaryExpressionIdentifier>(line,column,std::get<std::string>(currToken.getValue()));
         }
         else if (currToken.getTokenType() == TokenType::Literal)
         {
-            return std::make_unique<PrimaryExpressionConstant>(std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
+            return std::make_unique<PrimaryExpressionConstant>(line,column,std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
                                                                           {
                                                                               using T = std::decay_t<decltype(value)>;
                                                                               if constexpr(std::is_constructible_v<
@@ -1839,13 +1909,15 @@ namespace
         }
         else if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
+            auto line = currToken.getLine();
+            auto column = currToken.getColumn();
             auto expression = parseExpression(tokens, context);
             if (tokens.back().getTokenType() != TokenType::CloseParenthese)
             {
                 throw std::runtime_error("Expected Close Parenthese after expression in primary expression");
             }
             tokens.pop_back();
-            return std::make_unique<PrimaryExpressionParenthese>(std::move(expression));
+            return std::make_unique<PrimaryExpressionParenthese>(line,column,std::move(expression));
         }
         else
         {

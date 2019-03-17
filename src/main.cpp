@@ -1,5 +1,5 @@
-#include "Lexer.hpp"
-#include "Parser.hpp"
+#include "CompilerCore/Lexer.hpp"
+#include "CompilerCore/Parser.hpp"
 
 #include <iostream>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
