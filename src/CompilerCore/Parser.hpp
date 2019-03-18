@@ -14,7 +14,7 @@ namespace OpenCL::Parser
 
     class Context
     {
-        using tuple = std::pair<llvm::Value*,std::shared_ptr<Type>>;
+        using tuple = std::pair<llvm::Value*, std::shared_ptr<Type>>;
 
         struct Function
         {
@@ -37,17 +37,17 @@ namespace OpenCL::Parser
         const Type* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
-        std::vector<std::pair<llvm::SwitchInst*,bool>> switchStack;
+        std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
         std::vector<llvm::DIScope*> debugScope;
 
         struct StructOrUnion
         {
-            std::map<std::string,std::uint64_t> order;
+            std::map<std::string, std::uint64_t> order;
             std::vector<std::shared_ptr<Type>> types;
             bool isUnion = false;
         };
 
-        std::map<std::string,StructOrUnion> structs;
+        std::map<std::string, StructOrUnion> structs;
 
         bool hasFunction(const std::string& name) const
         {
@@ -86,8 +86,8 @@ namespace OpenCL::Parser
 
         void addGlobal(const std::string& name, const tuple& value)
         {
-            auto [it,ins] = m_globalValues.insert({name,value});
-            if(!ins)
+            auto[it, ins] = m_globalValues.insert({name, value});
+            if (!ins)
             {
                 throw std::runtime_error("Redefinition of global symbol " + name);
             }
@@ -205,7 +205,7 @@ namespace OpenCL::Parser
 
         explicit PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types);
 
-        PrimitiveType(std::uint64_t bitCount,bool isConst, bool isFloatingPoint, bool isSigned);
+        PrimitiveType(std::uint64_t bitCount, bool isConst, bool isFloatingPoint, bool isSigned);
 
         std::uint64_t getBitCount() const;
 
@@ -250,73 +250,73 @@ namespace OpenCL::Parser
     /**
      * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <PrimaryExpressionConstant> <TokenType::CloseSquareBracket>
      */
-     class ArrayType final : public Type
-     {
-         std::unique_ptr<Type> m_type;
-         std::size_t m_size;
+    class ArrayType final : public Type
+    {
+        std::unique_ptr<Type> m_type;
+        std::size_t m_size;
 
-     public:
+    public:
 
-         ArrayType(std::unique_ptr<Type>&& type, std::size_t size);
+        ArrayType(std::unique_ptr<Type>&& type, std::size_t size);
 
-         const std::unique_ptr<Type>& getType() const;
+        const std::unique_ptr<Type>& getType() const;
 
-         std::size_t getSize() const;
+        std::size_t getSize() const;
 
-         llvm::Type* type(Context& context) const override;
+        llvm::Type* type(Context& context) const override;
 
-         std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<Type> clone() const override;
 
-         std::string name() const override;
-     };
+        std::string name() const override;
+    };
 
-     /**
-      * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer>
-      *                  [ <TokenType::ConstKeyword> ]
-      */
-     class StructType final : public Type
-     {
-         std::string m_name;
-         bool m_isConst;
+    /**
+     * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer>
+     *                  [ <TokenType::ConstKeyword> ]
+     */
+    class StructType final : public Type
+    {
+        std::string m_name;
+        bool m_isConst;
 
-     public:
+    public:
 
-         explicit StructType(std::string name, bool isConst);
+        explicit StructType(std::string name, bool isConst);
 
-         const std::string& getName() const;
+        const std::string& getName() const;
 
-         bool isConst() const override;
+        bool isConst() const override;
 
-         llvm::Type* type(Context& context) const override;
+        llvm::Type* type(Context& context) const override;
 
-         std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<Type> clone() const override;
 
-         std::string name() const override;
-     };
+        std::string name() const override;
+    };
 
-     /**
-      * <UnionType> ::= [ <TokenType::ConstKeyword> ] <TokenType::UnionKeyword> <TokenType::Identifer>
-      *                  [ <TokenType::ConstKeyword> ]
-      */
-     class UnionType final : public Type
-     {
-         std::string m_name;
-         bool m_isConst;
+    /**
+     * <UnionType> ::= [ <TokenType::ConstKeyword> ] <TokenType::UnionKeyword> <TokenType::Identifer>
+     *                  [ <TokenType::ConstKeyword> ]
+     */
+    class UnionType final : public Type
+    {
+        std::string m_name;
+        bool m_isConst;
 
-     public:
+    public:
 
-         UnionType(std::string name, bool isConst);
+        UnionType(std::string name, bool isConst);
 
-         const std::string& getName() const;
+        const std::string& getName() const;
 
-         bool isConst() const override;
+        bool isConst() const override;
 
-         llvm::Type* type(Context& context) const override;
+        llvm::Type* type(Context& context) const override;
 
-         std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<Type> clone() const override;
 
-         std::string name() const override;
-     };
+        std::string name() const override;
+    };
 
     /**
      * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
@@ -325,7 +325,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        NonCommaExpression(std::uint64_t line,std::uint64_t column);
+        NonCommaExpression(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -339,9 +339,9 @@ namespace OpenCL::Parser
     public:
 
         Expression(std::uint64_t line,
-                           std::uint64_t column,
-                           std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
-                           std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression);
+                   std::uint64_t column,
+                   std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
+                   std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression);
 
         const NonCommaExpression& getNonCommaExpression() const;
 
@@ -349,7 +349,6 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
-
 
     /**
      * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
@@ -360,7 +359,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        PrimaryExpression(std::uint64_t line,std::uint64_t column);
+        PrimaryExpression(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -373,8 +372,8 @@ namespace OpenCL::Parser
     public:
 
         PrimaryExpressionIdentifier(std::uint64_t line,
-                                            std::uint64_t column,
-                                            std::string identifier);
+                                    std::uint64_t column,
+                                    std::string identifier);
 
         const std::string& getIdentifier() const;
 
@@ -420,8 +419,8 @@ namespace OpenCL::Parser
     public:
 
         PrimaryExpressionParenthese(std::uint64_t line,
-                                            std::uint64_t column,
-                                            Expression&& expression);
+                                    std::uint64_t column,
+                                    Expression&& expression);
 
         const Expression& getExpression() const;
 
@@ -442,7 +441,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        PostFixExpression(std::uint64_t line,std::uint64_t column);
+        PostFixExpression(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -455,8 +454,8 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionPrimaryExpression(std::uint64_t line,
-                                                   std::uint64_t column,
-                                                   std::unique_ptr<PrimaryExpression>&& primaryExpression);
+                                           std::uint64_t column,
+                                           std::unique_ptr<PrimaryExpression>&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
 
@@ -475,9 +474,9 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionSubscript(std::uint64_t line,
-                                           std::uint64_t column,
-                                           std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                           Expression&& expression);
+                                   std::uint64_t column,
+                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                   Expression&& expression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -496,8 +495,8 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionIncrement(std::uint64_t line,
-                                           std::uint64_t column,
-                                           std::unique_ptr<PostFixExpression>&& postFixExpression);
+                                   std::uint64_t column,
+                                   std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -514,8 +513,8 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionDecrement(std::uint64_t line,
-                                           std::uint64_t column,
-                                           std::unique_ptr<PostFixExpression>&& postFixExpression);
+                                   std::uint64_t column,
+                                   std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -533,9 +532,9 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionDot(std::uint64_t line,
-                                     std::uint64_t column,
-                                     std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                     std::string identifier);
+                             std::uint64_t column,
+                             std::unique_ptr<PostFixExpression>&& postFixExpression,
+                             std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -555,9 +554,9 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionArrow(std::uint64_t line,
-                                       std::uint64_t column,
-                                       std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                       std::string identifier);
+                               std::uint64_t column,
+                               std::unique_ptr<PostFixExpression>&& postFixExpression,
+                               std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -579,9 +578,9 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionFunctionCall(std::uint64_t line,
-                                              std::uint64_t column,
-                                              std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                              std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
+                                      std::uint64_t column,
+                                      std::unique_ptr<PostFixExpression>&& postFixExpression,
+                                      std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -603,9 +602,9 @@ namespace OpenCL::Parser
     public:
 
         PostFixExpressionTypeInitializer(std::uint64_t line,
-                                                 std::uint64_t column,
-                                                 std::shared_ptr<Type> type,
-                                                 std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions);
+                                         std::uint64_t column,
+                                         std::shared_ptr<Type> type,
+                                         std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions);
 
         const std::shared_ptr<Type>& getType() const;
 
@@ -623,7 +622,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        UnaryExpression(std::uint64_t line,std::uint64_t column);
+        UnaryExpression(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -661,10 +660,10 @@ namespace OpenCL::Parser
     public:
 
         AssignmentExpression(std::uint64_t line,
-                                     std::uint64_t column,
-                                     std::unique_ptr<UnaryExpression>&& unaryFactor,
-                                     AssignOperator assignOperator,
-                                     std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
+                             std::uint64_t column,
+                             std::unique_ptr<UnaryExpression>&& unaryFactor,
+                             AssignOperator assignOperator,
+                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
 
         const UnaryExpression& getUnaryFactor() const;
 
@@ -685,8 +684,8 @@ namespace OpenCL::Parser
     public:
 
         UnaryExpressionPostFixExpression(std::uint64_t line,
-                                                 std::uint64_t column,
-                                                 std::unique_ptr<PostFixExpression>&& postFixExpression);
+                                         std::uint64_t column,
+                                         std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -727,9 +726,9 @@ namespace OpenCL::Parser
     public:
 
         UnaryExpressionUnaryOperator(std::uint64_t line,
-                                             std::uint64_t column,
-                                             UnaryOperator anOperator,
-                                             std::unique_ptr<UnaryExpression>&& unaryExpression);
+                                     std::uint64_t column,
+                                     UnaryOperator anOperator,
+                                     std::unique_ptr<UnaryExpression>&& unaryExpression);
 
         UnaryOperator getAnOperator() const;
 
@@ -744,14 +743,14 @@ namespace OpenCL::Parser
      */
     class UnaryExpressionSizeOf final : public UnaryExpression
     {
-        std::variant<std::unique_ptr<UnaryExpression>,std::shared_ptr<Type>> m_unaryOrType;
+        std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>> m_unaryOrType;
 
     public:
 
         UnaryExpressionSizeOf(std::uint64_t line,
-                                      std::uint64_t column,
-                                      std::variant<std::unique_ptr<UnaryExpression>,
-                                               std::shared_ptr<Type>>&& unaryOrType);
+                              std::uint64_t column,
+                              std::variant<std::unique_ptr<UnaryExpression>,
+                                           std::shared_ptr<Type>>&& unaryOrType);
 
         const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>& getUnaryOrType() const;
 
@@ -764,13 +763,14 @@ namespace OpenCL::Parser
      */
     class CastExpression final : public Node
     {
-        std::variant<std::unique_ptr<UnaryExpression>,std::pair<std::shared_ptr<Type>,std::unique_ptr<CastExpression>>> m_unaryOrCast;
+        std::variant<std::unique_ptr<UnaryExpression>,
+                     std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>> m_unaryOrCast;
 
     public:
 
         CastExpression(std::uint64_t line, std::uint64_t column, std::variant<std::unique_ptr<UnaryExpression>,
-                                                                                      std::pair<std::shared_ptr<Type>,
-                                                                                            std::unique_ptr<CastExpression>>>&& unaryOrCast);
+                                                                              std::pair<std::shared_ptr<Type>,
+                                                                                        std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
         const std::variant<std::unique_ptr<UnaryExpression>,
                            std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
@@ -804,9 +804,9 @@ namespace OpenCL::Parser
     public:
 
         Term(std::uint64_t line,
-                     std::uint64_t column,
-                     CastExpression&& castExpressions,
-                     std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
+             std::uint64_t column,
+             CastExpression&& castExpressions,
+             std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
 
         const CastExpression& getCastExpression() const;
 
@@ -840,9 +840,9 @@ namespace OpenCL::Parser
     public:
 
         AdditiveExpression(std::uint64_t line,
-                                   std::uint64_t column,
-                                   Term&& term,
-                                   std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
+                           std::uint64_t column,
+                           Term&& term,
+                           std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
 
         const Term& getTerm() const;
 
@@ -876,10 +876,10 @@ namespace OpenCL::Parser
     public:
 
         ShiftExpression(std::uint64_t line,
-                                std::uint64_t column,
-                                AdditiveExpression&& additiveExpression,
-                                std::vector<std::pair<ShiftOperator,
-                                                  AdditiveExpression>>&& optionalAdditiveExpressions);
+                        std::uint64_t column,
+                        AdditiveExpression&& additiveExpression,
+                        std::vector<std::pair<ShiftOperator,
+                                              AdditiveExpression>>&& optionalAdditiveExpressions);
 
         const AdditiveExpression& getAdditiveExpression() const;
 
@@ -915,10 +915,10 @@ namespace OpenCL::Parser
     public:
 
         RelationalExpression(std::uint64_t line,
-                                     std::uint64_t column,
-                                     ShiftExpression&& shiftExpression,
-                                     std::vector<std::pair<RelationalOperator,
-                                                       ShiftExpression>>&& optionalRelationalExpressions);
+                             std::uint64_t column,
+                             ShiftExpression&& shiftExpression,
+                             std::vector<std::pair<RelationalOperator,
+                                                   ShiftExpression>>&& optionalRelationalExpressions);
 
         const ShiftExpression& getShiftExpression() const;
 
@@ -952,10 +952,10 @@ namespace OpenCL::Parser
     public:
 
         EqualityExpression(std::uint64_t line,
-                                   std::uint64_t column,
-                                   RelationalExpression&& relationalExpression,
-                                   std::vector<std::pair<EqualityOperator,
-                                                     RelationalExpression>>&& optionalRelationalExpressions);
+                           std::uint64_t column,
+                           RelationalExpression&& relationalExpression,
+                           std::vector<std::pair<EqualityOperator,
+                                                 RelationalExpression>>&& optionalRelationalExpressions);
 
         const RelationalExpression& getRelationalExpression() const;
 
@@ -975,9 +975,9 @@ namespace OpenCL::Parser
     public:
 
         BitAndExpression(std::uint64_t line,
-                                 std::uint64_t column,
-                                 EqualityExpression&& equalityExpression,
-                                 std::vector<EqualityExpression>&& optionalEqualityExpressions);
+                         std::uint64_t column,
+                         EqualityExpression&& equalityExpression,
+                         std::vector<EqualityExpression>&& optionalEqualityExpressions);
 
         const EqualityExpression& getEqualityExpression() const;
 
@@ -997,9 +997,9 @@ namespace OpenCL::Parser
     public:
 
         BitXorExpression(std::uint64_t line,
-                                 std::uint64_t column,
-                                 BitAndExpression&& bitAndExpression,
-                                 std::vector<BitAndExpression>&& optionalBitAndExpressions);
+                         std::uint64_t column,
+                         BitAndExpression&& bitAndExpression,
+                         std::vector<BitAndExpression>&& optionalBitAndExpressions);
 
         const BitAndExpression& getBitAndExpression() const;
 
@@ -1019,9 +1019,9 @@ namespace OpenCL::Parser
     public:
 
         BitOrExpression(std::uint64_t line,
-                                std::uint64_t column,
-                                BitXorExpression&& bitXorExpression,
-                                std::vector<BitXorExpression>&& optionalBitXorExpressions);
+                        std::uint64_t column,
+                        BitXorExpression&& bitXorExpression,
+                        std::vector<BitXorExpression>&& optionalBitXorExpressions);
 
         const BitXorExpression& getBitXorExpression() const;
 
@@ -1041,9 +1041,9 @@ namespace OpenCL::Parser
     public:
 
         LogicalAndExpression(std::uint64_t line,
-                                     std::uint64_t column,
-                                     BitOrExpression&& equalityExpression,
-                                     std::vector<BitOrExpression>&& optionalEqualityExpressions);
+                             std::uint64_t column,
+                             BitOrExpression&& equalityExpression,
+                             std::vector<BitOrExpression>&& optionalEqualityExpressions);
 
         const BitOrExpression& getBitOrExpression() const;
 
@@ -1063,9 +1063,9 @@ namespace OpenCL::Parser
     public:
 
         LogicalOrExpression(std::uint64_t line,
-                                    std::uint64_t column,
-                                    LogicalAndExpression&& andExpression,
-                                    std::vector<LogicalAndExpression>&& optionalAndExpressions);
+                            std::uint64_t column,
+                            LogicalAndExpression&& andExpression,
+                            std::vector<LogicalAndExpression>&& optionalAndExpressions);
 
         const LogicalAndExpression& getAndExpression() const;
 
@@ -1086,10 +1086,10 @@ namespace OpenCL::Parser
     public:
 
         ConditionalExpression(std::uint64_t line,
-                                      std::uint64_t column,
-                                      LogicalOrExpression&& logicalOrExpression,
-                                      std::unique_ptr<Expression>&& optionalExpression = nullptr,
-                                      std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
+                              std::uint64_t column,
+                              LogicalOrExpression&& logicalOrExpression,
+                              std::unique_ptr<Expression>&& optionalExpression = nullptr,
+                              std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
 
         const LogicalOrExpression& getLogicalOrExpression() const;
 
@@ -1107,7 +1107,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        BlockItem(std::uint64_t line,std::uint64_t column);
+        BlockItem(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -1130,7 +1130,7 @@ namespace OpenCL::Parser
     {
     protected:
 
-        Statement(std::uint64_t line,std::uint64_t column);
+        Statement(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -1159,8 +1159,8 @@ namespace OpenCL::Parser
     public:
 
         ExpressionStatement(std::uint64_t line,
-                                    std::uint64_t column,
-                                    std::unique_ptr<Expression>&& optionalExpression = nullptr);
+                            std::uint64_t column,
+                            std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
         const Expression* getOptionalExpression() const;
 
@@ -1182,10 +1182,10 @@ namespace OpenCL::Parser
     public:
 
         IfStatement(std::uint64_t line,
-                            std::uint64_t column,
-                            Expression&& expression,
-                            std::unique_ptr<Statement>&& branch,
-                            std::unique_ptr<Statement>&& elseBranch = nullptr);
+                    std::uint64_t column,
+                    Expression&& expression,
+                    std::unique_ptr<Statement>&& branch,
+                    std::unique_ptr<Statement>&& elseBranch = nullptr);
 
         const Expression& getExpression() const;
 
@@ -1208,9 +1208,9 @@ namespace OpenCL::Parser
     public:
 
         SwitchStatement(std::uint64_t line,
-                                std::uint64_t column,
-                                Expression&& expression,
-                                std::unique_ptr<Statement>&& statement);
+                        std::uint64_t column,
+                        Expression&& expression,
+                        std::unique_ptr<Statement>&& statement);
 
         const Expression& getExpression() const;
 
@@ -1229,8 +1229,8 @@ namespace OpenCL::Parser
     public:
 
         DefaultStatement(std::uint64_t line,
-                                 std::uint64_t column,
-                                 std::unique_ptr<Statement>&& statement);
+                         std::uint64_t column,
+                         std::unique_ptr<Statement>&& statement);
 
         const Statement& getStatement() const;
 
@@ -1248,9 +1248,9 @@ namespace OpenCL::Parser
     public:
 
         CaseStatement(std::uint64_t line,
-                              std::uint64_t column,
-                              Expression&& constant,
-                              std::unique_ptr<Statement>&& statement);
+                      std::uint64_t column,
+                      Expression&& constant,
+                      std::unique_ptr<Statement>&& statement);
 
         const Expression& getConstant() const;
 
@@ -1269,8 +1269,8 @@ namespace OpenCL::Parser
     public:
 
         BlockStatement(std::uint64_t line,
-                               std::uint64_t column,
-                               std::vector<std::unique_ptr<BlockItem>> blockItems);
+                       std::uint64_t column,
+                       std::vector<std::unique_ptr<BlockItem>> blockItems);
 
         const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
 
@@ -1291,11 +1291,11 @@ namespace OpenCL::Parser
     public:
 
         ForStatement(std::uint64_t line,
-                             std::uint64_t column,
-                             std::unique_ptr<Statement>&& statement,
-                             std::unique_ptr<Expression>&& initial = nullptr,
-                             std::unique_ptr<Expression>&& controlling = nullptr,
-                             std::unique_ptr<Expression>&& post = nullptr);
+                     std::uint64_t column,
+                     std::unique_ptr<Statement>&& statement,
+                     std::unique_ptr<Expression>&& initial = nullptr,
+                     std::unique_ptr<Expression>&& controlling = nullptr,
+                     std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
 
@@ -1309,23 +1309,76 @@ namespace OpenCL::Parser
     };
 
     /**
+     * <InitializerList> ::= <InitializerListScalarExpression> | <InitializerListBlock>
+     */
+    class InitializerList : public Node
+    {
+    protected:
+
+        InitializerList(std::uint64_t line, std::uint64_t column);
+    };
+
+    /**
+     * <InitializerListScalarExpression> ::= <Expression>
+     */
+    class InitializerListScalarExpression final : public InitializerList
+    {
+        Expression m_expression;
+
+    public:
+
+        InitializerListScalarExpression(uint64_t line, uint64_t column, Expression&& expression);
+
+        const Expression& getExpression() const;
+
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+    };
+
+    /**
+     * <InitializerListBlockItem> ::= <InitializerListBlock> | <NonCommaExpression>
+     *
+     * <InitializerListBlock> ::= <TokenType::OpenBrace> <TokenType::CloseBrace>
+     *                          | <TokenType::OpenBrace> <InitializerListBlockItem> { <TokenType::Comma> <InitializerListBlockItem> } <TokenType::CloseBrace>
+     */
+    class InitializerListBlock final : public InitializerList
+    {
+    public:
+
+        using vector = std::vector<std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>>;
+
+    private:
+
+        vector m_nonCommaExpressionsAndBlocks;
+
+    public:
+
+        InitializerListBlock(std::uint64_t line,
+                                     std::uint64_t column,
+                                     vector&& nonCommaExpressionsAndBlocks);
+
+        const vector& getNonCommaExpressionsAndBlocks() const;
+
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+    };
+
+    /**
      * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <Expression> ]} <TokenType::SemiColon>
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ]} <TokenType::SemiColon>
      */
     class Declarations final : public BlockItem
     {
-        std::vector<std::tuple<std::shared_ptr<Type>,std::string,std::unique_ptr<Expression>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
         Declarations(std::uint64_t line, std::uint64_t column, std::vector<std::tuple<std::shared_ptr<Type>,
-                                                                                              std::string,
-                                                                                              std::unique_ptr<Expression>>>&& declarations);
+                                                                                      std::string,
+                                                                                      std::unique_ptr<InitializerList>>>&& declarations);
 
         const std::vector<std::tuple<std::shared_ptr<Type>,
                                      std::string,
-                                     std::unique_ptr<Expression>>>& getDeclarations() const;
+                                     std::unique_ptr<InitializerList>>>& getDeclarations() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
@@ -1344,11 +1397,11 @@ namespace OpenCL::Parser
     public:
 
         ForDeclarationStatement(std::uint64_t line,
-                                        std::uint64_t column,
-                                        std::unique_ptr<Statement>&& statement,
-                                        Declarations&& initial,
-                                        std::unique_ptr<Expression>&& controlling = nullptr,
-                                        std::unique_ptr<Expression>&& post = nullptr);
+                                std::uint64_t column,
+                                std::unique_ptr<Statement>&& statement,
+                                Declarations&& initial,
+                                std::unique_ptr<Expression>&& controlling = nullptr,
+                                std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
 
@@ -1373,9 +1426,9 @@ namespace OpenCL::Parser
     public:
 
         HeadWhileStatement(std::uint64_t line,
-                                   std::uint64_t column,
-                                   Expression&& expression,
-                                   std::unique_ptr<Statement>&& statement);
+                           std::uint64_t column,
+                           Expression&& expression,
+                           std::unique_ptr<Statement>&& statement);
 
         const Expression& getExpression() const;
 
@@ -1395,9 +1448,9 @@ namespace OpenCL::Parser
     public:
 
         FootWhileStatement(std::uint64_t line,
-                                   std::uint64_t column,
-                                   std::unique_ptr<Statement>&& statement,
-                                   Expression&& expression);
+                           std::uint64_t column,
+                           std::unique_ptr<Statement>&& statement,
+                           Expression&& expression);
 
         const Statement& getStatement() const;
 
@@ -1413,7 +1466,7 @@ namespace OpenCL::Parser
     {
     public:
 
-        BreakStatement(std::uint64_t line,std::uint64_t column);
+        BreakStatement(std::uint64_t line, std::uint64_t column);
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
@@ -1425,16 +1478,19 @@ namespace OpenCL::Parser
     {
     public:
 
-        ContinueStatement(std::uint64_t line,std::uint64_t column);
+        ContinueStatement(std::uint64_t line, std::uint64_t column);
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
+    /**
+     * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration>
+     */
     class Global : public Node
     {
     protected:
 
-        Global(std::uint64_t line,std::uint64_t column);
+        Global(std::uint64_t line, std::uint64_t column);
     };
 
     /**
@@ -1449,22 +1505,22 @@ namespace OpenCL::Parser
     {
         bool m_isUnion;
         std::string m_name;
-        std::vector<std::pair<std::shared_ptr<Type>,std::string>> m_types;
+        std::vector<std::pair<std::shared_ptr<Type>, std::string>> m_types;
 
     public:
 
         StructOrUnionDeclaration(std::uint64_t line,
-                                         std::uint64_t column,
-                                         bool isUnion,
-                                         std::string name,
-                                         std::vector<std::pair<std::shared_ptr<Type>,
-                                                           std::string>>&& types);
+                                 std::uint64_t column,
+                                 bool isUnion,
+                                 std::string name,
+                                 std::vector<std::pair<std::shared_ptr<Type>,
+                                                       std::string>>&& types);
 
         bool isUnion() const;
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::shared_ptr<Type>,std::string>>& getTypes() const;
+        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypes() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
@@ -1485,8 +1541,8 @@ namespace OpenCL::Parser
     public:
 
         TypedefDeclaration(std::uint64_t line,
-                                   std::uint64_t column,
-                                   std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
+                           std::uint64_t column,
+                           std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
 
         const std::unique_ptr<StructOrUnionDeclaration>& getOptionalStructOrUnion() const;
 
@@ -1512,12 +1568,12 @@ namespace OpenCL::Parser
     public:
 
         Function(std::uint64_t line,
-                         std::uint64_t column,
-                         std::shared_ptr<Type> returnType,
-                         std::string name,
-                         std::vector<std::pair<std::shared_ptr<Type>,
-                                           std::string>> arguments,
-                         std::unique_ptr<BlockStatement>&& blockItems = nullptr);
+                 std::uint64_t column,
+                 std::shared_ptr<Type> returnType,
+                 std::string name,
+                 std::vector<std::pair<std::shared_ptr<Type>,
+                                       std::string>> arguments,
+                 std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
         const std::shared_ptr<Type>& getReturnType() const;
 
@@ -1543,10 +1599,10 @@ namespace OpenCL::Parser
     public:
 
         GlobalDeclaration(std::uint64_t line,
-                                  std::uint64_t column,
-                                  std::shared_ptr<Type> type,
-                                  std::string name,
-                                  std::unique_ptr<PrimaryExpressionConstant>&& value = nullptr);
+                          std::uint64_t column,
+                          std::shared_ptr<Type> type,
+                          std::string name,
+                          std::unique_ptr<PrimaryExpressionConstant>&& value = nullptr);
 
         const std::shared_ptr<Type>& getType() const;
 
@@ -1558,7 +1614,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <program> ::= {<Function> | <GlobalDeclaration>}
+     * <program> ::= {<Function> | <Global>}
      */
     class Program final
     {

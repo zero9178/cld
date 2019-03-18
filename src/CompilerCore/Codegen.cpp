@@ -314,7 +314,11 @@ namespace
             auto result = context.debugBuilder
                                  ->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
                                                    getAlignment(llvmArrayType),
-                                                   arrayedType,llvm::MDTuple::get(context.context,context.debugBuilder->getOrCreateSubrange(0,array->getSize())));
+                                                   arrayedType,
+                                                   llvm::MDTuple::get(context.context,
+                                                                      context.debugBuilder->getOrCreateSubrange(0,
+                                                                                                                array
+                                                                                                                    ->getSize())));
             cache[llvmType] = result;
             return result;
         }
@@ -330,6 +334,45 @@ namespace
         }
         auto* scope = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
         context.builder.SetCurrentDebugLocation(llvm::DebugLoc::get(node->getLine(), node->getColumn(), scope));
+    }
+
+    llvm::Constant* getZeroFor(llvm::Type* type)
+    {
+        if (type->isIntegerTy())
+        {
+            return llvm::ConstantInt::get(type, 0);
+        }
+        else if (type->isFloatingPointTy())
+        {
+            return llvm::ConstantFP::get(type, 0);
+        }
+        else if (type->isPointerTy())
+        {
+            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
+        }
+        else if (type->isStructTy())
+        {
+            auto* structType = llvm::cast<llvm::StructType>(type);
+            std::size_t count = structType->getStructNumElements();
+            std::vector<llvm::Constant*> constants;
+            constants.reserve(count);
+            for (std::size_t i = 0; i < count; i++)
+            {
+                constants.push_back(getZeroFor(structType->getTypeAtIndex(i)));
+            }
+            return llvm::ConstantStruct::get(structType, constants);
+        }
+        else if (type->isArrayTy())
+        {
+            auto* arrayType = llvm::cast<llvm::ArrayType>(type);
+            std::size_t count = arrayType->getArrayNumElements();
+            std::vector<llvm::Constant*> constants(count,getZeroFor(arrayType->getArrayElementType()));
+            return llvm::ConstantArray::get(arrayType,constants);
+        }
+        else
+        {
+            throw std::runtime_error("Not implemented yet");
+        }
     }
 }
 
@@ -378,45 +421,21 @@ std::pair<llvm::Value*,
     {
         castPrimitive(constant, sign->isSigned(), getType()->type(context), getType()->isSigned(), context);
     }
-    auto getZeroFor = [](llvm::Type* type, auto&& func) -> llvm::Constant*
-    {
-        if (type->isIntegerTy())
-        {
-            return llvm::ConstantInt::get(type, 0);
-        }
-        else if (type->isFloatingPointTy())
-        {
-            return llvm::ConstantFP::get(type, 0);
-        }
-        else if (type->isPointerTy())
-        {
-            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-        }
-        else if (type->isStructTy())
-        {
-            auto* structType = llvm::cast<llvm::StructType>(type);
-            std::size_t count = structType->getStructNumElements();
-            std::vector<llvm::Constant*> constants;
-            constants.reserve(count);
-            for (std::size_t i = 0; i < count; i++)
-            {
-                constants.push_back(func(structType->getTypeAtIndex(i), func));
-            }
-            return llvm::ConstantStruct::get(structType, constants);
-        }
-        else
-        {
-            return nullptr;
-        }
-    };
 
     auto* newGlobal = new llvm::GlobalVariable(*context.module,
                                                getType()->type(context),
                                                getType()->isConst(),
-                                               llvm::GlobalVariable::LinkageTypes::CommonLinkage,
+                                               llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
                                                constant ? llvm::cast<llvm::Constant>(constant) :
-                                               getZeroFor(getType()->type(context), getZeroFor),
+                                               getZeroFor(getType()->type(context)),
                                                getName());
+    context.debugBuilder->createGlobalVariableExpression(context.debugUnit,
+                                                         getName(),
+                                                         getName(),
+                                                         context.debugUnit,
+                                                         getLine(),
+                                                         toDwarfType(getType(), context),
+                                                         false);
     context.addGlobal(getName(), {newGlobal, getType()});
     return {};
 }
@@ -602,6 +621,7 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Declarations::codegen(OpenCL::Parser::Context& context) const
 {
+    //TODO: Array type with initializer list (with size deduction)
     emitLocation(this, context);
     llvm::IRBuilder<> tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
     for (auto&[type, name, optionalExpression] : getDeclarations())
@@ -622,13 +642,92 @@ std::pair<llvm::Value*,
                                             llvm::DebugLoc::get(getLine(), getColumn(), sp),
                                             context.builder.GetInsertBlock());
         alloca->setAlignment(getAlignment(allocaType));
+        context.addValueToScope(name, {alloca, type});
         if (optionalExpression)
         {
-            auto[value, otherType] = optionalExpression->codegen(context);
-            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
-            context.builder.CreateStore(value, alloca);
+            if (dynamic_cast<const InitializerListScalarExpression*>(optionalExpression.get()))
+            {
+                auto[value, otherType] = optionalExpression->codegen(context);
+                castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
+                context.builder.CreateStore(value, alloca);
+            }
+            else if (auto result = dynamic_cast<const InitializerListBlock*>(optionalExpression.get()))
+            {
+                std::function<void(const typename InitializerListBlock::vector& list,
+                                   llvm::Value* pointer,
+                                   std::shared_ptr<Type> type)>
+                    match = [&context,&match](const typename InitializerListBlock::vector& list,
+                                       llvm::Value* pointer,
+                                       std::shared_ptr<Type> type)
+                {
+                    auto* allocaType = type->type(context);
+                    if (list.empty())
+                    {
+                        if (allocaType->isStructTy())
+                        {
+                            context.builder.CreateStore(getZeroFor(allocaType), pointer);
+                        }
+                        else
+                        {
+                            throw std::runtime_error("Scalar initializer can not be empty");
+                        }
+                    }
+                    else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
+                    {
+                        auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
+                                                                                                  std::shared_ptr<OpenCL::Parser::Type>>
+                                                            {
+                                                                using T = std::decay_t<decltype(value)>;
+                                                                if constexpr(std::is_same_v<T, InitializerListBlock>)
+                                                                {
+                                                                    throw std::runtime_error(
+                                                                        "Only single level of braces allowed for scalar initialization");
+                                                                }
+                                                                else
+                                                                {
+                                                                    return value->codegen(context);
+                                                                }
+                                                            }, list[0]);
+                        castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
+                        context.builder.CreateStore(value, pointer);
+                    }
+                    else if (allocaType->isStructTy())
+                    {
+                        auto& structInfo = context.structs.at(allocaType->getStructName());
+                        std::size_t i = 0;
+                        for (auto& iter : structInfo.types)
+                        {
+                            auto* zero = context.builder.getInt32(0);
+                            auto* index = context.builder.getInt32(i);
+                            auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                            if (i >= list.size())
+                            {
+                                context.builder.CreateStore(getZeroFor(iter->type(context)),member);
+                            }
+                            else
+                            {
+                                std::visit([&context, member, &match, iter](auto&& value)
+                                           {
+                                               using T = std::decay_t<decltype(value)>;
+                                               if constexpr(std::is_same_v<T, InitializerListBlock>)
+                                               {
+                                                   match(value.getNonCommaExpressionsAndBlocks(), member, iter);
+                                               }
+                                               else
+                                               {
+                                                   auto [newValue,otherType] = value->codegen(context);
+                                                   castPrimitive(newValue, otherType->isSigned(),iter->type(context),iter->isSigned(), context);
+                                                   context.builder.CreateStore(newValue,member);
+                                               }
+                                           }, list[i]);
+                            }
+                            i++;
+                        }
+                    }
+                };
+                match(result->getNonCommaExpressionsAndBlocks(), alloca, type);
+            }
         }
-        context.addValueToScope(name, {alloca, type});
     }
     return {};
 }
@@ -2354,6 +2453,19 @@ std::pair<llvm::Value*,
     {
         return getOptionalStructOrUnion()->codegen(context);
     }
+    return {};
+}
+
+std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::InitializerListScalarExpression::codegen(
+    OpenCL::Parser::Context& context) const
+{
+    return getExpression().codegen(context);
+}
+
+std::pair<llvm::Value*,
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::InitializerListBlock::codegen(OpenCL::Parser::Context& context) const
+{
+    (void)context;
     return {};
 }
 

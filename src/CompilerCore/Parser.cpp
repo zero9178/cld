@@ -1,13 +1,6 @@
-#include <utility>
-
-#include <utility>
-
-#include <utility>
-
 #include "Parser.hpp"
 
 #include <utility>
-
 #include <algorithm>
 #include <sstream>
 
@@ -57,7 +50,7 @@ OpenCL::Parser::Declarations::Declarations(std::uint64_t line,
                                            std::uint64_t column,
                                            std::vector<std::tuple<std::shared_ptr<Type>,
                                                                   std::string,
-                                                                  std::unique_ptr<Expression>>>&& declarations)
+                                                                  std::unique_ptr<InitializerList>>>&& declarations)
     : BlockItem(line, column), m_declarations(std::move(declarations))
 {
     assert(std::all_of(m_declarations.begin(), m_declarations.end(), [](const auto& tuple)
@@ -66,7 +59,7 @@ OpenCL::Parser::Declarations::Declarations(std::uint64_t line,
 
 const std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
                              std::string,
-                             std::unique_ptr<OpenCL::Parser::Expression>>>& OpenCL::Parser::Declarations::getDeclarations() const
+                             std::unique_ptr<OpenCL::Parser::InitializerList>>>& OpenCL::Parser::Declarations::getDeclarations() const
 {
     return m_declarations;
 }
@@ -906,10 +899,6 @@ OpenCL::Parser::ArrayType::ArrayType(std::unique_ptr<Type>&& type, std::size_t s
     : m_type(std::move(type)), m_size(size)
 {
     assert(m_type);
-    if (size <= 0)
-    {
-        throw std::runtime_error("Array must have a size greater than 0");
-    }
 }
 
 const std::unique_ptr<OpenCL::Parser::Type>& OpenCL::Parser::ArrayType::getType() const
@@ -964,7 +953,10 @@ OpenCL::Parser::StructOrUnionDeclaration::StructOrUnionDeclaration(std::uint64_t
                                                                                          std::string>>&& types)
     : Global(line, column), m_isUnion(isUnion), m_name(std::move(name)), m_types(std::move(types))
 {
-    assert(!m_types.empty());
+    if(m_types.empty())
+    {
+        throw std::runtime_error("Struct and unions needs to have atleast one field");
+    }
     assert(std::all_of(m_types.begin(), m_types.end(), [](const auto& pair)
     { return pair.first.get(); }));
 }
@@ -1159,4 +1151,32 @@ OpenCL::Parser::UnaryExpression::UnaryExpression(std::uint64_t line, std::uint64
 OpenCL::Parser::Global::Global(std::uint64_t line, std::uint64_t column) : Node(line, column)
 {
 
+}
+
+OpenCL::Parser::InitializerList::InitializerList(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{
+
+}
+
+OpenCL::Parser::InitializerListScalarExpression::InitializerListScalarExpression(std::uint64_t line,
+                                                                                 std::uint64_t column,
+                                                                                 OpenCL::Parser::Expression&& expression)
+    : InitializerList(line, column), m_expression(std::move(expression))
+{}
+
+const OpenCL::Parser::Expression& OpenCL::Parser::InitializerListScalarExpression::getExpression() const
+{
+    return m_expression;
+}
+
+OpenCL::Parser::InitializerListBlock::InitializerListBlock(std::uint64_t line,
+                                                           std::uint64_t column,
+                                                           vector&& nonCommaExpressionsAndBlocks)
+    : InitializerList(line, column),  m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
+{}
+
+const std::vector<std::variant<std::unique_ptr<OpenCL::Parser::NonCommaExpression>,
+                               OpenCL::Parser::InitializerListBlock>>& OpenCL::Parser::InitializerListBlock::getNonCommaExpressionsAndBlocks() const
+{
+    return m_nonCommaExpressionsAndBlocks;
 }
