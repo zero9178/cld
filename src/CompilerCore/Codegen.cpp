@@ -366,12 +366,162 @@ namespace
         {
             auto* arrayType = llvm::cast<llvm::ArrayType>(type);
             std::size_t count = arrayType->getArrayNumElements();
-            std::vector<llvm::Constant*> constants(count,getZeroFor(arrayType->getArrayElementType()));
-            return llvm::ConstantArray::get(arrayType,constants);
+            std::vector<llvm::Constant*> constants(count, getZeroFor(arrayType->getArrayElementType()));
+            return llvm::ConstantArray::get(arrayType, constants);
         }
         else
         {
             throw std::runtime_error("Not implemented yet");
+        }
+    }
+
+    std::size_t elementsNeededForType(llvm::Type* type)
+    {
+        if (type->isArrayTy())
+        {
+            return elementsNeededForType(type->getArrayElementType()) * type->getArrayNumElements();
+        }
+        else if (type->isStructTy())
+        {
+            std::size_t sum = 0;
+            for (std::size_t i = 0; i < type->getStructNumElements(); i++)
+            {
+                sum += elementsNeededForType(type->getStructElementType(i));
+            }
+            return sum;
+        }
+        else
+        {
+            return 1;
+        }
+    }
+
+    void match(llvm::ArrayRef<typename OpenCL::Parser::InitializerListBlock::variant> list,
+               llvm::Value* pointer,
+               std::shared_ptr<OpenCL::Parser::Type> type, OpenCL::Parser::Context& context)
+    {
+        auto* allocaType = type->type(context);
+        if (list.empty())
+        {
+            if (allocaType->isStructTy())
+            {
+                context.builder.CreateStore(getZeroFor(allocaType), pointer);
+            }
+            else
+            {
+                throw std::runtime_error("Scalar initializer can not be empty");
+            }
+        }
+        else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
+        {
+            auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
+                                                                                      std::shared_ptr<OpenCL::Parser::Type>>
+                                                {
+                                                    using T = std::decay_t<decltype(value)>;
+                                                    if constexpr(std::is_same_v<T,
+                                                                                OpenCL::Parser::InitializerListBlock>)
+                                                    {
+                                                        throw std::runtime_error(
+                                                            "Only single level of braces allowed for scalar initialization");
+                                                    }
+                                                    else
+                                                    {
+                                                        return value->codegen(context);
+                                                    }
+                                                }, list[0]);
+            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
+            context.builder.CreateStore(value, pointer);
+        }
+        else if (allocaType->isStructTy())
+        {
+            auto& structInfo = context.structs.at(allocaType->getStructName());
+            std::size_t i = 0;
+            for (auto& iter : structInfo.types)
+            {
+                auto* zero = context.builder.getInt32(0);
+                auto* index = context.builder.getInt32(i);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                if (i >= list.size())
+                {
+                    context.builder.CreateStore(getZeroFor(iter->type(context)), member);
+                }
+                else
+                {
+                    std::visit([&context, member, iter](auto&& value)
+                               {
+                                   using T = std::decay_t<decltype(value)>;
+                                   if constexpr(std::is_same_v<T, OpenCL::Parser::InitializerListBlock>)
+                                   {
+                                       match(value.getNonCommaExpressionsAndBlocks(), member, iter, context);
+                                   }
+                                   else
+                                   {
+                                       auto[newValue, otherType] = value->codegen(context);
+                                       castPrimitive(newValue,
+                                                     otherType->isSigned(),
+                                                     iter->type(context),
+                                                     iter->isSigned(),
+                                                     context);
+                                       context.builder.CreateStore(newValue, member);
+                                   }
+                               }, list[i]);
+                }
+                i++;
+            }
+        }
+        else if (allocaType->isArrayTy())
+        {
+            auto* zero = context.builder.getInt32(0);
+            auto arrayType = std::dynamic_pointer_cast<OpenCL::Parser::ArrayType>(type);
+            if (list.size() == 1)
+            {
+                for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
+                {
+                    auto* index = context.builder.getInt32(i);
+                    auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                    std::visit([&context, member, arrayType](auto&& value)
+                               {
+                                   using T = std::decay_t<decltype(value)>;
+                                   if constexpr(std::is_same_v<T, OpenCL::Parser::InitializerListBlock>)
+                                   {
+                                       match(value.getNonCommaExpressionsAndBlocks(),
+                                             member,
+                                             arrayType->getType()->clone(),
+                                             context);
+                                   }
+                                   else
+                                   {
+                                       auto[newValue, otherType] = value->codegen(context);
+                                       castPrimitive(newValue,
+                                                     otherType->isSigned(),
+                                                     arrayType->getType()->type(context),
+                                                     arrayType->getType()->isSigned(),
+                                                     context);
+                                       context.builder.CreateStore(newValue, member);
+                                   }
+                               }, list[0]);
+                }
+                return;
+            }
+            auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
+            std::shared_ptr heldType = arrayType->getType()->clone();
+            std::size_t i = 0;
+            for(auto iter = list.begin(); iter < list.end(); i++)
+            {
+                if(i >= allocaType->getArrayNumElements())
+                {
+                    throw std::runtime_error("More elements specified in initializer list than elements in array");
+                }
+                auto* index = context.builder.getInt32(i);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                auto result = std::find_if(iter,iter + elementSize > list.end() ? list.end() : iter + elementSize ,[](auto&& value)
+                {
+                    return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
+                });
+                match({iter,result},member,heldType,context);
+                iter = result;
+            }
+
         }
     }
 }
@@ -401,7 +551,7 @@ void OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
     context.module->setTargetTriple(t.str());
     context.debugBuilder = new llvm::DIBuilder(*context.module);
     context.debugBuilder->finalize();
-    context.debugUnit = context.debugBuilder->createFile("input.c", "C:/Users/Markus/Documents/CLion/OpenCLParser/src");
+    context.debugUnit = context.debugBuilder->createFile("input.c", "../src");
     context.debugBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99, context.debugUnit,
                                             "OpenCL Compiler", false, "", 0);
     for (auto& iter : getGlobals())
@@ -621,11 +771,28 @@ std::pair<llvm::Value*,
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::Declarations::codegen(OpenCL::Parser::Context& context) const
 {
-    //TODO: Array type with initializer list (with size deduction)
     emitLocation(this, context);
     llvm::IRBuilder<> tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
     for (auto&[type, name, optionalExpression] : getDeclarations())
     {
+        if (auto array = std::dynamic_pointer_cast<ArrayType>(type);array && array->getSize() == 0)
+        {
+            if (!optionalExpression)
+            {
+                throw std::runtime_error("Initializer list needed to deduce size of array");
+            }
+            auto* result = dynamic_cast<InitializerListBlock*>(optionalExpression.get());
+            if (!result)
+            {
+                throw std::runtime_error("Initializer list needed to deduce size of array");
+            }
+
+            array->setSize(result->getNonCommaExpressionsAndBlocks().size());
+            if (!array->getSize())
+            {
+                throw std::runtime_error("Array can't be of size 0");
+            }
+        }
         auto* allocaType = type->type(context);
         auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
         auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope
@@ -653,79 +820,7 @@ std::pair<llvm::Value*,
             }
             else if (auto result = dynamic_cast<const InitializerListBlock*>(optionalExpression.get()))
             {
-                std::function<void(const typename InitializerListBlock::vector& list,
-                                   llvm::Value* pointer,
-                                   std::shared_ptr<Type> type)>
-                    match = [&context,&match](const typename InitializerListBlock::vector& list,
-                                       llvm::Value* pointer,
-                                       std::shared_ptr<Type> type)
-                {
-                    auto* allocaType = type->type(context);
-                    if (list.empty())
-                    {
-                        if (allocaType->isStructTy())
-                        {
-                            context.builder.CreateStore(getZeroFor(allocaType), pointer);
-                        }
-                        else
-                        {
-                            throw std::runtime_error("Scalar initializer can not be empty");
-                        }
-                    }
-                    else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
-                    {
-                        auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
-                                                                                                  std::shared_ptr<OpenCL::Parser::Type>>
-                                                            {
-                                                                using T = std::decay_t<decltype(value)>;
-                                                                if constexpr(std::is_same_v<T, InitializerListBlock>)
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Only single level of braces allowed for scalar initialization");
-                                                                }
-                                                                else
-                                                                {
-                                                                    return value->codegen(context);
-                                                                }
-                                                            }, list[0]);
-                        castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
-                        context.builder.CreateStore(value, pointer);
-                    }
-                    else if (allocaType->isStructTy())
-                    {
-                        auto& structInfo = context.structs.at(allocaType->getStructName());
-                        std::size_t i = 0;
-                        for (auto& iter : structInfo.types)
-                        {
-                            auto* zero = context.builder.getInt32(0);
-                            auto* index = context.builder.getInt32(i);
-                            auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                            if (i >= list.size())
-                            {
-                                context.builder.CreateStore(getZeroFor(iter->type(context)),member);
-                            }
-                            else
-                            {
-                                std::visit([&context, member, &match, iter](auto&& value)
-                                           {
-                                               using T = std::decay_t<decltype(value)>;
-                                               if constexpr(std::is_same_v<T, InitializerListBlock>)
-                                               {
-                                                   match(value.getNonCommaExpressionsAndBlocks(), member, iter);
-                                               }
-                                               else
-                                               {
-                                                   auto [newValue,otherType] = value->codegen(context);
-                                                   castPrimitive(newValue, otherType->isSigned(),iter->type(context),iter->isSigned(), context);
-                                                   context.builder.CreateStore(newValue,member);
-                                               }
-                                           }, list[i]);
-                            }
-                            i++;
-                        }
-                    }
-                };
-                match(result->getNonCommaExpressionsAndBlocks(), alloca, type);
+                match(result->getNonCommaExpressionsAndBlocks(), alloca, type, context);
             }
         }
     }

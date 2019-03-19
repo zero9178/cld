@@ -263,6 +263,8 @@ namespace OpenCL::Parser
 
         std::size_t getSize() const;
 
+        void setSize(size_t size);
+
         llvm::Type* type(Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
@@ -1344,7 +1346,9 @@ namespace OpenCL::Parser
     {
     public:
 
-        using vector = std::vector<std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>>;
+        using variant = std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>;
+
+        using vector = std::vector<variant>;
 
     private:
 

@@ -19,7 +19,6 @@
 
 int main()
 {
-    int i[][5] = {{1},{2}};
-//    Point three = {},two = {&three},one = {&two};
-//    return getListCount(&one);
+    int i[][5] = {5,3,43,4,34,34};
+    return i[0][0] + i[1][1];
 }

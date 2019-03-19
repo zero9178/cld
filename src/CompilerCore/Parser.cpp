@@ -923,6 +923,11 @@ std::string OpenCL::Parser::ArrayType::name() const
     return getType()->name() + " [" + ss.str() + "]";
 }
 
+void OpenCL::Parser::ArrayType::setSize(size_t size)
+{
+    m_size = size;
+}
+
 OpenCL::Parser::PostFixExpressionIncrement::PostFixExpressionIncrement(std::uint64_t line,
                                                                        std::uint64_t column,
                                                                        std::unique_ptr<PostFixExpression>&& postFixExpression)
