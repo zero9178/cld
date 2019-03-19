@@ -248,7 +248,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <PrimaryExpressionConstant> <TokenType::CloseSquareBracket>
+     * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <ConstantNonCommaExpression> <TokenType::CloseSquareBracket>
      */
     class ArrayType final : public Type
     {
@@ -1240,7 +1240,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <CaseStatement> ::= <TokenType::CaseKeyword> <ConstantExpression> <TokenType::Colon> [<Statement>]
+     * <CaseStatement> ::= <TokenType::CaseKeyword> <ConstantNonCommaExpression> <TokenType::Colon> [<Statement>]
      */
     class CaseStatement final : public Statement
     {
@@ -1337,7 +1337,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <InitializerListBlockItem> ::= <InitializerListBlock> | <NonCommaExpression>
+     * <InitializerListBlockItem> ::= [ <TokenType::OpenSquareBracket> <ConstantNonCommaExpression> <TokenType::CloseSquareBracket> <TokenType::Assign> ] <InitializerListBlock> | <NonCommaExpression>
      *
      * <InitializerListBlock> ::= <TokenType::OpenBrace> <TokenType::CloseBrace>
      *                          | <TokenType::OpenBrace> <InitializerListBlockItem> { <TokenType::Comma> <InitializerListBlockItem> } <TokenType::CloseBrace>
@@ -1366,8 +1366,8 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> [<ConstantNonCommaExpression>]
+     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <ConstantNonCommaExpression>
      * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ]} <TokenType::SemiColon>
      */
     class Declarations final : public BlockItem

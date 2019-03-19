@@ -398,12 +398,12 @@ namespace
 
     void match(llvm::ArrayRef<typename OpenCL::Parser::InitializerListBlock::variant> list,
                llvm::Value* pointer,
-               std::shared_ptr<OpenCL::Parser::Type> type, OpenCL::Parser::Context& context)
+               const std::shared_ptr<OpenCL::Parser::Type>& type, OpenCL::Parser::Context& context)
     {
         auto* allocaType = type->type(context);
         if (list.empty())
         {
-            if (allocaType->isStructTy())
+            if (allocaType->isStructTy() || allocaType->isArrayTy())
             {
                 context.builder.CreateStore(getZeroFor(allocaType), pointer);
             }
@@ -473,36 +473,6 @@ namespace
         {
             auto* zero = context.builder.getInt32(0);
             auto arrayType = std::dynamic_pointer_cast<OpenCL::Parser::ArrayType>(type);
-            if (list.size() == 1)
-            {
-                for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
-                {
-                    auto* index = context.builder.getInt32(i);
-                    auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                    std::visit([&context, member, arrayType](auto&& value)
-                               {
-                                   using T = std::decay_t<decltype(value)>;
-                                   if constexpr(std::is_same_v<T, OpenCL::Parser::InitializerListBlock>)
-                                   {
-                                       match(value.getNonCommaExpressionsAndBlocks(),
-                                             member,
-                                             arrayType->getType()->clone(),
-                                             context);
-                                   }
-                                   else
-                                   {
-                                       auto[newValue, otherType] = value->codegen(context);
-                                       castPrimitive(newValue,
-                                                     otherType->isSigned(),
-                                                     arrayType->getType()->type(context),
-                                                     arrayType->getType()->isSigned(),
-                                                     context);
-                                       context.builder.CreateStore(newValue, member);
-                                   }
-                               }, list[0]);
-                }
-                return;
-            }
             auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
             std::shared_ptr heldType = arrayType->getType()->clone();
             std::size_t i = 0;
@@ -514,14 +484,32 @@ namespace
                 }
                 auto* index = context.builder.getInt32(i);
                 auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                auto result = std::find_if(iter,iter + elementSize > list.end() ? list.end() : iter + elementSize ,[](auto&& value)
+                auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
+                auto result = std::find_if(iter,end,[](auto&& value)
                 {
                     return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
                 });
-                match({iter,result},member,heldType,context);
-                iter = result;
+                if(result == iter && std::holds_alternative<OpenCL::Parser::InitializerListBlock>(*result))
+                {
+                    match(std::get<OpenCL::Parser::InitializerListBlock>(*result).getNonCommaExpressionsAndBlocks(),member,heldType,context);
+                    iter++;
+                }
+                else
+                {
+                    if(iter == result)
+                    {
+                        result++;
+                    }
+                    match({iter,result},member,heldType,context);
+                    iter = result;
+                }
             }
-
+            for(; i < allocaType->getArrayNumElements(); i++)
+            {
+                auto* index = context.builder.getInt32(i);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()),member);
+            }
         }
     }
 }
@@ -786,8 +774,24 @@ std::pair<llvm::Value*,
             {
                 throw std::runtime_error("Initializer list needed to deduce size of array");
             }
-
-            array->setSize(result->getNonCommaExpressionsAndBlocks().size());
+            auto elementSize = elementsNeededForType(array->getType()->type(context));
+            std::size_t i = 0;
+            for(auto iter = result->getNonCommaExpressionsAndBlocks().begin(); iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
+            {
+                auto end = std::find_if(iter,iter + elementSize > result->getNonCommaExpressionsAndBlocks().end() ? result->getNonCommaExpressionsAndBlocks().end() : iter + elementSize ,[](auto&& value)
+                {
+                    return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
+                });
+                if(iter == end)
+                {
+                    iter++;
+                }
+                else
+                {
+                    iter = end;
+                }
+            }
+            array->setSize(i);
             if (!array->getSize())
             {
                 throw std::runtime_error("Array can't be of size 0");
@@ -820,6 +824,36 @@ std::pair<llvm::Value*,
             }
             else if (auto result = dynamic_cast<const InitializerListBlock*>(optionalExpression.get()))
             {
+                if(allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
+                {
+                    auto* zero = context.builder.getInt32(0);
+                    for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
+                    {
+                        auto* index = context.builder.getInt32(i);
+                        auto* member = context.builder.CreateInBoundsGEP(alloca, {zero, index});
+                        std::visit([&context, member,type = std::dynamic_pointer_cast<ArrayType>(type)](auto&& value)
+                                   {
+                                       using T = std::decay_t<decltype(value)>;
+                                       if constexpr(std::is_same_v<T, OpenCL::Parser::InitializerListBlock>)
+                                       {
+                                           match(value.getNonCommaExpressionsAndBlocks(),
+                                                 member,
+                                                 type->getType()->clone(),
+                                                 context);
+                                       }
+                                       else
+                                       {
+                                           auto[newValue, otherType] = value->codegen(context);
+                                           castPrimitive(newValue,
+                                                         otherType->isSigned(),
+                                                         type->getType()->type(context),
+                                                         type->getType()->isSigned(),
+                                                         context);
+                                           context.builder.CreateStore(newValue, member);
+                                       }
+                                   }, result->getNonCommaExpressionsAndBlocks()[0]);
+                    }
+                }
                 match(result->getNonCommaExpressionsAndBlocks(), alloca, type, context);
             }
         }

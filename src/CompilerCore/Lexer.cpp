@@ -34,263 +34,263 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         }
         else if (lastText == ".")
         {
-            result.emplace_back(line, column - lastText.size(), TokenType::Dot);
+            result.emplace_back(line, column, TokenType::Dot);
         }
         else if (lastText == "->")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Arrow);
+            result.emplace_back(line,  column, TokenType::Arrow);
         }
         else if (lastText == "switch")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::SwitchKeyword);
+            result.emplace_back(line,  column, TokenType::SwitchKeyword);
         }
         else if (lastText == "case")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::CaseKeyword);
+            result.emplace_back(line,  column, TokenType::CaseKeyword);
         }
         else if (lastText == "default")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::DefaultKeyword);
+            result.emplace_back(line,  column, TokenType::DefaultKeyword);
         }
         else if (lastText == "void")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::VoidKeyword);
+            result.emplace_back(line,  column, TokenType::VoidKeyword);
         }
         else if (lastText == "struct")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::StructKeyword);
+            result.emplace_back(line,  column, TokenType::StructKeyword);
         }
         else if (lastText == "char")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::CharKeyword);
+            result.emplace_back(line,  column, TokenType::CharKeyword);
         }
         else if (lastText == "short")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ShortKeyword);
+            result.emplace_back(line,  column, TokenType::ShortKeyword);
         }
         else if (lastText == "int")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::IntKeyword);
+            result.emplace_back(line,  column, TokenType::IntKeyword);
         }
         else if (lastText == "long")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LongKeyword);
+            result.emplace_back(line,  column, TokenType::LongKeyword);
         }
         else if (lastText == "float")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::FloatKeyword);
+            result.emplace_back(line,  column, TokenType::FloatKeyword);
         }
         else if (lastText == "double")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::DoubleKeyword);
+            result.emplace_back(line,  column, TokenType::DoubleKeyword);
         }
         else if (lastText == "signed")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::SignedKeyword);
+            result.emplace_back(line,  column, TokenType::SignedKeyword);
         }
         else if (lastText == "const")
         {
-            result.emplace_back(line, column - lastText.size(),TokenType::ConstKeyword);
+            result.emplace_back(line, column,TokenType::ConstKeyword);
         }
         else if (lastText == "sizeof")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::SizeofKeyword);
+            result.emplace_back(line,  column, TokenType::SizeofKeyword);
         }
         else if (lastText == "unsigned")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::UnsignedKeyword);
+            result.emplace_back(line,  column, TokenType::UnsignedKeyword);
         }
         else if (lastText == "typedef")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::TypedefKeyword);
+            result.emplace_back(line,  column, TokenType::TypedefKeyword);
         }
         else if (lastText == "extern")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ExternKeyword);
+            result.emplace_back(line,  column, TokenType::ExternKeyword);
         }
         else if (lastText == "static")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::StaticKeyword);
+            result.emplace_back(line,  column, TokenType::StaticKeyword);
         }
         else if (lastText == "auto")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::AutoKeyword);
+            result.emplace_back(line,  column, TokenType::AutoKeyword);
         }
         else if (lastText == "register")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::RegisterKeyword);
+            result.emplace_back(line,  column, TokenType::RegisterKeyword);
         }
         else if (lastText == "return")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ReturnKeyword);
+            result.emplace_back(line,  column, TokenType::ReturnKeyword);
         }
         else if (lastText == "break")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BreakKeyword);
+            result.emplace_back(line,  column, TokenType::BreakKeyword);
         }
         else if (lastText == "continue")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ContinueKeyword);
+            result.emplace_back(line,  column, TokenType::ContinueKeyword);
         }
         else if (lastText == "union")
         {
-            result.emplace_back(line, column - lastText.size(),TokenType::UnionKeyword);
+            result.emplace_back(line, column,TokenType::UnionKeyword);
         }
         else if (lastText == "do")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::DoKeyword);
+            result.emplace_back(line,  column, TokenType::DoKeyword);
         }
         else if (lastText == "else")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ElseKeyword);
+            result.emplace_back(line,  column, TokenType::ElseKeyword);
         }
         else if (lastText == "for")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ForKeyword);
+            result.emplace_back(line,  column, TokenType::ForKeyword);
         }
         else if (lastText == "if")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::IfKeyword);
+            result.emplace_back(line,  column, TokenType::IfKeyword);
         }
         else if (lastText == "while")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::WhileKeyword);
+            result.emplace_back(line,  column, TokenType::WhileKeyword);
         }
         else if (lastText == "~")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitWiseNegation);
+            result.emplace_back(line,  column, TokenType::BitWiseNegation);
         }
         else if (lastText == "!")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LogicalNegation);
+            result.emplace_back(line,  column, TokenType::LogicalNegation);
         }
         else if (lastText == "&")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Ampersand);
+            result.emplace_back(line,  column, TokenType::Ampersand);
         }
         else if (lastText == "^")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitXor);
+            result.emplace_back(line,  column, TokenType::BitXor);
         }
         else if (lastText == "|")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitOr);
+            result.emplace_back(line,  column, TokenType::BitOr);
         }
         else if (lastText == "+")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Addition);
+            result.emplace_back(line,  column, TokenType::Addition);
         }
         else if (lastText == "++")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Increment);
+            result.emplace_back(line,  column, TokenType::Increment);
         }
         else if (lastText == "--")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Decrement);
+            result.emplace_back(line,  column, TokenType::Decrement);
         }
         else if (lastText == "-")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Negation);
+            result.emplace_back(line,  column, TokenType::Negation);
         }
         else if (lastText == "*")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Asterisk);
+            result.emplace_back(line,  column, TokenType::Asterisk);
         }
         else if (lastText == "/")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Division);
+            result.emplace_back(line,  column, TokenType::Division);
         }
         else if (lastText == "%")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Modulo);
+            result.emplace_back(line,  column, TokenType::Modulo);
         }
         else if (lastText == "=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Assignment);
+            result.emplace_back(line,  column, TokenType::Assignment);
         }
         else if (lastText == "==")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Equal);
+            result.emplace_back(line,  column, TokenType::Equal);
         }
         else if (lastText == "&&")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LogicAnd);
+            result.emplace_back(line,  column, TokenType::LogicAnd);
         }
         else if (lastText == "||")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LogicOr);
+            result.emplace_back(line,  column, TokenType::LogicOr);
         }
         else if (lastText == "!=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::NotEqual);
+            result.emplace_back(line,  column, TokenType::NotEqual);
         }
         else if (lastText == "<")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LessThan);
+            result.emplace_back(line,  column, TokenType::LessThan);
         }
         else if (lastText == "<=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::LessThanOrEqual);
+            result.emplace_back(line,  column, TokenType::LessThanOrEqual);
         }
         else if (lastText == ">")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::GreaterThan);
+            result.emplace_back(line,  column, TokenType::GreaterThan);
         }
         else if (lastText == ">=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::GreaterThanOrEqual);
+            result.emplace_back(line,  column, TokenType::GreaterThanOrEqual);
         }
         else if (lastText == "+=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::PlusAssign);
+            result.emplace_back(line,  column, TokenType::PlusAssign);
         }
         else if (lastText == "-=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::MinusAssign);
+            result.emplace_back(line,  column, TokenType::MinusAssign);
         }
         else if (lastText == "/=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::DivideAssign);
+            result.emplace_back(line,  column, TokenType::DivideAssign);
         }
         else if (lastText == "*=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::MultiplyAssign);
+            result.emplace_back(line,  column, TokenType::MultiplyAssign);
         }
         else if (lastText == "%=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ModuloAssign);
+            result.emplace_back(line,  column, TokenType::ModuloAssign);
         }
         else if (lastText == "<<=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ShiftLeftAssign);
+            result.emplace_back(line,  column, TokenType::ShiftLeftAssign);
         }
         else if (lastText == ">>=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ShiftRightAssign);
+            result.emplace_back(line,  column, TokenType::ShiftRightAssign);
         }
         else if (lastText == "&=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitAndAssign);
+            result.emplace_back(line,  column, TokenType::BitAndAssign);
         }
         else if (lastText == "|=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitOrAssign);
+            result.emplace_back(line,  column, TokenType::BitOrAssign);
         }
         else if (lastText == "^=")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::BitXorAssign);
+            result.emplace_back(line,  column, TokenType::BitXorAssign);
         }
         else if (lastText == ">>")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ShiftRight);
+            result.emplace_back(line,  column, TokenType::ShiftRight);
         }
         else if (lastText == "<<")
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::ShiftLeft);
+            result.emplace_back(line,  column, TokenType::ShiftLeft);
         }
         else if (std::regex_match(lastText, identifierMatch))
         {
-            result.emplace_back(line,  column - lastText.size(), TokenType::Identifier, std::move(lastText));
+            result.emplace_back(line,  column, TokenType::Identifier, std::move(lastText));
         }
         else if (std::regex_match(lastText, integerLiteralMatch))
         {
@@ -331,18 +331,18 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                     ss >> number;
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
-                        result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                        result.emplace_back(line,  column, TokenType::Literal, number);
                     }
                     else
                     {
-                        result.emplace_back(line,  column - lastText.size(), TokenType::Literal, static_cast<std::uint32_t>(number));
+                        result.emplace_back(line,  column, TokenType::Literal, static_cast<std::uint32_t>(number));
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
                     std::uint64_t number;
                     ss >> number;
-                    result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                    result.emplace_back(line,  column, TokenType::Literal, number);
                 }
                 else
                 {
@@ -359,23 +359,23 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                     {
                         if(number <= std::numeric_limits<std::uint32_t>::max())
                         {
-                            result.emplace_back(line,  column - lastText.size(), TokenType::Literal, static_cast<std::uint32_t>(number));
+                            result.emplace_back(line,  column, TokenType::Literal, static_cast<std::uint32_t>(number));
                         }
                         else
                         {
-                            result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                            result.emplace_back(line,  column, TokenType::Literal, number);
                         }
                     }
                     else
                     {
-                        result.emplace_back(line,  column - lastText.size(), TokenType::Literal, static_cast<std::int32_t>(number));
+                        result.emplace_back(line,  column, TokenType::Literal, static_cast<std::int32_t>(number));
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
                     std::int64_t number;
                     ss >> number;
-                    result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                    result.emplace_back(line,  column, TokenType::Literal, number);
                 }
                 else
                 {
@@ -390,14 +390,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                 std::istringstream ss(lastText.substr(0, lastText.size() - 1));
                 float number;
                 ss >> number;
-                result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                result.emplace_back(line,  column, TokenType::Literal, number);
             }
             else
             {
                 std::istringstream ss(lastText);
                 double number;
                 ss >> number;
-                result.emplace_back(line,  column - lastText.size(), TokenType::Literal, number);
+                result.emplace_back(line,  column, TokenType::Literal, number);
             }
         }
         else
@@ -459,14 +459,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
                 if (!lastText.empty() && lastText.back() != '\\')
                 {
                     isStringLiteral = false;
-                    result.emplace_back(line,  column - lastText.size(), TokenType::Literal, lastText);
+                    result.emplace_back(line,  column, TokenType::Literal, lastText);
                     lastText.clear();
                     continue;
                 }
                 else if (lastText.empty())
                 {
                     isStringLiteral = false;
-                    result.emplace_back(line,  column - lastText.size(), TokenType::Literal, lastText);
+                    result.emplace_back(line,  column, TokenType::Literal, lastText);
                     lastText.clear();
                     continue;
                 }
@@ -479,7 +479,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
             if (iter == '\'')
             {
                 isCharacter = false;
-                result.emplace_back(line,  column - lastText.size(), TokenType::Literal, [lastText]() -> std::int32_t
+                result.emplace_back(line,  column, TokenType::Literal, [lastText]() -> std::int32_t
                 {
                     if (lastText.empty())
                     {
@@ -565,7 +565,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& sou
         {
             continue;
         }
-        column++;
         switch (iter)
         {
         case '\'':

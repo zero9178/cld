@@ -1435,6 +1435,10 @@ namespace
             {
                 tokens.pop_back();
                 optionalLogicalAnds.push_back(parseLogicalAndExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 curentToken = tokens.back();
             }
         }
@@ -1456,6 +1460,10 @@ namespace
             {
                 tokens.pop_back();
                 list.push_back(parseBitOrExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1477,6 +1485,10 @@ namespace
             {
                 tokens.pop_back();
                 list.push_back(parseBitXorExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1498,6 +1510,10 @@ namespace
             {
                 tokens.pop_back();
                 list.push_back(parseBitAndExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1519,6 +1535,10 @@ namespace
             {
                 tokens.pop_back();
                 list.push_back(parseEqualityExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1544,6 +1564,10 @@ namespace
                         currToken.getTokenType() == TokenType::Equal ? EqualityExpression::EqualityOperator::Equal
                                                                      : EqualityExpression::EqualityOperator::NotEqual,
                         parseRelationalExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1579,6 +1603,10 @@ namespace
                                           throw std::runtime_error("Invalid token for relational LogicalOrExpression");
                                       }
                                   }(), parseShiftExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1604,6 +1632,10 @@ namespace
                     currToken.getTokenType() == TokenType::ShiftRight ? ShiftExpression::ShiftOperator::Right
                                                                       : ShiftExpression::ShiftOperator::Left,
                     parseAdditiveExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1629,6 +1661,10 @@ namespace
                     currToken.getTokenType() == TokenType::Addition ? AdditiveExpression::BinaryDashOperator::BinaryPlus
                                                                     : AdditiveExpression::BinaryDashOperator::BinaryMinus,
                     parseTerm(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1661,6 +1697,10 @@ namespace
                                       default:throw std::runtime_error("Invalid token");
                                       }
                                   }(), parseCastExpression(tokens, context));
+                if(tokens.empty())
+                {
+                    break;
+                }
                 currToken = tokens.back();
             }
         }
@@ -1907,12 +1947,12 @@ namespace
                 std::size_t i = 0;
                 auto result = std::find_if(tokens.rbegin(), tokens.rend(), [&i](const Token& token)
                 {
-                    if (token.getTokenType() == TokenType::CloseSquareBracket && i == 0)
+                    if (token.getTokenType() == TokenType::CloseSquareBracket)
                     {
-                        return true;
-                    }
-                    else if (token.getTokenType() == TokenType::CloseSquareBracket)
-                    {
+                        if(i == 0)
+                        {
+                            return true;
+                        }
                         i--;
                     }
                     else if (token.getTokenType() == TokenType::OpenSquareBracket)
