@@ -322,6 +322,10 @@ namespace
             cache[llvmType] = result;
             return result;
         }
+        else if (llvmType->isVoidTy())
+        {
+            return nullptr;
+        }
         throw std::runtime_error("Not implemented yet");
     }
 
@@ -457,12 +461,26 @@ namespace
                                    else
                                    {
                                        auto[newValue, otherType] = value->codegen(context);
-                                       castPrimitive(newValue,
-                                                     otherType->isSigned(),
-                                                     iter->type(context),
-                                                     iter->isSigned(),
-                                                     context);
-                                       context.builder.CreateStore(newValue, member);
+                                       if (llvm::LoadInst* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
+                                           llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
+                                           && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
+                                       {
+                                           auto* zero = context.builder.getInt32(0);
+                                           context.builder.CreateMemCpy(member,
+                                                                        0,
+                                                                        context.builder.CreateInBoundsGEP(load->getPointerOperand(),{zero,zero}),
+                                                                        0,
+                                                                        load->getType()->getArrayNumElements());
+                                       }
+                                       else
+                                       {
+                                           castPrimitive(newValue,
+                                                         otherType->isSigned(),
+                                                         iter->type(context),
+                                                         iter->isSigned(),
+                                                         context);
+                                           context.builder.CreateStore(newValue, member);
+                                       }
                                    }
                                }, list[i]);
                 }
@@ -476,40 +494,74 @@ namespace
             auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
             std::shared_ptr heldType = arrayType->getType()->clone();
             std::size_t i = 0;
-            for(auto iter = list.begin(); iter < list.end(); i++)
+            for (auto iter = list.begin(); iter < list.end(); i++)
             {
-                if(i >= allocaType->getArrayNumElements())
+                if (i >= allocaType->getArrayNumElements())
                 {
                     throw std::runtime_error("More elements specified in initializer list than elements in array");
                 }
                 auto* index = context.builder.getInt32(i);
                 auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
                 auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
-                auto result = std::find_if(iter,end,[](auto&& value)
+                auto result = std::find_if(iter, end, [](auto&& value)
                 {
                     return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
                 });
-                if(result == iter && std::holds_alternative<OpenCL::Parser::InitializerListBlock>(*result))
+                if (result == iter && std::holds_alternative<OpenCL::Parser::InitializerListBlock>(*result))
                 {
-                    match(std::get<OpenCL::Parser::InitializerListBlock>(*result).getNonCommaExpressionsAndBlocks(),member,heldType,context);
+                    match(std::get<OpenCL::Parser::InitializerListBlock>(*result).getNonCommaExpressionsAndBlocks(),
+                          member,
+                          heldType,
+                          context);
                     iter++;
                 }
                 else
                 {
-                    if(iter == result)
+                    if (iter == result)
                     {
                         result++;
                     }
-                    match({iter,result},member,heldType,context);
+                    match({iter, result}, member, heldType, context);
                     iter = result;
                 }
             }
-            for(; i < allocaType->getArrayNumElements(); i++)
+            for (; i < allocaType->getArrayNumElements(); i++)
             {
                 auto* index = context.builder.getInt32(i);
                 auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()),member);
+                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()), member);
             }
+        }
+    }
+
+    llvm::Value* toBool(llvm::Value* value, OpenCL::Parser::Context& context)
+    {
+        if (value->getType()->isIntegerTy())
+        {
+            if (value->getType()->getIntegerBitWidth() > 1)
+            {
+                return context.builder
+                              .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
+            }
+            return value;
+        }
+        else if (value->getType()->isFloatingPointTy())
+        {
+            return context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
+        }
+        else if (value->getType()->isPointerTy())
+        {
+            return context.builder.CreateICmpNE(value,
+                                                llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
+                                                                                                                 ->getType())));
+        }
+        else if (value->getType()->isArrayTy())
+        {
+            return context.builder.getIntN(1, 0);
+        }
+        else
+        {
+            return nullptr;
         }
     }
 }
@@ -663,7 +715,7 @@ std::pair<llvm::Value*,
                                        spType,
                                        false,
                                        true,
-                                       getLine());
+                                       getScopeLine());
     context.currentFunction->setSubprogram(sp);
     context.debugScope.push_back(sp);
     auto* bb = llvm::BasicBlock::Create(context.context, "entry", context.currentFunction);
@@ -776,13 +828,17 @@ std::pair<llvm::Value*,
             }
             auto elementSize = elementsNeededForType(array->getType()->type(context));
             std::size_t i = 0;
-            for(auto iter = result->getNonCommaExpressionsAndBlocks().begin(); iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
+            for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
+                 iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
             {
-                auto end = std::find_if(iter,iter + elementSize > result->getNonCommaExpressionsAndBlocks().end() ? result->getNonCommaExpressionsAndBlocks().end() : iter + elementSize ,[](auto&& value)
-                {
-                    return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
-                });
-                if(iter == end)
+                auto end = std::find_if(iter,
+                                        iter + elementSize > result->getNonCommaExpressionsAndBlocks().end() ? result
+                                            ->getNonCommaExpressionsAndBlocks().end() : iter + elementSize,
+                                        [](auto&& value)
+                                        {
+                                            return std::holds_alternative<OpenCL::Parser::InitializerListBlock>(value);
+                                        });
+                if (iter == end)
                 {
                     iter++;
                 }
@@ -824,14 +880,14 @@ std::pair<llvm::Value*,
             }
             else if (auto result = dynamic_cast<const InitializerListBlock*>(optionalExpression.get()))
             {
-                if(allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
+                if (allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
                 {
                     auto* zero = context.builder.getInt32(0);
                     for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
                     {
                         auto* index = context.builder.getInt32(i);
                         auto* member = context.builder.CreateInBoundsGEP(alloca, {zero, index});
-                        std::visit([&context, member,type = std::dynamic_pointer_cast<ArrayType>(type)](auto&& value)
+                        std::visit([&context, member, type = std::dynamic_pointer_cast<ArrayType>(type)](auto&& value)
                                    {
                                        using T = std::decay_t<decltype(value)>;
                                        if constexpr(std::is_same_v<T, OpenCL::Parser::InitializerListBlock>)
@@ -904,18 +960,7 @@ std::pair<llvm::Value*,
 {
     emitLocation(this, context);
     auto[value, sign] = getExpression().codegen(context);
-    if (value->getType()->isIntegerTy())
-    {
-        if (value->getType()->getIntegerBitWidth() > 1)
-        {
-            value = context.builder
-                           .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
-        }
-    }
-    else if (value->getType()->isFloatingPointTy())
-    {
-        value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-    }
+    value = toBool(value, context);
     auto* function = context.builder.GetInsertBlock()->getParent();
 
     auto* thenBB = llvm::BasicBlock::Create(context.context, "then", function);
@@ -927,7 +972,7 @@ std::pair<llvm::Value*,
     context.builder.SetInsertPoint(thenBB);
     getBranch().codegen(context);
 
-    if (!thenBB->back().isTerminator())
+    if (!context.builder.GetInsertBlock()->getTerminator())
     {
         context.builder.CreateBr(mergeBB);
     }
@@ -937,7 +982,7 @@ std::pair<llvm::Value*,
         function->getBasicBlockList().push_back(elseBB);
         context.builder.SetInsertPoint(elseBB);
         getElseBranch()->codegen(context);
-        if (!elseBB->back().isTerminator())
+        if (!context.builder.GetInsertBlock()->getTerminator())
         {
             context.builder.CreateBr(mergeBB);
         }
@@ -1000,18 +1045,7 @@ namespace
         function->getBasicBlockList().push_back(condBB);
         context.builder.SetInsertPoint(condBB);
         auto* value = controlling ? controlling->codegen(context).first : context.builder.getInt1(true);
-        if (value->getType()->isIntegerTy())
-        {
-            if (value->getType()->getIntegerBitWidth() > 1)
-            {
-                value = context.builder
-                               .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
-            }
-        }
-        else if (value->getType()->isFloatingPointTy())
-        {
-            value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-        }
+        value = toBool(value, context);
         context.builder.CreateCondBr(value, blockBB, endBB);
 
         function->getBasicBlockList().push_back(blockBB);
@@ -1070,28 +1104,7 @@ std::pair<llvm::Value*,
 
     context.builder.SetInsertPoint(condBB);
     auto* value = getExpression().codegen(context).first;
-    if (value->getType()->isIntegerTy())
-    {
-        if (value->getType()->getIntegerBitWidth() > 1)
-        {
-            value = context.builder
-                           .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
-        }
-    }
-    else if (value->getType()->isFloatingPointTy())
-    {
-        value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-    }
-    else if (value->getType()->isPointerTy())
-    {
-        value = context.builder.CreateICmpNE(value,
-                                             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
-                                                                                                              ->getType())));
-    }
-    else
-    {
-        throw std::runtime_error("Can't convert value to int");
-    }
+    value = toBool(value, context);
     context.builder.CreateCondBr(value, blockBB, endBB);
 
     function->getBasicBlockList().push_back(blockBB);
@@ -1127,28 +1140,7 @@ std::pair<llvm::Value*,
     function->getBasicBlockList().push_back(condBB);
     context.builder.SetInsertPoint(condBB);
     auto* value = getExpression().codegen(context).first;
-    if (value->getType()->isIntegerTy())
-    {
-        if (value->getType()->getIntegerBitWidth() > 1)
-        {
-            value = context.builder
-                           .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
-        }
-    }
-    else if (value->getType()->isFloatingPointTy())
-    {
-        value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-    }
-    else if (value->getType()->isPointerTy())
-    {
-        value = context.builder.CreateICmpNE(value,
-                                             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
-                                                                                                              ->getType())));
-    }
-    else
-    {
-        throw std::runtime_error("Can't convert value to int");
-    }
+    value = toBool(value, context);
     context.builder.CreateCondBr(value, blockBB, endBB);
 
     function->getBasicBlockList().push_back(endBB);
@@ -1697,14 +1689,7 @@ std::pair<llvm::Value*,
     auto[value, vsign] = getLogicalOrExpression().codegen(context);
     if (getOptionalExpression() && getOptionalConditionalExpression())
     {
-        if (value->getType()->isIntegerTy() && value->getType()->getIntegerBitWidth() > 1)
-        {
-            value = context.builder.CreateICmpNE(value, llvm::ConstantInt::get(context.context, {32, 0}));
-        }
-        else if (value->getType()->isFloatingPointTy())
-        {
-            value = context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-        }
+        value = toBool(value, context);
         auto* function = context.builder.GetInsertBlock()->getParent();
 
         auto* thenBB = llvm::BasicBlock::Create(context.context, "then", function);
@@ -1828,9 +1813,13 @@ llvm::Type* OpenCL::Parser::PrimitiveType::type(Context& context) const
             throw std::runtime_error("Invalid bit size for floating point");
         }
     }
-    else
+    else if (getBitCount())
     {
         return context.builder.getIntNTy(getBitCount());
+    }
+    else
+    {
+        return context.builder.getVoidTy();
     }
 }
 
@@ -1918,6 +1907,11 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
     return getExpression().codegen(context);
 }
 
+std::int64_t OpenCL::Parser::PrimaryExpressionParenthese::solveConstantExpression() const
+{
+    return getExpression().solveConstantExpression();
+}
+
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::PostFixExpressionPrimaryExpression::codegen(
     OpenCL::Parser::Context& context) const
@@ -1933,15 +1927,19 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
     auto[value, sign] = getPostFixExpression().codegen(context);
     if (llvm::isa<llvm::ArrayType>(value->getType()))
     {
+        auto arrayType = std::dynamic_pointer_cast<ArrayType>(sign);
         auto* arrayPointer = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
         auto* index = getExpression().codegen(context).first;
         auto* zero = context.builder.getIntN(index->getType()->getIntegerBitWidth(), 0);
-        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(arrayPointer, {zero, index})), sign};
+        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(arrayPointer, {zero, index})),
+                arrayType->getType()->clone()};
     }
     else if (llvm::isa<llvm::PointerType>(value->getType()))
     {
+        auto pointerType = std::dynamic_pointer_cast<PointerType>(sign);
         auto* index = getExpression().codegen(context).first;
-        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(value, index)), sign};
+        return {context.builder.CreateLoad(context.builder.CreateInBoundsGEP(value, index)),
+                pointerType->getType().clone()};
     }
     else
     {
@@ -2109,6 +2107,23 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::U
     }
     }
     return {};
+}
+
+int64_t OpenCL::Parser::UnaryExpressionUnaryOperator::solveConstantExpression() const
+{
+    auto value = getUnaryExpression().solveConstantExpression();
+    switch (getAnOperator())
+    {
+    case UnaryOperator::Increment:
+    case UnaryOperator::Decrement:
+    case UnaryOperator::Ampersand:
+    case UnaryOperator::Asterisk:return Node::solveConstantExpression();
+    case UnaryOperator::Plus:return value;
+    case UnaryOperator::Minus:return -value;
+    case UnaryOperator::BitNot:return ~value;
+    case UnaryOperator::LogicalNot:return !value;
+    }
+    return value;
 }
 
 std::pair<llvm::Value*,

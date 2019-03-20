@@ -133,12 +133,3 @@ TEST(Lexer,Comments)
     EXPECT_EQ(result.at(0).getTokenType(),OpenCL::Lexer::TokenType::Addition);
     EXPECT_EQ(result.at(1).getTokenType(),OpenCL::Lexer::TokenType::Addition);
 }
-
-TEST(Lexer,Identifier)
-{
-    auto result = OpenCL::Lexer::tokenize(R"(TreeNode root = {"Markus", "Boeck"};)");
-    std::reverse(result.begin(),result.end());
-    ASSERT_EQ(result.size(),9);
-    EXPECT_EQ(result.at(0).getTokenType(),OpenCL::Lexer::TokenType::Identifier);
-    EXPECT_EQ(std::get<std::string>(result.at(0).getValue()),"TreeNode");
-}

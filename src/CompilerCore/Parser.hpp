@@ -129,6 +129,8 @@ namespace OpenCL::Parser
         uint64_t getColumn() const;
 
         virtual std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const = 0;
+
+        virtual std::int64_t solveConstantExpression() const;
     };
 
     /**
@@ -350,6 +352,8 @@ namespace OpenCL::Parser
         const NonCommaExpression* getOptionalNonCommaExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -409,6 +413,8 @@ namespace OpenCL::Parser
         const variant& getValue() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -427,6 +433,8 @@ namespace OpenCL::Parser
         const Expression& getExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -462,6 +470,8 @@ namespace OpenCL::Parser
         const PrimaryExpression& getPrimaryExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -692,6 +702,8 @@ namespace OpenCL::Parser
         const PostFixExpression& getPostFixExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -737,6 +749,8 @@ namespace OpenCL::Parser
         const UnaryExpression& getUnaryExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -757,6 +771,8 @@ namespace OpenCL::Parser
         const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>& getUnaryOrType() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -778,6 +794,8 @@ namespace OpenCL::Parser
                            std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -815,6 +833,8 @@ namespace OpenCL::Parser
         const std::vector<std::pair<BinaryDotOperator, CastExpression>>& getOptionalCastExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        std::int64_t solveConstantExpression() const override;
     };
 
     /**
@@ -1567,23 +1587,27 @@ namespace OpenCL::Parser
         std::shared_ptr<Type> m_returnType;
         std::string m_name;
         std::vector<std::pair<std::shared_ptr<Type>, std::string>> m_arguments;
+        std::uint64_t m_scopeLine;
         std::unique_ptr<BlockStatement> m_block;
 
     public:
 
         Function(std::uint64_t line,
-                 std::uint64_t column,
-                 std::shared_ptr<Type> returnType,
-                 std::string name,
-                 std::vector<std::pair<std::shared_ptr<Type>,
-                                       std::string>> arguments,
-                 std::unique_ptr<BlockStatement>&& blockItems = nullptr);
+                         std::uint64_t column,
+                         std::shared_ptr<Type> returnType,
+                         std::string name,
+                         std::vector<std::pair<std::shared_ptr<Type>,
+                                           std::string>> arguments,
+                         std::uint64_t scopeLine = 0,
+                         std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
         const std::shared_ptr<Type>& getReturnType() const;
 
         const std::string& getName() const;
 
         const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getArguments() const;
+
+        uint64_t getScopeLine() const;
 
         const BlockStatement* getBlockStatement() const;
 

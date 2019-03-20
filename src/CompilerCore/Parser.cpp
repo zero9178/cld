@@ -36,10 +36,11 @@ OpenCL::Parser::Function::Function(std::uint64_t line,
                                    std::shared_ptr<Type> returnType,
                                    std::string name,
                                    std::vector<std::pair<std::shared_ptr<Type>,
-                                                         std::string>> arguments,
+                                   std::string>> arguments,
+                                   std::uint64_t scopeLine,
                                    std::unique_ptr<BlockStatement>&& blockItems)
     : Global(line, column), m_returnType(std::move(returnType)), m_name(std::move(
-    name)), m_arguments(std::move(arguments)), m_block(std::move(blockItems))
+    name)), m_arguments(std::move(arguments)), m_scopeLine(scopeLine), m_block(std::move(blockItems))
 {
     assert(m_returnType);
     assert(std::all_of(m_arguments.begin(), m_arguments.begin(), [](const auto& pair)
@@ -251,6 +252,15 @@ const OpenCL::Parser::NonCommaExpression* OpenCL::Parser::Expression::getOptiona
     return m_optionalNonCommaExpression.get();
 }
 
+std::int64_t OpenCL::Parser::Expression::solveConstantExpression() const
+{
+    if(getOptionalNonCommaExpression())
+    {
+        return getOptionalNonCommaExpression()->solveConstantExpression();
+    }
+    return getNonCommaExpression().solveConstantExpression();
+}
+
 OpenCL::Parser::AssignmentExpression::AssignOperator OpenCL::Parser::AssignmentExpression::getAssignOperator() const
 {
     return m_assignOperator;
@@ -452,6 +462,8 @@ std::string OpenCL::Parser::PrimitiveType::name() const
         }
         switch (getBitCount())
         {
+        case 0:
+            return "void";
         case 8:
             return prefix + "char";
         case 16:
@@ -652,6 +664,11 @@ const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::Function::getReturn
     return m_returnType;
 }
 
+uint64_t OpenCL::Parser::Function::getScopeLine() const
+{
+    return m_scopeLine;
+}
+
 OpenCL::Parser::PointerType::PointerType(std::unique_ptr<Type>&& type, bool isConst)
     : m_type(std::move(type)), m_isConst(isConst)
 {}
@@ -698,6 +715,22 @@ const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::Primar
     return m_value;
 }
 
+std::int64_t OpenCL::Parser::PrimaryExpressionConstant::solveConstantExpression() const
+{
+    return std::visit([this](auto&& value)->std::int64_t
+                      {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr(std::is_integral_v<T>)
+        {
+            return value;
+        }
+        else
+        {
+            return Node::solveConstantExpression();
+        }
+                      },getValue());
+}
+
 OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::uint64_t line,
                                                                          std::uint64_t column,
                                                                          Expression&& expression)
@@ -718,6 +751,11 @@ OpenCL::Parser::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpr
 const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimaryExpression::getPrimaryExpression() const
 {
     return *m_primaryExpression;
+}
+
+int64_t OpenCL::Parser::PostFixExpressionPrimaryExpression::solveConstantExpression() const
+{
+    return getPrimaryExpression().solveConstantExpression();
 }
 
 OpenCL::Parser::PostFixExpressionSubscript::PostFixExpressionSubscript(std::uint64_t line,
@@ -785,6 +823,11 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::UnaryExpressionPostFixE
     return *m_postFixExpression;
 }
 
+std::int64_t OpenCL::Parser::UnaryExpressionPostFixExpression::solveConstantExpression() const
+{
+    return getPostFixExpression().solveConstantExpression();
+}
+
 OpenCL::Parser::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(std::uint64_t line,
                                                                            std::uint64_t column,
                                                                            UnaryOperator anOperator,
@@ -815,6 +858,11 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
     return m_unaryOrType;
 }
 
+int64_t OpenCL::Parser::UnaryExpressionSizeOf::solveConstantExpression() const
+{
+    throw std::runtime_error("Not implemented yet");
+}
+
 OpenCL::Parser::CastExpression::CastExpression(std::uint64_t line,
                                                std::uint64_t column,
                                                std::variant<std::unique_ptr<UnaryExpression>,
@@ -830,6 +878,11 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
     return m_unaryOrCast;
 }
 
+std::int64_t OpenCL::Parser::CastExpression::solveConstantExpression() const
+{
+    throw std::runtime_error("Not implemented yet");
+}
+
 OpenCL::Parser::Term::Term(std::uint64_t line,
                            std::uint64_t column,
                            CastExpression&& castExpressions,
@@ -837,6 +890,21 @@ OpenCL::Parser::Term::Term(std::uint64_t line,
     : Node(line, column), m_castExpression(
     std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
 {}
+
+std::int64_t OpenCL::Parser::Term::solveConstantExpression() const
+{
+    auto currentValue = getCastExpression().solveConstantExpression();
+    for(auto& [op,exp] : getOptionalCastExpressions())
+    {
+        switch(op)
+        {
+        case BinaryDotOperator::BinaryMultiply:currentValue *= exp.solveConstantExpression();break;
+        case BinaryDotOperator::BinaryDivide:currentValue /= exp.solveConstantExpression();break;
+        case BinaryDotOperator::BinaryRemainder:currentValue %= exp.solveConstantExpression();break;
+        }
+    }
+    return currentValue;
+}
 
 const OpenCL::Parser::CastExpression& OpenCL::Parser::Term::getCastExpression() const
 {
@@ -1130,6 +1198,11 @@ uint64_t OpenCL::Parser::Node::getLine() const
 uint64_t OpenCL::Parser::Node::getColumn() const
 {
     return m_column;
+}
+
+std::int64_t OpenCL::Parser::Node::solveConstantExpression() const
+{
+    throw std::runtime_error("Expression is not a constant expression");
 }
 
 OpenCL::Parser::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column) : Node(line, column)

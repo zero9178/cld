@@ -195,9 +195,10 @@ void addNode(TreeNode* root, TreeNode* p)
 
 int main()
 {
-    TreeNode root = {"Markus", "Boeck"};
+    TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
     TreeNode newNode = {"Lukas", "Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);
+    return newNode.height;
 }

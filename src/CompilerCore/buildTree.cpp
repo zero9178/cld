@@ -615,6 +615,7 @@ namespace
         context.pushScope();
         if (currToken.getTokenType() == TokenType::OpenBrace)
         {
+            auto scopeLine = currToken.getLine();
             for (auto&[type, name] : arguments)
             {
                 if (name.empty())
@@ -636,6 +637,7 @@ namespace
                             std::shared_ptr<Type>(rettype.release()),
                             std::move(name),
                             std::move(arguments),
+                            scopeLine,
                             std::make_unique<BlockStatement>(std::move(*pointer)));
         }
         else if (currToken.getTokenType() == TokenType::SemiColon)
