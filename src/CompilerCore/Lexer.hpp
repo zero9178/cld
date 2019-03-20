@@ -68,6 +68,7 @@ namespace OpenCL::Lexer
         RegisterKeyword,
         ConstKeyword,
         SizeofKeyword,
+        VolatileKeyword,
         ReturnKeyword,
         BreakKeyword,
         ContinueKeyword,
@@ -85,7 +86,14 @@ namespace OpenCL::Lexer
         CaseKeyword,
         DefaultKeyword,
         UnionKeyword,
+        EnumKeyword,
+        GotoKeyword,
+        Ellipse
     };
+
+    class Token;
+
+    std::vector<Token> tokenize(const std::string& source);
 
     class Token
     {
@@ -94,6 +102,8 @@ namespace OpenCL::Lexer
         using variant = std::variant<std::monostate,std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,std::string>;
         TokenType m_tokenType;
         variant m_value;
+
+        friend std::vector<Token> tokenize(const std::string& source);
 
     public:
 
@@ -128,8 +138,6 @@ namespace OpenCL::Lexer
 
         std::string emitBack() const;
     };
-
-    std::vector<Token> tokenize(const std::string& source);
 }
 
 #endif //OPENCLPARSER_LEXER_HPP

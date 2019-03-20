@@ -172,7 +172,8 @@ namespace
             || type.getTokenType() == TokenType::ConstKeyword
             || type.getTokenType() == TokenType::UnionKeyword
             || (type.getTokenType() == TokenType::Identifier
-                && !context.isInScope(std::get<std::string>(type.getValue())));
+                && !context.isInScope(std::get<std::string>(type.getValue()))
+                && context.typedefs.count(std::get<std::string>(type.getValue())));
     }
 
     std::unique_ptr<Type> makeConst(const std::unique_ptr<Type>& type)
