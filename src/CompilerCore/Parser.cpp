@@ -4,6 +4,69 @@
 #include <algorithm>
 #include <sstream>
 
+namespace
+{
+    template <class, class, class = void>
+    struct hasMultiply : std::false_type
+    {
+    };
+
+    template <class T1, class T2>
+    struct hasMultiply<T1, T2, std::void_t<decltype(std::declval<T1>() * std::declval<T2>())>> : std::true_type
+    {
+    };
+
+    template <class, class, class = void>
+    struct hasDivide : std::false_type
+    {
+    };
+
+    template <class T1, class T2>
+    struct hasDivide<T1, T2, std::void_t<decltype(std::declval<T1>() / std::declval<T2>())>> : std::true_type
+    {
+    };
+
+    template <class, class, class = void>
+    struct hasModulo : std::false_type
+    {
+    };
+
+    template <class T1, class T2>
+    struct hasModulo<T1, T2, std::void_t<decltype(std::declval<T1>() % std::declval<T2>())>> : std::true_type
+    {
+    };
+
+    template <class, class = void>
+    struct hasLogicNegate : std::false_type
+    {
+    };
+
+    template <class T>
+    struct hasLogicNegate<T, std::void_t<decltype(!std::declval<T>())>> : std::true_type
+    {
+    };
+
+    template <class, class = void>
+    struct hasBitNegate : std::false_type
+    {
+    };
+
+    template <class T>
+    struct hasBitNegate<T, std::void_t<decltype(~std::declval<T>())>> : std::true_type
+    {
+    };
+
+    template <class, class = void>
+    struct hasNegate : std::false_type
+    {
+    };
+
+    template <class T>
+    struct hasNegate<T, std::void_t<decltype(-std::declval<T>())>> : std::true_type
+    {
+    };
+}
+
 OpenCL::Parser::Program::Program(std::vector<std::unique_ptr<Global>>&& globals) noexcept : m_globals(std::move(
     globals))
 {
@@ -36,7 +99,7 @@ OpenCL::Parser::Function::Function(std::uint64_t line,
                                    std::shared_ptr<Type> returnType,
                                    std::string name,
                                    std::vector<std::pair<std::shared_ptr<Type>,
-                                   std::string>> arguments,
+                                                         std::string>> arguments,
                                    std::uint64_t scopeLine,
                                    std::unique_ptr<BlockStatement>&& blockItems)
     : Global(line, column), m_returnType(std::move(returnType)), m_name(std::move(
@@ -252,9 +315,9 @@ const OpenCL::Parser::NonCommaExpression* OpenCL::Parser::Expression::getOptiona
     return m_optionalNonCommaExpression.get();
 }
 
-std::int64_t OpenCL::Parser::Expression::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::Expression::solveConstantExpression() const
 {
-    if(getOptionalNonCommaExpression())
+    if (getOptionalNonCommaExpression())
     {
         return getOptionalNonCommaExpression()->solveConstantExpression();
     }
@@ -435,17 +498,16 @@ const std::vector<OpenCL::Parser::EqualityExpression>& OpenCL::Parser::BitAndExp
     return m_optionalEqualityExpressions;
 }
 
-
 std::string OpenCL::Parser::PrimitiveType::name() const
 {
     std::string prefix = isConst() ? "const " : "";
-    if(isFloatingPoint())
+    if (isFloatingPoint())
     {
-        if(m_bitCount == 32)
+        if (m_bitCount == 32)
         {
             return prefix + "float";
         }
-        else if(m_bitCount == 64)
+        else if (m_bitCount == 64)
         {
             return prefix + "double";
         }
@@ -456,24 +518,18 @@ std::string OpenCL::Parser::PrimitiveType::name() const
     }
     else
     {
-        if(!isSigned())
+        if (!isSigned())
         {
             prefix += "unsigned ";
         }
         switch (getBitCount())
         {
-        case 0:
-            return "void";
-        case 8:
-            return prefix + "char";
-        case 16:
-            return prefix + "short";
-        case 32:
-            return prefix + "int";
-        case 64:
-            return prefix + "long long";
-        default:
-            throw std::runtime_error("Invalid bitcount for integer type");
+        case 0:return "void";
+        case 8:return prefix + "char";
+        case 16:return prefix + "short";
+        case 32:return prefix + "int";
+        case 64:return prefix + "long long";
+        default:throw std::runtime_error("Invalid bitcount for integer type");
         }
     }
 }
@@ -715,20 +771,20 @@ const OpenCL::Parser::PrimaryExpressionConstant::variant& OpenCL::Parser::Primar
     return m_value;
 }
 
-std::int64_t OpenCL::Parser::PrimaryExpressionConstant::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::PrimaryExpressionConstant::solveConstantExpression() const
 {
-    return std::visit([this](auto&& value)->std::int64_t
+    return std::visit([this](auto&& value) -> OpenCL::Parser::Node::constantVariant
                       {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr(std::is_integral_v<T>)
-        {
-            return value;
-        }
-        else
-        {
-            return Node::solveConstantExpression();
-        }
-                      },getValue());
+                          using T = std::decay_t<decltype(value)>;
+                          if constexpr(std::is_integral_v<T>)
+                          {
+                              return value;
+                          }
+                          else
+                          {
+                              return Node::solveConstantExpression();
+                          }
+                      }, getValue());
 }
 
 OpenCL::Parser::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::uint64_t line,
@@ -753,7 +809,7 @@ const OpenCL::Parser::PrimaryExpression& OpenCL::Parser::PostFixExpressionPrimar
     return *m_primaryExpression;
 }
 
-int64_t OpenCL::Parser::PostFixExpressionPrimaryExpression::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::PostFixExpressionPrimaryExpression::solveConstantExpression() const
 {
     return getPrimaryExpression().solveConstantExpression();
 }
@@ -823,7 +879,7 @@ const OpenCL::Parser::PostFixExpression& OpenCL::Parser::UnaryExpressionPostFixE
     return *m_postFixExpression;
 }
 
-std::int64_t OpenCL::Parser::UnaryExpressionPostFixExpression::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::UnaryExpressionPostFixExpression::solveConstantExpression() const
 {
     return getPostFixExpression().solveConstantExpression();
 }
@@ -858,7 +914,7 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
     return m_unaryOrType;
 }
 
-int64_t OpenCL::Parser::UnaryExpressionSizeOf::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::UnaryExpressionSizeOf::solveConstantExpression() const
 {
     throw std::runtime_error("Not implemented yet");
 }
@@ -878,7 +934,7 @@ const std::variant<std::unique_ptr<OpenCL::Parser::UnaryExpression>,
     return m_unaryOrCast;
 }
 
-std::int64_t OpenCL::Parser::CastExpression::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::CastExpression::solveConstantExpression() const
 {
     throw std::runtime_error("Not implemented yet");
 }
@@ -891,20 +947,87 @@ OpenCL::Parser::Term::Term(std::uint64_t line,
     std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
 {}
 
-std::int64_t OpenCL::Parser::Term::solveConstantExpression() const
+#pragma GCC diagnostic push "-Wno-return-type"
+
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::Term::solveConstantExpression() const
 {
     auto currentValue = getCastExpression().solveConstantExpression();
-    for(auto& [op,exp] : getOptionalCastExpressions())
+    for (auto&[op, exp] : getOptionalCastExpressions())
     {
-        switch(op)
+        switch (op)
         {
-        case BinaryDotOperator::BinaryMultiply:currentValue *= exp.solveConstantExpression();break;
-        case BinaryDotOperator::BinaryDivide:currentValue /= exp.solveConstantExpression();break;
-        case BinaryDotOperator::BinaryRemainder:currentValue %= exp.solveConstantExpression();break;
+        case BinaryDotOperator::BinaryMultiply:
+        {
+            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+                                      {
+                                          using T1 = std::decay_t<decltype(lhs)>;
+                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+                                                            {
+                                                                using T2 = std::decay_t<decltype(rhs)>;
+                                                                if constexpr(hasMultiply<T1, T2>{})
+                                                                {
+                                                                    return lhs * rhs;
+                                                                }
+                                                                else
+                                                                {
+                                                                    throw std::runtime_error(
+                                                                        "Can't apply plus to operands in constant expression");
+                                                                    return {};
+                                                                }
+                                                            }, exp->solveConstantExpression());
+                                      }, currentValue);
+        }
+            break;
+        case BinaryDotOperator::BinaryDivide:
+        {
+            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+                                      {
+                                          using T1 = std::decay_t<decltype(lhs)>;
+                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+                                                            {
+                                                                using T2 = std::decay_t<decltype(rhs)>;
+                                                                if constexpr(hasDivide<T1, T2>{})
+                                                                {
+                                                                    return lhs / rhs;
+                                                                }
+                                                                else
+                                                                {
+                                                                    throw std::runtime_error(
+                                                                        "Can't apply plus to operands in constant expression");
+                                                                    return {};
+                                                                }
+                                                            }, exp->solveConstantExpression());
+                                      }, currentValue);
+        }
+            break;
+        case BinaryDotOperator::BinaryRemainder:
+        {
+            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+                                      {
+                                          using T1 = std::decay_t<decltype(lhs)>;
+                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+                                                            {
+                                                                using T2 = std::decay_t<decltype(rhs)>;
+                                                                if constexpr(hasModulo<T1, T2>{})
+                                                                {
+                                                                    return lhs % rhs;
+                                                                }
+                                                                else
+                                                                {
+                                                                    throw std::runtime_error(
+                                                                        "Can't apply plus to operands in constant expression");
+                                                                    return {};
+                                                                }
+                                                            }, exp->solveConstantExpression());
+                                      }, currentValue);
+        }
+            break;
         }
     }
     return currentValue;
 }
+
+#pragma GCC diagnostic pop
 
 const OpenCL::Parser::CastExpression& OpenCL::Parser::Term::getCastExpression() const
 {
@@ -987,7 +1110,7 @@ std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::ArrayType::clone() const
 std::string OpenCL::Parser::ArrayType::name() const
 {
     std::ostringstream ss;
-    ss<<getSize();
+    ss << getSize();
     return getType()->name() + " [" + ss.str() + "]";
 }
 
@@ -1026,7 +1149,7 @@ OpenCL::Parser::StructOrUnionDeclaration::StructOrUnionDeclaration(std::uint64_t
                                                                                          std::string>>&& types)
     : Global(line, column), m_isUnion(isUnion), m_name(std::move(name)), m_types(std::move(types))
 {
-    if(m_types.empty())
+    if (m_types.empty())
     {
         throw std::runtime_error("Struct and unions needs to have atleast one field");
     }
@@ -1179,7 +1302,7 @@ const std::vector<std::unique_ptr<OpenCL::Parser::NonCommaExpression>>& OpenCL::
 OpenCL::Parser::TypedefDeclaration::TypedefDeclaration(std::uint64_t line,
                                                        std::uint64_t column,
                                                        std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion)
-    : Global(line,column),m_optionalStructOrUnion(std::move(optionalStructOrUnion))
+    : Global(line, column), m_optionalStructOrUnion(std::move(optionalStructOrUnion))
 {}
 
 const std::unique_ptr<OpenCL::Parser::StructOrUnionDeclaration>& OpenCL::Parser::TypedefDeclaration::getOptionalStructOrUnion() const
@@ -1200,7 +1323,7 @@ uint64_t OpenCL::Parser::Node::getColumn() const
     return m_column;
 }
 
-std::int64_t OpenCL::Parser::Node::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::Node::solveConstantExpression() const
 {
     throw std::runtime_error("Expression is not a constant expression");
 }
@@ -1250,11 +1373,73 @@ const OpenCL::Parser::Expression& OpenCL::Parser::InitializerListScalarExpressio
 OpenCL::Parser::InitializerListBlock::InitializerListBlock(std::uint64_t line,
                                                            std::uint64_t column,
                                                            vector&& nonCommaExpressionsAndBlocks)
-    : InitializerList(line, column),  m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
+    : InitializerList(line, column), m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
 {}
 
 const std::vector<std::variant<std::unique_ptr<OpenCL::Parser::NonCommaExpression>,
                                OpenCL::Parser::InitializerListBlock>>& OpenCL::Parser::InitializerListBlock::getNonCommaExpressionsAndBlocks() const
 {
     return m_nonCommaExpressionsAndBlocks;
+}
+
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::UnaryExpressionUnaryOperator::solveConstantExpression() const
+{
+    auto value = getUnaryExpression().solveConstantExpression();
+    switch (getAnOperator())
+    {
+    case UnaryOperator::Increment:
+    case UnaryOperator::Decrement:
+    case UnaryOperator::Ampersand:
+    case UnaryOperator::Asterisk:return Node::solveConstantExpression();
+    case UnaryOperator::Plus:return value;
+    case UnaryOperator::Minus:
+    {
+        return std::visit([](auto&& value)->Node::constantVariant
+                          {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr(hasNegate<T>{})
+            {
+                return -value;
+            }
+            else
+            {
+                throw std::runtime_error("Can't apply - to constant operator");
+                return {};
+            }
+                          },value);
+    }
+    case UnaryOperator::BitNot:
+    {
+        return std::visit([](auto&& value)->Node::constantVariant
+                          {
+                              using T = std::decay_t<decltype(value)>;
+                              if constexpr(hasBitNegate<T>{})
+                              {
+                                  return ~value;
+                              }
+                              else
+                              {
+                                  throw std::runtime_error("Can't apply - to constant operator");
+                                  return {};
+                              }
+                          },value);
+    }
+    case UnaryOperator::LogicalNot:
+    {
+        return std::visit([](auto&& value)->Node::constantVariant
+                          {
+                              using T = std::decay_t<decltype(value)>;
+                              if constexpr(hasLogicNegate<T>{})
+                              {
+                                  return !value;
+                              }
+                              else
+                              {
+                                  throw std::runtime_error("Can't apply - to constant operator");
+                                  return {};
+                              }
+                          },value);
+    }
+    }
+    return value;
 }

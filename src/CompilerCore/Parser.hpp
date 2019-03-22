@@ -130,7 +130,9 @@ namespace OpenCL::Parser
 
         virtual std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const = 0;
 
-        virtual std::int64_t solveConstantExpression() const;
+        using constantVariant = std::variant<std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,void*>;
+
+        virtual constantVariant solveConstantExpression() const;
     };
 
     /**
@@ -143,6 +145,11 @@ namespace OpenCL::Parser
         Type() = default;
 
     public:
+
+        virtual ~Type() = default;
+
+        Type(Type&&) = default;
+        Type&operator=(Type&&) = default;
 
         virtual bool isSigned() const;
 
@@ -353,7 +360,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -414,7 +421,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -434,7 +441,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -471,7 +478,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -703,7 +710,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -750,7 +757,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -772,7 +779,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -795,7 +802,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -834,7 +841,7 @@ namespace OpenCL::Parser
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
 
-        std::int64_t solveConstantExpression() const override;
+        constantVariant solveConstantExpression() const override;
     };
 
     /**

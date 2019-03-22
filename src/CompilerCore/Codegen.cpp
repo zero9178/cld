@@ -1907,7 +1907,7 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::P
     return getExpression().codegen(context);
 }
 
-std::int64_t OpenCL::Parser::PrimaryExpressionParenthese::solveConstantExpression() const
+OpenCL::Parser::Node::constantVariant OpenCL::Parser::PrimaryExpressionParenthese::solveConstantExpression() const
 {
     return getExpression().solveConstantExpression();
 }
@@ -2109,22 +2109,6 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::U
     return {};
 }
 
-int64_t OpenCL::Parser::UnaryExpressionUnaryOperator::solveConstantExpression() const
-{
-    auto value = getUnaryExpression().solveConstantExpression();
-    switch (getAnOperator())
-    {
-    case UnaryOperator::Increment:
-    case UnaryOperator::Decrement:
-    case UnaryOperator::Ampersand:
-    case UnaryOperator::Asterisk:return Node::solveConstantExpression();
-    case UnaryOperator::Plus:return value;
-    case UnaryOperator::Minus:return -value;
-    case UnaryOperator::BitNot:return ~value;
-    case UnaryOperator::LogicalNot:return !value;
-    }
-    return value;
-}
 
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::UnaryExpressionSizeOf::codegen(OpenCL::Parser::Context& context) const
