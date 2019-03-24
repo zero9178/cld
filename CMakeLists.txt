@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 99)
 
 find_package(LLVM REQUIRED)
+find_package(Threads REQUIRED)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 message(STATUS ${LLVM_INCLUDE_DIRS})
@@ -15,7 +16,7 @@ list(APPEND CMAKE_CXX_FLAGS "-pedantic -Wall -Wextra -fdiagnostics-color=always"
 llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)
 
 add_library(CompilerCore src/CompilerCore/Lexer.cpp src/CompilerCore/buildTree.cpp src/CompilerCore/Parser.cpp src/CompilerCore/Codegen.cpp)
-target_link_libraries(CompilerCore PUBLIC ${llvm_libs})
+target_link_libraries(CompilerCore PUBLIC ${llvm_libs} Threads::Threads)
 
 add_executable(OpenCLParser src/main.cpp)
 target_link_libraries(OpenCLParser CompilerCore)

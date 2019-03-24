@@ -193,10 +193,13 @@ void addNode(TreeNode* root, TreeNode* p)
     recursiveAdd(root, p, 0, &root);
 }
 
+int i;
+
 int main()
 {
+    int f[] = {34,[5] = 7,3};
     TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
-    TreeNode newNode = {"Lukas", "Damianschitz"};
+    TreeNode newNode = {"Lukas","Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);

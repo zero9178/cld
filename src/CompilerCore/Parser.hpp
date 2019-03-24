@@ -878,6 +878,8 @@ namespace OpenCL::Parser
         const std::vector<std::pair<BinaryDashOperator, Term>>& getOptionalTerms() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -915,6 +917,8 @@ namespace OpenCL::Parser
         const std::vector<std::pair<ShiftOperator, AdditiveExpression>>& getOptionalAdditiveExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -951,9 +955,11 @@ namespace OpenCL::Parser
 
         const ShiftExpression& getShiftExpression() const;
 
-        const std::vector<std::pair<RelationalOperator, ShiftExpression>>& getOptionalRelationalExpressions() const;
+        const std::vector<std::pair<RelationalOperator, ShiftExpression>>& getOptionalShiftExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -991,6 +997,8 @@ namespace OpenCL::Parser
         const std::vector<std::pair<EqualityOperator, RelationalExpression>>& getOptionalRelationalExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1013,6 +1021,8 @@ namespace OpenCL::Parser
         const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1035,6 +1045,8 @@ namespace OpenCL::Parser
         const std::vector<BitAndExpression>& getOptionalBitAndExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1057,6 +1069,8 @@ namespace OpenCL::Parser
         const std::vector<BitXorExpression>& getOptionalBitXorExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1079,6 +1093,8 @@ namespace OpenCL::Parser
         const std::vector<BitOrExpression>& getOptionalBitOrExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1101,6 +1117,8 @@ namespace OpenCL::Parser
         const std::vector<LogicalAndExpression>& getOptionalAndExpressions() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1127,6 +1145,8 @@ namespace OpenCL::Parser
         const ConditionalExpression* getOptionalConditionalExpression() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+
+        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -1271,17 +1291,17 @@ namespace OpenCL::Parser
      */
     class CaseStatement final : public Statement
     {
-        Expression m_constant;
+        constantVariant m_constant;
         std::unique_ptr<Statement> m_statement;
 
     public:
 
         CaseStatement(std::uint64_t line,
                       std::uint64_t column,
-                      Expression&& constant,
+                      Node::constantVariant&& constant,
                       std::unique_ptr<Statement>&& statement);
 
-        const Expression& getConstant() const;
+        const constantVariant& getConstant() const;
 
         const Statement* getStatement() const;
 
@@ -1375,7 +1395,7 @@ namespace OpenCL::Parser
 
         using variant = std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>;
 
-        using vector = std::vector<variant>;
+        using vector = std::vector<std::pair<std::int64_t,variant>>;
 
     private:
 
@@ -1632,7 +1652,7 @@ namespace OpenCL::Parser
         std::unique_ptr<PrimaryExpressionConstant> m_optionalValue;
 
     public:
-
+        //TODO: Make global declaration take a list of declarations
         GlobalDeclaration(std::uint64_t line,
                           std::uint64_t column,
                           std::shared_ptr<Type> type,
