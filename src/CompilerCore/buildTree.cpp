@@ -69,13 +69,9 @@ namespace
 
     OpenCL::Parser::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&& type,
-                                                             Tokens& tokens,
-                                                             ParsingContext& context);
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
-                                           Tokens& tokens,
-                                           ParsingContext& context);
+    OpenCL::Parser::Function parseFunction(Tokens& tokens, ParsingContext& context);
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens, ParsingContext& context);
 
@@ -83,7 +79,8 @@ namespace
                                                        ParsingContext& context,
                                                        bool multiple = true,
                                                        bool allowInitialization = true,
-                                                       bool allowEmptyArray = true);
+                                                       bool allowEmptyArray = true,
+                                                       bool allowNoName = false);
 
     std::unique_ptr<OpenCL::Parser::InitializerList> parseInitializerList(Tokens& tokens, ParsingContext& context);
 
@@ -220,7 +217,7 @@ namespace
 
     std::unique_ptr<OpenCL::Parser::Global> parseGlobal(Tokens& tokens, ParsingContext& context)
     {
-        if ((tokens.back().getTokenType() == TokenType::StructKeyword
+        if (!tokens.empty() && (tokens.back().getTokenType() == TokenType::StructKeyword
             || tokens.back().getTokenType() == TokenType::UnionKeyword) && tokens.size() > 2
             && tokens.at(tokens.size() - 3).getTokenType() == TokenType::OpenBrace)
         {
@@ -231,34 +228,30 @@ namespace
             }
             return std::make_unique<StructOrUnionDeclaration>(std::move(structOrUnion));
         }
-        else if (tokens.back().getTokenType() == TokenType::TypedefKeyword)
+        else if (!tokens.empty() && tokens.back().getTokenType() == TokenType::TypedefKeyword)
         {
             return std::make_unique<TypedefDeclaration>(parseTypedefDeclaration(tokens, context));
         }
-        auto currToken = tokens.back();
-        if (!isType(currToken, context))
-        {
-            throw std::runtime_error("Expected type for global declaration");
-        }
-        auto type = parseType(tokens, context);
-        currToken = tokens.back();
-        if (currToken.getTokenType() != TokenType::Identifier)
-        {
-            throw std::runtime_error("Expected Identifier after type");
-        }
-        if (tokens.size() == 1)
+        else if(tokens.empty())
         {
             throw std::runtime_error("Unexpected end of tokens");
         }
-        currToken = tokens.at(tokens.size() - 2);
-        if (currToken.getTokenType() == TokenType::OpenParenthese)
+        auto result = std::find_if(tokens.rbegin(),tokens.rend(),[](const Token& token)
         {
-            return std::make_unique<Function>(parseFunction(std::move(type), tokens, context));
+            return token.getTokenType() == TokenType::OpenParenthese || token.getTokenType() == TokenType::SemiColon || token.getTokenType() == TokenType::Assignment;
+        });
+        if (result == tokens.rend())
+        {
+            throw std::runtime_error("Unexpected end of tokens");
         }
-        else if (currToken.getTokenType() == TokenType::SemiColon
-            || currToken.getTokenType() == TokenType::Assignment)
+        if (result->getTokenType() == TokenType::OpenParenthese)
         {
-            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(std::move(type), tokens, context));
+            return std::make_unique<Function>(parseFunction(tokens, context));
+        }
+        else if (result->getTokenType() == TokenType::SemiColon
+            || result->getTokenType() == TokenType::Assignment)
+        {
+            return std::make_unique<GlobalDeclaration>(parseGlobalDeclaration(tokens, context));
         }
         else
         {
@@ -351,28 +344,18 @@ namespace
         return StructOrUnionDeclaration(line, column, isUnion, std::move(name), std::move(fields));
     }
 
-    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(std::unique_ptr<OpenCL::Parser::Type>&&,
-                                                             Tokens& tokens,
-                                                             ParsingContext& context)
+    OpenCL::Parser::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens, ParsingContext& context)
     {
         auto currToken = tokens.back();
         auto line = currToken.getLine();
         auto column = currToken.getColumn();
-        auto declaration = parseDeclarations(tokens,context,true,false);
-        if(tokens.back().getTokenType() == TokenType::Assignment)
-        {
-            //TODO:
-            throw std::runtime_error("Not implemented yet");
-        }
-        else if(tokens.back().getTokenType() == TokenType::SemiColon)
-        {
-            tokens.pop_back();
-            return GlobalDeclaration(line,column,std::get<0>(declaration.getDeclarations()[0]),std::get<1>(declaration.getDeclarations()[0]));
-        }
-        else
+        auto declaration = parseDeclarations(tokens, context);
+        if(tokens.back().getTokenType() != TokenType::SemiColon)
         {
             throw std::runtime_error("Expected ; at the end of global declaration");
         }
+        tokens.pop_back();
+        return GlobalDeclaration(line,column,std::move(declaration.getDeclarations()));
     }
 
     TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context)
@@ -479,10 +462,9 @@ namespace
         return TypedefDeclaration(line, column, std::move(optionalDeclaration));
     }
 
-    OpenCL::Parser::Function parseFunction(std::unique_ptr<OpenCL::Parser::Type>&& rettype,
-                                           Tokens& tokens,
-                                           ParsingContext& context)
+    OpenCL::Parser::Function parseFunction(Tokens& tokens, ParsingContext& context)
     {
+        auto rettype = parseType(tokens,context);
         auto currToken = tokens.back();
         auto line = currToken.getLine();
         auto column = currToken.getColumn();
@@ -499,53 +481,14 @@ namespace
             throw std::runtime_error("Expected Opening Parantheses after function identifier");
         }
         std::vector<std::pair<std::shared_ptr<Type>, std::string>> arguments;
+        context.pushScope();
         currToken = tokens.back();
         if (currToken.getTokenType() != TokenType::CloseParenthese)
         {
             while (true)
             {
-                currToken = tokens.back();
-                if (!isType(currToken, context))
-                {
-                    throw std::runtime_error("Unsupported argument type");
-                }
-                auto type = parseType(tokens, context);
-                currToken = tokens.back();
-                std::string argname;
-                if (currToken.getTokenType() == TokenType::Identifier)
-                {
-                    argname = std::get<std::string>(currToken.getValue());
-                    tokens.pop_back();
-                }
-                std::vector<std::size_t> sizes;
-                while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
-                {
-                    tokens.pop_back();
-                    auto constant = parseNonCommaExpression(tokens, context);
-                    sizes.push_back(std::visit([](auto&& value) -> std::size_t
-                                               {
-                                                   using T = std::decay_t<decltype(value)>;
-                                                   if constexpr(std::is_integral_v<T>)
-                                                   {
-                                                       return value;
-                                                   }
-                                                   else
-                                                   {
-                                                       throw std::runtime_error(
-                                                           "Only integral type supported for array size");
-                                                   }
-                                               }, constant->solveConstantExpression()));
-                    if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
-                    {
-                        throw std::runtime_error("Expected ] after array declaration");
-                    }
-                    tokens.pop_back();
-                }
-                std::for_each(sizes.rbegin(), sizes.rend(), [&type](std::size_t value)
-                {
-                    type = std::make_unique<ArrayType>(std::move(type), value);
-                });
-                arguments.emplace_back(std::shared_ptr<Type>(type.release()), argname);
+                auto declaration = parseDeclarations(tokens,context,false,false,true,true);
+                arguments.emplace_back(std::get<0>(declaration.getDeclarations()[0]),std::get<1>(declaration.getDeclarations()[0]));
                 currToken = tokens.back();
                 if (currToken.getTokenType() == TokenType::CloseParenthese)
                 {
@@ -569,7 +512,6 @@ namespace
         }
 
         currToken = tokens.back();
-        context.pushScope();
         if (currToken.getTokenType() == TokenType::OpenBrace)
         {
             auto scopeLine = currToken.getLine();
@@ -579,7 +521,6 @@ namespace
                 {
                     throw std::runtime_error("Omitted parameter name");
                 }
-                context.addToScope(name);
             }
             auto statement = parseStatement(tokens, context);
             context.popScope();
@@ -599,6 +540,7 @@ namespace
         }
         else if (currToken.getTokenType() == TokenType::SemiColon)
         {
+            context.popScope();
             tokens.pop_back();
             return Function(line,
                             column,
@@ -842,7 +784,8 @@ namespace
                                                        ParsingContext& context,
                                                        bool multiple,
                                                        bool allowInitialization,
-                                                       bool allowEmptyArray)
+                                                       bool allowEmptyArray,
+                                                       bool allowNoName)
     {
         auto line = tokens.back().getLine();
         auto column = tokens.back().getColumn();
@@ -851,11 +794,16 @@ namespace
         while (true)
         {
             auto currToken = tokens.back();
-            if (currToken.getTokenType() != TokenType::Identifier)
+            if (!allowNoName && currToken.getTokenType() != TokenType::Identifier)
             {
                 throw std::runtime_error("Expected Identifier after variable declaration");
             }
-            tokens.pop_back();
+            std::string name;
+            if(currToken.getTokenType() == TokenType::Identifier)
+            {
+                name = std::get<std::string>(currToken.getValue());
+                tokens.pop_back();
+            }
             std::vector<std::size_t> sizes;
             while (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
             {
@@ -896,8 +844,10 @@ namespace
             {
                 thisType = std::make_unique<ArrayType>(std::move(thisType), value);
             });
-            auto name = std::get<std::string>(currToken.getValue());
-            context.addToScope(name);
+            if(!name.empty())
+            {
+                context.addToScope(name);
+            }
             currToken = tokens.back();
             if (allowInitialization && currToken.getTokenType() == TokenType::Assignment)
             {

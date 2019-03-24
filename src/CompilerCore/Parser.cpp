@@ -278,6 +278,13 @@ const std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
     return m_declarations;
 }
 
+std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
+                             std::string,
+                             std::unique_ptr<OpenCL::Parser::InitializerList>>>& OpenCL::Parser::Declarations::getDeclarations()
+{
+    return m_declarations;
+}
+
 const OpenCL::Parser::Expression& OpenCL::Parser::ReturnStatement::getExpression() const
 {
     return m_expression;
@@ -720,27 +727,20 @@ const std::vector<OpenCL::Parser::BitXorExpression>& OpenCL::Parser::BitOrExpres
     return m_optionalBitXorExpressions;
 }
 
+
 OpenCL::Parser::GlobalDeclaration::GlobalDeclaration(std::uint64_t line,
                                                      std::uint64_t column,
-                                                     std::shared_ptr<Type> type,
-                                                     std::string name,
-                                                     std::unique_ptr<PrimaryExpressionConstant>&& value)
-    : Global(line, column), m_type(std::move(type)), m_name(std::move(name)), m_optionalValue(std::move(value))
+                                                     std::vector<std::tuple<std::shared_ptr<Type>,
+                                                                            std::string,
+                                                                            std::unique_ptr<InitializerList>>>&& declarations)
+    : Global(line, column), m_declarations(std::move(declarations))
 {}
 
-const std::shared_ptr<OpenCL::Parser::Type>& OpenCL::Parser::GlobalDeclaration::getType() const
+const std::vector<std::tuple<std::shared_ptr<OpenCL::Parser::Type>,
+                             std::string,
+                             std::unique_ptr<OpenCL::Parser::InitializerList>>>& OpenCL::Parser::GlobalDeclaration::getDeclarations() const
 {
-    return m_type;
-}
-
-const std::string& OpenCL::Parser::GlobalDeclaration::getName() const
-{
-    return m_name;
-}
-
-const OpenCL::Parser::PrimaryExpressionConstant* OpenCL::Parser::GlobalDeclaration::getOptionalValue() const
-{
-    return m_optionalValue.get();
+    return m_declarations;
 }
 
 OpenCL::Parser::PrimitiveType::PrimitiveType(std::vector<OpenCL::Parser::PrimitiveType::Types>&& types)

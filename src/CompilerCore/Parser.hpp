@@ -1431,6 +1431,10 @@ namespace OpenCL::Parser
                                      std::string,
                                      std::unique_ptr<InitializerList>>>& getDeclarations() const;
 
+        std::vector<std::tuple<std::shared_ptr<Type>,
+                                     std::string,
+                                     std::unique_ptr<InitializerList>>>& getDeclarations();
+
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
 
@@ -1643,27 +1647,24 @@ namespace OpenCL::Parser
 
     /**
      * <GlobalDeclaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     *                <TokenType::CloseSquareBracket> }
+     *                <TokenType::CloseSquareBracket> } { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
+     *                <TokenType::CloseSquareBracket> }}
      */
     class GlobalDeclaration final : public Global
     {
-        std::shared_ptr<Type> m_type;
-        std::string m_name;
-        std::unique_ptr<PrimaryExpressionConstant> m_optionalValue;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
-        //TODO: Make global declaration take a list of declarations
+
         GlobalDeclaration(std::uint64_t line,
                           std::uint64_t column,
-                          std::shared_ptr<Type> type,
-                          std::string name,
-                          std::unique_ptr<PrimaryExpressionConstant>&& value = nullptr);
+                          std::vector<std::tuple<std::shared_ptr<Type>,
+                                                 std::string,
+                                                 std::unique_ptr<InitializerList>>>&& declarations);
 
-        const std::shared_ptr<Type>& getType() const;
-
-        const std::string& getName() const;
-
-        const PrimaryExpressionConstant* getOptionalValue() const;
+        const std::vector<std::tuple<std::shared_ptr<Type>,
+                                     std::string,
+                                     std::unique_ptr<InitializerList>>>& getDeclarations() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };

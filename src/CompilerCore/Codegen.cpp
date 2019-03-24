@@ -620,29 +620,37 @@ void OpenCL::Parser::Program::codegen(OpenCL::Parser::Context& context) const
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::GlobalDeclaration::codegen(OpenCL::Parser::Context& context) const
 {
-    auto[constant, sign] = getOptionalValue() ? getOptionalValue()->codegen(context) : decltype(getOptionalValue()
-        ->codegen(context)){};
-    if (constant
-        && (constant->getType() != getType()->type(context) || (sign && sign->isSigned()) != getType()->isSigned()))
+    //TODO: Make array size deduction and etc work
+    for (auto&[type, name, optionalValue] : getDeclarations())
     {
-        castPrimitive(constant, sign->isSigned(), getType()->type(context), getType()->isSigned(), context);
-    }
+        auto[constant, sign] = optionalValue ? optionalValue->codegen(context) : decltype(optionalValue
+            ->codegen(context)){};
+        if (constant
+            && (constant->getType() != type->type(context) || (sign && sign->isSigned()) != type->isSigned()))
+        {
+            castPrimitive(constant, sign->isSigned(), type->type(context), type->isSigned(), context);
+        }
+        if (constant && !llvm::isa<llvm::Constant>(constant))
+        {
+            throw std::runtime_error("Can only use constant expression to initialize global variable");
+        }
 
-    auto* newGlobal = new llvm::GlobalVariable(*context.module,
-                                               getType()->type(context),
-                                               getType()->isConst(),
-                                               llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
-                                               constant ? llvm::cast<llvm::Constant>(constant) :
-                                               getZeroFor(getType()->type(context)),
-                                               getName());
-    context.debugBuilder->createGlobalVariableExpression(context.debugUnit,
-                                                         getName(),
-                                                         getName(),
-                                                         context.debugUnit,
-                                                         getLine(),
-                                                         toDwarfType(getType(), context),
-                                                         false);
-    context.addGlobal(getName(), {newGlobal, getType()});
+        auto* newGlobal = new llvm::GlobalVariable(*context.module,
+                                                   type->type(context),
+                                                   type->isConst(),
+                                                   llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
+                                                   constant ? llvm::cast<llvm::Constant>(constant) :
+                                                   getZeroFor(type->type(context)),
+                                                   name);
+        context.debugBuilder->createGlobalVariableExpression(context.debugUnit,
+                                                             name,
+                                                             name,
+                                                             context.debugUnit,
+                                                             getLine(),
+                                                             toDwarfType(type, context),
+                                                             false);
+        context.addGlobal(name, {newGlobal, type});
+    }
     return {};
 }
 
@@ -1987,7 +1995,7 @@ std::pair<llvm::Value*,
                               else
                               {
                                   string = context.builder.CreateGlobalString(value);
-                                  cache.emplace(value,string);
+                                  cache.emplace(value, string);
                               }
                               return {context.builder.CreateLoad(string),
                                       std::make_shared<PointerType>(std::make_unique<PrimitiveType>(8,
@@ -2721,7 +2729,21 @@ std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::I
 std::pair<llvm::Value*,
           std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::InitializerListBlock::codegen(OpenCL::Parser::Context& context) const
 {
-    (void)context;
+    if (getNonCommaExpressionsAndBlocks().size() == 1)
+    {
+        return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Parser::Type>>
+                          {
+                              using T = std::decay_t<decltype(value)>;
+                              if constexpr(std::is_same_v<T, std::unique_ptr<NonCommaExpression>>)
+                              {
+                                  return value->codegen(context);
+                              }
+                              else
+                              {
+                                  return {};
+                              }
+                          }, getNonCommaExpressionsAndBlocks()[0].second);
+    }
     return {};
 }
 
