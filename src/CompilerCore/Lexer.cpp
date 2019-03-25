@@ -359,8 +359,9 @@ namespace
     };
 }
 
-std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(const std::string& source)
+std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
 {
+    source = std::regex_replace(source,std::regex("\r\n"),"\n");
     State currentState = State::Start;
     std::string characters;
     std::regex identifierMatch("[a-zA-Z_]\\w*");

@@ -1,11 +1,15 @@
 
+#define NAMESIZE 31
+
+#define DOUBLE(x) (2 * (x))
+
 typedef struct TreeNode
 {
-    char vorname[31];
-    char nachname[31];
+    char vorname[DOUBLE(NAMESIZE)];
+    char nachname[DOUBLE(NAMESIZE)];
     char anrede[5];
     float umsatz;
-    char wohnort[31];
+    char wohnort[DOUBLE(NAMESIZE)];
     int bankleitzahl;
     unsigned char height;
     struct TreeNode* right;

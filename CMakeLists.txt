@@ -15,7 +15,7 @@ list(APPEND CMAKE_CXX_FLAGS "-pedantic -Wall -Wextra -fdiagnostics-color=always"
 
 llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)
 
-add_library(CompilerCore src/CompilerCore/Lexer.cpp src/CompilerCore/buildTree.cpp src/CompilerCore/Parser.cpp src/CompilerCore/Codegen.cpp)
+add_library(CompilerCore src/CompilerCore/Lexer.cpp src/CompilerCore/buildTree.cpp src/CompilerCore/Parser.cpp src/CompilerCore/Codegen.cpp src/CompilerCore/Preprocessor.cpp src/CompilerCore/Preprocessor.hpp)
 target_link_libraries(CompilerCore PUBLIC ${llvm_libs} Threads::Threads)
 
 add_executable(OpenCLParser src/main.cpp)

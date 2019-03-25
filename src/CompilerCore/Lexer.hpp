@@ -93,7 +93,7 @@ namespace OpenCL::Lexer
 
     class Token;
 
-    std::vector<Token> tokenize(const std::string& source);
+    std::vector<Token> tokenize(std::string source);
 
     class Token
     {
@@ -103,7 +103,7 @@ namespace OpenCL::Lexer
         TokenType m_tokenType;
         variant m_value;
 
-        friend std::vector<Token> tokenize(const std::string& source);
+        friend std::vector<Token> tokenize(std::string source);
 
     public:
 

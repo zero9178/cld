@@ -1,5 +1,6 @@
 #include "CompilerCore/Lexer.hpp"
 #include "CompilerCore/Parser.hpp"
+#include "CompilerCore/Preprocessor.hpp"
 
 #include <iostream>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -29,7 +30,7 @@ int main()
     LLVMLinkInMCJIT();
 
     OpenCL::Parser::Context context;
-    auto result = OpenCL::Lexer::tokenize(source);
+    auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
     auto node = OpenCL::Parser::buildTree(std::move(result));
     node.codegen(context);
 
