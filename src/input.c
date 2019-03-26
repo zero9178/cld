@@ -1,7 +1,7 @@
 
 #define NAMESIZE 31
 
-//#define DOUBLE(x) (2 * (x))
+#define DOUBLE(x) (2 * (x))
 
 typedef struct TreeNode
 {
@@ -199,8 +199,11 @@ void addNode(TreeNode* root, TreeNode* p)
     recursiveAdd(root, p, 0, &root);
 }
 
+#define STRINGIFY(x) #x
+
 int main()
 {
+    char c[] = STRINGIFY(NAMESIZE);
     TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
     TreeNode newNode = {"Lukas","Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
