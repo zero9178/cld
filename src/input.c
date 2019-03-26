@@ -1,7 +1,7 @@
 
 #define NAMESIZE 31
 
-#define DOUBLE(x) (2 * (x))
+//#define DOUBLE(x) (2 * (x))
 
 typedef struct TreeNode
 {
@@ -16,6 +16,8 @@ typedef struct TreeNode
     struct TreeNode* left;
 
 } TreeNode;
+
+#undef NAMESIZE
 
 TreeNode* rotateLeft(TreeNode* pivot, TreeNode* parent);
 
