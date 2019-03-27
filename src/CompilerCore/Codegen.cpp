@@ -2747,4 +2747,10 @@ std::pair<llvm::Value*,
     return {};
 }
 
+std::pair<llvm::Value*,
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::EnumDeclaration::codegen(OpenCL::Parser::Context& context) const
+{
+    return std::pair<llvm::Value*, std::shared_ptr<Type>>();
+}
+
 

@@ -17,6 +17,12 @@ typedef struct TreeNode
 
 } TreeNode;
 
+#ifdef NAMESIZE
+
+int constant = 5;
+
+#endif
+
 #undef NAMESIZE
 
 TreeNode* rotateLeft(TreeNode* pivot, TreeNode* parent);
@@ -201,13 +207,26 @@ void addNode(TreeNode* root, TreeNode* p)
 
 #define STRINGIFY(x) #x
 
+#ifdef NAMESIZE
+eugfwazdbwaidbawiduawb
+#endif
+
+enum Name
+{
+    SomeConstant = 5,
+    LeadingValue
+};
+
 int main()
 {
+    char ct[SomeConstant];
+    //enum Name hopefullyInt;
+    //hopefullyInt = LeadingValue;
     char c[] = STRINGIFY(NAMESIZE);
     TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
     TreeNode newNode = {"Lukas","Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);
-    return newNode.height;
+    //return hopefullyInt == 6;
 }

@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Parser.hpp"
 
 #include <utility>
@@ -2127,4 +2129,24 @@ OpenCL::Parser::Node::constantVariant OpenCL::Parser::UnaryExpressionUnaryOperat
     }
     }
     return value;
+}
+
+OpenCL::Parser::EnumDeclaration::EnumDeclaration(std::uint64_t line,
+                                                 std::uint64_t column,
+                                                 std::string name,
+                                                 const std::vector<std::pair<std::string, std::int32_t>>& values) : Global(line,
+                                                                                                           column),
+                                                                                                    m_name(std::move(
+                                                                                                        name)),
+                                                                                                    m_values(values)
+{}
+
+const std::string& OpenCL::Parser::EnumDeclaration::getName() const
+{
+    return m_name;
+}
+
+const std::vector<std::pair<std::string,std::int32_t>>& OpenCL::Parser::EnumDeclaration::getValues() const
+{
+    return m_values;
 }

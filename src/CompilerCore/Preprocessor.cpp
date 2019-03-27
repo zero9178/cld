@@ -27,7 +27,9 @@ namespace
     enum class States
     {
         Start,
-        ContinueDefine
+        ContinueDefine,
+        RemoveRegion,
+        IncludeRegion
     };
 
     using unordered_map = std::unordered_map<std::string, std::pair<std::vector<std::string>, std::string>>;
@@ -35,6 +37,26 @@ namespace
     using MacroStrings = std::vector<std::pair<std::string, bool>>;
 
     std::string recursivePreprocess(std::string source, unordered_map& defines);
+
+    void removeTrailingWhitespace(std::string& text)
+    {
+        auto back = std::find_if_not(text.rbegin(), text.rend(), [](char c)
+        { return std::isspace(c); });
+        text = text.substr(0, text.size() - (back - text.rbegin()));
+    }
+
+    void removeLeadingWhitespace(std::string& text)
+    {
+        auto result = std::find_if_not(text.begin(), text.end(), [](char c)
+        { return std::isspace(c); });
+        text.erase(text.begin(), result);
+    }
+
+    void trimWhitespace(std::string& text)
+    {
+        removeLeadingWhitespace(text);
+        removeTrailingWhitespace(text);
+    }
 
     void resolveMacro(std::size_t current,
                       std::size_t pos,
@@ -95,9 +117,8 @@ namespace
 
     std::string recursivePreprocess(std::string source, unordered_map& defines)
     {
-        States currentState = States::Start;
         static std::regex isPreprocessor("\\s*#.*", std::regex_constants::optimize);
-        source = std::regex_replace(source, std::regex("\r\n"), "\n");
+        States currentState = States::Start;
         bool hasPreprocessorTokens;
         std::string* currentDefine = nullptr;
         do
@@ -198,10 +219,8 @@ namespace
                         if (iter.rfind("define", 0) == 0)
                         {
                             iter = iter.substr(6, iter.size() - 6);
-                            auto result = std::find_if_not(iter.begin(), iter.end(), [](char c)
-                            { return std::isspace(c); });
-                            iter.erase(iter.begin(), result);
-                            result = std::find_if(iter.begin(), iter.end(), [](char c)
+                            removeLeadingWhitespace(iter);
+                            auto result = std::find_if(iter.begin(), iter.end(), [](char c)
                             { return std::isspace(c) || c == '('; });
                             auto name = iter.substr(0, result - iter.begin());
                             iter = iter.substr(result - iter.begin(), iter.size() - (result - iter.begin()));
@@ -225,17 +244,12 @@ namespace
                                     }
                                 }
                             }
-                            auto back = std::find_if_not(iter.rbegin(), iter.rend(), [](char c)
-                            { return std::isspace(c); });
-                            iter = iter.substr(0, iter.size() - (back - iter.rbegin()));
+                            trimWhitespace(iter);
                             if (iter.back() == '\\')
                             {
                                 iter.resize(iter.size() - 1);
                                 currentState = States::ContinueDefine;
                             }
-                            result = std::find_if_not(iter.begin(), iter.end(), [](char c)
-                            { return std::isspace(c); });
-                            iter.erase(iter.begin(), result);
                             auto pair = defines.insert({name, {arguments, iter}});
                             if (!pair.second)
                             {
@@ -246,15 +260,33 @@ namespace
                         }
                         else if (iter.rfind("undef", 0) == 0)
                         {
-                            iter = iter.substr(5, iter.size() - 5);
-                            auto result = std::find_if_not(iter.begin(), iter.end(), [](char c)
-                            { return std::isspace(c); });
-                            iter.erase(iter.begin(), result);
-                            auto back = std::find_if_not(iter.rbegin(), iter.rend(), [](char c)
-                            { return std::isspace(c); });
-                            iter = iter.substr(0, iter.size() - (back - iter.rbegin()));
+                            iter = iter.substr(5);
+                            trimWhitespace(iter);
                             defines.erase(iter);
                             iter = "";
+                        }
+                        else if (iter.rfind("ifdef",0) == 0 || iter.rfind("ifndef",0) == 0)
+                        {
+                            bool negate = iter.rfind("ifdef",0);
+                            iter = iter.substr(negate ? 6 : 5);
+                            trimWhitespace(iter);
+                            if(defines.count(iter))
+                            {
+                                currentState = negate ? States::RemoveRegion : States::IncludeRegion;
+                            }
+                            else
+                            {
+                                currentState = negate ? States::IncludeRegion : States::RemoveRegion;
+                            }
+                            if(currentState == States::IncludeRegion)
+                            {
+                                hasPreprocessorTokens = true;
+                            }
+                            iter = "";
+                        }
+                        else
+                        {
+                            throw std::runtime_error("Invalid preprocessor directive");
                         }
                     }
                     break;
@@ -276,7 +308,29 @@ namespace
                     iter = "";
                     break;
                 }
+                case States::RemoveRegion:
+                {
+                    if(iter.rfind("#endif",0) == 0)
+                    {
+                        currentState = States::Start;
+                    }
+                    iter = "";
+                    break;
                 }
+                case States::IncludeRegion:
+                {
+                    if(iter.rfind("#endif",0) == 0)
+                    {
+                        currentState = States::Start;
+                        iter = "";
+                    }
+                    break;
+                }
+                }
+            }
+            if(currentState == States::IncludeRegion || currentState == States::RemoveRegion)
+            {
+                throw std::runtime_error("No matching #endif after #if*");
             }
             if (!lines.empty())
             {
@@ -289,6 +343,7 @@ namespace
                                          });
             }
         } while (hasPreprocessorTokens);
+
         return source;
     }
 }

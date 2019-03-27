@@ -12,7 +12,7 @@
 
 int main()
 {
-    std::ifstream file("../src/input.c");
+    std::ifstream file("../src/input.c",std::ios_base::binary);
     if(!file.is_open())
     {
         std::cerr<<"Could not open source file";
@@ -24,6 +24,10 @@ int main()
     source.resize(pos);
     file.seekg(0,std::ios_base::beg);
     file.read(source.data(),source.size());
+
+    #ifdef _WIN32
+    source.erase(std::remove(source.begin(),source.end(),'\r'),source.end());
+    #endif
 
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();

@@ -1539,7 +1539,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration>
+     * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration> | <EnumDeclaration>
      */
     class Global : public Node
     {
@@ -1576,6 +1576,31 @@ namespace OpenCL::Parser
         const std::string& getName() const;
 
         const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypes() const;
+
+        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
+    };
+
+    /**
+     * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
+     *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
+     *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
+     *                       [ <TokenType::Comma> ] <TokenType::CloseBrace> <TokenType::SemiColon>
+     */
+    class EnumDeclaration final : public Global
+    {
+        std::string m_name;
+        std::vector<std::pair<std::string,std::int32_t>> m_values;
+
+    public:
+
+        EnumDeclaration(std::uint64_t line,
+                        std::uint64_t column,
+                        std::string name,
+                        const std::vector<std::pair<std::string,std::int32_t>>& values);
+
+        const std::string& getName() const;
+
+        const std::vector<std::pair<std::string,std::int32_t>>& getValues() const;
 
         std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(Context& context) const override;
     };
@@ -1670,7 +1695,7 @@ namespace OpenCL::Parser
     };
 
     /**
-     * <program> ::= {<Function> | <Global>}
+     * <program> ::= {<Global>}
      */
     class Program final
     {
