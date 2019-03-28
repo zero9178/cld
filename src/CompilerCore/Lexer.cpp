@@ -361,7 +361,6 @@ namespace
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
 {
-    auto size = source.size();
     State currentState = State::Start;
     std::string characters;
     std::regex identifierMatch("[a-zA-Z_]\\w*");
@@ -448,7 +447,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     characters.clear();
                     if ((iter >= '0' && iter <= '9')
                         || (iter >= 'a' && iter <= 'z')
-                        || (iter >= 'A' && iter <= 'Z'))
+                        || (iter >= 'A' && iter <= 'Z')
+                        || (iter == '_'))
                     {
                         currentState = State::Text;
                     }
@@ -488,7 +488,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             {
                 if ((iter >= '0' && iter <= '9')
                     || (iter >= 'a' && iter <= 'z')
-                    || (iter >= 'A' && iter <= 'Z'))
+                    || (iter >= 'A' && iter <= 'Z')
+                    || (iter == '_'))
                 {
                     characters += iter;
                 }

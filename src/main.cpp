@@ -33,7 +33,7 @@ int main()
     llvm::InitializeNativeTargetAsmPrinter();
     LLVMLinkInMCJIT();
 
-    OpenCL::Parser::Context context;
+    OpenCL::Syntax::CodegenContext context;
     auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
     auto node = OpenCL::Parser::buildTree(std::move(result));
     node.codegen(context);
