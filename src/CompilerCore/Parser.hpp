@@ -162,6 +162,8 @@ namespace OpenCL::Parser
         virtual std::unique_ptr<Type> clone() const = 0;
 
         virtual std::string name() const = 0;
+
+        virtual llvm::DIType* debugType(Context& context) const = 0;
     };
 
     /**
@@ -231,6 +233,8 @@ namespace OpenCL::Parser
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
     };
 
     /**
@@ -254,6 +258,8 @@ namespace OpenCL::Parser
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
     };
 
     /**
@@ -279,6 +285,8 @@ namespace OpenCL::Parser
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
     };
 
     /**
@@ -303,6 +311,8 @@ namespace OpenCL::Parser
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
     };
 
     /**
@@ -327,6 +337,30 @@ namespace OpenCL::Parser
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
+    };
+
+    class EnumType final : public Type
+    {
+        std::string m_name;
+        bool m_isConst;
+
+    public:
+
+        EnumType(const std::string& name, bool isConst);
+
+        const std::string& getName() const;
+
+        bool isConst() const override;
+
+        llvm::Type* type(Context& context) const override;
+
+        std::unique_ptr<Type> clone() const override;
+
+        std::string name() const override;
+
+        llvm::DIType* debugType(Context& context) const override;
     };
 
     /**

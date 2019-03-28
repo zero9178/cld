@@ -11,11 +11,11 @@ namespace
     {
         std::vector<std::set<std::string>> m_currentScope;
         std::map<std::string,std::int32_t> m_enumConstants;
-
-
+        
     public:
 
         std::map<std::string, std::shared_ptr<OpenCL::Parser::Type>> typedefs;
+        std::set<std::string> functions;
 
         ParsingContext()
         {
@@ -68,11 +68,16 @@ namespace
             {
                 throw std::runtime_error("Enum constant called " + name + " alreaedy exists");
             }
+            if(functions.count(name))
+            {
+                throw std::runtime_error("Symbol " + name + " previously declared as function");
+            }
         }
 
-        std::int32_t getEnumConstant(const std::string& name)
+        std::int32_t* getEnumConstant(const std::string& name)
         {
-            return m_enumConstants.at(name);
+            auto result = m_enumConstants.find(name);
+            return result == m_enumConstants.end() ? nullptr : &result->second;
         }
     };
 
@@ -147,6 +152,8 @@ namespace
     OpenCL::Parser::StructType parseStructType(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Parser::UnionType parseUnionType(Tokens& tokens, ParsingContext& context);
+
+    OpenCL::Parser::EnumType parseEnumType(Tokens& tokens, ParsingContext& context);
 }
 
 OpenCL::Parser::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
@@ -561,6 +568,11 @@ namespace
             throw std::runtime_error("Invalid identifier for function");
         }
         auto name = std::get<std::string>(currToken.getValue());
+        if(context.getEnumConstant(name))
+        {
+            throw std::runtime_error(name + " previously declared as enumeration constant");
+        }
+        context.functions.insert(name);
         currToken = tokens.back();
         tokens.pop_back();
         if (currToken.getTokenType() != TokenType::OpenParenthese)
@@ -682,7 +694,9 @@ namespace
             }
             case TokenType::EnumKeyword:
             {
-
+                types.push(std::make_unique<EnumType>(parseEnumType(tokens,context)));
+                iter = tokens.rbegin();
+                break;
             }
             case TokenType::Asterisk:
             {
@@ -848,6 +862,34 @@ namespace
             tokens.pop_back();
         }
         return UnionType(std::move(name), isConst);
+    }
+
+    OpenCL::Parser::EnumType parseEnumType(Tokens& tokens, ParsingContext& context)
+    {
+        (void)context;
+        bool isConst = false;
+        if (tokens.back().getTokenType() == TokenType::ConstKeyword)
+        {
+            isConst = true;
+            tokens.pop_back();
+        }
+        if (tokens.back().getTokenType() != TokenType::EnumKeyword)
+        {
+            throw std::runtime_error("Expected struct keyword in struct type instantiation");
+        }
+        tokens.pop_back();
+        if (tokens.back().getTokenType() != TokenType::Identifier)
+        {
+            throw std::runtime_error("Expected identifier after struct keyword");
+        }
+        const std::string& name = std::get<std::string>(tokens.back().getValue());
+        tokens.pop_back();
+        if (tokens.back().getTokenType() == TokenType::ConstKeyword)
+        {
+            isConst = true;
+            tokens.pop_back();
+        }
+        return EnumType(name, isConst);
     }
 
     std::unique_ptr<OpenCL::Parser::BlockItem> parseBlockItem(Tokens& tokens, ParsingContext& context)
@@ -2082,9 +2124,28 @@ namespace
         auto column = currToken.getColumn();
         if (currToken.getTokenType() == TokenType::Identifier)
         {
-            return std::make_unique<PrimaryExpressionIdentifier>(line,
-                                                                 column,
-                                                                 std::get<std::string>(currToken.getValue()));
+            auto name = std::get<std::string>(currToken.getValue());
+            if(context.isInScope(name))
+            {
+                return std::make_unique<PrimaryExpressionIdentifier>(line,
+                                                                     column,
+                                                                     name);
+            }
+            else if(context.functions.count(name))
+            {
+                return std::make_unique<PrimaryExpressionIdentifier>(line,
+                                                                     column,
+                                                                     name);
+            }
+            else
+            {
+                auto* result = context.getEnumConstant(name);
+                if(!result)
+                {
+                    throw std::runtime_error("Unknown reference to variable or enum constant " + name);
+                }
+                return std::make_unique<PrimaryExpressionConstant>(line,column,*result);
+            }
         }
         else if (currToken.getTokenType() == TokenType::Literal)
         {

@@ -2150,3 +2150,26 @@ const std::vector<std::pair<std::string,std::int32_t>>& OpenCL::Parser::EnumDecl
 {
     return m_values;
 }
+
+OpenCL::Parser::EnumType::EnumType(const std::string& name, bool isConst) : m_name(name), m_isConst(isConst)
+{}
+
+const std::string& OpenCL::Parser::EnumType::getName() const
+{
+    return m_name;
+}
+
+std::unique_ptr<OpenCL::Parser::Type> OpenCL::Parser::EnumType::clone() const
+{
+    return std::make_unique<EnumType>(getName(),isConst());
+}
+
+std::string OpenCL::Parser::EnumType::name() const
+{
+    return (isConst() ? "const enum " : "enum ") + getName();
+}
+
+bool OpenCL::Parser::EnumType::isConst() const
+{
+    return m_isConst;
+}

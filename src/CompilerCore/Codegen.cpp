@@ -247,87 +247,17 @@ namespace
         }
     }
 
-    std::unordered_map<void*, llvm::DIType*> cache;
+    std::unordered_map<std::string, llvm::DIType*> cache;
 
-    llvm::DIType* toDwarfType(std::shared_ptr<OpenCL::Parser::Type> type, OpenCL::Parser::Context& context)
+    llvm::DIType* toDwarfType(const std::shared_ptr<OpenCL::Parser::Type>& type, OpenCL::Parser::Context& context)
     {
-        auto* llvmType = type->type(context);
-        if (auto result = cache.find(llvmType); result != cache.end())
+        if (auto result = cache.find(type->name()); result != cache.end())
         {
             return result->second;
         }
-        if (llvmType->isIntegerTy() || llvmType->isFloatingPointTy())
-        {
-            auto primitive = std::dynamic_pointer_cast<OpenCL::Parser::PrimitiveType>(type);
-            auto result = context.debugBuilder
-                                 ->createBasicType(type->name(), primitive->getBitCount(), [llvmType, &type]
-                                 {
-                                     if (llvmType->isIntegerTy())
-                                     {
-                                         if (llvmType->getIntegerBitWidth() == 8)
-                                         {
-                                             if (type->isSigned())
-                                             {
-                                                 return llvm::dwarf::DW_ATE_signed_char;
-                                             }
-                                             else
-                                             {
-                                                 return llvm::dwarf::DW_ATE_unsigned_char;
-                                             }
-                                         }
-                                         else
-                                         {
-                                             if (type->isSigned())
-                                             {
-                                                 return llvm::dwarf::DW_ATE_signed;
-                                             }
-                                             else
-                                             {
-                                                 return llvm::dwarf::DW_ATE_unsigned;
-                                             }
-                                         }
-                                     }
-                                     else if (llvmType->isFloatingPointTy())
-                                     {
-                                         return llvm::dwarf::DW_ATE_float;
-                                     }
-                                     else
-                                     {
-                                         throw std::runtime_error("Not implemented yet");
-                                     }
-                                 }());
-            cache[llvmType] = result;
-            return result;
-        }
-        else if (llvmType->isPointerTy())
-        {
-            auto pointer = std::dynamic_pointer_cast<OpenCL::Parser::PointerType>(type);
-            auto result = context.debugBuilder
-                                 ->createPointerType(toDwarfType(pointer->getType().clone(), context), 64, 64);
-            cache[llvmType] = result;
-            return result;
-        }
-        else if (llvmType->isArrayTy())
-        {
-            auto array = std::dynamic_pointer_cast<OpenCL::Parser::ArrayType>(type);
-            auto arrayedType = toDwarfType(array->getType()->clone(), context);
-            auto* llvmArrayType = array->type(context);
-            auto result = context.debugBuilder
-                                 ->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
-                                                   getAlignment(llvmArrayType),
-                                                   arrayedType,
-                                                   llvm::MDTuple::get(context.context,
-                                                                      context.debugBuilder->getOrCreateSubrange(0,
-                                                                                                                array
-                                                                                                                    ->getSize())));
-            cache[llvmType] = result;
-            return result;
-        }
-        else if (llvmType->isVoidTy())
-        {
-            return nullptr;
-        }
-        throw std::runtime_error("Not implemented yet");
+        auto* newDebugType = type->debugType(context);
+        cache[type->name()] = newDebugType;
+        return newDebugType;
     }
 
     void emitLocation(const OpenCL::Parser::Node* node, OpenCL::Parser::Context& context)
@@ -2419,8 +2349,8 @@ std::pair<llvm::Value*,
         });
         llvmStruct->setBody(maxElement);
     }
-    llvm::DICompositeType* fw_decl, * res;
-    cache[llvmStruct] = fw_decl = context.debugBuilder
+    llvm::DICompositeType* fw_decl, *res;
+    cache[getName()] = fw_decl = context.debugBuilder
                                          ->createReplaceableCompositeType(isUnion() ? llvm::dwarf::DW_TAG_union_type
                                                                                     : llvm::dwarf::DW_TAG_structure_type,
                                                                           getName(),
@@ -2480,9 +2410,27 @@ std::pair<llvm::Value*,
     }
     llvm::TempMDNode fwd_decl(fw_decl);
     context.debugBuilder->replaceTemporary(std::move(fwd_decl), res);
-    cache[llvmStruct] = res;
+    cache[getName()] = res;
     structType.isUnion = isUnion();
     context.structs[(isUnion() ? "union." : "struct.") + getName()] = structType;
+    return {};
+}
+
+std::pair<llvm::Value*,
+          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::EnumDeclaration::codegen(OpenCL::Parser::Context& context) const
+{
+    if (!getName().empty())
+    {
+        auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
+        std::vector<llvm::Metadata*> elements;
+        for(auto& [name,value] : getValues())
+        {
+            elements.push_back(context.debugBuilder->createEnumerator(name,value));
+        }
+        auto* result = context.debugBuilder->createEnumerationType(sp,getName(),context.debugUnit,getLine(),32,32,
+                                                    llvm::MDTuple::get(context.context,elements),toDwarfType(std::make_shared<PrimitiveType>(32,false,false,true),context));
+        cache[getName()] = result;
+    }
     return {};
 }
 
@@ -2747,10 +2695,105 @@ std::pair<llvm::Value*,
     return {};
 }
 
-std::pair<llvm::Value*,
-          std::shared_ptr<OpenCL::Parser::Type>> OpenCL::Parser::EnumDeclaration::codegen(OpenCL::Parser::Context& context) const
+llvm::DIType* OpenCL::Parser::PrimitiveType::debugType(OpenCL::Parser::Context& context) const
 {
-    return std::pair<llvm::Value*, std::shared_ptr<Type>>();
+    if (isVoid())
+    {
+        return nullptr;
+    }
+    auto* result = context.debugBuilder->createBasicType(name(), getBitCount(), [this]() -> unsigned int
+    {
+        if (!isFloatingPoint() && getBitCount())
+        {
+            if (getBitCount() == 8)
+            {
+                return isSigned() ? llvm::dwarf::DW_ATE_signed_char : llvm::dwarf::DW_ATE_unsigned_char;
+            }
+            else
+            {
+                return isSigned() ? llvm::dwarf::DW_ATE_signed : llvm::dwarf::DW_ATE_unsigned;
+            }
+        }
+        else
+        {
+            return llvm::dwarf::DW_ATE_float;
+        }
+    }());
+    if (isConst())
+    {
+        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+    }
+    else
+    {
+        return result;
+    }
 }
 
+llvm::DIType* OpenCL::Parser::PointerType::debugType(OpenCL::Parser::Context& context) const
+{
+    auto* result = context.debugBuilder->createPointerType(getType().debugType(context), 64, 64);
+    if (isConst())
+    {
+        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+    }
+    else
+    {
+        return result;
+    }
+}
 
+llvm::DIType* OpenCL::Parser::ArrayType::debugType(OpenCL::Parser::Context& context) const
+{
+    auto* elemenType = getType()->debugType(context);
+    auto* llvmArrayType = type(context);
+    return context.debugBuilder->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
+                                                 getAlignment(llvmArrayType),
+                                                 elemenType,
+                                                 llvm::MDTuple::get(context.context,
+                                                                    context.debugBuilder
+                                                                           ->getOrCreateSubrange(0, getSize())));
+}
+
+llvm::DIType* OpenCL::Parser::StructType::debugType(OpenCL::Parser::Context& context) const
+{
+    auto* result = cache.at(getName());
+    if (isConst())
+    {
+        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+    }
+    else
+    {
+        return result;
+    }
+}
+
+llvm::DIType* OpenCL::Parser::UnionType::debugType(OpenCL::Parser::Context& context) const
+{
+    auto* result = cache.at(getName());
+    if (isConst())
+    {
+        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+    }
+    else
+    {
+        return result;
+    }
+}
+
+llvm::DIType* OpenCL::Parser::EnumType::debugType(OpenCL::Parser::Context& context) const
+{
+    auto* result = cache.at(getName());
+    if (isConst())
+    {
+        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+    }
+    else
+    {
+        return result;
+    }
+}
+
+llvm::Type* OpenCL::Parser::EnumType::type(OpenCL::Parser::Context& context) const
+{
+    return context.builder.getInt32Ty();
+}

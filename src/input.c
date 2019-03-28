@@ -220,13 +220,13 @@ enum Name
 int main()
 {
     char ct[SomeConstant];
-    //enum Name hopefullyInt;
-    //hopefullyInt = LeadingValue;
+    enum Name hopefullyInt = SomeConstant;
+    hopefullyInt = LeadingValue;
     char c[] = STRINGIFY(NAMESIZE);
     TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
     TreeNode newNode = {"Lukas","Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);
-    //return hopefullyInt == 6;
+    return hopefullyInt == 6;
 }
