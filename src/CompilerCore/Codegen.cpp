@@ -1,4 +1,4 @@
-#include "Syntax.hpp"
+#include "Codegen.hpp"
 
 #include <sstream>
 #include <llvm/IR/Verifier.h>
@@ -2796,4 +2796,294 @@ llvm::DIType* OpenCL::Syntax::EnumType::debugType(OpenCL::Syntax::CodegenContext
 llvm::Type* OpenCL::Syntax::EnumType::type(OpenCL::Syntax::CodegenContext& context) const
 {
     return context.builder.getInt32Ty();
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Expression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionIdentifier& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionConstant& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionParenthese& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionSubscript& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionIncrement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionDecrement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionDot& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionArrow& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionFunctionCall& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::AssignmentExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionSizeOf& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::CastExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Term& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::AdditiveExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ShiftExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::RelationalExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::EqualityExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitAndExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitXorExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitOrExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::LogicalAndExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::LogicalOrExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ConditionalExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::NonCommaExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ReturnStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ExpressionStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::IfStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::SwitchStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::DefaultStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::CaseStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BlockStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ForStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerListScalarExpression& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerListBlock& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerList& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Declarations& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BlockItem& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ForDeclarationStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::HeadWhileStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::FootWhileStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BreakStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ContinueStatement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Statement& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::StructOrUnionDeclaration& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::EnumDeclaration& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::TypedefDeclaration& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Function& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::GlobalDeclaration& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Global& node)
+{
+
+}
+
+void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Program& node)
+{
+
 }

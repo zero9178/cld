@@ -105,14 +105,264 @@ namespace OpenCL::Syntax
         }
     };
 
-    class Node
+    class Expression;
+
+    class PrimaryExpressionIdentifier;
+
+    class PrimaryExpressionConstant;
+
+    class PrimaryExpressionParenthese;
+
+    class PrimaryExpression;
+
+    class PostFixExpressionPrimaryExpression;
+
+    class PostFixExpressionSubscript;
+
+    class PostFixExpressionIncrement;
+
+    class PostFixExpressionDecrement;
+
+    class PostFixExpressionDot;
+
+    class PostFixExpressionArrow;
+
+    class PostFixExpressionFunctionCall;
+
+    class PostFixExpressionTypeInitializer;
+
+    class PostFixExpression;
+
+    class AssignmentExpression;
+
+    class UnaryExpressionPostFixExpression;
+
+    class UnaryExpressionUnaryOperator;
+
+    class UnaryExpressionSizeOf;
+
+    class UnaryExpression;
+
+    class CastExpression;
+
+    class Term;
+
+    class AdditiveExpression;
+
+    class ShiftExpression;
+
+    class RelationalExpression;
+
+    class EqualityExpression;
+
+    class BitAndExpression;
+
+    class BitXorExpression;
+
+    class BitOrExpression;
+
+    class LogicalAndExpression;
+
+    class LogicalOrExpression;
+
+    class ConditionalExpression;
+
+    class NonCommaExpression;
+
+    class ReturnStatement;
+
+    class ExpressionStatement;
+
+    class IfStatement;
+
+    class SwitchStatement;
+
+    class DefaultStatement;
+
+    class CaseStatement;
+
+    class BlockStatement;
+
+    class ForStatement;
+
+    class InitializerListScalarExpression;
+
+    class InitializerListBlock;
+
+    class InitializerList;
+
+    class Declarations;
+
+    class BlockItem;
+
+    class ForDeclarationStatement;
+
+    class HeadWhileStatement;
+
+    class FootWhileStatement;
+
+    class BreakStatement;
+
+    class ContinueStatement;
+
+    class Statement;
+
+    class StructOrUnionDeclaration;
+
+    class EnumDeclaration;
+
+    class TypedefDeclaration;
+
+    class Function;
+
+    class GlobalDeclaration;
+
+    class Global;
+
+    class Program;
+
+    class Visitable;
+
+    class NodeVisitor
+    {
+    public:
+
+        virtual void visit(Visitable& node);
+
+        virtual void visit(Expression& node) = 0;
+
+        virtual void visit(PrimaryExpressionIdentifier& node) = 0;
+
+        virtual void visit(PrimaryExpressionConstant& node) = 0;
+
+        virtual void visit(PrimaryExpressionParenthese& node) = 0;
+
+        virtual void visit(PrimaryExpression& node) = 0;
+
+        virtual void visit(PostFixExpressionPrimaryExpression& node) = 0;
+
+        virtual void visit(PostFixExpressionSubscript& node) = 0;
+
+        virtual void visit(PostFixExpressionIncrement& node) = 0;
+
+        virtual void visit(PostFixExpressionDecrement& node) = 0;
+
+        virtual void visit(PostFixExpressionDot& node) = 0;
+
+        virtual void visit(PostFixExpressionArrow& node) = 0;
+
+        virtual void visit(PostFixExpressionFunctionCall& node) = 0;
+
+        virtual void visit(PostFixExpressionTypeInitializer& node) = 0;
+
+        virtual void visit(PostFixExpression& node) = 0;
+
+        virtual void visit(AssignmentExpression& node) = 0;
+
+        virtual void visit(UnaryExpressionPostFixExpression& node) = 0;
+
+        virtual void visit(UnaryExpressionUnaryOperator& node) = 0;
+
+        virtual void visit(UnaryExpressionSizeOf& node) = 0;
+
+        virtual void visit(UnaryExpression& node) = 0;
+
+        virtual void visit(CastExpression& node) = 0;
+
+        virtual void visit(Term& node) = 0;
+
+        virtual void visit(AdditiveExpression& node) = 0;
+
+        virtual void visit(ShiftExpression& node) = 0;
+
+        virtual void visit(RelationalExpression& node) = 0;
+
+        virtual void visit(EqualityExpression& node) = 0;
+
+        virtual void visit(BitAndExpression& node) = 0;
+
+        virtual void visit(BitXorExpression& node) = 0;
+
+        virtual void visit(BitOrExpression& node) = 0;
+
+        virtual void visit(LogicalAndExpression& node) = 0;
+
+        virtual void visit(LogicalOrExpression& node) = 0;
+
+        virtual void visit(ConditionalExpression& node) = 0;
+
+        virtual void visit(NonCommaExpression& node) = 0;
+
+        virtual void visit(ReturnStatement& node) = 0;
+
+        virtual void visit(ExpressionStatement& node) = 0;
+
+        virtual void visit(IfStatement& node) = 0;
+
+        virtual void visit(SwitchStatement& node) = 0;
+
+        virtual void visit(DefaultStatement& node) = 0;
+
+        virtual void visit(CaseStatement& node) = 0;
+
+        virtual void visit(BlockStatement& node) = 0;
+
+        virtual void visit(ForStatement& node) = 0;
+
+        virtual void visit(InitializerListScalarExpression& node) = 0;
+
+        virtual void visit(InitializerListBlock& node) = 0;
+
+        virtual void visit(InitializerList& node) = 0;
+
+        virtual void visit(Declarations& node) = 0;
+
+        virtual void visit(BlockItem& node) = 0;
+
+        virtual void visit(ForDeclarationStatement& node) = 0;
+
+        virtual void visit(HeadWhileStatement& node) = 0;
+
+        virtual void visit(FootWhileStatement& node) = 0;
+
+        virtual void visit(BreakStatement& node) = 0;
+
+        virtual void visit(ContinueStatement& node) = 0;
+
+        virtual void visit(Statement& node) = 0;
+
+        virtual void visit(StructOrUnionDeclaration& node) = 0;
+
+        virtual void visit(EnumDeclaration& node) = 0;
+
+        virtual void visit(TypedefDeclaration& node) = 0;
+
+        virtual void visit(Function& node) = 0;
+
+        virtual void visit(GlobalDeclaration& node) = 0;
+
+        virtual void visit(Global& node) = 0;
+
+        virtual void visit(Program& node) = 0;
+    };
+
+    class Visitable
+    {
+    public:
+
+        virtual void accept(NodeVisitor& visitor) = 0;
+    };
+
+    template <class T>
+    class Node : public Visitable
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
 
     public:
 
-        Node(uint64_t line, uint64_t column);
+        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column)
+        {}
 
         virtual ~Node() = default;
 
@@ -124,15 +374,30 @@ namespace OpenCL::Syntax
 
         Node& operator=(Node&&) noexcept = default;
 
-        uint64_t getLine() const;
+        std::uint64_t getLine() const
+        {
+            return m_line;
+        }
 
-        uint64_t getColumn() const;
+        std::uint64_t getColumn() const
+        {
+            return m_column;
+        }
 
-        virtual std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const = 0;
+        void accept(NodeVisitor& visitor) final
+        {
+            static_assert(std::is_final_v<T>);
+            visitor.visit(*static_cast<T*>(this));
+        }
 
-        using constantVariant = std::variant<std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,void*>;
+        using constantVariant = std::variant<std::int32_t,
+                                             std::uint32_t,
+                                             std::int64_t,
+                                             std::uint64_t,
+                                             float,
+                                             double,
+                                             void*>;
 
-        virtual constantVariant solveConstantExpression() const;
     };
 
     /**
@@ -149,7 +414,8 @@ namespace OpenCL::Syntax
         virtual ~Type() = default;
 
         Type(Type&&) = default;
-        Type&operator=(Type&&) = default;
+
+        Type& operator=(Type&&) = default;
 
         virtual bool isSigned() const;
 
@@ -348,7 +614,7 @@ namespace OpenCL::Syntax
 
     public:
 
-        EnumType(const std::string& name, bool isConst);
+        EnumType(std::string name, bool isConst);
 
         const std::string& getName() const;
 
@@ -364,19 +630,9 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
-     */
-    class NonCommaExpression : public Node
-    {
-    protected:
-
-        NonCommaExpression(std::uint64_t line, std::uint64_t column);
-    };
-
-    /**
      * <Expression> ::= <NonCommaExpression> [ <TokenType::Comma> <NonCommaExpression>]
      */
-    class Expression final : public Node
+    class Expression final : public Node<Expression>
     {
         std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
         std::unique_ptr<NonCommaExpression> m_optionalNonCommaExpression;
@@ -391,28 +647,12 @@ namespace OpenCL::Syntax
         const NonCommaExpression& getNonCommaExpression() const;
 
         const NonCommaExpression* getOptionalNonCommaExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
-    };
-
-    /**
-     * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
-     *                       | <PrimaryExpressionConstant>
-     *                       | <PrimaryExpressionParenthese>
-     */
-    class PrimaryExpression : public Node
-    {
-    protected:
-
-        PrimaryExpression(std::uint64_t line, std::uint64_t column);
     };
 
     /**
      * <PrimaryExpressionIdentifier> ::= <TokenType::Identifier>
      */
-    class PrimaryExpressionIdentifier final : public PrimaryExpression
+    class PrimaryExpressionIdentifier final : public Node<PrimaryExpressionIdentifier>
     {
         std::string m_identifier;
 
@@ -423,14 +663,12 @@ namespace OpenCL::Syntax
                                     std::string identifier);
 
         const std::string& getIdentifier() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <PrimaryExpressionConstant> ::= <TokenType::Constant>
      */
-    class PrimaryExpressionConstant final : public PrimaryExpression
+    class PrimaryExpressionConstant final : public Node<PrimaryExpressionConstant>
     {
 
     public:
@@ -452,16 +690,12 @@ namespace OpenCL::Syntax
         PrimaryExpressionConstant(std::uint64_t line, std::uint64_t column, variant value);
 
         const variant& getValue() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <PrimaryExpressionParenthese> ::= <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
      */
-    class PrimaryExpressionParenthese final : public PrimaryExpression
+    class PrimaryExpressionParenthese final : public Node<PrimaryExpressionParenthese>
     {
         Expression m_expression;
 
@@ -472,33 +706,29 @@ namespace OpenCL::Syntax
                                     Expression&& expression);
 
         const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
-     * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
-     *                       | <PostFixExpressionSubscript>
-     *                       | <PostFixExpressionDot>
-     *                       | <PostFixExpressionFunctionCall>
-     *                       | <PostFixExpressionArrow>
-     *                       | <PostFixExpressionIncrement>
-     *                       | <PostFixExpressionDecrement>
-     *                       | <PostFixExpressionTypeInitializer>
-     */
-    class PostFixExpression : public Node
+    * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
+    *                       | <PrimaryExpressionConstant>
+    *                       | <PrimaryExpressionParenthese>
+    */
+    class PrimaryExpression final : public Node<PrimaryExpression>
     {
-    protected:
+        using variant = std::variant<PrimaryExpressionIdentifier,
+                                     PrimaryExpressionConstant,
+                                     PrimaryExpressionParenthese>;
+        variant m_variant;
 
-        PostFixExpression(std::uint64_t line, std::uint64_t column);
+    public:
+
+        PrimaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
     };
 
     /**
      * <PostFixExpressionPrimaryExpression> ::= <PrimaryExpression>
      */
-    class PostFixExpressionPrimaryExpression final : public PostFixExpression
+    class PostFixExpressionPrimaryExpression final : public Node<PostFixExpressionPrimaryExpression>
     {
         std::unique_ptr<PrimaryExpression> m_primaryExpression;
 
@@ -509,18 +739,13 @@ namespace OpenCL::Syntax
                                            std::unique_ptr<PrimaryExpression>&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <PostFixExpressionSubscript> ::= <PostFixExpression> <TokenType::OpenSquareBracket> <Expression> <TokenType::CloseSquareBracket>
      */
-    class PostFixExpressionSubscript final : public PostFixExpression
+    class PostFixExpressionSubscript final : public Node<PostFixExpressionSubscript>
     {
-
         std::unique_ptr<PostFixExpression> m_postFixExpression;
         Expression m_expression;
 
@@ -534,14 +759,12 @@ namespace OpenCL::Syntax
         const PostFixExpression& getPostFixExpression() const;
 
         const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <PostFixExpressionIncrement> ::= <PostFixExpression> <TokenType::Increment>
      */
-    class PostFixExpressionIncrement final : public PostFixExpression
+    class PostFixExpressionIncrement final : public Node<PostFixExpressionIncrement>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
@@ -552,14 +775,12 @@ namespace OpenCL::Syntax
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <PostFixExpressionDecrement> ::= <PostFixExpression> <TokenType::Decrement>
      */
-    class PostFixExpressionDecrement final : public PostFixExpression
+    class PostFixExpressionDecrement final : public Node<PostFixExpressionDecrement>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
@@ -570,14 +791,12 @@ namespace OpenCL::Syntax
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <PostFixExpressionDot> ::= <PostFixExpression> <TokenType::Dot> <TokenType::Identifier>
      */
-    class PostFixExpressionDot final : public PostFixExpression
+    class PostFixExpressionDot final : public Node<PostFixExpressionDot>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
         std::string m_identifier;
@@ -592,14 +811,12 @@ namespace OpenCL::Syntax
         const PostFixExpression& getPostFixExpression() const;
 
         const std::string& getIdentifier() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <PostFixExpressionArrow> ::= <PostFixExpression> <TokenType::Arrow> <TokenType::Identifier>
      */
-    class PostFixExpressionArrow final : public PostFixExpression
+    class PostFixExpressionArrow final : public Node<PostFixExpressionArrow>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
         std::string m_identifier;
@@ -614,8 +831,6 @@ namespace OpenCL::Syntax
         const PostFixExpression& getPostFixExpression() const;
 
         const std::string& getIdentifier() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -623,7 +838,7 @@ namespace OpenCL::Syntax
      *                                     { <TokenType::Comma> <NonCommaExpression> }
      *                                     <TokenType::CloseParenthese>
      */
-    class PostFixExpressionFunctionCall final : public PostFixExpression
+    class PostFixExpressionFunctionCall final : public Node<PostFixExpressionFunctionCall>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
         std::vector<std::unique_ptr<NonCommaExpression>> m_optionalAssignmanetExpressions;
@@ -638,8 +853,6 @@ namespace OpenCL::Syntax
         const PostFixExpression& getPostFixExpression() const;
 
         const std::vector<std::unique_ptr<NonCommaExpression>>& getOptionalAssignmentExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -647,7 +860,7 @@ namespace OpenCL::Syntax
      *                                        <TokenType::OpenBrace> <NonCommaExpression>
      *                                        { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseBrace>
      */
-    class PostFixExpressionTypeInitializer final : public PostFixExpression
+    class PostFixExpressionTypeInitializer final : public Node<PostFixExpressionTypeInitializer>
     {
         std::shared_ptr<Type> m_type;
         std::vector<std::unique_ptr<NonCommaExpression>> m_nonCommaExpressions;
@@ -662,26 +875,42 @@ namespace OpenCL::Syntax
         const std::shared_ptr<Type>& getType() const;
 
         const std::vector<std::unique_ptr<NonCommaExpression>>& getNonCommaExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
-     * <UnaryExpression> ::= <UnaryExpressionPostFixExpression>
-     *                     | <UnaryExpressionUnaryOperator>
-     *                     | <UnaryExpressionSizeOf>
+     * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
+     *                       | <PostFixExpressionSubscript>
+     *                       | <PostFixExpressionDot>
+     *                       | <PostFixExpressionFunctionCall>
+     *                       | <PostFixExpressionArrow>
+     *                       | <PostFixExpressionIncrement>
+     *                       | <PostFixExpressionDecrement>
+     *                       | <PostFixExpressionTypeInitializer>
      */
-    class UnaryExpression : public Node
+    class PostFixExpression : public Node<PostFixExpression>
     {
-    protected:
+        using variant = std::variant<PostFixExpressionPrimaryExpression,
+                                     PostFixExpressionSubscript,
+                                     PostFixExpressionDot,
+                                     PostFixExpressionFunctionCall,
+                                     PostFixExpressionArrow,
+                                     PostFixExpressionIncrement,
+                                     PostFixExpressionDecrement,
+                                     PostFixExpressionTypeInitializer>;
 
-        UnaryExpression(std::uint64_t line, std::uint64_t column);
+        variant m_variant;
+
+    public:
+
+        PostFixExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
     };
 
     /**
      * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
      */
-    class AssignmentExpression final : public NonCommaExpression
+    class AssignmentExpression final : public Node<AssignmentExpression>
     {
         std::unique_ptr<UnaryExpression> m_unaryFactor;
 
@@ -724,13 +953,13 @@ namespace OpenCL::Syntax
 
         AssignOperator getAssignOperator() const;
 
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+        //std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
      */
-    class UnaryExpressionPostFixExpression final : public UnaryExpression
+    class UnaryExpressionPostFixExpression final : public Node<UnaryExpressionPostFixExpression>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
@@ -741,10 +970,6 @@ namespace OpenCL::Syntax
                                          std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
@@ -757,7 +982,7 @@ namespace OpenCL::Syntax
      *                                  | <TokenType::BitWiseNegation> <UnaryExpression>
      *                                  | <TokenType::LogicalNegation> <UnaryExpression>
      */
-    class UnaryExpressionUnaryOperator final : public UnaryExpression
+    class UnaryExpressionUnaryOperator final : public Node<UnaryExpressionUnaryOperator>
     {
     public:
 
@@ -788,17 +1013,13 @@ namespace OpenCL::Syntax
         UnaryOperator getAnOperator() const;
 
         const UnaryExpression& getUnaryExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
      *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
      */
-    class UnaryExpressionSizeOf final : public UnaryExpression
+    class UnaryExpressionSizeOf final : public Node<UnaryExpressionSizeOf>
     {
         std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>> m_unaryOrType;
 
@@ -810,39 +1031,50 @@ namespace OpenCL::Syntax
                                            std::shared_ptr<Type>>&& unaryOrType);
 
         const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>& getUnaryOrType() const;
+    };
 
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+    /**
+     * <UnaryExpression> ::= <UnaryExpressionPostFixExpression>
+     *                     | <UnaryExpressionUnaryOperator>
+     *                     | <UnaryExpressionSizeOf>
+     */
+    class UnaryExpression final : public Node<UnaryExpression>
+    {
+        using variant = std::variant<UnaryExpressionPostFixExpression,
+                                     UnaryExpressionUnaryOperator,
+                                     UnaryExpressionSizeOf>;
+        variant m_variant;
 
-        constantVariant solveConstantExpression() const override;
+    public:
+
+        UnaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
     };
 
     /**
      * <CastExpression> ::= <UnaryExpression>
      *                    | <TokenType::OpenParenthese> <Type> <TokenType::CloseParentheses> <CastExpression>
      */
-    class CastExpression final : public Node
+    class CastExpression final : public Node<CastExpression>
     {
-        std::variant<std::unique_ptr<UnaryExpression>,
+        std::variant<UnaryExpression,
                      std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>> m_unaryOrCast;
 
     public:
 
-        CastExpression(std::uint64_t line, std::uint64_t column, std::variant<std::unique_ptr<UnaryExpression>,
+        CastExpression(std::uint64_t line, std::uint64_t column, std::variant<UnaryExpression,
                                                                               std::pair<std::shared_ptr<Type>,
                                                                                         std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
         const std::variant<std::unique_ptr<UnaryExpression>,
                            std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <Term> ::= <CastExpression> { <Term::BinaryDotOperator> <CastExpressions> }
      */
-    class Term final : public Node
+    class Term final : public Node<Term>
     {
         CastExpression m_castExpression;
 
@@ -872,16 +1104,12 @@ namespace OpenCL::Syntax
         const CastExpression& getCastExpression() const;
 
         const std::vector<std::pair<BinaryDotOperator, CastExpression>>& getOptionalCastExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <AdditiveExpression> ::= <Term> { <AdditiveExpression::BinaryDashOperator> <Term> }
      */
-    class AdditiveExpression final : public Node
+    class AdditiveExpression final : public Node<AdditiveExpression>
     {
         Term m_term;
 
@@ -910,16 +1138,12 @@ namespace OpenCL::Syntax
         const Term& getTerm() const;
 
         const std::vector<std::pair<BinaryDashOperator, Term>>& getOptionalTerms() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <ShiftExpression> ::= <AdditiveExpression> { <ShiftExpression::ShiftOperator> <AdditiveExpression> }
      */
-    class ShiftExpression final : public Node
+    class ShiftExpression final : public Node<ShiftExpression>
     {
         AdditiveExpression m_additiveExpression;
 
@@ -949,16 +1173,12 @@ namespace OpenCL::Syntax
         const AdditiveExpression& getAdditiveExpression() const;
 
         const std::vector<std::pair<ShiftOperator, AdditiveExpression>>& getOptionalAdditiveExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <RelationalExpression> ::= <ShiftExpression> { <RelationalExpression::RelationalOperator> <ShiftExpression> }
      */
-    class RelationalExpression final : public Node
+    class RelationalExpression final : public Node<RelationalExpression>
     {
         ShiftExpression m_shiftExpression;
 
@@ -990,16 +1210,12 @@ namespace OpenCL::Syntax
         const ShiftExpression& getShiftExpression() const;
 
         const std::vector<std::pair<RelationalOperator, ShiftExpression>>& getOptionalShiftExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <EqualityExpression> ::= <RelationalExpression> { <EqualityExpression::EqualityOperator> <RelationalExpression> }
      */
-    class EqualityExpression final : public Node
+    class EqualityExpression final : public Node<EqualityExpression>
     {
         RelationalExpression m_relationalExpression;
 
@@ -1029,16 +1245,12 @@ namespace OpenCL::Syntax
         const RelationalExpression& getRelationalExpression() const;
 
         const std::vector<std::pair<EqualityOperator, RelationalExpression>>& getOptionalRelationalExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <BitAndExpression> ::= <EqualityExpression> { <TokenType::BitAnd> <EqualityExpression> }
      */
-    class BitAndExpression final : public Node
+    class BitAndExpression final : public Node<BitAndExpression>
     {
         EqualityExpression m_equalityExpression;
         std::vector<EqualityExpression> m_optionalEqualityExpressions;
@@ -1053,16 +1265,12 @@ namespace OpenCL::Syntax
         const EqualityExpression& getEqualityExpression() const;
 
         const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <BitXorExpression> ::= <BitAndExpression> { <TokenType::BitXor> <BitAndExpression> }
      */
-    class BitXorExpression final : public Node
+    class BitXorExpression final : public Node<BitXorExpression>
     {
         BitAndExpression m_bitAndExpression;
         std::vector<BitAndExpression> m_optionalBitAndExpressions;
@@ -1077,16 +1285,12 @@ namespace OpenCL::Syntax
         const BitAndExpression& getBitAndExpression() const;
 
         const std::vector<BitAndExpression>& getOptionalBitAndExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <BitOrExpression> ::= <BitXorExpression> { <TokenType::BitOr> <BitXorExpression> }
      */
-    class BitOrExpression final : public Node
+    class BitOrExpression final : public Node<BitOrExpression>
     {
         BitXorExpression m_bitXorExpression;
         std::vector<BitXorExpression> m_optionalBitXorExpressions;
@@ -1101,16 +1305,12 @@ namespace OpenCL::Syntax
         const BitXorExpression& getBitXorExpression() const;
 
         const std::vector<BitXorExpression>& getOptionalBitXorExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <LogicalAndExpression> ::= <BitOrExpression> { <TokenType::LogicAnd> <BitOrExpression> }
      */
-    class LogicalAndExpression final : public Node
+    class LogicalAndExpression final : public Node<LogicalAndExpression>
     {
         BitOrExpression m_bitOrExpression;
         std::vector<BitOrExpression> m_optionalBitOrExpressions;
@@ -1125,16 +1325,12 @@ namespace OpenCL::Syntax
         const BitOrExpression& getBitOrExpression() const;
 
         const std::vector<BitOrExpression>& getOptionalBitOrExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <LogicalOrExpression> ::= <LogicalAndExpression> { <TokenType::LogicOr> <LogicalAndExpression> }
      */
-    class LogicalOrExpression final : public Node
+    class LogicalOrExpression final : public Node<LogicalOrExpression>
     {
         LogicalAndExpression m_andExpression;
         std::vector<LogicalAndExpression> m_optionalAndExpressions;
@@ -1149,16 +1345,12 @@ namespace OpenCL::Syntax
         const LogicalAndExpression& getAndExpression() const;
 
         const std::vector<LogicalAndExpression>& getOptionalAndExpressions() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
      * <ConditionalExpression> ::= <LogicalOrExpression> [ <TokenType::QuestionMark> <Expression> <TokenType::Colon> <ConditionalExpression> ]
      */
-    class ConditionalExpression final : public NonCommaExpression
+    class ConditionalExpression final : public Node<ConditionalExpression>
     {
         LogicalOrExpression m_logicalOrExpression;
         std::unique_ptr<Expression> m_optionalExpression;
@@ -1177,49 +1369,29 @@ namespace OpenCL::Syntax
         const Expression* getOptionalExpression() const;
 
         const ConditionalExpression* getOptionalConditionalExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-
-        constantVariant solveConstantExpression() const override;
     };
 
     /**
-     * <BlockItem> ::= <Statement> | <Declaration>
+     * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
      */
-    class BlockItem : public Node
+    class NonCommaExpression final : public Node<NonCommaExpression>
     {
-    protected:
 
-        BlockItem(std::uint64_t line, std::uint64_t column);
-    };
+        std::variant<AssignmentExpression, ConditionalExpression> m_variant;
 
-    /**
-     * <Statement>
-     * ::=  <ReturnStatement>
-     * |    <ExpressionStatement>
-     * |    <IfStatement>
-     * |    <BlockStatement>
-     * |    <ForStatement>
-     * |    <ForDeclarationStatement>
-     * |    <HeadWhileStatement>
-     * |    <FootWhileStatement>
-     * |    <BreakStatement>
-     * |    <ContinueStatement>
-     * |    <SwitchStatement>
-     * |    <DefaultStatement>
-     * |    <CaseStatement>
-     */
-    class Statement : public BlockItem
-    {
-    protected:
+    public:
 
-        Statement(std::uint64_t line, std::uint64_t column);
+        NonCommaExpression(std::uint64_t line,
+                           std::uint64_t column,
+                           std::variant<AssignmentExpression, ConditionalExpression>&& variant);
+
+        const std::variant<AssignmentExpression, ConditionalExpression>& getVariant() const;
     };
 
     /**
      * <ReturnStatement> ::= <TokenType::ReturnKeyword> <Expression> <TokenType::SemiColon>
      */
-    class ReturnStatement final : public Statement
+    class ReturnStatement final : public Node<ReturnStatement>
     {
         Expression m_expression;
 
@@ -1228,14 +1400,12 @@ namespace OpenCL::Syntax
         ReturnStatement(std::uint64_t line, std::uint64_t column, Expression&& expression);
 
         const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <ExpressionStatement> ::= [<Expression>] <TokenType::SemiColon>
      */
-    class ExpressionStatement final : public Statement
+    class ExpressionStatement final : public Node<ExpressionStatement>
     {
         std::unique_ptr<Expression> m_optionalExpression;
 
@@ -1248,15 +1418,13 @@ namespace OpenCL::Syntax
         const Expression* getOptionalExpression() const;
 
         std::unique_ptr<Expression> moveOptionalExpression();
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
      *               <Statement> [ <TokenType::ElseKeyword> <Statement> ]
      */
-    class IfStatement final : public Statement
+    class IfStatement final : public Node<IfStatement>
     {
         Expression m_expression;
         std::unique_ptr<Statement> m_branch;
@@ -1275,15 +1443,13 @@ namespace OpenCL::Syntax
         const Statement& getBranch() const;
 
         const Statement* getElseBranch() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
      *                          <Statement>
      */
-    class SwitchStatement final : public Statement
+    class SwitchStatement final : public Node<SwitchStatement>
     {
         Expression m_expression;
         std::unique_ptr<Statement> m_statement;
@@ -1298,14 +1464,12 @@ namespace OpenCL::Syntax
         const Expression& getExpression() const;
 
         const Statement& getStatement() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <DefaultStatement> ::= <TokenType::DefaultKeyword> <TokenType::Colon> <Statement>
      */
-    class DefaultStatement final : public Statement
+    class DefaultStatement final : public Node<DefaultStatement>
     {
         std::unique_ptr<Statement> m_statement;
 
@@ -1316,14 +1480,12 @@ namespace OpenCL::Syntax
                          std::unique_ptr<Statement>&& statement);
 
         const Statement& getStatement() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <CaseStatement> ::= <TokenType::CaseKeyword> <ConstantNonCommaExpression> <TokenType::Colon> [<Statement>]
      */
-    class CaseStatement final : public Statement
+    class CaseStatement final : public Node<CaseStatement>
     {
         constantVariant m_constant;
         std::unique_ptr<Statement> m_statement;
@@ -1338,33 +1500,29 @@ namespace OpenCL::Syntax
         const constantVariant& getConstant() const;
 
         const Statement* getStatement() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <BlockStatement> ::= <TokenType::OpenBrace> { <BlockItem> } <TokenType::CloseBrace>
      */
-    class BlockStatement final : public Statement
+    class BlockStatement final : public Node<BlockStatement>
     {
-        std::vector<std::unique_ptr<BlockItem>> m_blockItems;
+        std::vector<BlockItem> m_blockItems;
 
     public:
 
         BlockStatement(std::uint64_t line,
                        std::uint64_t column,
-                       std::vector<std::unique_ptr<BlockItem>> blockItems);
+                       std::vector<BlockItem> blockItems);
 
-        const std::vector<std::unique_ptr<BlockItem>>& getBlockItems() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+        const std::vector<BlockItem>& getBlockItems() const;
     };
 
     /**
      * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> [<Expression>] <TokenType::SemiColon>
      *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParenthese> <Statement>
      */
-    class ForStatement final : public Statement
+    class ForStatement final : public Node<ForStatement>
     {
         std::unique_ptr<Statement> m_statement;
         std::unique_ptr<Expression> m_initial;
@@ -1387,24 +1545,12 @@ namespace OpenCL::Syntax
         const Expression* getControlling() const;
 
         const Expression* getPost() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-    };
-
-    /**
-     * <InitializerList> ::= <InitializerListScalarExpression> | <InitializerListBlock>
-     */
-    class InitializerList : public Node
-    {
-    protected:
-
-        InitializerList(std::uint64_t line, std::uint64_t column);
     };
 
     /**
      * <InitializerListScalarExpression> ::= <Expression>
      */
-    class InitializerListScalarExpression final : public InitializerList
+    class InitializerListScalarExpression final : public Node<InitializerListScalarExpression>
     {
         Expression m_expression;
 
@@ -1413,8 +1559,6 @@ namespace OpenCL::Syntax
         InitializerListScalarExpression(uint64_t line, uint64_t column, Expression&& expression);
 
         const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -1423,13 +1567,13 @@ namespace OpenCL::Syntax
      * <InitializerListBlock> ::= <TokenType::OpenBrace> <TokenType::CloseBrace>
      *                          | <TokenType::OpenBrace> <InitializerListBlockItem> { <TokenType::Comma> <InitializerListBlockItem> } <TokenType::CloseBrace>
      */
-    class InitializerListBlock final : public InitializerList
+    class InitializerListBlock final : public Node<InitializerListBlock>
     {
     public:
 
         using variant = std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>;
 
-        using vector = std::vector<std::pair<std::int64_t,variant>>;
+        using vector = std::vector<std::pair<std::int64_t, variant>>;
 
     private:
 
@@ -1438,12 +1582,23 @@ namespace OpenCL::Syntax
     public:
 
         InitializerListBlock(std::uint64_t line,
-                                     std::uint64_t column,
-                                     vector&& nonCommaExpressionsAndBlocks);
+                             std::uint64_t column,
+                             vector&& nonCommaExpressionsAndBlocks);
 
         const vector& getNonCommaExpressionsAndBlocks() const;
+    };
 
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+    /**
+     * <InitializerList> ::= <InitializerListScalarExpression> | <InitializerListBlock>
+     */
+    class InitializerList : public Node<InitializerList>
+    {
+        using variant = std::variant<InitializerListScalarExpression, InitializerListBlock>;
+        variant m_variant;
+
+    public:
+
+        InitializerList(std::uint64_t line, std::uint64_t column, variant&& variant);
     };
 
     /**
@@ -1451,9 +1606,9 @@ namespace OpenCL::Syntax
      * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <ConstantNonCommaExpression>
      * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ]} <TokenType::SemiColon>
      */
-    class Declarations final : public BlockItem
+    class Declarations final : public Node<Declarations>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string,std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
@@ -1468,15 +1623,13 @@ namespace OpenCL::Syntax
         std::vector<std::tuple<std::shared_ptr<Type>,
                                      std::string,
                                      std::unique_ptr<InitializerList>>>& getDeclarations();
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration> [<Expression>]
      *                           <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese> <Statement>
      */
-    class ForDeclarationStatement final : public Statement
+    class ForDeclarationStatement final : public Node<ForDeclarationStatement>
     {
         std::unique_ptr<Statement> m_statement;
         Declarations m_initial;
@@ -1499,15 +1652,13 @@ namespace OpenCL::Syntax
         const Expression* getControlling() const;
 
         const Expression* getPost() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <HeadWhileStatement> ::= <TokenType::WhileKeyword> <TokenType::OpenParenthese> <Expression>
      *                          <TokenType::CloseParenthese> <Statement>
      */
-    class HeadWhileStatement final : public Statement
+    class HeadWhileStatement final : public Node<HeadWhileStatement>
     {
         Expression m_expression;
         std::unique_ptr<Statement> m_statement;
@@ -1522,14 +1673,12 @@ namespace OpenCL::Syntax
         const Expression& getExpression() const;
 
         const Statement& getStatement() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <FootWhileStatement> ::= <TokenType::DoKeyword> <Statement> <TokenType::WhileKeyword> <Expression> <TokenType::SemiColon>
      */
-    class FootWhileStatement final : public Statement
+    class FootWhileStatement final : public Node<FootWhileStatement>
     {
         std::unique_ptr<Statement> m_statement;
         Expression m_expression;
@@ -1544,42 +1693,83 @@ namespace OpenCL::Syntax
         const Statement& getStatement() const;
 
         const Expression& getExpression() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <BreakStatement> ::= <TokenType::BreakKeyword> <TokenType::SemiColon>
      */
-    class BreakStatement final : public Statement
+    class BreakStatement final : public Node<BreakStatement>
     {
     public:
 
         BreakStatement(std::uint64_t line, std::uint64_t column);
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
      * <ContinueStatement> ::= <TokenType::ContinueStatement> <TokenType::SemiColon>
      */
-    class ContinueStatement final : public Statement
+    class ContinueStatement final : public Node<ContinueStatement>
     {
     public:
 
         ContinueStatement(std::uint64_t line, std::uint64_t column);
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
-     * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration> | <EnumDeclaration>
+     * <Statement>
+     * ::=  <ReturnStatement>
+     * |    <ExpressionStatement>
+     * |    <IfStatement>
+     * |    <BlockStatement>
+     * |    <ForStatement>
+     * |    <ForDeclarationStatement>
+     * |    <HeadWhileStatement>
+     * |    <FootWhileStatement>
+     * |    <BreakStatement>
+     * |    <ContinueStatement>
+     * |    <SwitchStatement>
+     * |    <DefaultStatement>
+     * |    <CaseStatement>
      */
-    class Global : public Node
+    class Statement final : public Node<Statement>
     {
-    protected:
+        using variant = std::variant<ReturnStatement,
+                                     ExpressionStatement,
+                                     IfStatement,
+                                     BlockStatement,
+                                     ForStatement,
+                                     ForDeclarationStatement,
+                                     HeadWhileStatement,
+                                     FootWhileStatement,
+                                     BreakStatement,
+                                     ContinueStatement,
+                                     SwitchStatement,
+                                     DefaultStatement,
+                                     CaseStatement>;
 
-        Global(std::uint64_t line, std::uint64_t column);
+        variant m_variant;
+    public:
+
+        Statement(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
+    };
+
+    /**
+     * <BlockItem> ::= <Statement> | <Declaration>
+     */
+    class BlockItem final : public Node<BlockItem>
+    {
+        using variant = std::variant<Statement, Declarations>;
+        variant m_variant;
+
+    public:
+
+        BlockItem(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
+
+        variant& getVariant();
     };
 
     /**
@@ -1590,7 +1780,7 @@ namespace OpenCL::Syntax
       *                { <Type> <TokenType::Identifier> <TokenType::Semicolon> }
       *                <TokenType::CloseBrace>
       */
-    class StructOrUnionDeclaration final : public Global
+    class StructOrUnionDeclaration final : public Node<StructOrUnionDeclaration>
     {
         bool m_isUnion;
         std::string m_name;
@@ -1610,8 +1800,6 @@ namespace OpenCL::Syntax
         const std::string& getName() const;
 
         const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypes() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -1620,23 +1808,21 @@ namespace OpenCL::Syntax
      *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
      *                       [ <TokenType::Comma> ] <TokenType::CloseBrace> <TokenType::SemiColon>
      */
-    class EnumDeclaration final : public Global
+    class EnumDeclaration final : public Node<EnumDeclaration>
     {
         std::string m_name;
-        std::vector<std::pair<std::string,std::int32_t>> m_values;
+        std::vector<std::pair<std::string, std::int32_t>> m_values;
 
     public:
 
         EnumDeclaration(std::uint64_t line,
                         std::uint64_t column,
                         std::string name,
-                        const std::vector<std::pair<std::string,std::int32_t>>& values);
+                        std::vector<std::pair<std::string, std::int32_t>> values);
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::string,std::int32_t>>& getValues() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+        const std::vector<std::pair<std::string, std::int32_t>>& getValues() const;
     };
 
     /**
@@ -1648,7 +1834,7 @@ namespace OpenCL::Syntax
      * [ {<TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket> }] }
      * <TokenType::SemiColon>
      */
-    class TypedefDeclaration final : public Global
+    class TypedefDeclaration final : public Node<TypedefDeclaration>
     {
         std::unique_ptr<StructOrUnionDeclaration> m_optionalStructOrUnion;
 
@@ -1659,8 +1845,6 @@ namespace OpenCL::Syntax
                            std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
 
         const std::unique_ptr<StructOrUnionDeclaration>& getOptionalStructOrUnion() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -1672,7 +1856,7 @@ namespace OpenCL::Syntax
      *                <TokenType::CloseSquareBracket> ] } ] <TokenType::CloseParenthese>
      *                ( <TokenType::OpenBrace>  { <BlockItem> } <TokenType::CloseBrace>  | <TokenType::SemiColon>  )
      */
-    class Function final : public Global
+    class Function final : public Node<Function>
     {
         std::shared_ptr<Type> m_returnType;
         std::string m_name;
@@ -1683,13 +1867,13 @@ namespace OpenCL::Syntax
     public:
 
         Function(std::uint64_t line,
-                         std::uint64_t column,
-                         std::shared_ptr<Type> returnType,
-                         std::string name,
-                         std::vector<std::pair<std::shared_ptr<Type>,
-                                           std::string>> arguments,
-                         std::uint64_t scopeLine = 0,
-                         std::unique_ptr<BlockStatement>&& blockItems = nullptr);
+                 std::uint64_t column,
+                 std::shared_ptr<Type> returnType,
+                 std::string name,
+                 std::vector<std::pair<std::shared_ptr<Type>,
+                                       std::string>> arguments,
+                 std::uint64_t scopeLine = 0,
+                 std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
         const std::shared_ptr<Type>& getReturnType() const;
 
@@ -1700,8 +1884,6 @@ namespace OpenCL::Syntax
         uint64_t getScopeLine() const;
 
         const BlockStatement* getBlockStatement() const;
-
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
     };
 
     /**
@@ -1709,9 +1891,9 @@ namespace OpenCL::Syntax
      *                <TokenType::CloseSquareBracket> } { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
      *                <TokenType::CloseSquareBracket> }}
      */
-    class GlobalDeclaration final : public Global
+    class GlobalDeclaration final : public Node<GlobalDeclaration>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string,std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
@@ -1724,8 +1906,21 @@ namespace OpenCL::Syntax
         const std::vector<std::tuple<std::shared_ptr<Type>,
                                      std::string,
                                      std::unique_ptr<InitializerList>>>& getDeclarations() const;
+    };
 
-        std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
+    /**
+    * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration> | <EnumDeclaration> | <Function>
+    */
+    class Global final : public Node<Global>
+    {
+        using variant = std::variant<StructOrUnionDeclaration, TypedefDeclaration, GlobalDeclaration, EnumDeclaration,Function>;
+        variant m_variant;
+
+    public:
+
+        Global(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
     };
 
     /**
@@ -1733,15 +1928,13 @@ namespace OpenCL::Syntax
      */
     class Program final
     {
-        std::vector<std::unique_ptr<Global>> m_globals;
+        std::vector<Global> m_globals;
 
     public:
 
-        explicit Program(std::vector<std::unique_ptr<Global>>&& globals) noexcept;
+        explicit Program(std::vector<Global>&& globals) noexcept;
 
-        const std::vector<std::unique_ptr<Global>>& getGlobals() const;
-
-        void codegen(CodegenContext& context) const;
+        const std::vector<Global>& getGlobals() const;
     };
 }
 

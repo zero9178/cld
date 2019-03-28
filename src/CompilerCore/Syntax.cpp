@@ -219,13 +219,18 @@ namespace
     };
 }
 
-OpenCL::Syntax::Program::Program(std::vector<std::unique_ptr<Global>>&& globals) noexcept : m_globals(std::move(
+void OpenCL::Syntax::NodeVisitor::visit(Visitable&)
+{
+    throw std::runtime_error("Visit failed");
+}
+
+OpenCL::Syntax::Program::Program(std::vector<Global>&& globals) noexcept : m_globals(std::move(
     globals))
 {
 
 }
 
-const std::vector<std::unique_ptr<OpenCL::Syntax::Global>>& OpenCL::Syntax::Program::getGlobals() const
+const std::vector<OpenCL::Syntax::Global>& OpenCL::Syntax::Program::getGlobals() const
 {
     return m_globals;
 }
@@ -254,7 +259,7 @@ OpenCL::Syntax::Function::Function(std::uint64_t line,
                                                          std::string>> arguments,
                                    std::uint64_t scopeLine,
                                    std::unique_ptr<BlockStatement>&& blockItems)
-    : Global(line, column), m_returnType(std::move(returnType)), m_name(std::move(
+    : Node(line, column), m_returnType(std::move(returnType)), m_name(std::move(
     name)), m_arguments(std::move(arguments)), m_scopeLine(scopeLine), m_block(std::move(blockItems))
 {
     assert(m_returnType);
@@ -267,7 +272,7 @@ OpenCL::Syntax::Declarations::Declarations(std::uint64_t line,
                                            std::vector<std::tuple<std::shared_ptr<Type>,
                                                                   std::string,
                                                                   std::unique_ptr<InitializerList>>>&& declarations)
-    : BlockItem(line, column), m_declarations(std::move(declarations))
+    : Node(line, column), m_declarations(std::move(declarations))
 {
     assert(std::all_of(m_declarations.begin(), m_declarations.end(), [](const auto& tuple)
     { return std::get<0>(tuple).get(); }));
@@ -281,8 +286,8 @@ const std::vector<std::tuple<std::shared_ptr<OpenCL::Syntax::Type>,
 }
 
 std::vector<std::tuple<std::shared_ptr<OpenCL::Syntax::Type>,
-                             std::string,
-                             std::unique_ptr<OpenCL::Syntax::InitializerList>>>& OpenCL::Syntax::Declarations::getDeclarations()
+                       std::string,
+                       std::unique_ptr<OpenCL::Syntax::InitializerList>>>& OpenCL::Syntax::Declarations::getDeclarations()
 {
     return m_declarations;
 }
@@ -293,13 +298,13 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::ReturnStatement::getExpression
 }
 
 OpenCL::Syntax::ReturnStatement::ReturnStatement(std::uint64_t line, std::uint64_t column, Expression&& expression)
-    : Statement(line, column), m_expression(std::move(expression))
+    : Node(line, column), m_expression(std::move(expression))
 {}
 
 OpenCL::Syntax::ExpressionStatement::ExpressionStatement(std::uint64_t line,
                                                          std::uint64_t column,
                                                          std::unique_ptr<Expression>&& optionalExpression)
-    : Statement(line, column), m_optionalExpression(std::move(optionalExpression))
+    : Node(line, column), m_optionalExpression(std::move(optionalExpression))
 {}
 
 const OpenCL::Syntax::Expression* OpenCL::Syntax::ExpressionStatement::getOptionalExpression() const
@@ -317,13 +322,13 @@ OpenCL::Syntax::IfStatement::IfStatement(std::uint64_t line,
                                          Expression&& expression,
                                          std::unique_ptr<Statement>&& branch,
                                          std::unique_ptr<Statement>&& elseBranch)
-    : Statement(line, column), m_expression(std::move(expression)), m_branch(std::move(branch)),
+    : Node(line, column), m_expression(std::move(expression)), m_branch(std::move(branch)),
       m_elseBranch(std::move(elseBranch))
 {
     assert(m_branch);
 }
 
-OpenCL::Syntax::ContinueStatement::ContinueStatement(std::uint64_t line, std::uint64_t column) : Statement(line, column)
+OpenCL::Syntax::ContinueStatement::ContinueStatement(std::uint64_t line, std::uint64_t column) : Node(line, column)
 {
 
 }
@@ -345,16 +350,11 @@ const OpenCL::Syntax::Statement* OpenCL::Syntax::IfStatement::getElseBranch() co
 
 OpenCL::Syntax::BlockStatement::BlockStatement(std::uint64_t line,
                                                std::uint64_t column,
-                                               std::vector<std::unique_ptr<BlockItem>> blockItems)
-    : Statement(line, column), m_blockItems(std::move(blockItems))
-{
-    assert(std::all_of(m_blockItems.begin(),
-                       m_blockItems.end(),
-                       [](const std::unique_ptr<OpenCL::Syntax::BlockItem>& ptr)
-                       { return ptr.get(); }));
-}
+                                               std::vector<BlockItem> blockItems)
+    : Node(line, column), m_blockItems(std::move(blockItems))
+{}
 
-const std::vector<std::unique_ptr<OpenCL::Syntax::BlockItem>>& OpenCL::Syntax::BlockStatement::getBlockItems() const
+const std::vector<OpenCL::Syntax::BlockItem>& OpenCL::Syntax::BlockStatement::getBlockItems() const
 {
     return m_blockItems;
 }
@@ -365,7 +365,7 @@ OpenCL::Syntax::ForStatement::ForStatement(std::uint64_t line,
                                            std::unique_ptr<Expression>&& initial,
                                            std::unique_ptr<Expression>&& controlling,
                                            std::unique_ptr<Expression>&& post)
-    : Statement(line, column), m_statement(std::move(statement)), m_initial(std::move(initial)),
+    : Node(line, column), m_statement(std::move(statement)), m_initial(std::move(initial)),
       m_controlling(std::move(controlling)),
       m_post(std::move(post))
 {
@@ -393,7 +393,7 @@ OpenCL::Syntax::ForDeclarationStatement::ForDeclarationStatement(std::uint64_t l
                                                                  Declarations&& initial,
                                                                  std::unique_ptr<Expression>&& controlling,
                                                                  std::unique_ptr<Expression>&& post)
-    : Statement(line, column), m_statement(std::move(statement)), m_initial(std::move(initial)),
+    : Node(line, column), m_statement(std::move(statement)), m_initial(std::move(initial)),
       m_controlling(std::move(controlling)),
       m_post(std::move(post))
 {
@@ -419,7 +419,7 @@ OpenCL::Syntax::HeadWhileStatement::HeadWhileStatement(std::uint64_t line,
                                                        std::uint64_t column,
                                                        Expression&& expression,
                                                        std::unique_ptr<Statement>&& statement)
-    : Statement(line, column), m_expression(std::move(expression)), m_statement(std::move(statement))
+    : Node(line, column), m_expression(std::move(expression)), m_statement(std::move(statement))
 {
     assert(m_statement);
 }
@@ -438,7 +438,7 @@ OpenCL::Syntax::FootWhileStatement::FootWhileStatement(std::uint64_t line,
                                                        std::uint64_t column,
                                                        std::unique_ptr<Statement>&& statement,
                                                        Expression&& expression)
-    : Statement(line, column), m_statement(
+    : Node(line, column), m_statement(
     std::move(statement)), m_expression(std::move(expression))
 {
     assert(m_statement);
@@ -473,15 +473,15 @@ const OpenCL::Syntax::NonCommaExpression* OpenCL::Syntax::Expression::getOptiona
 {
     return m_optionalNonCommaExpression.get();
 }
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::Expression::solveConstantExpression() const
-{
-    if (getOptionalNonCommaExpression())
-    {
-        return getOptionalNonCommaExpression()->solveConstantExpression();
-    }
-    return getNonCommaExpression().solveConstantExpression();
-}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::Expression::solveConstantExpression() const
+//{
+//    if (getOptionalNonCommaExpression())
+//    {
+//        return getOptionalNonCommaExpression()->solveConstantExpression();
+//    }
+//    return getNonCommaExpression().solveConstantExpression();
+//}
 
 OpenCL::Syntax::AssignmentExpression::AssignOperator OpenCL::Syntax::AssignmentExpression::getAssignOperator() const
 {
@@ -607,7 +607,7 @@ OpenCL::Syntax::ConditionalExpression::ConditionalExpression(std::uint64_t line,
                                                              LogicalOrExpression&& logicalOrExpression,
                                                              std::unique_ptr<Expression>&& optionalExpression,
                                                              std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression)
-    : NonCommaExpression(line, column), m_logicalOrExpression(std::move(logicalOrExpression)),
+    : Node(line, column), m_logicalOrExpression(std::move(logicalOrExpression)),
       m_optionalExpression(std::move(optionalExpression)),
       m_optionalConditionalExpression(std::move(optionalConditionalExpression))
 {}
@@ -729,13 +729,12 @@ const std::vector<OpenCL::Syntax::BitXorExpression>& OpenCL::Syntax::BitOrExpres
     return m_optionalBitXorExpressions;
 }
 
-
 OpenCL::Syntax::GlobalDeclaration::GlobalDeclaration(std::uint64_t line,
                                                      std::uint64_t column,
                                                      std::vector<std::tuple<std::shared_ptr<Type>,
                                                                             std::string,
                                                                             std::unique_ptr<InitializerList>>>&& declarations)
-    : Global(line, column), m_declarations(std::move(declarations))
+    : Node(line, column), m_declarations(std::move(declarations))
 {}
 
 const std::vector<std::tuple<std::shared_ptr<OpenCL::Syntax::Type>,
@@ -904,7 +903,7 @@ std::string OpenCL::Syntax::PointerType::name() const
 OpenCL::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::uint64_t line,
                                                                          std::uint64_t column,
                                                                          std::string identifier) :
-    PrimaryExpression(line, column), m_identifier(std::move(identifier))
+    Node(line, column), m_identifier(std::move(identifier))
 {}
 
 const std::string& OpenCL::Syntax::PrimaryExpressionIdentifier::getIdentifier() const
@@ -915,7 +914,7 @@ const std::string& OpenCL::Syntax::PrimaryExpressionIdentifier::getIdentifier() 
 OpenCL::Syntax::PrimaryExpressionConstant::PrimaryExpressionConstant(std::uint64_t line,
                                                                      std::uint64_t column,
                                                                      variant value)
-    : PrimaryExpression(line, column), m_value(std::move(value))
+    : Node(line, column), m_value(std::move(value))
 {}
 
 const OpenCL::Syntax::PrimaryExpressionConstant::variant& OpenCL::Syntax::PrimaryExpressionConstant::getValue() const
@@ -923,26 +922,26 @@ const OpenCL::Syntax::PrimaryExpressionConstant::variant& OpenCL::Syntax::Primar
     return m_value;
 }
 
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PrimaryExpressionConstant::solveConstantExpression() const
-{
-    return std::visit([this](auto&& value) -> OpenCL::Syntax::Node::constantVariant
-                      {
-                          using T = std::decay_t<decltype(value)>;
-                          if constexpr(!std::is_same_v<T,std::string>)
-                          {
-                              return value;
-                          }
-                          else
-                          {
-                              return Node::solveConstantExpression();
-                          }
-                      }, getValue());
-}
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PrimaryExpressionConstant::solveConstantExpression() const
+//{
+//    return std::visit([this](auto&& value) -> OpenCL::Syntax::Node::constantVariant
+//                      {
+//                          using T = std::decay_t<decltype(value)>;
+//                          if constexpr(!std::is_same_v<T,std::string>)
+//                          {
+//                              return value;
+//                          }
+//                          else
+//                          {
+//                              return Node::solveConstantExpression();
+//                          }
+//                      }, getValue());
+//}
 
 OpenCL::Syntax::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::uint64_t line,
                                                                          std::uint64_t column,
                                                                          Expression&& expression)
-    : PrimaryExpression(line, column), m_expression(std::move(expression))
+    : Node(line, column), m_expression(std::move(expression))
 {}
 
 const OpenCL::Syntax::Expression& OpenCL::Syntax::PrimaryExpressionParenthese::getExpression() const
@@ -953,7 +952,7 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::PrimaryExpressionParenthese::g
 OpenCL::Syntax::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::uint64_t line,
                                                                                        std::uint64_t column,
                                                                                        std::unique_ptr<PrimaryExpression>&& primaryExpression)
-    : PostFixExpression(line, column), m_primaryExpression(std::move(primaryExpression))
+    : Node(line, column), m_primaryExpression(std::move(primaryExpression))
 {}
 
 const OpenCL::Syntax::PrimaryExpression& OpenCL::Syntax::PostFixExpressionPrimaryExpression::getPrimaryExpression() const
@@ -961,16 +960,16 @@ const OpenCL::Syntax::PrimaryExpression& OpenCL::Syntax::PostFixExpressionPrimar
     return *m_primaryExpression;
 }
 
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PostFixExpressionPrimaryExpression::solveConstantExpression() const
-{
-    return getPrimaryExpression().solveConstantExpression();
-}
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PostFixExpressionPrimaryExpression::solveConstantExpression() const
+//{
+//    return getPrimaryExpression().solveConstantExpression();
+//}
 
 OpenCL::Syntax::PostFixExpressionSubscript::PostFixExpressionSubscript(std::uint64_t line,
                                                                        std::uint64_t column,
                                                                        std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                                        Expression&& expression)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression)),
       m_expression(std::move(expression))
 {}
 
@@ -988,7 +987,7 @@ OpenCL::Syntax::PostFixExpressionDot::PostFixExpressionDot(std::uint64_t line,
                                                            std::uint64_t column,
                                                            std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                            std::string identifier)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression)),
       m_identifier(std::move(identifier))
 {}
 
@@ -1006,7 +1005,7 @@ OpenCL::Syntax::PostFixExpressionArrow::PostFixExpressionArrow(std::uint64_t lin
                                                                std::uint64_t column,
                                                                std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                                std::string identifier)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression)),
       m_identifier(std::move(identifier))
 {}
 
@@ -1023,24 +1022,24 @@ const std::string& OpenCL::Syntax::PostFixExpressionArrow::getIdentifier() const
 OpenCL::Syntax::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(std::uint64_t line,
                                                                                    std::uint64_t column,
                                                                                    std::unique_ptr<PostFixExpression>&& postFixExpression)
-    : UnaryExpression(line, column), m_postFixExpression(std::move(postFixExpression))
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::UnaryExpressionPostFixExpression::getPostFixExpression() const
 {
     return *m_postFixExpression;
 }
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionPostFixExpression::solveConstantExpression() const
-{
-    return getPostFixExpression().solveConstantExpression();
-}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionPostFixExpression::solveConstantExpression() const
+//{
+//    return getPostFixExpression().solveConstantExpression();
+//}
 
 OpenCL::Syntax::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(std::uint64_t line,
                                                                            std::uint64_t column,
                                                                            UnaryOperator anOperator,
                                                                            std::unique_ptr<UnaryExpression>&& unaryExpression)
-    : UnaryExpression(line, column), m_operator(anOperator), m_unaryExpression(std::move(unaryExpression))
+    : Node(line, column), m_operator(anOperator), m_unaryExpression(std::move(unaryExpression))
 {}
 
 OpenCL::Syntax::UnaryExpressionUnaryOperator::UnaryOperator OpenCL::Syntax::UnaryExpressionUnaryOperator::getAnOperator() const
@@ -1057,7 +1056,7 @@ OpenCL::Syntax::UnaryExpressionSizeOf::UnaryExpressionSizeOf(std::uint64_t line,
                                                              std::uint64_t column,
                                                              std::variant<std::unique_ptr<UnaryExpression>,
                                                                           std::shared_ptr<Type>>&& unaryOrType)
-    : UnaryExpression(line, column), m_unaryOrType(std::move(unaryOrType))
+    : Node(line, column), m_unaryOrType(std::move(unaryOrType))
 {}
 
 const std::variant<std::unique_ptr<OpenCL::Syntax::UnaryExpression>,
@@ -1066,127 +1065,127 @@ const std::variant<std::unique_ptr<OpenCL::Syntax::UnaryExpression>,
     return m_unaryOrType;
 }
 
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionSizeOf::solveConstantExpression() const
-{
-    throw std::runtime_error("Not implemented yet");
-}
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionSizeOf::solveConstantExpression() const
+//{
+//    throw std::runtime_error("Not implemented yet");
+//}
 
 OpenCL::Syntax::CastExpression::CastExpression(std::uint64_t line,
                                                std::uint64_t column,
-                                               std::variant<std::unique_ptr<UnaryExpression>,
+                                               std::variant<UnaryExpression,
                                                             std::pair<std::shared_ptr<Type>,
                                                                       std::unique_ptr<CastExpression>>>&& unaryOrCast)
     : Node(line, column), m_unaryOrCast(std::move(unaryOrCast))
 {}
 
-const std::variant<std::unique_ptr<OpenCL::Syntax::UnaryExpression>,
+const std::variant<OpenCL::Syntax::UnaryExpression,
                    std::pair<std::shared_ptr<OpenCL::Syntax::Type>,
                              std::unique_ptr<OpenCL::Syntax::CastExpression>>>& OpenCL::Syntax::CastExpression::getUnaryOrCast() const
 {
     return m_unaryOrCast;
 }
 
-namespace
-{
-    template<class T>
-    OpenCL::Syntax::Node::constantVariant castVariant(OpenCL::Syntax::Node::constantVariant&& variant)
-    {
-        return std::visit([](auto&& value)->OpenCL::Syntax::Node::constantVariant
-                          {
-            using U = std::decay_t<decltype(value)>;
-            if constexpr(std::is_convertible_v<U,T>)
-            {
-                return static_cast<T>(value);
-            }
-            else
-            {
-                throw std::runtime_error("Invalid constant cast");
-            }
-            return {};
-                          },variant);
-    }
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::CastExpression::solveConstantExpression() const
-{
-    return std::visit([](auto&& value)->constantVariant
-                      {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr(std::is_same_v<T,std::unique_ptr<OpenCL::Syntax::UnaryExpression>>)
-        {
-            return value->solveConstantExpression();
-        }
-        else
-        {
-            auto old = value.second->solveConstantExpression();
-            if(std::shared_ptr<PrimitiveType> primitive = std::dynamic_pointer_cast<PrimitiveType>(value.first);primitive)
-            {
-                if(primitive->isFloatingPoint())
-                {
-                    if(primitive->getBitCount() == 32)
-                    {
-                        return castVariant<float>(std::move(old));
-                    }
-                    else if(primitive->getBitCount() == 64)
-                    {
-                        return castVariant<double>(std::move(old));
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Invalid bitcount for floating point type");
-                    }
-                }
-                else
-                {
-                    switch(primitive->getBitCount())
-                    {
-                    case 8:
-                        if(primitive->isSigned())
-                        {
-                            return castVariant<std::int8_t>(std::move(old));
-                        }
-                        else
-                        {
-                            return castVariant<std::uint8_t>(std::move(old));
-                        }
-                    case 16:
-                        if(primitive->isSigned())
-                        {
-                            return castVariant<std::int16_t>(std::move(old));
-                        }
-                        else
-                        {
-                            return castVariant<std::uint16_t>(std::move(old));
-                        }
-                    case 32:
-                        if(primitive->isSigned())
-                        {
-                            return castVariant<std::int32_t>(std::move(old));
-                        }
-                        else
-                        {
-                            return castVariant<std::uint32_t>(std::move(old));
-                        }
-                    case 64:
-                        if(primitive->isSigned())
-                        {
-                            return castVariant<std::int64_t>(std::move(old));
-                        }
-                        else
-                        {
-                            return castVariant<std::uint64_t>(std::move(old));
-                        }
-                    default:throw std::runtime_error("Invalid bitcount for integer type");
-                    }
-                }
-            }
-            else
-            {
-                throw std::runtime_error("Not implemented yet");
-            }
-        }
-        },getUnaryOrCast());
-}
+//namespace
+//{
+//    template<class T>
+//    OpenCL::Syntax::Node::constantVariant castVariant(OpenCL::Syntax::Node::constantVariant&& variant)
+//    {
+//        return std::visit([](auto&& value)->OpenCL::Syntax::Node::constantVariant
+//                          {
+//            using U = std::decay_t<decltype(value)>;
+//            if constexpr(std::is_convertible_v<U,T>)
+//            {
+//                return static_cast<T>(value);
+//            }
+//            else
+//            {
+//                throw std::runtime_error("Invalid constant cast");
+//            }
+//            return {};
+//                          },variant);
+//    }
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::CastExpression::solveConstantExpression() const
+//{
+//    return std::visit([](auto&& value)->constantVariant
+//                      {
+//        using T = std::decay_t<decltype(value)>;
+//        if constexpr(std::is_same_v<T,std::unique_ptr<OpenCL::Syntax::UnaryExpression>>)
+//        {
+//            return value->solveConstantExpression();
+//        }
+//        else
+//        {
+//            auto old = value.second->solveConstantExpression();
+//            if(std::shared_ptr<PrimitiveType> primitive = std::dynamic_pointer_cast<PrimitiveType>(value.first);primitive)
+//            {
+//                if(primitive->isFloatingPoint())
+//                {
+//                    if(primitive->getBitCount() == 32)
+//                    {
+//                        return castVariant<float>(std::move(old));
+//                    }
+//                    else if(primitive->getBitCount() == 64)
+//                    {
+//                        return castVariant<double>(std::move(old));
+//                    }
+//                    else
+//                    {
+//                        throw std::runtime_error("Invalid bitcount for floating point type");
+//                    }
+//                }
+//                else
+//                {
+//                    switch(primitive->getBitCount())
+//                    {
+//                    case 8:
+//                        if(primitive->isSigned())
+//                        {
+//                            return castVariant<std::int8_t>(std::move(old));
+//                        }
+//                        else
+//                        {
+//                            return castVariant<std::uint8_t>(std::move(old));
+//                        }
+//                    case 16:
+//                        if(primitive->isSigned())
+//                        {
+//                            return castVariant<std::int16_t>(std::move(old));
+//                        }
+//                        else
+//                        {
+//                            return castVariant<std::uint16_t>(std::move(old));
+//                        }
+//                    case 32:
+//                        if(primitive->isSigned())
+//                        {
+//                            return castVariant<std::int32_t>(std::move(old));
+//                        }
+//                        else
+//                        {
+//                            return castVariant<std::uint32_t>(std::move(old));
+//                        }
+//                    case 64:
+//                        if(primitive->isSigned())
+//                        {
+//                            return castVariant<std::int64_t>(std::move(old));
+//                        }
+//                        else
+//                        {
+//                            return castVariant<std::uint64_t>(std::move(old));
+//                        }
+//                    default:throw std::runtime_error("Invalid bitcount for integer type");
+//                    }
+//                }
+//            }
+//            else
+//            {
+//                throw std::runtime_error("Not implemented yet");
+//            }
+//        }
+//        },getUnaryOrCast());
+//}
 
 OpenCL::Syntax::Term::Term(std::uint64_t line,
                            std::uint64_t column,
@@ -1196,527 +1195,527 @@ OpenCL::Syntax::Term::Term(std::uint64_t line,
     std::move(castExpressions)), m_optionalCastExpressions(std::move(optionalCastExpressions))
 {}
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::Term::solveConstantExpression() const
-{
-    auto currentValue = getCastExpression().solveConstantExpression();
-    for (auto&[op, exp] : getOptionalCastExpressions())
-    {
-        switch (op)
-        {
-        case BinaryDotOperator::BinaryMultiply:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasMultiply<T1, T2>{})
-                                                                {
-                                                                    return lhs * rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case BinaryDotOperator::BinaryDivide:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasDivide<T1, T2>{})
-                                                                {
-                                                                    return lhs / rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case BinaryDotOperator::BinaryRemainder:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasModulo<T1, T2>{})
-                                                                {
-                                                                    return lhs % rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        }
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::AdditiveExpression::solveConstantExpression() const
-{
-    auto currentValue = getTerm().solveConstantExpression();
-    for (auto&[op, exp] : getOptionalTerms())
-    {
-        switch (op)
-        {
-        case BinaryDashOperator::BinaryPlus:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasPlus<T1, T2>{})
-                                                                {
-                                                                    return lhs + rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case BinaryDashOperator::BinaryMinus:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(!std::is_void_v<std::remove_pointer_t<T1>>
-                                                                    || !std::is_void_v<std::remove_pointer_t<T2>>)
-                                                                {
-                                                                    if constexpr(hasMinus<T1, T2>{})
-                                                                    {
-                                                                        return lhs - rhs;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        throw std::runtime_error(
-                                                                            "Can't apply plus to operands in constant expression");
-                                                                        return {};
-                                                                    }
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        }
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::ShiftExpression::solveConstantExpression() const
-{
-    auto currentValue = getAdditiveExpression().solveConstantExpression();
-    for (auto&[op, exp] : getOptionalAdditiveExpressions())
-    {
-        switch (op)
-        {
-        case ShiftOperator::Left:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasLShift<T1, T2>{})
-                                                                {
-                                                                    return lhs << rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case ShiftOperator::Right:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasRShift<T1, T2>{})
-                                                                {
-                                                                    return lhs >> rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        }
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitAndExpression::solveConstantExpression() const
-{
-    auto currentValue = getEqualityExpression().solveConstantExpression();
-    for (auto& exp : getOptionalEqualityExpressions())
-    {
-        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
-                                  {
-                                      using T1 = std::decay_t<decltype(lhs)>;
-                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                        {
-                                                            using T2 = std::decay_t<decltype(rhs)>;
-                                                            if constexpr(hasBitAnd<T1, T2>{})
-                                                            {
-                                                                return lhs & rhs;
-                                                            }
-                                                            else
-                                                            {
-                                                                throw std::runtime_error(
-                                                                    "Can't apply plus to operands in constant expression");
-                                                                return {};
-                                                            }
-                                                        }, exp.solveConstantExpression());
-                                  }, currentValue);
-    }
-    return currentValue;
-}
-
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitXorExpression::solveConstantExpression() const
-{
-    auto currentValue = getBitAndExpression().solveConstantExpression();
-    for (auto& exp : getOptionalBitAndExpressions())
-    {
-        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
-                                  {
-                                      using T1 = std::decay_t<decltype(lhs)>;
-                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                        {
-                                                            using T2 = std::decay_t<decltype(rhs)>;
-                                                            if constexpr(hasBitXor<T1, T2>{})
-                                                            {
-                                                                return lhs ^ rhs;
-                                                            }
-                                                            else
-                                                            {
-                                                                throw std::runtime_error(
-                                                                    "Can't apply plus to operands in constant expression");
-                                                                return {};
-                                                            }
-                                                        }, exp.solveConstantExpression());
-                                  }, currentValue);
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitOrExpression::solveConstantExpression() const
-{
-    auto currentValue = getBitXorExpression().solveConstantExpression();
-    for (auto& exp : getOptionalBitXorExpressions())
-    {
-        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
-                                  {
-                                      using T1 = std::decay_t<decltype(lhs)>;
-                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                        {
-                                                            using T2 = std::decay_t<decltype(rhs)>;
-                                                            if constexpr(hasBitOr<T1, T2>{})
-                                                            {
-                                                                return lhs | rhs;
-                                                            }
-                                                            else
-                                                            {
-                                                                throw std::runtime_error(
-                                                                    "Can't apply plus to operands in constant expression");
-                                                                return {};
-                                                            }
-                                                        }, exp.solveConstantExpression());
-                                  }, currentValue);
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::LogicalAndExpression::solveConstantExpression() const
-{
-    auto currentValue = getBitOrExpression().solveConstantExpression();
-    for (auto& exp : getOptionalBitOrExpressions())
-    {
-        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
-                                  {
-                                      using T1 = std::decay_t<decltype(lhs)>;
-                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                        {
-                                                            using T2 = std::decay_t<decltype(rhs)>;
-                                                            if constexpr(hasLogicAnd<T1, T2>{})
-                                                            {
-                                                                return lhs && rhs;
-                                                            }
-                                                            else
-                                                            {
-                                                                throw std::runtime_error(
-                                                                    "Can't apply plus to operands in constant expression");
-                                                                return {};
-                                                            }
-                                                        }, exp.solveConstantExpression());
-                                  }, currentValue);
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::LogicalOrExpression::solveConstantExpression() const
-{
-    auto currentValue = getAndExpression().solveConstantExpression();
-    for (auto& exp : getOptionalAndExpressions())
-    {
-        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
-                                  {
-                                      using T1 = std::decay_t<decltype(lhs)>;
-                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                        {
-                                                            using T2 = std::decay_t<decltype(rhs)>;
-                                                            if constexpr(hasLogicOr<T1, T2>{})
-                                                            {
-                                                                return lhs || rhs;
-                                                            }
-                                                            else
-                                                            {
-                                                                throw std::runtime_error(
-                                                                    "Can't apply plus to operands in constant expression");
-                                                                return {};
-                                                            }
-                                                        }, exp.solveConstantExpression());
-                                  }, currentValue);
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::ConditionalExpression::solveConstantExpression() const
-{
-    auto value = getLogicalOrExpression().solveConstantExpression();
-    if(getOptionalExpression() && getOptionalConditionalExpression())
-    {
-        bool first = std::visit([](auto&& value)->bool{return value;},value);
-        if(first)
-        {
-            return getOptionalExpression()->solveConstantExpression();
-        }
-        else
-        {
-            return getOptionalConditionalExpression()->solveConstantExpression();
-        }
-    }
-    else
-    {
-        return value;
-    }
-}
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::EqualityExpression::solveConstantExpression() const
-{
-    auto currentValue = getRelationalExpression().solveConstantExpression();
-    for (auto&[op, exp] : getOptionalRelationalExpressions())
-    {
-        switch (op)
-        {
-        case EqualityOperator::Equal:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasEQ<T1, T2>{})
-                                                                {
-                                                                    return lhs == rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case EqualityOperator::NotEqual:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasNE<T1, T2>{})
-                                                                {
-                                                                    return lhs != rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        }
-    }
-    return currentValue;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::RelationalExpression::solveConstantExpression() const
-{
-    auto currentValue = getShiftExpression().solveConstantExpression();
-    for (auto&[op, exp] : getOptionalShiftExpressions())
-    {
-        switch (op)
-        {
-        case RelationalOperator::GreaterThan:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasGT<T1, T2>{})
-                                                                {
-                                                                    return lhs > rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case RelationalOperator::GreaterThanOrEqual:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasGE<T1, T2>{})
-                                                                {
-                                                                    return lhs > rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case RelationalOperator::LessThan:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasLT<T1, T2>{})
-                                                                {
-                                                                    return lhs < rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        case RelationalOperator::LessThanOrEqual:
-        {
-            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasLE<T1, T2>{})
-                                                                {
-                                                                    return lhs <= rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, exp->solveConstantExpression());
-                                      }, currentValue);
-        }
-            break;
-        }
-    }
-    return currentValue;
-}
-#pragma GCC diagnostic pop
-#pragma GCC diagnostic pop
+//#pragma GCC diagnostic push
+//#pragma GCC diagnostic ignored "-Wreturn-type"
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::Term::solveConstantExpression() const
+//{
+//    auto currentValue = getCastExpression().solveConstantExpression();
+//    for (auto&[op, exp] : getOptionalCastExpressions())
+//    {
+//        switch (op)
+//        {
+//        case BinaryDotOperator::BinaryMultiply:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasMultiply<T1, T2>{})
+//                                                                {
+//                                                                    return lhs * rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case BinaryDotOperator::BinaryDivide:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasDivide<T1, T2>{})
+//                                                                {
+//                                                                    return lhs / rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case BinaryDotOperator::BinaryRemainder:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasModulo<T1, T2>{})
+//                                                                {
+//                                                                    return lhs % rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        }
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::AdditiveExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getTerm().solveConstantExpression();
+//    for (auto&[op, exp] : getOptionalTerms())
+//    {
+//        switch (op)
+//        {
+//        case BinaryDashOperator::BinaryPlus:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasPlus<T1, T2>{})
+//                                                                {
+//                                                                    return lhs + rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case BinaryDashOperator::BinaryMinus:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(!std::is_void_v<std::remove_pointer_t<T1>>
+//                                                                    || !std::is_void_v<std::remove_pointer_t<T2>>)
+//                                                                {
+//                                                                    if constexpr(hasMinus<T1, T2>{})
+//                                                                    {
+//                                                                        return lhs - rhs;
+//                                                                    }
+//                                                                    else
+//                                                                    {
+//                                                                        throw std::runtime_error(
+//                                                                            "Can't apply plus to operands in constant expression");
+//                                                                        return {};
+//                                                                    }
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        }
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::ShiftExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getAdditiveExpression().solveConstantExpression();
+//    for (auto&[op, exp] : getOptionalAdditiveExpressions())
+//    {
+//        switch (op)
+//        {
+//        case ShiftOperator::Left:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasLShift<T1, T2>{})
+//                                                                {
+//                                                                    return lhs << rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case ShiftOperator::Right:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasRShift<T1, T2>{})
+//                                                                {
+//                                                                    return lhs >> rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        }
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitAndExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getEqualityExpression().solveConstantExpression();
+//    for (auto& exp : getOptionalEqualityExpressions())
+//    {
+//        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
+//                                  {
+//                                      using T1 = std::decay_t<decltype(lhs)>;
+//                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                        {
+//                                                            using T2 = std::decay_t<decltype(rhs)>;
+//                                                            if constexpr(hasBitAnd<T1, T2>{})
+//                                                            {
+//                                                                return lhs & rhs;
+//                                                            }
+//                                                            else
+//                                                            {
+//                                                                throw std::runtime_error(
+//                                                                    "Can't apply plus to operands in constant expression");
+//                                                                return {};
+//                                                            }
+//                                                        }, exp.solveConstantExpression());
+//                                  }, currentValue);
+//    }
+//    return currentValue;
+//}
+//
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitXorExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getBitAndExpression().solveConstantExpression();
+//    for (auto& exp : getOptionalBitAndExpressions())
+//    {
+//        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
+//                                  {
+//                                      using T1 = std::decay_t<decltype(lhs)>;
+//                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                        {
+//                                                            using T2 = std::decay_t<decltype(rhs)>;
+//                                                            if constexpr(hasBitXor<T1, T2>{})
+//                                                            {
+//                                                                return lhs ^ rhs;
+//                                                            }
+//                                                            else
+//                                                            {
+//                                                                throw std::runtime_error(
+//                                                                    "Can't apply plus to operands in constant expression");
+//                                                                return {};
+//                                                            }
+//                                                        }, exp.solveConstantExpression());
+//                                  }, currentValue);
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::BitOrExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getBitXorExpression().solveConstantExpression();
+//    for (auto& exp : getOptionalBitXorExpressions())
+//    {
+//        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
+//                                  {
+//                                      using T1 = std::decay_t<decltype(lhs)>;
+//                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                        {
+//                                                            using T2 = std::decay_t<decltype(rhs)>;
+//                                                            if constexpr(hasBitOr<T1, T2>{})
+//                                                            {
+//                                                                return lhs | rhs;
+//                                                            }
+//                                                            else
+//                                                            {
+//                                                                throw std::runtime_error(
+//                                                                    "Can't apply plus to operands in constant expression");
+//                                                                return {};
+//                                                            }
+//                                                        }, exp.solveConstantExpression());
+//                                  }, currentValue);
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::LogicalAndExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getBitOrExpression().solveConstantExpression();
+//    for (auto& exp : getOptionalBitOrExpressions())
+//    {
+//        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
+//                                  {
+//                                      using T1 = std::decay_t<decltype(lhs)>;
+//                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                        {
+//                                                            using T2 = std::decay_t<decltype(rhs)>;
+//                                                            if constexpr(hasLogicAnd<T1, T2>{})
+//                                                            {
+//                                                                return lhs && rhs;
+//                                                            }
+//                                                            else
+//                                                            {
+//                                                                throw std::runtime_error(
+//                                                                    "Can't apply plus to operands in constant expression");
+//                                                                return {};
+//                                                            }
+//                                                        }, exp.solveConstantExpression());
+//                                  }, currentValue);
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::LogicalOrExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getAndExpression().solveConstantExpression();
+//    for (auto& exp : getOptionalAndExpressions())
+//    {
+//        currentValue = std::visit([&exp](auto&& lhs) -> Node::constantVariant
+//                                  {
+//                                      using T1 = std::decay_t<decltype(lhs)>;
+//                                      return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                        {
+//                                                            using T2 = std::decay_t<decltype(rhs)>;
+//                                                            if constexpr(hasLogicOr<T1, T2>{})
+//                                                            {
+//                                                                return lhs || rhs;
+//                                                            }
+//                                                            else
+//                                                            {
+//                                                                throw std::runtime_error(
+//                                                                    "Can't apply plus to operands in constant expression");
+//                                                                return {};
+//                                                            }
+//                                                        }, exp.solveConstantExpression());
+//                                  }, currentValue);
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::ConditionalExpression::solveConstantExpression() const
+//{
+//    auto value = getLogicalOrExpression().solveConstantExpression();
+//    if(getOptionalExpression() && getOptionalConditionalExpression())
+//    {
+//        bool first = std::visit([](auto&& value)->bool{return value;},value);
+//        if(first)
+//        {
+//            return getOptionalExpression()->solveConstantExpression();
+//        }
+//        else
+//        {
+//            return getOptionalConditionalExpression()->solveConstantExpression();
+//        }
+//    }
+//    else
+//    {
+//        return value;
+//    }
+//}
+//
+//#pragma GCC diagnostic push
+//#pragma GCC diagnostic ignored "-Wsign-compare"
+//
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::EqualityExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getRelationalExpression().solveConstantExpression();
+//    for (auto&[op, exp] : getOptionalRelationalExpressions())
+//    {
+//        switch (op)
+//        {
+//        case EqualityOperator::Equal:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasEQ<T1, T2>{})
+//                                                                {
+//                                                                    return lhs == rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case EqualityOperator::NotEqual:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasNE<T1, T2>{})
+//                                                                {
+//                                                                    return lhs != rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        }
+//    }
+//    return currentValue;
+//}
+//
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::RelationalExpression::solveConstantExpression() const
+//{
+//    auto currentValue = getShiftExpression().solveConstantExpression();
+//    for (auto&[op, exp] : getOptionalShiftExpressions())
+//    {
+//        switch (op)
+//        {
+//        case RelationalOperator::GreaterThan:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasGT<T1, T2>{})
+//                                                                {
+//                                                                    return lhs > rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case RelationalOperator::GreaterThanOrEqual:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasGE<T1, T2>{})
+//                                                                {
+//                                                                    return lhs > rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case RelationalOperator::LessThan:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasLT<T1, T2>{})
+//                                                                {
+//                                                                    return lhs < rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        case RelationalOperator::LessThanOrEqual:
+//        {
+//            currentValue = std::visit([exp = &exp](auto&& lhs) -> Node::constantVariant
+//                                      {
+//                                          using T1 = std::decay_t<decltype(lhs)>;
+//                                          return std::visit([lhs](auto&& rhs) -> Node::constantVariant
+//                                                            {
+//                                                                using T2 = std::decay_t<decltype(rhs)>;
+//                                                                if constexpr(hasLE<T1, T2>{})
+//                                                                {
+//                                                                    return lhs <= rhs;
+//                                                                }
+//                                                                else
+//                                                                {
+//                                                                    throw std::runtime_error(
+//                                                                        "Can't apply plus to operands in constant expression");
+//                                                                    return {};
+//                                                                }
+//                                                            }, exp->solveConstantExpression());
+//                                      }, currentValue);
+//        }
+//            break;
+//        }
+//    }
+//    return currentValue;
+//}
+//#pragma GCC diagnostic pop
+//#pragma GCC diagnostic pop
 
 const OpenCL::Syntax::CastExpression& OpenCL::Syntax::Term::getCastExpression() const
 {
@@ -1734,7 +1733,7 @@ OpenCL::Syntax::AssignmentExpression::AssignmentExpression(std::uint64_t line,
                                                            std::unique_ptr<UnaryExpression>&& unaryFactor,
                                                            AssignOperator assignOperator,
                                                            std::unique_ptr<NonCommaExpression>&& nonCommaExpression)
-    : NonCommaExpression(line, column), m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
+    : Node(line, column), m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
       m_nonCommaExpression(std::move(nonCommaExpression))
 {
     assert(m_unaryFactor);
@@ -1755,7 +1754,7 @@ OpenCL::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std
                                                                              std::unique_ptr<PostFixExpression>&& postFixExpression,
                                                                              std::vector<std::unique_ptr<
                                                                                  NonCommaExpression>>&& optionalAssignmanetExpressions)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression)),
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression)),
       m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
 {
     assert(m_postFixExpression);
@@ -1811,7 +1810,7 @@ void OpenCL::Syntax::ArrayType::setSize(size_t size)
 OpenCL::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(std::uint64_t line,
                                                                        std::uint64_t column,
                                                                        std::unique_ptr<PostFixExpression>&& postFixExpression)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression))
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionIncrement::getPostFixExpression() const
@@ -1822,7 +1821,7 @@ const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionIncrem
 OpenCL::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(std::uint64_t line,
                                                                        std::uint64_t column,
                                                                        std::unique_ptr<PostFixExpression>&& postFixExpression)
-    : PostFixExpression(line, column), m_postFixExpression(std::move(postFixExpression))
+    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionDecrement::getPostFixExpression() const
@@ -1836,7 +1835,7 @@ OpenCL::Syntax::StructOrUnionDeclaration::StructOrUnionDeclaration(std::uint64_t
                                                                    std::string name,
                                                                    std::vector<std::pair<std::shared_ptr<Type>,
                                                                                          std::string>>&& types)
-    : Global(line, column), m_isUnion(isUnion), m_name(std::move(name)), m_types(std::move(types))
+    : Node(line, column), m_isUnion(isUnion), m_name(std::move(name)), m_types(std::move(types))
 {
     if (m_types.empty())
     {
@@ -1884,7 +1883,7 @@ OpenCL::Syntax::SwitchStatement::SwitchStatement(std::uint64_t line,
                                                  std::uint64_t column,
                                                  Expression&& expression,
                                                  std::unique_ptr<Statement>&& statement)
-    : Statement(line, column), m_expression(std::move(expression)), m_statement(std::move(statement))
+    : Node(line, column), m_expression(std::move(expression)), m_statement(std::move(statement))
 {
     assert(m_statement);
 }
@@ -1902,7 +1901,7 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::SwitchStatement::getStatement()
 OpenCL::Syntax::DefaultStatement::DefaultStatement(std::uint64_t line,
                                                    std::uint64_t column,
                                                    std::unique_ptr<Statement>&& statement)
-    : Statement(line, column), m_statement(std::move(statement))
+    : Node(line, column), m_statement(std::move(statement))
 {
     assert(m_statement);
 }
@@ -1916,15 +1915,15 @@ OpenCL::Syntax::CaseStatement::CaseStatement(std::uint64_t line,
                                              std::uint64_t column,
                                              constantVariant&& constant,
                                              std::unique_ptr<Statement>&& statement)
-    : Statement(line, column), m_constant(constant), m_statement(std::move(statement))
+    : Node(line, column), m_constant(constant), m_statement(std::move(statement))
 {
 
 }
 
-const OpenCL::Syntax::Node::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
-{
-    return m_constant;
-}
+//const OpenCL::Syntax::Node::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
+//{
+//    return m_constant;
+//}
 
 const OpenCL::Syntax::Statement* OpenCL::Syntax::CaseStatement::getStatement() const
 {
@@ -1974,7 +1973,7 @@ OpenCL::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializ
                                                                                    std::shared_ptr<Type> type,
                                                                                    std::vector<std::unique_ptr<
                                                                                        NonCommaExpression>>&& nonCommaExpressions)
-    : PostFixExpression(line, column), m_type(std::move(type)), m_nonCommaExpressions(std::move(nonCommaExpressions))
+    : Node(line, column), m_type(std::move(type)), m_nonCommaExpressions(std::move(nonCommaExpressions))
 {}
 
 const std::shared_ptr<OpenCL::Syntax::Type>& OpenCL::Syntax::PostFixExpressionTypeInitializer::getType() const
@@ -1990,7 +1989,7 @@ const std::vector<std::unique_ptr<OpenCL::Syntax::NonCommaExpression>>& OpenCL::
 OpenCL::Syntax::TypedefDeclaration::TypedefDeclaration(std::uint64_t line,
                                                        std::uint64_t column,
                                                        std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion)
-    : Global(line, column), m_optionalStructOrUnion(std::move(optionalStructOrUnion))
+    : Node(line, column), m_optionalStructOrUnion(std::move(optionalStructOrUnion))
 {}
 
 const std::unique_ptr<OpenCL::Syntax::StructOrUnionDeclaration>& OpenCL::Syntax::TypedefDeclaration::getOptionalStructOrUnion() const
@@ -1998,59 +1997,10 @@ const std::unique_ptr<OpenCL::Syntax::StructOrUnionDeclaration>& OpenCL::Syntax:
     return m_optionalStructOrUnion;
 }
 
-OpenCL::Syntax::Node::Node(uint64_t line, uint64_t column) : m_line(line), m_column(column)
-{}
-
-uint64_t OpenCL::Syntax::Node::getLine() const
-{
-    return m_line;
-}
-
-uint64_t OpenCL::Syntax::Node::getColumn() const
-{
-    return m_column;
-}
-
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::Node::solveConstantExpression() const
-{
-    throw std::runtime_error("Expression is not a constant expression");
-}
-
-OpenCL::Syntax::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{}
-
-OpenCL::Syntax::Statement::Statement(std::uint64_t line, std::uint64_t column) : BlockItem(line, column)
-{}
-
-OpenCL::Syntax::BreakStatement::BreakStatement(std::uint64_t line, std::uint64_t column) : Statement(line, column)
-{}
-
-OpenCL::Syntax::NonCommaExpression::NonCommaExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{}
-
-OpenCL::Syntax::PrimaryExpression::PrimaryExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{}
-
-OpenCL::Syntax::PostFixExpression::PostFixExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{}
-
-OpenCL::Syntax::UnaryExpression::UnaryExpression(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{}
-
-OpenCL::Syntax::Global::Global(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{
-
-}
-
-OpenCL::Syntax::InitializerList::InitializerList(std::uint64_t line, std::uint64_t column) : Node(line, column)
-{
-
-}
-
 OpenCL::Syntax::InitializerListScalarExpression::InitializerListScalarExpression(std::uint64_t line,
                                                                                  std::uint64_t column,
                                                                                  OpenCL::Syntax::Expression&& expression)
-    : InitializerList(line, column), m_expression(std::move(expression))
+    : Node(line, column), m_expression(std::move(expression))
 {}
 
 const OpenCL::Syntax::Expression& OpenCL::Syntax::InitializerListScalarExpression::getExpression() const
@@ -2061,7 +2011,7 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::InitializerListScalarExpressio
 OpenCL::Syntax::InitializerListBlock::InitializerListBlock(std::uint64_t line,
                                                            std::uint64_t column,
                                                            vector&& nonCommaExpressionsAndBlocks)
-    : InitializerList(line, column), m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
+    : Node(line, column), m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
 {}
 
 const typename OpenCL::Syntax::InitializerListBlock::vector& OpenCL::Syntax::InitializerListBlock::getNonCommaExpressionsAndBlocks() const
@@ -2069,76 +2019,78 @@ const typename OpenCL::Syntax::InitializerListBlock::vector& OpenCL::Syntax::Ini
     return m_nonCommaExpressionsAndBlocks;
 }
 
-OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionUnaryOperator::solveConstantExpression() const
-{
-    auto value = getUnaryExpression().solveConstantExpression();
-    switch (getAnOperator())
-    {
-    case UnaryOperator::Increment:
-    case UnaryOperator::Decrement:
-    case UnaryOperator::Ampersand:
-    case UnaryOperator::Asterisk:return Node::solveConstantExpression();
-    case UnaryOperator::Plus:return value;
-    case UnaryOperator::Minus:
-    {
-        return std::visit([](auto&& value) -> Node::constantVariant
-                          {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr(hasNegate<T>{})
-                              {
-                                  return -value;
-                              }
-                              else
-                              {
-                                  throw std::runtime_error("Can't apply - to constant operator");
-                                  return {};
-                              }
-                          }, value);
-    }
-    case UnaryOperator::BitNot:
-    {
-        return std::visit([](auto&& value) -> Node::constantVariant
-                          {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr(hasBitNegate<T>{})
-                              {
-                                  return ~value;
-                              }
-                              else
-                              {
-                                  throw std::runtime_error("Can't apply - to constant operator");
-                                  return {};
-                              }
-                          }, value);
-    }
-    case UnaryOperator::LogicalNot:
-    {
-        return std::visit([](auto&& value) -> Node::constantVariant
-                          {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr(hasLogicNegate<T>{})
-                              {
-                                  return !value;
-                              }
-                              else
-                              {
-                                  throw std::runtime_error("Can't apply - to constant operator");
-                                  return {};
-                              }
-                          }, value);
-    }
-    }
-    return value;
-}
+//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionUnaryOperator::solveConstantExpression() const
+//{
+//    auto value = getUnaryExpression().solveConstantExpression();
+//    switch (getAnOperator())
+//    {
+//    case UnaryOperator::Increment:
+//    case UnaryOperator::Decrement:
+//    case UnaryOperator::Ampersand:
+//    case UnaryOperator::Asterisk:return Node::solveConstantExpression();
+//    case UnaryOperator::Plus:return value;
+//    case UnaryOperator::Minus:
+//    {
+//        return std::visit([](auto&& value) -> Node::constantVariant
+//                          {
+//                              using T = std::decay_t<decltype(value)>;
+//                              if constexpr(hasNegate<T>{})
+//                              {
+//                                  return -value;
+//                              }
+//                              else
+//                              {
+//                                  throw std::runtime_error("Can't apply - to constant operator");
+//                                  return {};
+//                              }
+//                          }, value);
+//    }
+//    case UnaryOperator::BitNot:
+//    {
+//        return std::visit([](auto&& value) -> Node::constantVariant
+//                          {
+//                              using T = std::decay_t<decltype(value)>;
+//                              if constexpr(hasBitNegate<T>{})
+//                              {
+//                                  return ~value;
+//                              }
+//                              else
+//                              {
+//                                  throw std::runtime_error("Can't apply - to constant operator");
+//                                  return {};
+//                              }
+//                          }, value);
+//    }
+//    case UnaryOperator::LogicalNot:
+//    {
+//        return std::visit([](auto&& value) -> Node::constantVariant
+//                          {
+//                              using T = std::decay_t<decltype(value)>;
+//                              if constexpr(hasLogicNegate<T>{})
+//                              {
+//                                  return !value;
+//                              }
+//                              else
+//                              {
+//                                  throw std::runtime_error("Can't apply - to constant operator");
+//                                  return {};
+//                              }
+//                          }, value);
+//    }
+//    }
+//    return value;
+//}
 
 OpenCL::Syntax::EnumDeclaration::EnumDeclaration(std::uint64_t line,
                                                  std::uint64_t column,
                                                  std::string name,
-                                                 const std::vector<std::pair<std::string, std::int32_t>>& values) : Global(line,
-                                                                                                           column),
-                                                                                                    m_name(std::move(
-                                                                                                        name)),
-                                                                                                    m_values(values)
+                                                 std::vector<std::pair<std::string, std::int32_t>> values) : Node(line,
+                                                                                                                  column),
+                                                                                                             m_name(std::move(
+                                                                                                                 name)),
+                                                                                                             m_values(
+                                                                                                                 std::move(
+                                                                                                                     values))
 {}
 
 const std::string& OpenCL::Syntax::EnumDeclaration::getName() const
@@ -2146,12 +2098,12 @@ const std::string& OpenCL::Syntax::EnumDeclaration::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<std::string,std::int32_t>>& OpenCL::Syntax::EnumDeclaration::getValues() const
+const std::vector<std::pair<std::string, std::int32_t>>& OpenCL::Syntax::EnumDeclaration::getValues() const
 {
     return m_values;
 }
 
-OpenCL::Syntax::EnumType::EnumType(const std::string& name, bool isConst) : m_name(name), m_isConst(isConst)
+OpenCL::Syntax::EnumType::EnumType(std::string name, bool isConst) : m_name(std::move(name)), m_isConst(isConst)
 {}
 
 const std::string& OpenCL::Syntax::EnumType::getName() const
@@ -2161,7 +2113,7 @@ const std::string& OpenCL::Syntax::EnumType::getName() const
 
 std::unique_ptr<OpenCL::Syntax::Type> OpenCL::Syntax::EnumType::clone() const
 {
-    return std::make_unique<EnumType>(getName(),isConst());
+    return std::make_unique<EnumType>(getName(), isConst());
 }
 
 std::string OpenCL::Syntax::EnumType::name() const
@@ -2172,4 +2124,96 @@ std::string OpenCL::Syntax::EnumType::name() const
 bool OpenCL::Syntax::EnumType::isConst() const
 {
     return m_isConst;
+}
+
+OpenCL::Syntax::PrimaryExpression::PrimaryExpression(std::uint64_t line,
+                                                     std::uint64_t column,
+                                                     OpenCL::Syntax::PrimaryExpression::variant&& variant) : Node(
+    line,
+    column), m_variant(std::move(variant))
+{}
+
+OpenCL::Syntax::PostFixExpression::PostFixExpression(std::uint64_t line,
+                                                     std::uint64_t column,
+                                                     OpenCL::Syntax::PostFixExpression::variant&& variant) : Node(
+    line,
+    column), m_variant(std::move(variant))
+{}
+
+const OpenCL::Syntax::PostFixExpression::variant& OpenCL::Syntax::PostFixExpression::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::UnaryExpression::UnaryExpression(std::uint64_t line,
+                                                 std::uint64_t column,
+                                                 OpenCL::Syntax::UnaryExpression::variant&& variant) : Node(line,
+                                                                                                            column),
+                                                                                                       m_variant(
+                                                                                                           std::move(
+                                                                                                               variant))
+{}
+
+const OpenCL::Syntax::UnaryExpression::variant& OpenCL::Syntax::UnaryExpression::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::NonCommaExpression::NonCommaExpression(std::uint64_t line,
+                                                       std::uint64_t column,
+                                                       std::variant<OpenCL::Syntax::AssignmentExpression,
+                                                                          OpenCL::Syntax::ConditionalExpression>&& variant)
+    : Node(line, column), m_variant(std::move(variant))
+{}
+
+const std::variant<OpenCL::Syntax::AssignmentExpression,
+                   OpenCL::Syntax::ConditionalExpression>& OpenCL::Syntax::NonCommaExpression::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::InitializerList::InitializerList(std::uint64_t line,
+                                                 std::uint64_t column,
+                                                 OpenCL::Syntax::InitializerList::variant&& variant) : Node(line,
+                                                                                                                 column),
+                                                                                                            m_variant(
+                                                                                                                std::move(variant))
+{}
+
+OpenCL::Syntax::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::BlockItem::variant&& variant)
+    : Node(line, column), m_variant(std::move(variant))
+{}
+
+const OpenCL::Syntax::BlockItem::variant& OpenCL::Syntax::BlockItem::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::BlockItem::variant& OpenCL::Syntax::BlockItem::getVariant()
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::Statement::Statement(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::Statement::variant&& variant)
+    : Node(line, column), m_variant(std::move(variant))
+{}
+
+const OpenCL::Syntax::Statement::variant& OpenCL::Syntax::Statement::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::Global::Global(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::Global::variant&& variant) : Node(
+    line,
+    column), m_variant(std::move(variant))
+{}
+
+const OpenCL::Syntax::Global::variant& OpenCL::Syntax::Global::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::BreakStatement::BreakStatement(std::uint64_t line, std::uint64_t column) : Node(line, column)
+{
+
 }

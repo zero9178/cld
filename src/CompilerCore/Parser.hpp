@@ -85,7 +85,7 @@ namespace OpenCL::Parser
 
     OpenCL::Syntax::Program parseProgram(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::Global> parseGlobal(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::Global parseGlobal(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::StructOrUnionDeclaration parseStructOrUnion(Tokens& tokens, ParsingContext& context);
 
@@ -97,7 +97,7 @@ namespace OpenCL::Parser
 
     OpenCL::Syntax::Function parseFunction(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::BlockItem> parseBlockItem(Tokens& tokens, ParsingContext& context);
+    Syntax::BlockItem parseBlockItem(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::Declarations parseDeclarations(Tokens& tokens,
                                                    ParsingContext& context,
@@ -106,16 +106,16 @@ namespace OpenCL::Parser
                                                    bool allowEmptyArray = true,
                                                    bool allowNoName = false);
 
-    std::unique_ptr<OpenCL::Syntax::InitializerList> parseInitializerList(Tokens& tokens, ParsingContext& context);
+    Syntax::InitializerList parseInitializerList(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::InitializerListBlock parseInitializerListBlock(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::Statement> parseStatement(Tokens& tokens, ParsingContext& context);
+    Syntax::Statement parseStatement(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::Expression parseExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::NonCommaExpression> parseNonCommaExpression(Tokens& tokens,
-                                                                                ParsingContext& context);
+    Syntax::NonCommaExpression parseNonCommaExpression(Tokens& tokens,
+                                                       ParsingContext& context);
 
     OpenCL::Syntax::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context);
 
@@ -141,7 +141,7 @@ namespace OpenCL::Parser
 
     OpenCL::Syntax::CastExpression parseCastExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::UnaryExpression> parseUnaryExpression(Tokens& tokens, ParsingContext& context);
+    Syntax::UnaryExpression parseUnaryExpression(Tokens& tokens, ParsingContext& context);
 
     std::unique_ptr<OpenCL::Syntax::PostFixExpression> parsePostFixExpression(Tokens& tokens, ParsingContext& context);
 
