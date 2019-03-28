@@ -143,9 +143,9 @@ namespace OpenCL::Parser
 
     Syntax::UnaryExpression parseUnaryExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::PostFixExpression> parsePostFixExpression(Tokens& tokens, ParsingContext& context);
+    Syntax::PostFixExpression parsePostFixExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::PrimaryExpression> parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
+    Syntax::PrimaryExpression parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
 
     std::unique_ptr<OpenCL::Syntax::Type> parseType(Tokens& tokens, ParsingContext& context);
 

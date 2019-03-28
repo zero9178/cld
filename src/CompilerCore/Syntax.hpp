@@ -12,99 +12,6 @@ namespace OpenCL::Syntax
 {
     class Type;
 
-    class CodegenContext
-    {
-        using tuple = std::pair<llvm::Value*, std::shared_ptr<Type>>;
-
-        struct Function
-        {
-            std::shared_ptr<Type> retType;
-            std::vector<const Type*> arguments;
-        };
-
-        std::map<std::string, Function> m_functions;
-        std::map<std::string, tuple> m_globalValues;
-        std::vector<std::map<std::string, tuple>> m_namedValues;
-
-    public:
-
-        llvm::LLVMContext context;
-        llvm::IRBuilder<> builder{context};
-        llvm::DIBuilder* debugBuilder;
-        llvm::DIFile* debugUnit = nullptr;
-        std::unique_ptr<llvm::Module> module;
-        llvm::Function* currentFunction;
-        const Type* functionRetType = nullptr;
-        std::vector<llvm::BasicBlock*> continueBlocks;
-        std::vector<llvm::BasicBlock*> breakBlocks;
-        std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
-        std::vector<llvm::DIScope*> debugScope;
-
-        struct StructOrUnion
-        {
-            std::map<std::string, std::uint64_t> order;
-            std::vector<std::shared_ptr<Type>> types;
-            bool isUnion = false;
-        };
-
-        std::map<std::string, StructOrUnion> structs;
-
-        bool hasFunction(const std::string& name) const
-        {
-            return m_functions.find(name) != m_functions.end();
-        }
-
-        const Function& getFunction(const std::string& name) const
-        {
-            return m_functions.at(name);
-        }
-
-        tuple getNamedValue(const std::string& name) const
-        {
-            for (auto begin = m_namedValues.rbegin(); begin != m_namedValues.rend(); begin++)
-            {
-                if (auto result = begin->find(name);result != begin->end())
-                {
-                    return result->second;
-                }
-            }
-            auto result = m_globalValues.find(name);
-            return result != m_globalValues.end() ? result->second : tuple{};
-        }
-
-        void popScope()
-        {
-            m_namedValues.pop_back();
-        }
-
-        void pushScope()
-        {
-            m_namedValues.emplace_back();
-        }
-
-        void addValueToScope(const std::string& name, const tuple& value);
-
-        void addGlobal(const std::string& name, const tuple& value)
-        {
-            auto[it, ins] = m_globalValues.insert({name, value});
-            if (!ins)
-            {
-                throw std::runtime_error("Redefinition of global symbol " + name);
-            }
-        }
-
-        void addFunction(const std::string& name, const Function& function)
-        {
-            m_functions[name] = function;
-        }
-
-        void clearScope()
-        {
-            m_namedValues.clear();
-            pushScope();
-        }
-    };
-
     class Expression;
 
     class PrimaryExpressionIdentifier;
@@ -227,130 +134,132 @@ namespace OpenCL::Syntax
     {
     public:
 
-        virtual void visit(Visitable& node);
+        using retType = std::pair<llvm::Value*,std::shared_ptr<Type>>;
 
-        virtual void visit(Expression& node) = 0;
+        virtual retType visit(const Visitable& node);
 
-        virtual void visit(PrimaryExpressionIdentifier& node) = 0;
+        virtual retType visit(const Expression& node) = 0;
 
-        virtual void visit(PrimaryExpressionConstant& node) = 0;
+        virtual retType visit(const PrimaryExpressionIdentifier& node) = 0;
 
-        virtual void visit(PrimaryExpressionParenthese& node) = 0;
+        virtual retType visit(const PrimaryExpressionConstant& node) = 0;
 
-        virtual void visit(PrimaryExpression& node) = 0;
+        virtual retType visit(const PrimaryExpressionParenthese& node) = 0;
 
-        virtual void visit(PostFixExpressionPrimaryExpression& node) = 0;
+        virtual retType visit(const PrimaryExpression& node) = 0;
 
-        virtual void visit(PostFixExpressionSubscript& node) = 0;
+        virtual retType visit(const PostFixExpressionPrimaryExpression& node) = 0;
 
-        virtual void visit(PostFixExpressionIncrement& node) = 0;
+        virtual retType visit(const PostFixExpressionSubscript& node) = 0;
 
-        virtual void visit(PostFixExpressionDecrement& node) = 0;
+        virtual retType visit(const PostFixExpressionIncrement& node) = 0;
 
-        virtual void visit(PostFixExpressionDot& node) = 0;
+        virtual retType visit(const PostFixExpressionDecrement& node) = 0;
 
-        virtual void visit(PostFixExpressionArrow& node) = 0;
+        virtual retType visit(const PostFixExpressionDot& node) = 0;
 
-        virtual void visit(PostFixExpressionFunctionCall& node) = 0;
+        virtual retType visit(const PostFixExpressionArrow& node) = 0;
 
-        virtual void visit(PostFixExpressionTypeInitializer& node) = 0;
+        virtual retType visit(const PostFixExpressionFunctionCall& node) = 0;
 
-        virtual void visit(PostFixExpression& node) = 0;
+        virtual retType visit(const PostFixExpressionTypeInitializer& node) = 0;
 
-        virtual void visit(AssignmentExpression& node) = 0;
+        virtual retType visit(const PostFixExpression& node) = 0;
 
-        virtual void visit(UnaryExpressionPostFixExpression& node) = 0;
+        virtual retType visit(const AssignmentExpression& node) = 0;
 
-        virtual void visit(UnaryExpressionUnaryOperator& node) = 0;
+        virtual retType visit(const UnaryExpressionPostFixExpression& node) = 0;
 
-        virtual void visit(UnaryExpressionSizeOf& node) = 0;
+        virtual retType visit(const UnaryExpressionUnaryOperator& node) = 0;
 
-        virtual void visit(UnaryExpression& node) = 0;
+        virtual retType visit(const UnaryExpressionSizeOf& node) = 0;
 
-        virtual void visit(CastExpression& node) = 0;
+        virtual retType visit(const UnaryExpression& node) = 0;
 
-        virtual void visit(Term& node) = 0;
+        virtual retType visit(const CastExpression& node) = 0;
 
-        virtual void visit(AdditiveExpression& node) = 0;
+        virtual retType visit(const Term& node) = 0;
 
-        virtual void visit(ShiftExpression& node) = 0;
+        virtual retType visit(const AdditiveExpression& node) = 0;
 
-        virtual void visit(RelationalExpression& node) = 0;
+        virtual retType visit(const ShiftExpression& node) = 0;
 
-        virtual void visit(EqualityExpression& node) = 0;
+        virtual retType visit(const RelationalExpression& node) = 0;
 
-        virtual void visit(BitAndExpression& node) = 0;
+        virtual retType visit(const EqualityExpression& node) = 0;
 
-        virtual void visit(BitXorExpression& node) = 0;
+        virtual retType visit(const BitAndExpression& node) = 0;
 
-        virtual void visit(BitOrExpression& node) = 0;
+        virtual retType visit(const BitXorExpression& node) = 0;
 
-        virtual void visit(LogicalAndExpression& node) = 0;
+        virtual retType visit(const BitOrExpression& node) = 0;
 
-        virtual void visit(LogicalOrExpression& node) = 0;
+        virtual retType visit(const LogicalAndExpression& node) = 0;
 
-        virtual void visit(ConditionalExpression& node) = 0;
+        virtual retType visit(const LogicalOrExpression& node) = 0;
 
-        virtual void visit(NonCommaExpression& node) = 0;
+        virtual retType visit(const ConditionalExpression& node) = 0;
 
-        virtual void visit(ReturnStatement& node) = 0;
+        virtual retType visit(const NonCommaExpression& node) = 0;
 
-        virtual void visit(ExpressionStatement& node) = 0;
+        virtual retType visit(const ReturnStatement& node) = 0;
 
-        virtual void visit(IfStatement& node) = 0;
+        virtual retType visit(const ExpressionStatement& node) = 0;
 
-        virtual void visit(SwitchStatement& node) = 0;
+        virtual retType visit(const IfStatement& node) = 0;
 
-        virtual void visit(DefaultStatement& node) = 0;
+        virtual retType visit(const SwitchStatement& node) = 0;
 
-        virtual void visit(CaseStatement& node) = 0;
+        virtual retType visit(const DefaultStatement& node) = 0;
 
-        virtual void visit(BlockStatement& node) = 0;
+        virtual retType visit(const CaseStatement& node) = 0;
 
-        virtual void visit(ForStatement& node) = 0;
+        virtual retType visit(const BlockStatement& node) = 0;
 
-        virtual void visit(InitializerListScalarExpression& node) = 0;
+        virtual retType visit(const ForStatement& node) = 0;
 
-        virtual void visit(InitializerListBlock& node) = 0;
+        virtual retType visit(const InitializerListScalarExpression& node) = 0;
 
-        virtual void visit(InitializerList& node) = 0;
+        virtual retType visit(const InitializerListBlock& node) = 0;
 
-        virtual void visit(Declarations& node) = 0;
+        virtual retType visit(const InitializerList& node) = 0;
 
-        virtual void visit(BlockItem& node) = 0;
+        virtual retType visit(const Declarations& node) = 0;
 
-        virtual void visit(ForDeclarationStatement& node) = 0;
+        virtual retType visit(const BlockItem& node) = 0;
 
-        virtual void visit(HeadWhileStatement& node) = 0;
+        virtual retType visit(const ForDeclarationStatement& node) = 0;
 
-        virtual void visit(FootWhileStatement& node) = 0;
+        virtual retType visit(const HeadWhileStatement& node) = 0;
 
-        virtual void visit(BreakStatement& node) = 0;
+        virtual retType visit(const FootWhileStatement& node) = 0;
 
-        virtual void visit(ContinueStatement& node) = 0;
+        virtual retType visit(const BreakStatement& node) = 0;
 
-        virtual void visit(Statement& node) = 0;
+        virtual retType visit(const ContinueStatement& node) = 0;
 
-        virtual void visit(StructOrUnionDeclaration& node) = 0;
+        virtual retType visit(const Statement& node) = 0;
 
-        virtual void visit(EnumDeclaration& node) = 0;
+        virtual retType visit(const StructOrUnionDeclaration& node) = 0;
 
-        virtual void visit(TypedefDeclaration& node) = 0;
+        virtual retType visit(const EnumDeclaration& node) = 0;
 
-        virtual void visit(Function& node) = 0;
+        virtual retType visit(const TypedefDeclaration& node) = 0;
 
-        virtual void visit(GlobalDeclaration& node) = 0;
+        virtual retType visit(const Function& node) = 0;
 
-        virtual void visit(Global& node) = 0;
+        virtual retType visit(const GlobalDeclaration& node) = 0;
 
-        virtual void visit(Program& node) = 0;
+        virtual retType visit(const Global& node) = 0;
+
+        virtual retType visit(const Program& node) = 0;
     };
 
     class Visitable
     {
     public:
 
-        virtual void accept(NodeVisitor& visitor) = 0;
+        virtual void accept(NodeVisitor& visitor) const = 0;
     };
 
     template <class T>
@@ -384,7 +293,7 @@ namespace OpenCL::Syntax
             return m_column;
         }
 
-        void accept(NodeVisitor& visitor) final
+        void accept(NodeVisitor& visitor) const final
         {
             static_assert(std::is_final_v<T>);
             visitor.visit(*static_cast<T*>(this));
@@ -730,13 +639,13 @@ namespace OpenCL::Syntax
      */
     class PostFixExpressionPrimaryExpression final : public Node<PostFixExpressionPrimaryExpression>
     {
-        std::unique_ptr<PrimaryExpression> m_primaryExpression;
+        PrimaryExpression m_primaryExpression;
 
     public:
 
         PostFixExpressionPrimaryExpression(std::uint64_t line,
                                            std::uint64_t column,
-                                           std::unique_ptr<PrimaryExpression>&& primaryExpression);
+                                           PrimaryExpression&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
     };
@@ -887,7 +796,7 @@ namespace OpenCL::Syntax
      *                       | <PostFixExpressionDecrement>
      *                       | <PostFixExpressionTypeInitializer>
      */
-    class PostFixExpression : public Node<PostFixExpression>
+    class PostFixExpression final : public Node<PostFixExpression>
     {
         using variant = std::variant<PostFixExpressionPrimaryExpression,
                                      PostFixExpressionSubscript,
@@ -908,66 +817,17 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
-     */
-    class AssignmentExpression final : public Node<AssignmentExpression>
-    {
-        std::unique_ptr<UnaryExpression> m_unaryFactor;
-
-    public:
-
-        /**
-         * <AssignmentExpression::AssignOperator>
-         */
-        enum class AssignOperator
-        {
-            NoOperator,///<<TokenType::Assignment>
-            PlusAssign,///<<TokenType::PlusAssign>
-            MinusAssign,///<<TokenType::MinusAssign>
-            DivideAssign,///<TokenType::DivideAssign>
-            MultiplyAssign,///<<TokenType::MultiplyAssign>
-            ModuloAssign,///<<TokenType::ModuloAssign>
-            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
-            RightShiftAssign,///<<TokenType::RightShiftAssign>
-            BitAndAssign,///<<TokenType::BitAndAssign>
-            BitOrAssign,///<<TokenType::BitOrAssign>
-            BitXorAssign///<<TokenType::BitXorAssign>
-        };
-
-    private:
-
-        AssignOperator m_assignOperator;
-        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
-
-    public:
-
-        AssignmentExpression(std::uint64_t line,
-                             std::uint64_t column,
-                             std::unique_ptr<UnaryExpression>&& unaryFactor,
-                             AssignOperator assignOperator,
-                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
-
-        const UnaryExpression& getUnaryFactor() const;
-
-        const NonCommaExpression& getNonCommaExpression() const;
-
-        AssignOperator getAssignOperator() const;
-
-        //std::pair<llvm::Value*, std::shared_ptr<Type>> codegen(CodegenContext& context) const override;
-    };
-
-    /**
      * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
      */
     class UnaryExpressionPostFixExpression final : public Node<UnaryExpressionPostFixExpression>
     {
-        std::unique_ptr<PostFixExpression> m_postFixExpression;
+        PostFixExpression m_postFixExpression;
 
     public:
 
         UnaryExpressionPostFixExpression(std::uint64_t line,
                                          std::uint64_t column,
-                                         std::unique_ptr<PostFixExpression>&& postFixExpression);
+                                         PostFixExpression&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
     };
@@ -1053,6 +913,53 @@ namespace OpenCL::Syntax
     };
 
     /**
+     * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
+     */
+    class AssignmentExpression final : public Node<AssignmentExpression>
+    {
+        UnaryExpression m_unaryFactor;
+
+    public:
+
+        /**
+         * <AssignmentExpression::AssignOperator>
+         */
+        enum class AssignOperator
+        {
+            NoOperator,///<<TokenType::Assignment>
+            PlusAssign,///<<TokenType::PlusAssign>
+            MinusAssign,///<<TokenType::MinusAssign>
+            DivideAssign,///<TokenType::DivideAssign>
+            MultiplyAssign,///<<TokenType::MultiplyAssign>
+            ModuloAssign,///<<TokenType::ModuloAssign>
+            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
+            RightShiftAssign,///<<TokenType::RightShiftAssign>
+            BitAndAssign,///<<TokenType::BitAndAssign>
+            BitOrAssign,///<<TokenType::BitOrAssign>
+            BitXorAssign///<<TokenType::BitXorAssign>
+        };
+
+    private:
+
+        AssignOperator m_assignOperator;
+        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
+
+    public:
+
+        AssignmentExpression(std::uint64_t line,
+                             std::uint64_t column,
+                             UnaryExpression&& unaryFactor,
+                             AssignOperator assignOperator,
+                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
+
+        const UnaryExpression& getUnaryFactor() const;
+
+        const NonCommaExpression& getNonCommaExpression() const;
+
+        AssignOperator getAssignOperator() const;
+    };
+
+    /**
      * <CastExpression> ::= <UnaryExpression>
      *                    | <TokenType::OpenParenthese> <Type> <TokenType::CloseParentheses> <CastExpression>
      */
@@ -1067,7 +974,7 @@ namespace OpenCL::Syntax
                                                                               std::pair<std::shared_ptr<Type>,
                                                                                         std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
-        const std::variant<std::unique_ptr<UnaryExpression>,
+        const std::variant<UnaryExpression,
                            std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
     };
 
@@ -1571,7 +1478,7 @@ namespace OpenCL::Syntax
     {
     public:
 
-        using variant = std::variant<std::unique_ptr<NonCommaExpression>, InitializerListBlock>;
+        using variant = std::variant<NonCommaExpression, InitializerListBlock>;
 
         using vector = std::vector<std::pair<std::int64_t, variant>>;
 
@@ -1591,7 +1498,7 @@ namespace OpenCL::Syntax
     /**
      * <InitializerList> ::= <InitializerListScalarExpression> | <InitializerListBlock>
      */
-    class InitializerList : public Node<InitializerList>
+    class InitializerList final : public Node<InitializerList>
     {
         using variant = std::variant<InitializerListScalarExpression, InitializerListBlock>;
         variant m_variant;
@@ -1753,6 +1660,8 @@ namespace OpenCL::Syntax
         Statement(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
+
+        variant& getVariant();
     };
 
     /**

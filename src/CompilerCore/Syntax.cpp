@@ -219,7 +219,7 @@ namespace
     };
 }
 
-void OpenCL::Syntax::NodeVisitor::visit(Visitable&)
+void OpenCL::Syntax::NodeVisitor::visit(const Visitable& node)
 {
     throw std::runtime_error("Visit failed");
 }
@@ -951,13 +951,13 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::PrimaryExpressionParenthese::g
 
 OpenCL::Syntax::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(std::uint64_t line,
                                                                                        std::uint64_t column,
-                                                                                       std::unique_ptr<PrimaryExpression>&& primaryExpression)
+                                                                                       PrimaryExpression&& primaryExpression)
     : Node(line, column), m_primaryExpression(std::move(primaryExpression))
 {}
 
 const OpenCL::Syntax::PrimaryExpression& OpenCL::Syntax::PostFixExpressionPrimaryExpression::getPrimaryExpression() const
 {
-    return *m_primaryExpression;
+    return m_primaryExpression;
 }
 
 //OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PostFixExpressionPrimaryExpression::solveConstantExpression() const
@@ -1021,14 +1021,15 @@ const std::string& OpenCL::Syntax::PostFixExpressionArrow::getIdentifier() const
 
 OpenCL::Syntax::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(std::uint64_t line,
                                                                                    std::uint64_t column,
-                                                                                   std::unique_ptr<PostFixExpression>&& postFixExpression)
+                                                                                   PostFixExpression&& postFixExpression)
     : Node(line, column), m_postFixExpression(std::move(postFixExpression))
 {}
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::UnaryExpressionPostFixExpression::getPostFixExpression() const
 {
-    return *m_postFixExpression;
+    return m_postFixExpression;
 }
+
 //
 //OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::UnaryExpressionPostFixExpression::solveConstantExpression() const
 //{
@@ -1730,18 +1731,18 @@ const std::vector<std::pair<OpenCL::Syntax::Term::BinaryDotOperator,
 
 OpenCL::Syntax::AssignmentExpression::AssignmentExpression(std::uint64_t line,
                                                            std::uint64_t column,
-                                                           std::unique_ptr<UnaryExpression>&& unaryFactor,
+                                                           UnaryExpression&& unaryFactor,
                                                            AssignOperator assignOperator,
                                                            std::unique_ptr<NonCommaExpression>&& nonCommaExpression)
     : Node(line, column), m_unaryFactor(std::move(unaryFactor)), m_assignOperator(assignOperator),
       m_nonCommaExpression(std::move(nonCommaExpression))
 {
-    assert(m_unaryFactor);
+
 }
 
 const OpenCL::Syntax::UnaryExpression& OpenCL::Syntax::AssignmentExpression::getUnaryFactor() const
 {
-    return *m_unaryFactor;
+    return m_unaryFactor;
 }
 
 const OpenCL::Syntax::NonCommaExpression& OpenCL::Syntax::AssignmentExpression::getNonCommaExpression() const
@@ -2199,6 +2200,11 @@ OpenCL::Syntax::Statement::Statement(std::uint64_t line, std::uint64_t column, O
 {}
 
 const OpenCL::Syntax::Statement::variant& OpenCL::Syntax::Statement::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::Statement::variant& OpenCL::Syntax::Statement::getVariant()
 {
     return m_variant;
 }
