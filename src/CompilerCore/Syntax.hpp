@@ -8,6 +8,11 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DIBuilder.h>
 
+namespace OpenCL::Codegen
+{
+    class Context;
+}
+
 namespace OpenCL::Syntax
 {
     class Type;
@@ -259,7 +264,7 @@ namespace OpenCL::Syntax
     {
     public:
 
-        virtual void accept(NodeVisitor& visitor) const = 0;
+        virtual NodeVisitor::retType accept(NodeVisitor& visitor) const = 0;
     };
 
     template <class T>
@@ -293,10 +298,10 @@ namespace OpenCL::Syntax
             return m_column;
         }
 
-        void accept(NodeVisitor& visitor) const final
+        NodeVisitor::retType accept(NodeVisitor& visitor) const final
         {
             static_assert(std::is_final_v<T>);
-            visitor.visit(*static_cast<T*>(this));
+            return visitor.visit(*static_cast<const T*>(this));
         }
 
         using constantVariant = std::variant<std::int32_t,
@@ -332,13 +337,13 @@ namespace OpenCL::Syntax
 
         virtual bool isConst() const;
 
-        virtual llvm::Type* type(CodegenContext& context) const = 0;
+        virtual llvm::Type* type(Codegen::Context& context) const = 0;
 
         virtual std::unique_ptr<Type> clone() const = 0;
 
         virtual std::string name() const = 0;
 
-        virtual llvm::DIType* debugType(CodegenContext& context) const = 0;
+        virtual llvm::DIType* debugType(Codegen::Context& context) const = 0;
     };
 
     /**
@@ -403,13 +408,13 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
@@ -428,13 +433,13 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
@@ -455,13 +460,13 @@ namespace OpenCL::Syntax
 
         void setSize(size_t size);
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
@@ -481,13 +486,13 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
@@ -507,13 +512,13 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     class EnumType final : public Type
@@ -529,13 +534,13 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(CodegenContext& context) const override;
+        llvm::Type* type(OpenCL::Codegen::Context& context) const override;
 
         std::unique_ptr<Type> clone() const override;
 
         std::string name() const override;
 
-        llvm::DIType* debugType(CodegenContext& context) const override;
+        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**

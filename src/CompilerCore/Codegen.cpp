@@ -8,193 +8,193 @@
 
 namespace
 {
-//    void castPrimitive(llvm::Value*& value,
-//                       bool isSigned,
-//                       llvm::Type* destType,
-//                       bool destIsSigned,
-//                       OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (value->getType() != destType)
-//        {
-//            if (value->getType()->isIntegerTy())
-//            {
-//                if (destType->isIntegerTy())
-//                {
-//                    value = context.builder.CreateIntCast(value, destType, isSigned);
-//                }
-//                else if (destType->isFloatingPointTy())
-//                {
-//                    if (isSigned)
-//                    {
-//                        value = context.builder.CreateSIToFP(value, destType);
-//                    }
-//                    else
-//                    {
-//                        value = context.builder.CreateUIToFP(value, destType);
-//                    }
-//                }
-//                else if (destType->isPointerTy())
-//                {
-//                    if (value->getType()->getIntegerBitWidth() != 64)
-//                    {
-//                        value = context.builder.CreateIntCast(value, context.builder.getInt64Ty(), isSigned);
-//                    }
-//                    value = context.builder.CreateIntToPtr(value, destType);
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Cannot convert type");
-//                }
-//            }
-//            else if (value->getType()->isFloatingPointTy())
-//            {
-//                if (destType->isFloatingPointTy())
-//                {
-//                    value = context.builder.CreateFPCast(value, destType);
-//                }
-//                else if (destType->isIntegerTy())
-//                {
-//                    if (destIsSigned)
-//                    {
-//                        value = context.builder.CreateFPToSI(value, destType);
-//                    }
-//                    else
-//                    {
-//                        value = context.builder.CreateFPToUI(value, destType);
-//                    }
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Cannot convert type");
-//                }
-//            }
-//            else if (value->getType()->isPointerTy())
-//            {
-//                if (destType->isIntegerTy())
-//                {
-//                    value = context.builder.CreatePtrToInt(value, destType);
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Cannot convert pointer type to other");
-//                }
-//            }
-//            else if (value->getType()->isArrayTy())
-//            {
-//                if (llvm::isa<llvm::LoadInst>(value) && destType->isIntOrPtrTy())
-//                {
-//                    auto* zero = context.builder.getInt32(0);
-//                    value = context.builder.CreateInBoundsGEP(llvm::cast<llvm::LoadInst>(value)->getPointerOperand(),
-//                                                              {zero, zero});
-//                    if (destType->isIntegerTy())
-//                    {
-//                        value = context.builder.CreatePtrToInt(value, destType);
-//                    }
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Cannot convert array type to other");
-//                }
-//            }
-//        }
-//        isSigned = destIsSigned;
-//    }
-//
-//    void castToDouble(llvm::Value*& value, bool isSigned, OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (!value->getType()->isDoubleTy())
-//        {
-//            if (value->getType()->isIntegerTy())
-//            {
-//                if (isSigned)
-//                {
-//                    value = context.builder.CreateSIToFP(value, context.builder.getDoubleTy());
-//                }
-//                else
-//                {
-//                    value = context.builder.CreateUIToFP(value, context.builder.getDoubleTy());
-//                }
-//            }
-//            else if (value->getType()->isFloatingPointTy())
-//            {
-//                value = context.builder.CreateFPCast(value, context.builder.getDoubleTy());
-//            }
-//            else
-//            {
-//                throw std::runtime_error("Can't cast to double");
-//            }
-//        }
-//    }
-//
-//    void castToFloat(llvm::Value*& value, bool isSigned, OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (!value->getType()->isFloatTy())
-//        {
-//            if (value->getType()->isIntegerTy())
-//            {
-//                if (isSigned)
-//                {
-//                    value = context.builder.CreateSIToFP(value, context.builder.getFloatTy());
-//                }
-//                else
-//                {
-//                    value = context.builder.CreateUIToFP(value, context.builder.getFloatTy());
-//                }
-//            }
-//            else if (value->getType()->isFloatingPointTy())
-//            {
-//                value = context.builder.CreateFPCast(value, context.builder.getFloatTy());
-//            }
-//            else
-//            {
-//                throw std::runtime_error("Can't cast to double");
-//            }
-//        }
-//    }
-//
-//    void arithmeticCast(llvm::Value*& lhs,
-//                        bool lhsIsSigned,
-//                        llvm::Value*& rhs,
-//                        bool rhsIsSigned,
-//                        OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy())
-//        {
-//            castToDouble(lhs, lhsIsSigned, context);
-//            castToDouble(rhs, rhsIsSigned, context);
-//        }
-//        else if (lhs->getType()->isFloatTy() || rhs->getType()->isFloatTy())
-//        {
-//            castToFloat(lhs, lhsIsSigned, context);
-//            castToFloat(rhs, rhsIsSigned, context);
-//        }
-//        else if (lhs->getType()->isIntegerTy() && rhs->getType()->isIntegerTy())
-//        {
-//            if (lhs->getType()->getIntegerBitWidth() < 32u
-//                || lhs->getType()->getIntegerBitWidth() < rhs->getType()->getIntegerBitWidth())
-//            {
-//                lhs = context.builder.CreateIntCast(lhs,
-//                                                    context.builder.getIntNTy(std::max(32u,
-//                                                                                       rhs->getType()
-//                                                                                          ->getIntegerBitWidth())),
-//                                                    lhsIsSigned);
-//            }
-//            if (rhs->getType()->getIntegerBitWidth() < 32u
-//                || rhs->getType()->getIntegerBitWidth() < lhs->getType()->getIntegerBitWidth())
-//            {
-//                rhs = context.builder.CreateIntCast(rhs,
-//                                                    context.builder.getIntNTy(std::max(32u,
-//                                                                                       lhs->getType()
-//                                                                                          ->getIntegerBitWidth())),
-//                                                    rhsIsSigned);
-//            }
-//        }
-//        else if (!rhs->getType()->isPointerTy() || !lhs->getType()->isPointerTy())
-//        {
-//            throw std::runtime_error("Can't cast to common type");
-//        }
-//    }
-//
+    void castPrimitive(llvm::Value*& value,
+                       bool isSigned,
+                       llvm::Type* destType,
+                       bool destIsSigned,
+                       OpenCL::Codegen::Context& context)
+    {
+        if (value->getType() != destType)
+        {
+            if (value->getType()->isIntegerTy())
+            {
+                if (destType->isIntegerTy())
+                {
+                    value = context.builder.CreateIntCast(value, destType, isSigned);
+                }
+                else if (destType->isFloatingPointTy())
+                {
+                    if (isSigned)
+                    {
+                        value = context.builder.CreateSIToFP(value, destType);
+                    }
+                    else
+                    {
+                        value = context.builder.CreateUIToFP(value, destType);
+                    }
+                }
+                else if (destType->isPointerTy())
+                {
+                    if (value->getType()->getIntegerBitWidth() != 64)
+                    {
+                        value = context.builder.CreateIntCast(value, context.builder.getInt64Ty(), isSigned);
+                    }
+                    value = context.builder.CreateIntToPtr(value, destType);
+                }
+                else
+                {
+                    throw std::runtime_error("Cannot convert type");
+                }
+            }
+            else if (value->getType()->isFloatingPointTy())
+            {
+                if (destType->isFloatingPointTy())
+                {
+                    value = context.builder.CreateFPCast(value, destType);
+                }
+                else if (destType->isIntegerTy())
+                {
+                    if (destIsSigned)
+                    {
+                        value = context.builder.CreateFPToSI(value, destType);
+                    }
+                    else
+                    {
+                        value = context.builder.CreateFPToUI(value, destType);
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Cannot convert type");
+                }
+            }
+            else if (value->getType()->isPointerTy())
+            {
+                if (destType->isIntegerTy())
+                {
+                    value = context.builder.CreatePtrToInt(value, destType);
+                }
+                else
+                {
+                    throw std::runtime_error("Cannot convert pointer type to other");
+                }
+            }
+            else if (value->getType()->isArrayTy())
+            {
+                if (llvm::isa<llvm::LoadInst>(value) && destType->isIntOrPtrTy())
+                {
+                    auto* zero = context.builder.getInt32(0);
+                    value = context.builder.CreateInBoundsGEP(llvm::cast<llvm::LoadInst>(value)->getPointerOperand(),
+                                                              {zero, zero});
+                    if (destType->isIntegerTy())
+                    {
+                        value = context.builder.CreatePtrToInt(value, destType);
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Cannot convert array type to other");
+                }
+            }
+        }
+        isSigned = destIsSigned;
+    }
+
+    void castToDouble(llvm::Value*& value, bool isSigned, OpenCL::Codegen::Context& context)
+    {
+        if (!value->getType()->isDoubleTy())
+        {
+            if (value->getType()->isIntegerTy())
+            {
+                if (isSigned)
+                {
+                    value = context.builder.CreateSIToFP(value, context.builder.getDoubleTy());
+                }
+                else
+                {
+                    value = context.builder.CreateUIToFP(value, context.builder.getDoubleTy());
+                }
+            }
+            else if (value->getType()->isFloatingPointTy())
+            {
+                value = context.builder.CreateFPCast(value, context.builder.getDoubleTy());
+            }
+            else
+            {
+                throw std::runtime_error("Can't cast to double");
+            }
+        }
+    }
+
+    void castToFloat(llvm::Value*& value, bool isSigned, OpenCL::Codegen::Context& context)
+    {
+        if (!value->getType()->isFloatTy())
+        {
+            if (value->getType()->isIntegerTy())
+            {
+                if (isSigned)
+                {
+                    value = context.builder.CreateSIToFP(value, context.builder.getFloatTy());
+                }
+                else
+                {
+                    value = context.builder.CreateUIToFP(value, context.builder.getFloatTy());
+                }
+            }
+            else if (value->getType()->isFloatingPointTy())
+            {
+                value = context.builder.CreateFPCast(value, context.builder.getFloatTy());
+            }
+            else
+            {
+                throw std::runtime_error("Can't cast to double");
+            }
+        }
+    }
+
+    void arithmeticCast(llvm::Value*& lhs,
+                        bool lhsIsSigned,
+                        llvm::Value*& rhs,
+                        bool rhsIsSigned,
+                        OpenCL::Codegen::Context& context)
+    {
+        if (lhs->getType()->isDoubleTy() || rhs->getType()->isDoubleTy())
+        {
+            castToDouble(lhs, lhsIsSigned, context);
+            castToDouble(rhs, rhsIsSigned, context);
+        }
+        else if (lhs->getType()->isFloatTy() || rhs->getType()->isFloatTy())
+        {
+            castToFloat(lhs, lhsIsSigned, context);
+            castToFloat(rhs, rhsIsSigned, context);
+        }
+        else if (lhs->getType()->isIntegerTy() && rhs->getType()->isIntegerTy())
+        {
+            if (lhs->getType()->getIntegerBitWidth() < 32u
+                || lhs->getType()->getIntegerBitWidth() < rhs->getType()->getIntegerBitWidth())
+            {
+                lhs = context.builder.CreateIntCast(lhs,
+                                                    context.builder.getIntNTy(std::max(32u,
+                                                                                       rhs->getType()
+                                                                                          ->getIntegerBitWidth())),
+                                                    lhsIsSigned);
+            }
+            if (rhs->getType()->getIntegerBitWidth() < 32u
+                || rhs->getType()->getIntegerBitWidth() < lhs->getType()->getIntegerBitWidth())
+            {
+                rhs = context.builder.CreateIntCast(rhs,
+                                                    context.builder.getIntNTy(std::max(32u,
+                                                                                       lhs->getType()
+                                                                                          ->getIntegerBitWidth())),
+                                                    rhsIsSigned);
+            }
+        }
+        else if (!rhs->getType()->isPointerTy() || !lhs->getType()->isPointerTy())
+        {
+            throw std::runtime_error("Can't cast to common type");
+        }
+    }
+
     std::size_t getAlignment(llvm::Type* type)
     {
         if (type->isPointerTy())
@@ -249,7 +249,7 @@ namespace
 
     std::unordered_map<std::string, llvm::DIType*> cache;
 
-    llvm::DIType* toDwarfType(const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Syntax::CodegenContext& context)
+    llvm::DIType* toDwarfType(const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Codegen::Context& context)
     {
         if (auto result = cache.find(type->name()); result != cache.end())
         {
@@ -259,773 +259,267 @@ namespace
         cache[type->name()] = newDebugType;
         return newDebugType;
     }
-//
-//    template<class T>
-//    void emitLocation(const OpenCL::Syntax::Node<T>* node, OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (!node)
-//        {
-//            context.builder.SetCurrentDebugLocation(llvm::DebugLoc());
-//            return;
-//        }
-//        auto* scope = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
-//        context.builder.SetCurrentDebugLocation(llvm::DebugLoc::get(node->getLine(), node->getColumn(), scope));
-//    }
-//
-//    llvm::Constant* getZeroFor(llvm::Type* type)
-//    {
-//        if (type->isIntegerTy())
-//        {
-//            return llvm::ConstantInt::get(type, 0);
-//        }
-//        else if (type->isFloatingPointTy())
-//        {
-//            return llvm::ConstantFP::get(type, 0);
-//        }
-//        else if (type->isPointerTy())
-//        {
-//            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
-//        }
-//        else if (type->isStructTy())
-//        {
-//            auto* structType = llvm::cast<llvm::StructType>(type);
-//            std::size_t count = structType->getStructNumElements();
-//            std::vector<llvm::Constant*> constants;
-//            constants.reserve(count);
-//            for (std::size_t i = 0; i < count; i++)
-//            {
-//                constants.push_back(getZeroFor(structType->getTypeAtIndex(i)));
-//            }
-//            return llvm::ConstantStruct::get(structType, constants);
-//        }
-//        else if (type->isArrayTy())
-//        {
-//            auto* arrayType = llvm::cast<llvm::ArrayType>(type);
-//            std::size_t count = arrayType->getArrayNumElements();
-//            std::vector<llvm::Constant*> constants(count, getZeroFor(arrayType->getArrayElementType()));
-//            return llvm::ConstantArray::get(arrayType, constants);
-//        }
-//        else
-//        {
-//            throw std::runtime_error("Not implemented yet");
-//        }
-//    }
-//
-//    std::size_t elementsNeededForType(llvm::Type* type)
-//    {
-//        if (type->isArrayTy())
-//        {
-//            return elementsNeededForType(type->getArrayElementType()) * type->getArrayNumElements();
-//        }
-//        else if (type->isStructTy())
-//        {
-//            std::size_t sum = 0;
-//            for (std::size_t i = 0; i < type->getStructNumElements(); i++)
-//            {
-//                sum += elementsNeededForType(type->getStructElementType(i));
-//            }
-//            return sum;
-//        }
-//        else
-//        {
-//            return 1;
-//        }
-//    }
-//
-//    void match(llvm::ArrayRef<std::pair<std::int64_t, typename OpenCL::Syntax::InitializerListBlock::variant>> list,
-//               llvm::Value* pointer,
-//               const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Syntax::CodegenContext& context)
-//    {
-//        auto* allocaType = type->type(context);
-//        if (list.empty())
-//        {
-//            if (allocaType->isStructTy() || allocaType->isArrayTy())
-//            {
-//                context.builder.CreateStore(getZeroFor(allocaType), pointer);
-//            }
-//            else
-//            {
-//                throw std::runtime_error("Scalar initializer can not be empty");
-//            }
-//        }
-//        else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
-//        {
-//            auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
-//                                                                                      std::shared_ptr<OpenCL::Syntax::Type>>
-//                                                {
-//                                                    using T = std::decay_t<decltype(value)>;
-//                                                    if constexpr(std::is_same_v<T,
-//                                                                                OpenCL::Syntax::InitializerListBlock>)
-//                                                    {
-//                                                        throw std::runtime_error(
-//                                                            "Only single level of braces allowed for scalar initialization");
-//                                                    }
-//                                                    else
-//                                                    {
-//                                                        return value->codegen(context);
-//                                                    }
-//                                                }, list[0].second);
-//            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
-//            context.builder.CreateStore(value, pointer);
-//        }
-//        else if (allocaType->isStructTy())
-//        {
-//            auto& structInfo = context.structs.at(allocaType->getStructName());
-//            std::size_t i = 0;
-//            for (auto& iter : structInfo.types)
-//            {
-//                auto* zero = context.builder.getInt32(0);
-//                auto* index = context.builder.getInt32(i);
-//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-//                if (i >= list.size())
-//                {
-//                    context.builder.CreateStore(getZeroFor(iter->type(context)), member);
-//                }
-//                else
-//                {
-//                    std::visit([&context, member, iter](auto&& value)
-//                               {
-//                                   using T = std::decay_t<decltype(value)>;
-//                                   if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
-//                                   {
-//                                       match(value.getNonCommaExpressionsAndBlocks(), member, iter, context);
-//                                   }
-//                                   else
-//                                   {
-//                                       auto[newValue, otherType] = value->codegen(context);
-//                                       if (llvm::LoadInst* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
-//                                           llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
-//                                           && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
-//                                       {
-//                                           auto* zero = context.builder.getInt32(0);
-//                                           context.builder.CreateMemCpy(member,
-//                                                                        0,
-//                                                                        context.builder
-//                                                                               .CreateInBoundsGEP(load->getPointerOperand(),
-//                                                                                                  {zero, zero}),
-//                                                                        0,
-//                                                                        load->getType()->getArrayNumElements());
-//                                       }
-//                                       else
-//                                       {
-//                                           castPrimitive(newValue,
-//                                                         otherType->isSigned(),
-//                                                         iter->type(context),
-//                                                         iter->isSigned(),
-//                                                         context);
-//                                           context.builder.CreateStore(newValue, member);
-//                                       }
-//                                   }
-//                               }, list[i].second);
-//                }
-//                i++;
-//            }
-//        }
-//        else if (allocaType->isArrayTy())
-//        {
-//            auto* zero = context.builder.getInt32(0);
-//            auto arrayType = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(type);
-//            auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
-//            std::shared_ptr heldType = arrayType->getType()->clone();
-//            std::size_t i = 0;
-//            std::set<std::size_t> needsNullInitialization;
-//            std::generate_n(std::inserter(needsNullInitialization, needsNullInitialization.end()),
-//                            allocaType->getArrayNumElements(),
-//                            [&]
-//                            {
-//                                return needsNullInitialization.size();
-//                            });
-//            for (auto iter = list.begin(); iter < list.end(); i++)
-//            {
-//                if (iter->first != -1)
-//                {
-//                    i = iter->first;
-//                }
-//                if (i >= allocaType->getArrayNumElements())
-//                {
-//                    throw std::runtime_error("More elements specified in initializer list than elements in array");
-//                }
-//                needsNullInitialization.erase(i);
-//                auto* index = context.builder.getInt32(i);
-//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-//                auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
-//                auto result = std::find_if(iter, end, [](auto&& value)
-//                {
-//                    return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(value.second);
-//                });
-//                if (result == iter && std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(result->second))
-//                {
-//                    match(std::get<OpenCL::Syntax::InitializerListBlock>(result->second)
-//                              .getNonCommaExpressionsAndBlocks(),
-//                          member,
-//                          heldType,
-//                          context);
-//                    iter++;
-//                }
-//                else
-//                {
-//                    if (iter == result)
-//                    {
-//                        result++;
-//                    }
-//                    match({iter, result}, member, heldType, context);
-//                    iter = result;
-//                }
-//            }
-//            for (auto iter : needsNullInitialization)
-//            {
-//                auto* index = context.builder.getInt32(iter);
-//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-//                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()), member);
-//            }
-//        }
-//    }
-//
-//    llvm::Value* toBool(llvm::Value* value, OpenCL::Syntax::CodegenContext& context)
-//    {
-//        if (value->getType()->isIntegerTy())
-//        {
-//            if (value->getType()->getIntegerBitWidth() > 1)
-//            {
-//                return context.builder
-//                              .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
-//            }
-//            return value;
-//        }
-//        else if (value->getType()->isFloatingPointTy())
-//        {
-//            return context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-//        }
-//        else if (value->getType()->isPointerTy())
-//        {
-//            return context.builder.CreateICmpNE(value,
-//                                                llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
-//                                                                                                                 ->getType())));
-//        }
-//        else if (value->getType()->isArrayTy())
-//        {
-//            return context.builder.getIntN(1, 0);
-//        }
-//        else
-//        {
-//            return nullptr;
-//        }
-//    }
+
+    template <class T = void>
+    void emitLocation(const OpenCL::Syntax::Node<T>* node, OpenCL::Codegen::Context& context)
+    {
+        if (!node)
+        {
+            context.builder.SetCurrentDebugLocation(llvm::DebugLoc());
+            return;
+        }
+        auto* scope = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
+        context.builder.SetCurrentDebugLocation(llvm::DebugLoc::get(node->getLine(), node->getColumn(), scope));
+    }
+
+    llvm::Constant* getZeroFor(llvm::Type* type)
+    {
+        if (type->isIntegerTy())
+        {
+            return llvm::ConstantInt::get(type, 0);
+        }
+        else if (type->isFloatingPointTy())
+        {
+            return llvm::ConstantFP::get(type, 0);
+        }
+        else if (type->isPointerTy())
+        {
+            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(type));
+        }
+        else if (type->isStructTy())
+        {
+            auto* structType = llvm::cast<llvm::StructType>(type);
+            std::size_t count = structType->getStructNumElements();
+            std::vector<llvm::Constant*> constants;
+            constants.reserve(count);
+            for (std::size_t i = 0; i < count; i++)
+            {
+                constants.push_back(getZeroFor(structType->getTypeAtIndex(i)));
+            }
+            return llvm::ConstantStruct::get(structType, constants);
+        }
+        else if (type->isArrayTy())
+        {
+            auto* arrayType = llvm::cast<llvm::ArrayType>(type);
+            std::size_t count = arrayType->getArrayNumElements();
+            std::vector<llvm::Constant*> constants(count, getZeroFor(arrayType->getArrayElementType()));
+            return llvm::ConstantArray::get(arrayType, constants);
+        }
+        else
+        {
+            throw std::runtime_error("Not implemented yet");
+        }
+    }
+
+    std::size_t elementsNeededForType(llvm::Type* type)
+    {
+        if (type->isArrayTy())
+        {
+            return elementsNeededForType(type->getArrayElementType()) * type->getArrayNumElements();
+        }
+        else if (type->isStructTy())
+        {
+            std::size_t sum = 0;
+            for (std::size_t i = 0; i < type->getStructNumElements(); i++)
+            {
+                sum += elementsNeededForType(type->getStructElementType(i));
+            }
+            return sum;
+        }
+        else
+        {
+            return 1;
+        }
+    }
+
+    void match(llvm::ArrayRef<std::pair<std::int64_t, typename OpenCL::Syntax::InitializerListBlock::variant>> list,
+               llvm::Value* pointer,
+               const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Codegen::Context& context)
+    {
+        auto* allocaType = type->type(context);
+        if (list.empty())
+        {
+            if (allocaType->isStructTy() || allocaType->isArrayTy())
+            {
+                context.builder.CreateStore(getZeroFor(allocaType), pointer);
+            }
+            else
+            {
+                throw std::runtime_error("Scalar initializer can not be empty");
+            }
+        }
+        else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
+        {
+            auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
+                                                                                      std::shared_ptr<OpenCL::Syntax::Type>>
+                                                {
+                                                    using T = std::decay_t<decltype(value)>;
+                                                    if constexpr(std::is_same_v<T,
+                                                                                OpenCL::Syntax::InitializerListBlock>)
+                                                    {
+                                                        throw std::runtime_error(
+                                                            "Only single level of braces allowed for scalar initialization");
+                                                    }
+                                                    else
+                                                    {
+                                                        return value.accept(context);
+                                                    }
+                                                }, list[0].second);
+            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
+            context.builder.CreateStore(value, pointer);
+        }
+        else if (allocaType->isStructTy())
+        {
+            auto& structInfo = context.structs.at(allocaType->getStructName());
+            std::size_t i = 0;
+            for (auto& iter : structInfo.types)
+            {
+                auto* zero = context.builder.getInt32(0);
+                auto* index = context.builder.getInt32(i);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                if (i >= list.size())
+                {
+                    context.builder.CreateStore(getZeroFor(iter->type(context)), member);
+                }
+                else
+                {
+                    std::visit([&context, member, iter](auto&& value)
+                               {
+                                   using T = std::decay_t<decltype(value)>;
+                                   if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
+                                   {
+                                       match(value.getNonCommaExpressionsAndBlocks(), member, iter, context);
+                                   }
+                                   else
+                                   {
+                                       auto[newValue, otherType] = value.accept(context);
+                                       if (llvm::LoadInst* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
+                                           llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
+                                           && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
+                                       {
+                                           auto* zero = context.builder.getInt32(0);
+                                           context.builder.CreateMemCpy(member,
+                                                                        0,
+                                                                        context.builder
+                                                                               .CreateInBoundsGEP(load->getPointerOperand(),
+                                                                                                  {zero, zero}),
+                                                                        0,
+                                                                        load->getType()->getArrayNumElements());
+                                       }
+                                       else
+                                       {
+                                           castPrimitive(newValue,
+                                                         otherType->isSigned(),
+                                                         iter->type(context),
+                                                         iter->isSigned(),
+                                                         context);
+                                           context.builder.CreateStore(newValue, member);
+                                       }
+                                   }
+                               }, list[i].second);
+                }
+                i++;
+            }
+        }
+        else if (allocaType->isArrayTy())
+        {
+            auto* zero = context.builder.getInt32(0);
+            auto arrayType = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(type);
+            auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
+            std::shared_ptr heldType = arrayType->getType()->clone();
+            std::size_t i = 0;
+            std::set<std::size_t> needsNullInitialization;
+            std::generate_n(std::inserter(needsNullInitialization, needsNullInitialization.end()),
+                            allocaType->getArrayNumElements(),
+                            [&]
+                            {
+                                return needsNullInitialization.size();
+                            });
+            for (auto iter = list.begin(); iter < list.end(); i++)
+            {
+                if (iter->first != -1)
+                {
+                    i = iter->first;
+                }
+                if (i >= allocaType->getArrayNumElements())
+                {
+                    throw std::runtime_error("More elements specified in initializer list than elements in array");
+                }
+                needsNullInitialization.erase(i);
+                auto* index = context.builder.getInt32(i);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
+                auto result = std::find_if(iter, end, [](auto&& value)
+                {
+                    return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(value.second);
+                });
+                if (result == iter && std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(result->second))
+                {
+                    match(std::get<OpenCL::Syntax::InitializerListBlock>(result->second)
+                              .getNonCommaExpressionsAndBlocks(),
+                          member,
+                          heldType,
+                          context);
+                    iter++;
+                }
+                else
+                {
+                    if (iter == result)
+                    {
+                        result++;
+                    }
+                    match({iter, result}, member, heldType, context);
+                    iter = result;
+                }
+            }
+            for (auto iter : needsNullInitialization)
+            {
+                auto* index = context.builder.getInt32(iter);
+                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()), member);
+            }
+        }
+    }
+
+    llvm::Value* toBool(llvm::Value* value, OpenCL::Codegen::Context& context)
+    {
+        if (value->getType()->isIntegerTy())
+        {
+            if (value->getType()->getIntegerBitWidth() > 1)
+            {
+                return context.builder
+                              .CreateICmpNE(value, context.builder.getIntN(value->getType()->getIntegerBitWidth(), 0));
+            }
+            return value;
+        }
+        else if (value->getType()->isFloatingPointTy())
+        {
+            return context.builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
+        }
+        else if (value->getType()->isPointerTy())
+        {
+            return context.builder.CreateICmpNE(value,
+                                                llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value
+                                                                                                                 ->getType())));
+        }
+        else if (value->getType()->isArrayTy())
+        {
+            return context.builder.getIntN(1, 0);
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
 }
 
-void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, const OpenCL::Syntax::CodegenContext::tuple& value)
+void OpenCL::Codegen::Context::addValueToScope(const std::string& name, const OpenCL::Codegen::Context::tuple& value)
 {
     m_namedValues.back()[name] = value;
 }
 
-//void OpenCL::Syntax::Program::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    context.module = std::make_unique<llvm::Module>("main", context.context);
-//    std::string error;
-//    const std::string tripleStr = llvm::sys::getProcessTriple();
-//    llvm::Triple t(tripleStr);
-//    if (t.isOSBinFormatCOFF())
-//    {
-//        t.setObjectFormat(llvm::Triple::ELF);
-//    }
-//    auto target = llvm::TargetRegistry::lookupTarget(t.str(), error);
-//    if (!target)
-//    {
-//        throw std::runtime_error(error);
-//    }
-//    auto targetMachine = target->createTargetMachine(t.str(), "generic", "", {}, {});
-//    context.module->setDataLayout(targetMachine->createDataLayout());
-//    context.module->setTargetTriple(t.str());
-//    context.debugBuilder = new llvm::DIBuilder(*context.module);
-//    context.debugBuilder->finalize();
-//    context.debugUnit = context.debugBuilder->createFile("input.c", "../src");
-//    context.debugBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99, context.debugUnit,
-//                                            "OpenCL Compiler", false, "", 0);
-//    for (auto& iter : getGlobals())
-//    {
-//        iter->codegen(context);
-//    }
-//    context.debugBuilder->finalize();
-//}
-//
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::GlobalDeclaration::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    //TODO: Make array size deduction and etc work
-//    for (auto&[type, name, optionalValue] : getDeclarations())
-//    {
-//        auto[constant, sign] = optionalValue ? optionalValue->codegen(context) : decltype(optionalValue
-//            ->codegen(context)){};
-//        if (constant
-//            && (constant->getType() != type->type(context) || (sign && sign->isSigned()) != type->isSigned()))
-//        {
-//            castPrimitive(constant, sign->isSigned(), type->type(context), type->isSigned(), context);
-//        }
-//        if (constant && !llvm::isa<llvm::Constant>(constant))
-//        {
-//            throw std::runtime_error("Can only use constant expression to initialize global variable");
-//        }
-//
-//        auto* newGlobal = new llvm::GlobalVariable(*context.module,
-//                                                   type->type(context),
-//                                                   type->isConst(),
-//                                                   llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
-//                                                   constant ? llvm::cast<llvm::Constant>(constant) :
-//                                                   getZeroFor(type->type(context)),
-//                                                   name);
-//        context.debugBuilder->createGlobalVariableExpression(context.debugUnit,
-//                                                             name,
-//                                                             name,
-//                                                             context.debugUnit,
-//                                                             getLine(),
-//                                                             toDwarfType(type, context),
-//                                                             false);
-//        context.addGlobal(name, {newGlobal, type});
-//    }
-//    return {};
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Function::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    if (!context.hasFunction(getName()))
-//    {
-//        {
-//            std::vector<const Type*> types;
-//            std::transform(getArguments().begin(), getArguments().end(), std::back_inserter(types), [](const auto& pair)
-//            {
-//                return pair.first.get();
-//            });
-//            context.addFunction(getName(), {getReturnType(), std::move(types)});
-//            context.functionRetType = getReturnType().get();
-//        }
-//        {
-//            std::set<std::size_t> needsByVal;
-//            std::vector<llvm::Type*> types;
-//            std::size_t i = 0;
-//            bool isStruct = dynamic_cast<const StructType*>(getReturnType().get());
-//            for (auto&[type, name] : getArguments())
-//            {
-//                if (!dynamic_cast<const StructType*>(type.get()))
-//                {
-//                    types.emplace_back(type->type(context));
-//                }
-//                else
-//                {
-//                    types.emplace_back(llvm::PointerType::getUnqual(type->type(context)));
-//                    needsByVal.insert(i + (isStruct ? 2 : 1));
-//                }
-//                i++;
-//            }
-//            if (isStruct)
-//            {
-//                types.insert(types.begin(), llvm::PointerType::getUnqual(getReturnType()->type(context)));
-//            }
-//            auto* ft = llvm::FunctionType::get(isStruct ? context.builder.getVoidTy() : getReturnType()->type(context),
-//                                               types,
-//                                               false);
-//            auto* fun = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, getName(), context.module.get());
-//            if (isStruct)
-//            {
-//                fun->addAttribute(1, llvm::Attribute::get(context.context, llvm::Attribute::StructRet));
-//                fun->addAttribute(1, llvm::Attribute::get(context.context, llvm::Attribute::NoAlias));
-//            }
-//            for (auto& iter : needsByVal)
-//            {
-//                fun->addAttribute(iter, llvm::Attribute::get(context.context, llvm::Attribute::ByVal));
-//            }
-//        }
-//    }
-//    if (!getBlockStatement())
-//    {
-//        return {};
-//    }
-//    context.currentFunction = context.module->getFunction(getName());
-//    std::size_t i = 0;
-//    for (auto& iter : context.currentFunction->args())
-//    {
-//        if (iter.hasAttribute(llvm::Attribute::StructRet))
-//        {
-//            continue;
-//        }
-//        if (!getArguments()[i].second.empty())
-//        {
-//            iter.setName(getArguments()[i++].second);
-//        }
-//    }
-//
-//    std::vector<llvm::Metadata*> types;
-//    types.push_back(toDwarfType(getReturnType(), context));
-//    for (auto& iter : getArguments())
-//    {
-//        types.push_back(toDwarfType(iter.first, context));
-//    }
-//    auto* spType = context.debugBuilder->createSubroutineType({llvm::MDTuple::get(context.context, types)});
-//    auto* sp = context.debugBuilder
-//                      ->createFunction(context.debugUnit,
-//                                       getName(),
-//                                       {},
-//                                       context.debugUnit,
-//                                       getLine(),
-//                                       spType,
-//                                       false,
-//                                       true,
-//                                       getScopeLine());
-//    context.currentFunction->setSubprogram(sp);
-//    context.debugScope.push_back(sp);
-//    auto* bb = llvm::BasicBlock::Create(context.context, "entry", context.currentFunction);
-//    context.builder.SetInsertPoint(bb);
-//    context.clearScope();
-//    i = 0;
-//    emitLocation(nullptr, context);
-//    for (auto& iter : context.currentFunction->args())
-//    {
-//        if (iter.hasAttribute(llvm::Attribute::StructRet))
-//        {
-//            continue;
-//        }
-//        if (getArguments()[i].second.empty())
-//        {
-//            continue;
-//        }
-//        llvm::AllocaInst* alloca;
-//        auto createDebug = [&]
-//        {
-//            auto* local = context.debugBuilder->createParameterVariable(sp,
-//                                                                        iter.getName(),
-//                                                                        i,
-//                                                                        context.debugUnit,
-//                                                                        getLine(),
-//                                                                        toDwarfType(getArguments()[i].first, context));
-//            context.debugBuilder->insertDeclare(alloca,
-//                                                local,
-//                                                context.debugBuilder->createExpression(),
-//                                                llvm::DebugLoc::get(getLine(), 0, sp),
-//                                                context.builder.GetInsertBlock());
-//        };
-//        llvm::IRBuilder<>
-//            tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
-//        if (!iter.hasByValAttr())
-//        {
-//            alloca = tmpB.CreateAlloca(iter.getType());
-//            createDebug();
-//            alloca->setAlignment(getAlignment(iter.getType()));
-//            context.builder.CreateStore(&iter, alloca);
-//            context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first});
-//        }
-//        else
-//        {
-//            auto* ptrType = llvm::cast<llvm::PointerType>(iter.getType());
-//            alloca = tmpB.CreateAlloca(ptrType->getPointerElementType());
-//            createDebug();
-//            alloca->setAlignment(getAlignment(ptrType->getPointerElementType()));
-//            auto* zero = context.builder.getInt32(0);
-//            auto* value = context.builder.CreateInBoundsGEP(alloca, {zero, zero});
-//            context.builder.CreateStore(&iter, value);
-//            context.addValueToScope(iter.getName(), {alloca, getArguments()[i++].first});
-//        }
-//    }
-//
-//    emitLocation(getBlockStatement(), context);
-//    getBlockStatement()->codegen(context);
-//    auto& block = context.currentFunction->back();
-//    if (block.empty() || !block.back().isTerminator())
-//    {
-//        if (!getReturnType()->isVoid())
-//        {
-//            auto* type = getReturnType()->type(context);
-//            llvm::Value* value = nullptr;
-//            if (type->isIntegerTy())
-//            {
-//                value = llvm::ConstantInt::get(type, 0);
-//            }
-//            else if (type->isFloatingPointTy())
-//            {
-//                value = llvm::ConstantFP::get(type, 0);
-//            }
-//            context.builder.CreateRet(value);
-//        }
-//        else
-//        {
-//            context.builder.CreateRetVoid();
-//        }
-//    }
-//
-//    context.debugScope.pop_back();
-//
-//    context.debugBuilder->finalize();
-//    if (llvm::verifyFunction(*context.currentFunction, &llvm::errs()))
-//    {
-//        context.currentFunction->print(llvm::outs());
-//        std::terminate();
-//    }
-//
-//    return {};
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Declarations::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    emitLocation(this, context);
-//    llvm::IRBuilder<> tmpB(&context.currentFunction->getEntryBlock(), context.currentFunction->getEntryBlock().begin());
-//    for (auto&[type, name, optionalExpression] : getDeclarations())
-//    {
-//        if (auto array = std::dynamic_pointer_cast<ArrayType>(type);array && array->getSize() == 0)
-//        {
-//            if (!optionalExpression)
-//            {
-//                throw std::runtime_error("Initializer list needed to deduce size of array");
-//            }
-//            auto* result = dynamic_cast<InitializerListBlock*>(optionalExpression.get());
-//            if (!result)
-//            {
-//                if (auto* primitive = dynamic_cast<const PrimitiveType*>(array->getType().get());primitive
-//                    && primitive->getBitCount() == 8)
-//                {
-//                    auto[value, type] = dynamic_cast<InitializerListScalarExpression*>(optionalExpression.get())
-//                        ->codegen(context);
-//                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
-//                    if (value->getType()->isArrayTy() && load
-//                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
-//                    {
-//                        array->setSize(value->getType()->getArrayNumElements());
-//                    }
-//                    else
-//                    {
-//                        throw std::runtime_error("Can only initialize char array with a string literal");
-//                    }
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Initializer list needed to deduce size of array");
-//                }
-//            }
-//            else
-//            {
-//                auto elementSize = elementsNeededForType(array->getType()->type(context));
-//                std::size_t i = 0, max = std::numeric_limits<std::size_t>::lowest();
-//                for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
-//                     iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
-//                {
-//                    if (iter->first != -1)
-//                    {
-//                        max = std::max(i, max);
-//                        i = iter->first;
-//                    }
-//                    auto end = std::find_if(iter,
-//                                            iter + elementSize > result->getNonCommaExpressionsAndBlocks().end()
-//                                            ? result
-//                                                ->getNonCommaExpressionsAndBlocks().end() : iter + elementSize,
-//                                            [](auto&& value)
-//                                            {
-//                                                return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(
-//                                                    value
-//                                                        .second);
-//                                            });
-//                    if (iter == end)
-//                    {
-//                        iter++;
-//                    }
-//                    else
-//                    {
-//                        iter = end;
-//                    }
-//                }
-//                max = std::max(i, max);
-//                array->setSize(max);
-//                if (!array->getSize())
-//                {
-//                    throw std::runtime_error("Array can't be of size 0");
-//                }
-//            }
-//        }
-//        else
-//        {
-//            if (auto* result = dynamic_cast<InitializerListBlock*>(optionalExpression.get()))
-//            {
-//                if (std::any_of(result->getNonCommaExpressionsAndBlocks().begin(),
-//                                result->getNonCommaExpressionsAndBlocks().end(),
-//                                [](const auto& pair)
-//                                {
-//                                    return pair.first != -1;
-//                                }))
-//                {
-//                    throw std::runtime_error("Designators are only allowed in initializers for arrays");
-//                }
-//            }
-//        }
-//        auto* allocaType = type->type(context);
-//        auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
-//        auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope
-//                                                                           .back();
-//        auto* di = context.debugBuilder
-//                          ->createAutoVariable(sp,
-//                                               name,
-//                                               context.debugUnit,
-//                                               getLine(),
-//                                               toDwarfType(type, context));
-//        context.debugBuilder->insertDeclare(alloca,
-//                                            di,
-//                                            context.debugBuilder->createExpression(),
-//                                            llvm::DebugLoc::get(getLine(), getColumn(), sp),
-//                                            context.builder.GetInsertBlock());
-//        alloca->setAlignment(getAlignment(allocaType));
-//        context.addValueToScope(name, {alloca, type});
-//        if (optionalExpression)
-//        {
-//            if (dynamic_cast<const InitializerListScalarExpression*>(optionalExpression.get()))
-//            {
-//                if (allocaType->isArrayTy() && allocaType->getArrayElementType()->isIntegerTy()
-//                    && allocaType->getArrayElementType()->getIntegerBitWidth() == 8)
-//                {
-//                    auto[value, type] = dynamic_cast<InitializerListScalarExpression*>(optionalExpression.get())
-//                        ->codegen(context);
-//                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
-//                    if (value->getType()->isArrayTy() && load
-//                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
-//                    {
-//                        auto* zero = context.builder.getInt32(0);
-//                        context.builder.CreateMemCpy(alloca,
-//                                                     0,
-//                                                     context.builder
-//                                                            .CreateInBoundsGEP(load->getPointerOperand(), {zero, zero}),
-//                                                     0,
-//                                                     load->getType()->getArrayNumElements());
-//                    }
-//                    else
-//                    {
-//                        throw std::runtime_error("Can only initialize char array with a string literal");
-//                    }
-//                }
-//                else if (!allocaType->isArrayTy())
-//                {
-//                    auto[value, otherType] = optionalExpression->codegen(context);
-//                    castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
-//                    context.builder.CreateStore(value, alloca);
-//                }
-//                else
-//                {
-//                    throw std::runtime_error("Can't initialize array with scalar initializer");
-//                }
-//            }
-//            else if (auto result = dynamic_cast<const InitializerListBlock*>(optionalExpression.get()))
-//            {
-//                if (allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
-//                {
-//                    auto* zero = context.builder.getInt32(0);
-//                    for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
-//                    {
-//                        auto* index = context.builder.getInt32(i);
-//                        auto* member = context.builder.CreateInBoundsGEP(alloca, {zero, index});
-//                        std::visit([&context, member, type = std::dynamic_pointer_cast<ArrayType>(type)](auto&& value)
-//                                   {
-//                                       using T = std::decay_t<decltype(value)>;
-//                                       if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
-//                                       {
-//                                           match(value.getNonCommaExpressionsAndBlocks(),
-//                                                 member,
-//                                                 type->getType()->clone(),
-//                                                 context);
-//                                       }
-//                                       else
-//                                       {
-//                                           auto[newValue, otherType] = value->codegen(context);
-//                                           castPrimitive(newValue,
-//                                                         otherType->isSigned(),
-//                                                         type->getType()->type(context),
-//                                                         type->getType()->isSigned(),
-//                                                         context);
-//                                           context.builder.CreateStore(newValue, member);
-//                                       }
-//                                   }, result->getNonCommaExpressionsAndBlocks()[0].second);
-//                    }
-//                }
-//                match(result->getNonCommaExpressionsAndBlocks(), alloca, type, context);
-//            }
-//        }
-//    }
-//    return {};
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ReturnStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    emitLocation(this, context);
-//    bool isStruct = dynamic_cast<const StructType*>(context.functionRetType);
-//    if (!isStruct)
-//    {
-//        auto* retType = context.currentFunction->getReturnType();
-//        auto[value, sign] = getExpression().codegen(context);
-//        castPrimitive(value, sign->isSigned(), retType, context.functionRetType->isSigned(), context);
-//        context.builder.CreateRet(value);
-//        return {};
-//    }
-//    else
-//    {
-//        auto[value, sign] = getExpression().codegen(context);
-//        auto* args = context.currentFunction->args().begin();
-//        if (value->getType() != args->getType()->getPointerElementType())
-//        {
-//            throw std::runtime_error("Struct values are not the same");
-//        }
-//        context.builder.CreateStore(value, args);
-//        context.builder.CreateRetVoid();
-//        return {};
-//    }
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ExpressionStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    emitLocation(this, context);
-//    if (getOptionalExpression())
-//    {
-//        return getOptionalExpression()->codegen(context);
-//    }
-//    return {};
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::IfStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
-//{
-//    emitLocation(this, context);
-//    auto[value, sign] = getExpression().codegen(context);
-//    value = toBool(value, context);
-//    auto* function = context.builder.GetInsertBlock()->getParent();
-//
-//    auto* thenBB = llvm::BasicBlock::Create(context.context, "then", function);
-//    auto* elseBB = getElseBranch() ? llvm::BasicBlock::Create(context.context, "else") : nullptr;
-//    auto* mergeBB = llvm::BasicBlock::Create(context.context, "ifcont");
-//
-//    context.builder.CreateCondBr(value, thenBB, elseBB ? elseBB : mergeBB);
-//
-//    context.builder.SetInsertPoint(thenBB);
-//    getBranch().codegen(context);
-//
-//    if (!context.builder.GetInsertBlock()->getTerminator())
-//    {
-//        context.builder.CreateBr(mergeBB);
-//    }
-//
-//    if (elseBB)
-//    {
-//        function->getBasicBlockList().push_back(elseBB);
-//        context.builder.SetInsertPoint(elseBB);
-//        getElseBranch()->codegen(context);
-//        if (!context.builder.GetInsertBlock()->getTerminator())
-//        {
-//            context.builder.CreateBr(mergeBB);
-//        }
-//    }
-//
-//    function->getBasicBlockList().push_back(mergeBB);
-//    context.builder.SetInsertPoint(mergeBB);
-//
-//    return {};
-//}
-//
-//std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BlockStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BlockStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    context.pushScope();
 //    context.debugScope.push_back(context.debugBuilder->createLexicalBlock(context.debugScope.back(),
@@ -1052,7 +546,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //    void doForLoop(const OpenCL::Syntax::Expression* controlling,
 //                   const OpenCL::Syntax::Expression* post,
 //                   const OpenCL::Syntax::Statement& statement,
-//                   OpenCL::Syntax::CodegenContext& context)
+//                   OpenCL::Syntax::Context& context)
 //    {
 //        auto* function = context.builder.GetInsertBlock()->getParent();
 //
@@ -1091,7 +585,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ForStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ForStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    if (getInitial())
@@ -1103,7 +597,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ForDeclarationStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ForDeclarationStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    context.pushScope();
@@ -1119,7 +613,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::HeadWhileStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::HeadWhileStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto* function = context.builder.GetInsertBlock()->getParent();
@@ -1150,7 +644,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::FootWhileStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::FootWhileStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto* function = context.builder.GetInsertBlock()->getParent();
@@ -1181,7 +675,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Expression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Expression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto left = getNonCommaExpression().codegen(context);
@@ -1191,7 +685,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::AssignmentExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::AssignmentExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getUnaryFactor().codegen(context);
@@ -1341,7 +835,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Term::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::Term::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getCastExpression().codegen(context);
@@ -1407,7 +901,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::AdditiveExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::AdditiveExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getTerm().codegen(context);
@@ -1453,7 +947,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ShiftExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ShiftExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getAdditiveExpression().codegen(context);
@@ -1481,7 +975,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::RelationalExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::RelationalExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getShiftExpression().codegen(context);
@@ -1568,7 +1062,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::EqualityExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::EqualityExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getRelationalExpression().codegen(context);
@@ -1607,7 +1101,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::LogicalAndExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::LogicalAndExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getBitOrExpression().codegen(context);
@@ -1660,7 +1154,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::LogicalOrExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::LogicalOrExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getAndExpression().codegen(context);
@@ -1713,7 +1207,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ConditionalExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ConditionalExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[value, vsign] = getLogicalOrExpression().codegen(context);
@@ -1754,7 +1248,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BreakStatement::codegen(CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BreakStatement::codegen(Context& context) const
 //{
 //    emitLocation(this, context);
 //    context.builder.CreateBr(context.breakBlocks.back());
@@ -1762,7 +1256,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ContinueStatement::codegen(CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::ContinueStatement::codegen(Context& context) const
 //{
 //    emitLocation(this, context);
 //    context.builder.CreateBr(context.continueBlocks.back());
@@ -1770,7 +1264,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitAndExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitAndExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getEqualityExpression().codegen(context);
@@ -1789,7 +1283,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitXorExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitXorExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getBitAndExpression().codegen(context);
@@ -1808,7 +1302,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitOrExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::BitOrExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[left, sign] = getBitXorExpression().codegen(context);
@@ -1826,7 +1320,7 @@ void OpenCL::Syntax::CodegenContext::addValueToScope(const std::string& name, co
 //    return {left, sign};
 //}
 
-llvm::Type* OpenCL::Syntax::PrimitiveType::type(CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::PrimitiveType::type(Codegen::Context& context) const
 {
     if (isFloatingPoint())
     {
@@ -1853,7 +1347,7 @@ llvm::Type* OpenCL::Syntax::PrimitiveType::type(CodegenContext& context) const
     }
 }
 
-llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Codegen::Context& context) const
 {
     auto* type = getType().type(context);
     if (!type->isVoidTy())
@@ -1866,20 +1360,8 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
     }
 }
 
-//std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PrimaryExpressionIdentifier::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
-//{
-//    emitLocation(this, context);
-//    auto[value, sign] = context.getNamedValue(getIdentifier());
-//    if (!value)
-//    {
-//        return {context.module->getFunction(getIdentifier()), sign};
-//    }
-//    return {context.builder.CreateLoad(value), sign};
-//}
-//
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PrimaryExpressionConstant::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PrimaryExpressionConstant::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    static std::unordered_map<std::string, llvm::Value*> cache;
@@ -1942,7 +1424,7 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PrimaryExpressionParenthese::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    return getExpression().codegen(context);
@@ -1955,14 +1437,14 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //
 //std::pair<llvm::Value*,
 //          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionPrimaryExpression::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    return getPrimaryExpression().codegen(context);
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionSubscript::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[value, sign] = getPostFixExpression().codegen(context);
@@ -1989,7 +1471,7 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionDot::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionDot::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto* structValue = getPostFixExpression().codegen(context).first;
@@ -2019,14 +1501,14 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //
 //std::pair<llvm::Value*,
 //          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::UnaryExpressionPostFixExpression::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    return getPostFixExpression().codegen(context);
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::UnaryExpressionUnaryOperator::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[rhs, sign] = getUnaryExpression().codegen(context);
@@ -2151,7 +1633,7 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::UnaryExpressionSizeOf::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::UnaryExpressionSizeOf::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Type>>
@@ -2171,7 +1653,7 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::CastExpression::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::CastExpression::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    return std::visit([&context](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Type>>
@@ -2192,7 +1674,7 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionFunctionCall::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto value = getPostFixExpression().codegen(context).first;
@@ -2254,13 +1736,13 @@ llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Syntax::CodegenContext& co
 //    }
 //}
 
-llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Syntax::CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Codegen::Context& context) const
 {
     return llvm::ArrayType::get(getType()->type(context), getSize());
 }
 
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionIncrement::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[value, sign] = getPostFixExpression().codegen(context);
@@ -2291,7 +1773,7 @@ llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionDecrement::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[value, sign] = getPostFixExpression().codegen(context);
@@ -2322,10 +1804,10 @@ llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::StructOrUnionDeclaration::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::StructOrUnionDeclaration::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
-//    OpenCL::Syntax::CodegenContext::StructOrUnion structType;
+//    OpenCL::Syntax::Context::StructOrUnion structType;
 //    std::vector<llvm::Type*> types;
 //    auto* sp = context.debugScope.empty() ? context.debugUnit : context.debugScope.back();
 //    auto* llvmStruct = llvm::StructType::create(context.context, (isUnion() ? "union." : "struct.") + getName());
@@ -2418,7 +1900,7 @@ llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::EnumDeclaration::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::EnumDeclaration::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    if (!getName().empty())
 //    {
@@ -2435,18 +1917,18 @@ llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Syntax::CodegenContext& cont
 //    return {};
 //}
 
-llvm::Type* OpenCL::Syntax::StructType::type(OpenCL::Syntax::CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::StructType::type(OpenCL::Codegen::Context& context) const
 {
     return context.module->getTypeByName("struct." + getName());
 }
 
-llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Codegen::Context& context) const
 {
     return context.module->getTypeByName("union." + getName());
 }
 
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionArrow::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionArrow::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto* structValue = getPostFixExpression().codegen(context).first;
@@ -2474,7 +1956,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::SwitchStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::SwitchStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto[value, sign] = getExpression().codegen(context);
@@ -2508,7 +1990,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::DefaultStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::DefaultStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    if (context.switchStack.empty())
@@ -2543,7 +2025,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::CaseStatement::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::CaseStatement::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    if (context.switchStack.empty())
@@ -2615,7 +2097,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionTypeInitializer::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::PostFixExpressionTypeInitializer::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    emitLocation(this, context);
 //    auto* type = getType()->type(context);
@@ -2660,7 +2142,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::TypedefDeclaration::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::TypedefDeclaration::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    if (getOptionalStructOrUnion())
 //    {
@@ -2670,13 +2152,13 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //}
 //
 //std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::InitializerListScalarExpression::codegen(
-//    OpenCL::Syntax::CodegenContext& context) const
+//    OpenCL::Syntax::Context& context) const
 //{
 //    return getExpression().codegen(context);
 //}
 //
 //std::pair<llvm::Value*,
-//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::InitializerListBlock::codegen(OpenCL::Syntax::CodegenContext& context) const
+//          std::shared_ptr<OpenCL::Syntax::Type>> OpenCL::Syntax::InitializerListBlock::codegen(OpenCL::Syntax::Context& context) const
 //{
 //    if (getNonCommaExpressionsAndBlocks().size() == 1)
 //    {
@@ -2696,7 +2178,7 @@ llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Syntax::CodegenContext& cont
 //    return {};
 //}
 
-llvm::DIType* OpenCL::Syntax::PrimitiveType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::PrimitiveType::debugType(OpenCL::Codegen::Context& context) const
 {
     if (isVoid())
     {
@@ -2730,7 +2212,7 @@ llvm::DIType* OpenCL::Syntax::PrimitiveType::debugType(OpenCL::Syntax::CodegenCo
     }
 }
 
-llvm::DIType* OpenCL::Syntax::PointerType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::PointerType::debugType(OpenCL::Codegen::Context& context) const
 {
     auto* result = context.debugBuilder->createPointerType(getType().debugType(context), 64, 64);
     if (isConst())
@@ -2743,7 +2225,7 @@ llvm::DIType* OpenCL::Syntax::PointerType::debugType(OpenCL::Syntax::CodegenCont
     }
 }
 
-llvm::DIType* OpenCL::Syntax::ArrayType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::ArrayType::debugType(OpenCL::Codegen::Context& context) const
 {
     auto* elemenType = getType()->debugType(context);
     auto* llvmArrayType = type(context);
@@ -2755,7 +2237,7 @@ llvm::DIType* OpenCL::Syntax::ArrayType::debugType(OpenCL::Syntax::CodegenContex
                                                                            ->getOrCreateSubrange(0, getSize())));
 }
 
-llvm::DIType* OpenCL::Syntax::StructType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::StructType::debugType(OpenCL::Codegen::Context& context) const
 {
     auto* result = cache.at(getName());
     if (isConst())
@@ -2768,7 +2250,7 @@ llvm::DIType* OpenCL::Syntax::StructType::debugType(OpenCL::Syntax::CodegenConte
     }
 }
 
-llvm::DIType* OpenCL::Syntax::UnionType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::UnionType::debugType(OpenCL::Codegen::Context& context) const
 {
     auto* result = cache.at(getName());
     if (isConst())
@@ -2781,7 +2263,7 @@ llvm::DIType* OpenCL::Syntax::UnionType::debugType(OpenCL::Syntax::CodegenContex
     }
 }
 
-llvm::DIType* OpenCL::Syntax::EnumType::debugType(OpenCL::Syntax::CodegenContext& context) const
+llvm::DIType* OpenCL::Syntax::EnumType::debugType(OpenCL::Codegen::Context& context) const
 {
     auto* result = cache.at(getName());
     if (isConst())
@@ -2794,301 +2276,776 @@ llvm::DIType* OpenCL::Syntax::EnumType::debugType(OpenCL::Syntax::CodegenContext
     }
 }
 
-llvm::Type* OpenCL::Syntax::EnumType::type(OpenCL::Syntax::CodegenContext& context) const
+llvm::Type* OpenCL::Syntax::EnumType::type(OpenCL::Codegen::Context& context) const
 {
     return context.builder.getInt32Ty();
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Expression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const Syntax::Expression& node)
 {
-    //emitLocation(this, context);
+    emitLocation(&node, *this);
     auto left = node.getNonCommaExpression().accept(*this);
-    auto right = node.getOptionalNonCommaExpression() ? getOptionalNonCommaExpression()->codegen(context)
-                                                 : decltype(getOptionalNonCommaExpression()->codegen(context)){};
+    auto right = node.getOptionalNonCommaExpression() ? node.getOptionalNonCommaExpression()->accept(*this)
+                                                      : decltype(node.getOptionalNonCommaExpression()->accept(*this)){};
     return right.first ? right : left;
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionIdentifier& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
+{
+    emitLocation(&node, *this);
+    auto[value, sign] = getNamedValue(node.getIdentifier());
+    if (!value)
+    {
+        return {module->getFunction(node.getIdentifier()), sign};
+    }
+    return {builder.CreateLoad(value), sign};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionConstant& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpressionParenthese& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PrimaryExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionSubscript& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionIncrement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionDecrement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionDot& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionArrow& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionFunctionCall& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::PostFixExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::AssignmentExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpressionSizeOf& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::UnaryExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::CastExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Term& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Term& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::AdditiveExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ShiftExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::RelationalExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::EqualityExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitAndExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitXorExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BitOrExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::LogicalAndExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::LogicalOrExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ConditionalExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::NonCommaExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::NonCommaExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ReturnStatement& node)
+{
+    emitLocation(&node, *this);
+    bool isStruct = dynamic_cast<const Syntax::StructType*>(functionRetType);
+    if (!isStruct)
+    {
+        auto* retType = currentFunction->getReturnType();
+        auto[value, sign] = node.getExpression().accept(*this);
+        castPrimitive(value, sign->isSigned(), retType, functionRetType->isSigned(), *this);
+        builder.CreateRet(value);
+        return {};
+    }
+    else
+    {
+        auto[value, sign] = node.getExpression().accept(*this);
+        auto* args = currentFunction->args().begin();
+        if (value->getType() != args->getType()->getPointerElementType())
+        {
+            throw std::runtime_error("Struct values are not the same");
+        }
+        builder.CreateStore(value, args);
+        builder.CreateRetVoid();
+        return {};
+    }
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExpressionStatement& node)
+{
+    emitLocation(&node, *this);
+    if (node.getOptionalExpression())
+    {
+        return node.getOptionalExpression()->accept(*this);
+    }
+    return {};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::IfStatement& node)
+{
+    emitLocation(&node, *this);
+    auto[value, sign] = node.getExpression().accept(*this);
+    value = toBool(value, *this);
+    auto* function = builder.GetInsertBlock()->getParent();
+
+    auto* thenBB = llvm::BasicBlock::Create(context, "then", function);
+    auto* elseBB = node.getElseBranch() ? llvm::BasicBlock::Create(context, "else") : nullptr;
+    auto* mergeBB = llvm::BasicBlock::Create(context, "ifcont");
+
+    builder.CreateCondBr(value, thenBB, elseBB ? elseBB : mergeBB);
+
+    builder.SetInsertPoint(thenBB);
+    node.getBranch().accept(*this);
+
+    if (!builder.GetInsertBlock()->getTerminator())
+    {
+        builder.CreateBr(mergeBB);
+    }
+
+    if (elseBB)
+    {
+        function->getBasicBlockList().push_back(elseBB);
+        builder.SetInsertPoint(elseBB);
+        node.getElseBranch()->accept(*this);
+        if (!builder.GetInsertBlock()->getTerminator())
+        {
+            builder.CreateBr(mergeBB);
+        }
+    }
+
+    function->getBasicBlockList().push_back(mergeBB);
+    builder.SetInsertPoint(mergeBB);
+
+    return {};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ReturnStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::DefaultStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ExpressionStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::IfStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BlockStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::SwitchStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::DefaultStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerListScalarExpression& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::CaseStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerListBlock& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BlockStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ForStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
+{
+    emitLocation(&node, *this);
+    llvm::IRBuilder<> tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
+    for (auto&[type, name, optionalExpression] : node.getDeclarations())
+    {
+        if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(type);array && array->getSize() == 0)
+        {
+            if (!optionalExpression)
+            {
+                throw std::runtime_error("Initializer list needed to deduce size of array");
+            }
+            auto* result = dynamic_cast<Syntax::InitializerListBlock*>(optionalExpression.get());
+            if (!result)
+            {
+                if (auto* primitive = dynamic_cast<const Syntax::PrimitiveType*>(array->getType().get());primitive
+                    && primitive->getBitCount() == 8)
+                {
+                    auto[value, type] = dynamic_cast<Syntax::InitializerListScalarExpression*>(optionalExpression.get())
+                        ->accept(*this);
+                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
+                    if (value->getType()->isArrayTy() && load
+                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
+                    {
+                        array->setSize(value->getType()->getArrayNumElements());
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Can only initialize char array with a string literal");
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Initializer list needed to deduce size of array");
+                }
+            }
+            else
+            {
+                auto elementSize = elementsNeededForType(array->getType()->type(*this));
+                std::size_t i = 0, max = std::numeric_limits<std::size_t>::lowest();
+                for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
+                     iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
+                {
+                    if (iter->first != -1)
+                    {
+                        max = std::max(i, max);
+                        i = iter->first;
+                    }
+                    auto end = std::find_if(iter,
+                                            iter + elementSize > result->getNonCommaExpressionsAndBlocks().end()
+                                            ? result
+                                                ->getNonCommaExpressionsAndBlocks().end() : iter + elementSize,
+                                            [](auto&& value)
+                                            {
+                                                return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(
+                                                    value
+                                                        .second);
+                                            });
+                    if (iter == end)
+                    {
+                        iter++;
+                    }
+                    else
+                    {
+                        iter = end;
+                    }
+                }
+                max = std::max(i, max);
+                array->setSize(max);
+                if (!array->getSize())
+                {
+                    throw std::runtime_error("Array can't be of size 0");
+                }
+            }
+        }
+        else
+        {
+            if (auto* result = dynamic_cast<Syntax::InitializerListBlock*>(optionalExpression.get()))
+            {
+                if (std::any_of(result->getNonCommaExpressionsAndBlocks().begin(),
+                                result->getNonCommaExpressionsAndBlocks().end(),
+                                [](const auto& pair)
+                                {
+                                    return pair.first != -1;
+                                }))
+                {
+                    throw std::runtime_error("Designators are only allowed in initializers for arrays");
+                }
+            }
+        }
+        auto* allocaType = type->type(*this);
+        auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
+        auto* sp = debugScope.empty() ? debugUnit : debugScope
+            .back();
+        auto* di = debugBuilder
+            ->createAutoVariable(sp,
+                                 name,
+                                 debugUnit,
+                                 node.getLine(),
+                                 toDwarfType(type, *this));
+        debugBuilder->insertDeclare(alloca,
+                                    di,
+                                    debugBuilder->createExpression(),
+                                    llvm::DebugLoc::get(node.getLine(), node.getColumn(), sp),
+                                    builder.GetInsertBlock());
+        alloca->setAlignment(getAlignment(allocaType));
+        addValueToScope(name, {alloca, type});
+        if (optionalExpression)
+        {
+            if (dynamic_cast<const Syntax::InitializerListScalarExpression*>(optionalExpression.get()))
+            {
+                if (allocaType->isArrayTy() && allocaType->getArrayElementType()->isIntegerTy()
+                    && allocaType->getArrayElementType()->getIntegerBitWidth() == 8)
+                {
+                    auto[value, type] = dynamic_cast<Syntax::InitializerListScalarExpression*>(optionalExpression.get())
+                        ->accept(*this);
+                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
+                    if (value->getType()->isArrayTy() && load
+                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
+                    {
+                        auto* zero = builder.getInt32(0);
+                        builder.CreateMemCpy(alloca,
+                                             0,
+                                             builder
+                                                 .CreateInBoundsGEP(load->getPointerOperand(), {zero, zero}),
+                                             0,
+                                             load->getType()->getArrayNumElements());
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Can only initialize char array with a string literal");
+                    }
+                }
+                else if (!allocaType->isArrayTy())
+                {
+                    auto[value, otherType] = optionalExpression->accept(*this);
+                    castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), *this);
+                    builder.CreateStore(value, alloca);
+                }
+                else
+                {
+                    throw std::runtime_error("Can't initialize array with scalar initializer");
+                }
+            }
+            else if (auto result = dynamic_cast<const Syntax::InitializerListBlock*>(optionalExpression.get()))
+            {
+                if (allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
+                {
+                    auto* zero = builder.getInt32(0);
+                    for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
+                    {
+                        auto* index = builder.getInt32(i);
+                        auto* member = builder.CreateInBoundsGEP(alloca, {zero, index});
+                        std::visit([this, member,
+                                       type = std::dynamic_pointer_cast<Syntax::ArrayType>(type)](auto&& value)
+                                   {
+                                       using T = std::decay_t<decltype(value)>;
+                                       if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
+                                       {
+                                           match(value.getNonCommaExpressionsAndBlocks(),
+                                                 member,
+                                                 type->getType()->clone(),
+                                                 *this);
+                                       }
+                                       else
+                                       {
+                                           auto[newValue, otherType] = value.accept(*this);
+                                           castPrimitive(newValue,
+                                                         otherType->isSigned(),
+                                                         type->getType()->type(*this),
+                                                         type->getType()->isSigned(),
+                                                         *this);
+                                           builder.CreateStore(newValue, member);
+                                       }
+                                   }, result->getNonCommaExpressionsAndBlocks()[0].second);
+                    }
+                }
+                match(result->getNonCommaExpressionsAndBlocks(), alloca, type, *this);
+            }
+        }
+    }
+    return {};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BlockItem& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerListScalarExpression& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerListBlock& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::HeadWhileStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::InitializerList& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FootWhileStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Declarations& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BreakStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BlockItem& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ForDeclarationStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Statement& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::HeadWhileStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructOrUnionDeclaration& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::FootWhileStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EnumDeclaration& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::BreakStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::TypedefDeclaration& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::ContinueStatement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
+{
+    if (!hasFunction(node.getName()))
+    {
+        {
+            std::vector<const Syntax::Type*> types;
+            std::transform(node.getArguments().begin(),
+                           node.getArguments().end(),
+                           std::back_inserter(types),
+                           [](const auto& pair)
+                           {
+                               return pair.first.get();
+                           });
+            addFunction(node.getName(), {node.getReturnType(), std::move(types)});
+            functionRetType = node.getReturnType().get();
+        }
+        {
+            std::set<std::size_t> needsByVal;
+            std::vector<llvm::Type*> types;
+            std::size_t i = 0;
+            bool isStruct = dynamic_cast<const Syntax::StructType*>(node.getReturnType().get());
+            for (auto&[type, name] : node.getArguments())
+            {
+                if (!dynamic_cast<const Syntax::StructType*>(type.get()))
+                {
+                    types.emplace_back(type->type(*this));
+                }
+                else
+                {
+                    types.emplace_back(llvm::PointerType::getUnqual(type->type(*this)));
+                    needsByVal.insert(i + (isStruct ? 2 : 1));
+                }
+                i++;
+            }
+            if (isStruct)
+            {
+                types.insert(types.begin(), llvm::PointerType::getUnqual(node.getReturnType()->type(*this)));
+            }
+            auto* ft = llvm::FunctionType::get(isStruct ? builder.getVoidTy() : node.getReturnType()->type(*this),
+                                               types,
+                                               false);
+            auto* fun = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node.getName(), module.get());
+            if (isStruct)
+            {
+                fun->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::StructRet));
+                fun->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::NoAlias));
+            }
+            for (auto& iter : needsByVal)
+            {
+                fun->addAttribute(iter, llvm::Attribute::get(context, llvm::Attribute::ByVal));
+            }
+        }
+    }
+    if (!node.getBlockStatement())
+    {
+        return {};
+    }
+    currentFunction = module->getFunction(node.getName());
+    std::size_t i = 0;
+    for (auto& iter : currentFunction->args())
+    {
+        if (iter.hasAttribute(llvm::Attribute::StructRet))
+        {
+            continue;
+        }
+        if (!node.getArguments()[i].second.empty())
+        {
+            iter.setName(node.getArguments()[i++].second);
+        }
+    }
+
+    std::vector<llvm::Metadata*> types;
+    types.push_back(toDwarfType(node.getReturnType(), *this));
+    for (auto& iter : node.getArguments())
+    {
+        types.push_back(toDwarfType(iter.first, *this));
+    }
+    auto* spType = debugBuilder->createSubroutineType({llvm::MDTuple::get(context, types)});
+    auto* sp = debugBuilder
+        ->createFunction(debugUnit,
+                         node.getName(),
+                         {},
+                         debugUnit,
+                         node.getLine(),
+                         spType,
+                         false,
+                         true,
+                         node.getScopeLine());
+    currentFunction->setSubprogram(sp);
+    debugScope.push_back(sp);
+    auto* bb = llvm::BasicBlock::Create(context, "entry", currentFunction);
+    builder.SetInsertPoint(bb);
+    clearScope();
+    i = 0;
+    emitLocation<void>(nullptr, *this);
+    for (auto& iter : currentFunction->args())
+    {
+        if (iter.hasAttribute(llvm::Attribute::StructRet))
+        {
+            continue;
+        }
+        if (node.getArguments()[i].second.empty())
+        {
+            continue;
+        }
+        llvm::AllocaInst* alloca;
+        auto createDebug = [&]
+        {
+            auto* local = debugBuilder->createParameterVariable(sp,
+                                                                iter.getName(),
+                                                                i,
+                                                                debugUnit,
+                                                                node.getLine(),
+                                                                toDwarfType(node.getArguments()[i].first, *this));
+            debugBuilder->insertDeclare(alloca,
+                                        local,
+                                        debugBuilder->createExpression(),
+                                        llvm::DebugLoc::get(node.getLine(), 0, sp),
+                                        builder.GetInsertBlock());
+        };
+        llvm::IRBuilder<>
+            tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
+        if (!iter.hasByValAttr())
+        {
+            alloca = tmpB.CreateAlloca(iter.getType());
+            createDebug();
+            alloca->setAlignment(getAlignment(iter.getType()));
+            builder.CreateStore(&iter, alloca);
+            addValueToScope(iter.getName(), {alloca, node.getArguments()[i++].first});
+        }
+        else
+        {
+            auto* ptrType = llvm::cast<llvm::PointerType>(iter.getType());
+            alloca = tmpB.CreateAlloca(ptrType->getPointerElementType());
+            createDebug();
+            alloca->setAlignment(getAlignment(ptrType->getPointerElementType()));
+            auto* zero = builder.getInt32(0);
+            auto* value = builder.CreateInBoundsGEP(alloca, {zero, zero});
+            builder.CreateStore(&iter, value);
+            addValueToScope(iter.getName(), {alloca, node.getArguments()[i++].first});
+        }
+    }
+
+    emitLocation(node.getBlockStatement(), *this);
+    node.getBlockStatement()->accept(*this);
+    auto& block = currentFunction->back();
+    if (block.empty() || !block.back().isTerminator())
+    {
+        if (!node.getReturnType()->isVoid())
+        {
+            auto* type = node.getReturnType()->type(*this);
+            llvm::Value* value = nullptr;
+            if (type->isIntegerTy())
+            {
+                value = llvm::ConstantInt::get(type, 0);
+            }
+            else if (type->isFloatingPointTy())
+            {
+                value = llvm::ConstantFP::get(type, 0);
+            }
+            builder.CreateRet(value);
+        }
+        else
+        {
+            builder.CreateRetVoid();
+        }
+    }
+
+    debugScope.pop_back();
+
+    debugBuilder->finalize();
+    if (llvm::verifyFunction(*currentFunction, &llvm::errs()))
+    {
+        currentFunction->print(llvm::outs());
+        std::terminate();
+    }
+
+    return {};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& node)
+{
+    //TODO: Make array size deduction and etc work
+    for (auto&[type, name, optionalValue] : node.getDeclarations())
+    {
+        auto[constant, sign] = optionalValue ? optionalValue->accept(*this) : decltype(optionalValue
+            ->accept(*this)){};
+        if (constant
+            && (constant->getType() != type->type(*this) || (sign && sign->isSigned()) != type->isSigned()))
+        {
+            castPrimitive(constant, sign->isSigned(), type->type(*this), type->isSigned(), *this);
+        }
+        if (constant && !llvm::isa<llvm::Constant>(constant))
+        {
+            throw std::runtime_error("Can only use constant expression to initialize global variable");
+        }
+
+        auto* newGlobal = new llvm::GlobalVariable(*module,
+                                                   type->type(*this),
+                                                   type->isConst(),
+                                                   llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
+                                                   constant ? llvm::cast<llvm::Constant>(constant) :
+                                                   getZeroFor(type->type(*this)),
+                                                   name);
+        debugBuilder->createGlobalVariableExpression(debugUnit,
+                                                     name,
+                                                     name,
+                                                     debugUnit,
+                                                     node.getLine(),
+                                                     toDwarfType(type, *this),
+                                                     false);
+        addGlobal(name, {newGlobal, type});
+    }
+    return {};
+}
+
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Global& node)
 {
 
 }
 
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Statement& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Program& node)
 {
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::StructOrUnionDeclaration& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::EnumDeclaration& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::TypedefDeclaration& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Function& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::GlobalDeclaration& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Global& node)
-{
-
-}
-
-void OpenCL::Codegen::CodegenVisitor::visit(OpenCL::Syntax::Program& node)
-{
-
+    module = std::make_unique<llvm::Module>("main", context);
+    std::string error;
+    const std::string tripleStr = llvm::sys::getProcessTriple();
+    llvm::Triple t(tripleStr);
+    if (t.isOSBinFormatCOFF())
+    {
+        t.setObjectFormat(llvm::Triple::ELF);
+    }
+    auto target = llvm::TargetRegistry::lookupTarget(t.str(), error);
+    if (!target)
+    {
+        throw std::runtime_error(error);
+    }
+    auto targetMachine = target->createTargetMachine(t.str(), "generic", "", {}, {});
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(t.str());
+    debugBuilder = new llvm::DIBuilder(*module);
+    debugBuilder->finalize();
+    debugUnit = debugBuilder->createFile("input.c", "../src");
+    debugBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C99, debugUnit,
+                                    "OpenCL Compiler", false, "", 0);
+    for (auto& iter : node.getGlobals())
+    {
+        iter.accept(*this);
+    }
+    debugBuilder->finalize();
 }

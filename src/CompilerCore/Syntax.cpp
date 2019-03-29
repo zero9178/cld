@@ -219,7 +219,7 @@ namespace
     };
 }
 
-void OpenCL::Syntax::NodeVisitor::visit(const Visitable& node)
+OpenCL::Syntax::NodeVisitor::retType OpenCL::Syntax::NodeVisitor::visit(const Visitable&)
 {
     throw std::runtime_error("Visit failed");
 }
