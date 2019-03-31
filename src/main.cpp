@@ -1,6 +1,7 @@
 #include "CompilerCore/Lexer.hpp"
 #include "CompilerCore/Parser.hpp"
 #include "CompilerCore/Preprocessor.hpp"
+#include "CompilerCore/Codegen.hpp"
 
 #include <iostream>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -33,12 +34,10 @@ int main()
     llvm::InitializeNativeTargetAsmPrinter();
     LLVMLinkInMCJIT();
 
-    OpenCL::Syntax::CodegenContext context;
+    OpenCL::Codegen::Context context;
     auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
     auto node = OpenCL::Parser::buildTree(std::move(result));
     context.visit(node);
-
-    //node.codegen(context);
 
     context.module->print(llvm::outs(), nullptr);
 

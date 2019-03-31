@@ -133,15 +133,36 @@ namespace OpenCL::Syntax
 
     class Program;
 
-    class Visitable;
-
     class NodeVisitor
     {
     public:
 
-        using retType = std::pair<llvm::Value*,std::shared_ptr<Type>>;
+        struct ReturnInterface
+        {
+            virtual ~ReturnInterface() = default;
 
-        virtual retType visit(const Visitable& node);
+            ReturnInterface(const ReturnInterface&) = delete;
+
+            ReturnInterface(ReturnInterface&&) = delete;
+
+            ReturnInterface& operator=(const ReturnInterface&) = delete;
+
+            ReturnInterface& operator=(ReturnInterface&&) = delete;
+        };
+
+    private:
+
+        using retType = ReturnInterface*;
+        std::vector<std::unique_ptr<ReturnInterface>> m_returnTypes;
+
+    public:
+
+        template <class T,class...Args>
+        T* newReturn(Args&&...arguments)
+        {
+            static_assert(std::is_base_of_v<ReturnInterface, T>);
+            return m_returnTypes.emplace_back(std::make_unique<T>(std::forward<Args>(arguments)...)).get();
+        }
 
         virtual retType visit(const Expression& node) = 0;
 
@@ -260,15 +281,28 @@ namespace OpenCL::Syntax
         virtual retType visit(const Program& node) = 0;
     };
 
+    template <class T>
     class Visitable
     {
+        struct ReturnType : NodeVisitor::ReturnInterface
+        {
+            T value;
+
+            operator T() const noexcept
+            {
+                return value;
+            }
+        };
+
     public:
 
-        virtual NodeVisitor::retType accept(NodeVisitor& visitor) const = 0;
+        using retType = ReturnType;
+
+        virtual retType* accept(NodeVisitor& visitor) const = 0;
     };
 
     template <class T>
-    class Node : public Visitable
+    class Node : public Visitable<std::pair<llvm::Value*, std::shared_ptr<Type>>>
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
@@ -298,10 +332,12 @@ namespace OpenCL::Syntax
             return m_column;
         }
 
-        NodeVisitor::retType accept(NodeVisitor& visitor) const final
+        retType* accept(NodeVisitor& visitor) const final
         {
             static_assert(std::is_final_v<T>);
-            return visitor.visit(*static_cast<const T*>(this));
+            auto ret = dynamic_cast<retType*>(visitor.visit(*static_cast<const T*>(this)));
+            assert(ret);
+            return ret;
         }
 
         using constantVariant = std::variant<std::int32_t,
@@ -637,6 +673,8 @@ namespace OpenCL::Syntax
     public:
 
         PrimaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
     };
 
     /**
@@ -1511,6 +1549,8 @@ namespace OpenCL::Syntax
     public:
 
         InitializerList(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
     };
 
     /**
@@ -1520,7 +1560,7 @@ namespace OpenCL::Syntax
      */
     class Declarations final : public Node<Declarations>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string,std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
@@ -1533,8 +1573,8 @@ namespace OpenCL::Syntax
                                      std::unique_ptr<InitializerList>>>& getDeclarations() const;
 
         std::vector<std::tuple<std::shared_ptr<Type>,
-                                     std::string,
-                                     std::unique_ptr<InitializerList>>>& getDeclarations();
+                               std::string,
+                               std::unique_ptr<InitializerList>>>& getDeclarations();
     };
 
     /**
@@ -1807,7 +1847,7 @@ namespace OpenCL::Syntax
      */
     class GlobalDeclaration final : public Node<GlobalDeclaration>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string,std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
@@ -1827,7 +1867,11 @@ namespace OpenCL::Syntax
     */
     class Global final : public Node<Global>
     {
-        using variant = std::variant<StructOrUnionDeclaration, TypedefDeclaration, GlobalDeclaration, EnumDeclaration,Function>;
+        using variant = std::variant<StructOrUnionDeclaration,
+                                     TypedefDeclaration,
+                                     GlobalDeclaration,
+                                     EnumDeclaration,
+                                     Function>;
         variant m_variant;
 
     public:

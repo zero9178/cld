@@ -24,7 +24,7 @@ llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object O
 
 add_library(Lexer src/CompilerCore/Lexer.cpp  src/CompilerCore/Preprocessor.cpp)
 
-add_library(CompilerCore src/CompilerCore/Parser.cpp src/CompilerCore/Syntax.cpp src/CompilerCore/Codegen.cpp)
+add_library(CompilerCore src/CompilerCore/Parser.cpp src/CompilerCore/Syntax.cpp src/CompilerCore/Codegen.cpp src/CompilerCore/CovariantUniquePtr.hpp)
 target_link_libraries(CompilerCore PUBLIC ${llvm_libs} Threads::Threads Lexer)
 
 add_executable(OpenCLParser src/main.cpp)

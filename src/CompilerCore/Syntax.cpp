@@ -219,11 +219,6 @@ namespace
     };
 }
 
-OpenCL::Syntax::NodeVisitor::retType OpenCL::Syntax::NodeVisitor::visit(const Visitable&)
-{
-    throw std::runtime_error("Visit failed");
-}
-
 OpenCL::Syntax::Program::Program(std::vector<Global>&& globals) noexcept : m_globals(std::move(
     globals))
 {
@@ -1921,14 +1916,14 @@ OpenCL::Syntax::CaseStatement::CaseStatement(std::uint64_t line,
 
 }
 
-//const OpenCL::Syntax::Node::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
-//{
-//    return m_constant;
-//}
-
 const OpenCL::Syntax::Statement* OpenCL::Syntax::CaseStatement::getStatement() const
 {
     return m_statement.get();
+}
+
+const OpenCL::Syntax::Node<OpenCL::Syntax::CaseStatement>::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
+{
+    return m_constant;
 }
 
 bool OpenCL::Syntax::Type::isSigned() const
@@ -2134,6 +2129,11 @@ OpenCL::Syntax::PrimaryExpression::PrimaryExpression(std::uint64_t line,
     column), m_variant(std::move(variant))
 {}
 
+const OpenCL::Syntax::PrimaryExpression::variant& OpenCL::Syntax::PrimaryExpression::getVariant() const
+{
+    return m_variant;
+}
+
 OpenCL::Syntax::PostFixExpression::PostFixExpression(std::uint64_t line,
                                                      std::uint64_t column,
                                                      OpenCL::Syntax::PostFixExpression::variant&& variant) : Node(
@@ -2180,6 +2180,11 @@ OpenCL::Syntax::InitializerList::InitializerList(std::uint64_t line,
                                                                                                             m_variant(
                                                                                                                 std::move(variant))
 {}
+
+const OpenCL::Syntax::InitializerList::variant& OpenCL::Syntax::InitializerList::getVariant() const
+{
+    return m_variant;
+}
 
 OpenCL::Syntax::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::BlockItem::variant&& variant)
     : Node(line, column), m_variant(std::move(variant))

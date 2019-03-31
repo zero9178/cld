@@ -1,7 +1,7 @@
 
 #define NAMESIZE 31
 
-#define DOUBLE(x) (2 * (x))
+#define DOUBLE(x) x
 
 typedef struct TreeNode
 {
