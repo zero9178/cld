@@ -362,7 +362,7 @@ namespace
                                                     }
                                                     else
                                                     {
-                                                        return *value.accept(context);
+                                                        return value.accept(context)->value;
                                                     }
                                                 }, list[0].second);
             castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
@@ -739,16 +739,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     auto[value, sign] = getNamedValue(node.getIdentifier());
     if (!value)
     {
-        return newReturn<NodeRetType>(module->getFunction(node.getIdentifier()), sign);
+        return node.returnValue({module->getFunction(node.getIdentifier()), sign});
     }
-    return newReturn<NodeRetType>(builder.CreateLoad(value), sign);
+    return node.returnValue({builder.CreateLoad(value), sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     emitLocation(&node, *this);
     static std::unordered_map<std::string, llvm::Value*> cache;
-    return newReturn<NodeRetType>(std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>
+    return node.returnValue(std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>
                       {
                           using T = std::decay_t<decltype(value)>;
                           if constexpr(std::is_same_v<T, std::int32_t>)
@@ -837,15 +837,15 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         auto* arrayPointer = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
         auto* index = node.getExpression().accept(*this)->value.first;
         auto* zero = builder.getIntN(index->getType()->getIntegerBitWidth(), 0);
-        return newReturn<NodeRetType>(builder.CreateLoad(builder.CreateInBoundsGEP(arrayPointer, {zero, index})),
-                arrayType->getType()->clone());
+        return node.returnValue({builder.CreateLoad(builder.CreateInBoundsGEP(arrayPointer, {zero, index})),
+                arrayType->getType()->clone()});
     }
     else if (llvm::isa<llvm::PointerType>(value->getType()))
     {
         auto pointerType = std::dynamic_pointer_cast<Syntax::PointerType>(sign);
         auto* index = node.getExpression().accept(*this)->value.first;
-        return newReturn<NodeRetType>(builder.CreateLoad(builder.CreateInBoundsGEP(value, index)),
-                pointerType->getType().clone());
+        return node.returnValue({builder.CreateLoad(builder.CreateInBoundsGEP(value, index)),
+                pointerType->getType().clone()});
     }
     else
     {
@@ -880,7 +880,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         throw std::runtime_error("Can't increment value that is not an integer or floating point type");
     }
     builder.CreateStore(newValue, load->getPointerOperand());
-    return newReturn<NodeRetType>(value, sign);
+    return node.returnValue({value, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
@@ -910,7 +910,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         throw std::runtime_error("Can't increment value that is not an integer or floating point type");
     }
     builder.CreateStore(newValue, load->getPointerOperand());
-    return newReturn<NodeRetType>(value, sign);
+    return node.returnValue({value, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
@@ -930,14 +930,14 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         auto* index = builder.getInt32(structInfo.order.at(node.getIdentifier()));
         auto memberType = structInfo.types.at(index->getValue().getLimitedValue());
         auto* pointer = builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, index});
-        return newReturn<NodeRetType>(builder.CreateLoad(pointer), memberType);
+        return node.returnValue({builder.CreateLoad(pointer), memberType});
     }
     else
     {
         auto memberType = structInfo.types.at(structInfo.order.at(node.getIdentifier()));
         auto* pointer = builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, zero});
         auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(*this)));
-        return newReturn<NodeRetType>(builder.CreateLoad(cast), memberType);
+        return node.returnValue({builder.CreateLoad(cast), memberType});
     }
 }
 
@@ -957,14 +957,14 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         auto* index = builder.getInt32(structInfo.order[node.getIdentifier()]);
         auto memberType = structInfo.types[index->getValue().getLimitedValue()];
         auto* pointer = builder.CreateInBoundsGEP(structValue, {zero, index});
-        return newReturn<NodeRetType>(builder.CreateLoad(pointer), memberType);
+        return node.returnValue({builder.CreateLoad(pointer), memberType});
     }
     else
     {
         auto memberType = structInfo.types.at(structInfo.order.at(node.getIdentifier()));
         auto* pointer = builder.CreateInBoundsGEP(structValue, {zero, zero});
         auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(*this)));
-        return newReturn<NodeRetType>(builder.CreateLoad(cast), memberType);
+        return node.returnValue({builder.CreateLoad(cast), memberType});
     }
 }
 
@@ -982,7 +982,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     std::size_t i = 0;
     for (auto& iter : node.getOptionalAssignmentExpressions())
     {
-        auto[arg, signarg] = iter->accept(*this);
+        auto& [arg, signarg] = iter->accept(*this)->value;
         if (!dynamic_cast<const Syntax::StructType*>(function.arguments[i]))
         {
             castPrimitive(arg,
@@ -1016,7 +1016,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     }
     if (!dynamic_cast<const Syntax::StructType*>(function.retType.get()))
     {
-        return {builder.CreateCall(value, arguments), function.retType};
+        return node.returnValue({builder.CreateCall(value, arguments), function.retType});
     }
     else
     {
@@ -1026,7 +1026,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         alloca->setAlignment(getAlignment(function.retType->type(*this)));
         arguments.insert(arguments.begin(), alloca);
         builder.CreateCall(value, arguments);
-        return {builder.CreateLoad(alloca), function.retType};
+        return node.returnValue({builder.CreateLoad(alloca), function.retType});
     }
 }
 
@@ -1048,7 +1048,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         }
         for (std::size_t i = 0; i < type->getStructNumElements(); i++)
         {
-            auto[value, ntype] = node.getNonCommaExpressions().at(i)->accept(*this);
+            auto& [value, ntype] = node.getNonCommaExpressions().at(i)->accept(*this)->value;
             if (ntype->type(*this) != type->getStructElementType(i))
             {
                 castPrimitive(value,
@@ -1068,10 +1068,10 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         {
             throw std::runtime_error("Amount of values unequal to 1");
         }
-        auto[value, ntype] = node.getNonCommaExpressions()[0]->accept(*this);
+        auto& [value, ntype] = node.getNonCommaExpressions()[0]->accept(*this)->value;
         builder.CreateStore(value, alloca);
     }
-    return {builder.CreateLoad(alloca), node.getType()};
+    return node.returnValue({builder.CreateLoad(alloca), node.getType()});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
@@ -1085,7 +1085,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getUnaryFactor().accept(*this);
+    auto& [left, sign] = node.getUnaryFactor().accept(*this)->value;
     if (sign->isConst())
     {
         throw std::runtime_error("Can't assign value to const");
@@ -1099,7 +1099,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     {
     case Syntax::AssignmentExpression::AssignOperator::NoOperator:
     {
-        auto[value, sign] = node.getNonCommaExpression().accept(*this);
+        auto& [value, sign] = node.getNonCommaExpression().accept(*this)->value;
         castPrimitive(value, sign->isSigned(), left->getType(), sign->isSigned(), *this);
         builder.CreateStore(value, load->getPointerOperand());
         break;
@@ -1107,7 +1107,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::PlusAssign:
     {
         llvm::Value* current = left;
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         if (current->getType()->isIntegerTy())
         {
@@ -1124,7 +1124,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::MinusAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         if (current->getType()->isIntegerTy())
         {
@@ -1141,7 +1141,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::DivideAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         if (current->getType()->isIntegerTy())
         {
@@ -1165,7 +1165,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::MultiplyAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         if (current->getType()->isIntegerTy())
         {
@@ -1182,7 +1182,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::ModuloAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateSRem(current, newValue), load->getPointerOperand());
         break;
@@ -1190,7 +1190,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::LeftShiftAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateShl(current, newValue), load->getPointerOperand());
         break;
@@ -1198,7 +1198,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::RightShiftAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateAShr(current, newValue), load->getPointerOperand());
         break;
@@ -1206,7 +1206,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::BitAndAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateAnd(current, newValue), load->getPointerOperand());
         break;
@@ -1214,7 +1214,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::BitOrAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateOr(current, newValue), load->getPointerOperand());
         break;
@@ -1222,13 +1222,13 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     case Syntax::AssignmentExpression::AssignOperator::BitXorAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
-        auto[newValue, newSign] = node.getNonCommaExpression().accept(*this);
+        auto& [newValue, newSign] = node.getNonCommaExpression().accept(*this)->value;
         arithmeticCast(current, sign->isSigned(), newValue, newSign->isSigned(), *this);
         builder.CreateStore(builder.CreateXor(current, newValue), load->getPointerOperand());
         break;
     }
     }
-    return {builder.CreateLoad(load->getPointerOperand()), sign};
+    return node.returnValue({builder.CreateLoad(load->getPointerOperand()), sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
@@ -1240,7 +1240,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
     emitLocation(&node, *this);
-    auto[rhs, sign] = node.getUnaryExpression().accept(*this);
+    auto& [rhs, sign] = node.getUnaryExpression().accept(*this)->value;
     switch (node.getAnOperator())
     {
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
@@ -1263,7 +1263,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             throw std::runtime_error("Cannot apply unary ++ to non lvalue");
         }
         builder.CreateStore(newValue, llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand());
-        return {newValue, sign};
+        return node.returnValue({newValue, sign});
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
     {
@@ -1285,7 +1285,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             throw std::runtime_error("Cannot apply unary -- to non lvalue");
         }
         builder.CreateStore(newValue, llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand());
-        return {newValue, sign};
+        return node.returnValue({newValue, sign});
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
     {
@@ -1293,13 +1293,13 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         {
             throw std::runtime_error("Cannot take address of type");
         }
-        return {llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), sign};
+        return node.returnValue({llvm::cast<llvm::LoadInst>(rhs)->getPointerOperand(), sign});
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
     {
         if (auto result = std::dynamic_pointer_cast<Syntax::PointerType>(sign);result)
         {
-            return {builder.CreateLoad(rhs), result->getType().clone()};
+            return node.returnValue({builder.CreateLoad(rhs), result->getType().clone()});
         }
         else
         {
@@ -1312,27 +1312,27 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         {
             rhs = builder.CreateIntCast(rhs, builder.getInt32Ty(), sign->isSigned());
         }
-        return {rhs, sign};
+        return node.returnValue({rhs, sign});
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
     {
         if (rhs->getType()->isIntegerTy())
         {
-            return {builder.CreateNeg(rhs),
+            return node.returnValue({builder.CreateNeg(rhs),
                     std::make_shared<Syntax::PrimitiveType>(std::static_pointer_cast<Syntax::PrimitiveType>(sign)
                                                                 ->getBitCount(),
                                                             false,
                                                             false,
-                                                            true)};
+                                                            true)});
         }
         else
         {
-            return {builder.CreateFNeg(rhs),
+            return node.returnValue({builder.CreateFNeg(rhs),
                     std::make_shared<Syntax::PrimitiveType>(std::static_pointer_cast<Syntax::PrimitiveType>(sign)
                                                                 ->getBitCount(),
                                                             false,
                                                             true,
-                                                            true)};
+                                                            true)});
         }
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
@@ -1341,7 +1341,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         {
             throw std::runtime_error("Cannot apply ~ to non integer type");
         }
-        return {builder.CreateNot(rhs), sign};
+        return node.returnValue({builder.CreateNot(rhs), sign});
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
     {
@@ -1357,7 +1357,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         {
             throw std::runtime_error("Cannot apply ! operator to specified type");
         }
-        return {builder.CreateZExt(builder.CreateNot(rhs), builder.getInt32Ty()), sign};
+        return node.returnValue({builder.CreateZExt(builder.CreateNot(rhs), builder.getInt32Ty()), sign});
     }
     }
     return {};
@@ -1366,7 +1366,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
     emitLocation(&node, *this);
-    return std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Syntax::Type>>
+    return std::visit([this,&node](auto&& value) -> NodeRetType*
                       {
                           using T = std::decay_t<decltype(value)>;
                           if constexpr(std::is_same_v<T, std::unique_ptr<OpenCL::Syntax::UnaryExpression>>)
@@ -1376,8 +1376,8 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                           else
                           {
                               auto size = module->getDataLayout().getTypeAllocSize(value->type(*this));
-                              return {builder.getIntN(64, size),
-                                      std::make_unique<Syntax::PrimitiveType>(64, false, false, false)};
+                              return node.returnValue({builder.getIntN(64, size),
+                                      std::make_unique<Syntax::PrimitiveType>(64, false, false, false)});
                           }
                       }, node.getUnaryOrType());
 }
@@ -1393,7 +1393,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
 {
     emitLocation(&node, *this);
-    return std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Syntax::Type>>
+    return std::visit([this,&node](auto&& value) -> NodeRetType*
                       {
                           using T = std::decay_t<decltype(value)>;
                           if constexpr(std::is_same_v<T, Syntax::UnaryExpression>)
@@ -1403,9 +1403,9 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                           else
                           {
                               auto&[type, cast] = value;
-                              auto[rhs, sign] = cast->accept(*this);
+                              auto& [rhs, sign] = cast->accept(*this)->value;
                               castPrimitive(rhs, sign->isSigned(), type->type(*this), type->isSigned(), *this);
-                              return {rhs, type};
+                              return node.returnValue({rhs, type});
                           }
                       }, node.getUnaryOrCast());
 }
@@ -1413,10 +1413,10 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Term& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getCastExpression().accept(*this);
+    auto& [left, sign] = node.getCastExpression().accept(*this)->value;
     for (auto&[op, cast] : node.getOptionalCastExpressions())
     {
-        auto[right, rsign] = cast.accept(*this);
+        auto& [right, rsign] = cast.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, rsign->isSigned(), *this);
 
         switch (op)
@@ -1472,16 +1472,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getTerm().accept(*this);
+    auto& [left, sign] = node.getTerm().accept(*this)->value;
     for (auto&[op, term] : node.getOptionalTerms())
     {
-        auto[right, rsign] = term.accept(*this);
+        auto& [right, rsign] = term.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, rsign->isSigned(), *this);
 
         switch (op)
@@ -1517,16 +1517,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getAdditiveExpression().accept(*this);
+    auto& [left, sign] = node.getAdditiveExpression().accept(*this)->value;
     for (auto&[op, rel] : node.getOptionalAdditiveExpressions())
     {
-        auto[right, rsign] = rel.accept(*this);
+        auto& [right, rsign] = rel.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, rsign->isSigned(), *this);
         if (!left->getType()->isIntegerTy())
         {
@@ -1544,16 +1544,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getShiftExpression().accept(*this);
+    auto& [left, sign] = node.getShiftExpression().accept(*this)->value;
     for (auto&[op, rel] : node.getOptionalShiftExpressions())
     {
-        auto[right, rsign] = rel.accept(*this);
+        auto& [right, rsign] = rel.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, rsign->isSigned(), *this);
 
         switch (op)
@@ -1630,16 +1630,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         sign = std::make_shared<Syntax::PrimitiveType>(32, false, false, true);
         left = builder.CreateZExt(left, builder.getInt32Ty());
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getRelationalExpression().accept(*this);
+    auto& [left, sign] = node.getRelationalExpression().accept(*this)->value;
     for (auto&[op, factor] : node.getOptionalRelationalExpressions())
     {
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, rsign->isSigned(), *this);
 
         switch (op)
@@ -1668,16 +1668,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         sign = std::make_shared<Syntax::PrimitiveType>(32, false, false, true);
         left = builder.CreateZExt(left, builder.getInt32Ty());
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getEqualityExpression().accept(*this);
+    auto& [left, sign] = node.getEqualityExpression().accept(*this)->value;
     for (auto& factor : node.getOptionalEqualityExpressions())
     {
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, sign->isSigned(), *this);
         left = builder.CreateAnd(left, right);
         if (std::static_pointer_cast<Syntax::PrimitiveType>(sign)->getBitCount()
@@ -1686,16 +1686,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getBitAndExpression().accept(*this);
+    auto& [left, sign] = node.getBitAndExpression().accept(*this)->value;
     for (auto& factor : node.getOptionalBitAndExpressions())
     {
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, sign->isSigned(), *this);
         left = builder.CreateXor(left, right);
         if (std::static_pointer_cast<Syntax::PrimitiveType>(sign)->getBitCount()
@@ -1704,16 +1704,16 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getBitXorExpression().accept(*this);
+    auto& [left, sign] = node.getBitXorExpression().accept(*this)->value;
     for (auto& factor : node.getOptionalBitXorExpressions())
     {
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         arithmeticCast(left, sign->isSigned(), right, sign->isSigned(), *this);
         left = builder.CreateOr(left, right);
         if (std::static_pointer_cast<Syntax::PrimitiveType>(sign)->getBitCount()
@@ -1722,13 +1722,13 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
             sign = rsign;
         }
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getBitOrExpression().accept(*this);
+    auto& [left, sign] = node.getBitOrExpression().accept(*this)->value;
     for (auto& factor : node.getOptionalBitOrExpressions())
     {
         auto* function = builder.GetInsertBlock()->getParent();
@@ -1740,7 +1740,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         builder.CreateCondBr(left, thenBB, elseBB);
 
         builder.SetInsertPoint(thenBB);
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         right = toBool(right, *this);
         right = builder.CreateZExt(right, builder.getInt32Ty());
         builder.CreateBr(mergeBB);
@@ -1760,13 +1760,13 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         left = pn;
         sign = std::make_shared<Syntax::PrimitiveType>(32, false, false, true);
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
     emitLocation(&node, *this);
-    auto[left, sign] = node.getAndExpression().accept(*this);
+    auto& [left, sign] = node.getAndExpression().accept(*this)->value;
     for (auto& factor : node.getOptionalAndExpressions())
     {
         auto* function = builder.GetInsertBlock()->getParent();
@@ -1778,7 +1778,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         builder.CreateCondBr(left, elseBB, thenBB);
 
         builder.SetInsertPoint(thenBB);
-        auto[right, rsign] = factor.accept(*this);
+        auto& [right, rsign] = factor.accept(*this)->value;
         right = toBool(right, *this);
         right = builder.CreateZExt(right, builder.getInt32Ty());
         builder.CreateBr(mergeBB);
@@ -1798,13 +1798,13 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         left = pn;
         sign = std::make_shared<Syntax::PrimitiveType>(32, false, false, true);
     }
-    return {left, sign};
+    return node.returnValue({left, sign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
     emitLocation(&node, *this);
-    auto[value, vsign] = node.getLogicalOrExpression().accept(*this);
+    auto& [value, vsign] = node.getLogicalOrExpression().accept(*this)->value;
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
         value = toBool(value, *this);
@@ -1817,7 +1817,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         builder.CreateCondBr(value, thenBB, elseBB);
 
         builder.SetInsertPoint(thenBB);
-        auto[thenV, tsign] = node.getOptionalExpression()->accept(*this);
+        auto& [thenV, tsign] = node.getOptionalExpression()->accept(*this)->value;
 
         builder.CreateBr(mergeBB);
         thenBB = builder.GetInsertBlock();
@@ -1825,7 +1825,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         function->getBasicBlockList().push_back(elseBB);
         builder.SetInsertPoint(elseBB);
 
-        auto[elseV, esign] = node.getOptionalConditionalExpression()->accept(*this);
+        auto& [elseV, esign] = node.getOptionalConditionalExpression()->accept(*this)->value;
 
         builder.CreateBr(mergeBB);
         elseBB = builder.GetInsertBlock();
@@ -1836,9 +1836,9 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
         auto* pn = builder.CreatePHI(thenV->getType(), 2);
         pn->addIncoming(thenV, thenBB);
         pn->addIncoming(elseV, elseBB);
-        return {pn, tsign};
+        return node.returnValue({pn, tsign});
     }
-    return {value, vsign};
+    return node.returnValue({value, vsign});
 }
 
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::NonCommaExpression& node)
@@ -1856,14 +1856,14 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     if (!isStruct)
     {
         auto* retType = currentFunction->getReturnType();
-        auto[value, sign] = node.getExpression().accept(*this);
+        auto& [value, sign] = node.getExpression().accept(*this)->value;
         castPrimitive(value, sign->isSigned(), retType, functionRetType->isSigned(), *this);
         builder.CreateRet(value);
         return {};
     }
     else
     {
-        auto[value, sign] = node.getExpression().accept(*this);
+        auto& [value, sign] = node.getExpression().accept(*this)->value;
         auto* args = currentFunction->args().begin();
         if (value->getType() != args->getType()->getPointerElementType())
         {
@@ -1888,7 +1888,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::IfStatement& node)
 {
     emitLocation(&node, *this);
-    auto[value, sign] = node.getExpression().accept(*this);
+    auto& [value, sign] = node.getExpression().accept(*this)->value;
     value = toBool(value, *this);
     auto* function = builder.GetInsertBlock()->getParent();
 
@@ -1926,7 +1926,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node)
 {
     emitLocation(&node, *this);
-    auto[value, sign] = node.getExpression().accept(*this);
+    auto& [value, sign] = node.getExpression().accept(*this)->value;
     auto* defaultBlock = llvm::BasicBlock::Create(context, "default");
     auto* thenBlock = llvm::BasicBlock::Create(context, "then");
     breakBlocks.push_back(thenBlock);
@@ -2105,7 +2105,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 {
     if (node.getNonCommaExpressionsAndBlocks().size() == 1)
     {
-        return std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>
+        return std::visit([this](auto&& value) -> NodeRetType*
                           {
                               using T = std::decay_t<decltype(value)>;
                               if constexpr(std::is_same_v<T, Syntax::NonCommaExpression>)
@@ -2147,8 +2147,8 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                 if (auto* primitive = dynamic_cast<const Syntax::PrimitiveType*>(array->getType().get());primitive
                     && primitive->getBitCount() == 8)
                 {
-                    auto[value, type] = std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant())
-                        .accept(*this);
+                    auto& [value, type] = std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant())
+                        .accept(*this)->value;
                     auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
                     if (value->getType()->isArrayTy() && load
                         && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
@@ -2246,8 +2246,8 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                 if (allocaType->isArrayTy() && allocaType->getArrayElementType()->isIntegerTy()
                     && allocaType->getArrayElementType()->getIntegerBitWidth() == 8)
                 {
-                    auto[value, type] = std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant())
-                        .accept(*this);
+                    auto& [value, type] = std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant())
+                        .accept(*this)->value;
                     auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
                     if (value->getType()->isArrayTy() && load
                         && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
@@ -2267,7 +2267,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                 }
                 else if (!allocaType->isArrayTy())
                 {
-                    auto[value, otherType] = optionalExpression->accept(*this);
+                    auto& [value, otherType] = optionalExpression->accept(*this)->value;
                     castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), *this);
                     builder.CreateStore(value, alloca);
                 }
@@ -2298,7 +2298,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
                                        }
                                        else
                                        {
-                                           auto[newValue, otherType] = value.accept(*this);
+                                           auto& [newValue, otherType] = value.accept(*this)->value;
                                            castPrimitive(newValue,
                                                          otherType->isSigned(),
                                                          type->getType()->type(*this),
@@ -2353,7 +2353,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     continueBlocks.push_back(condBB);
 
     builder.SetInsertPoint(condBB);
-    auto* value = node.getExpression().accept(*this).first;
+    auto* value = node.getExpression().accept(*this)->value.first;
     value = toBool(value, *this);
     builder.CreateCondBr(value, blockBB, endBB);
 
@@ -2388,7 +2388,7 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
 
     function->getBasicBlockList().push_back(condBB);
     builder.SetInsertPoint(condBB);
-    auto* value = node.getExpression().accept(*this).first;
+    auto* value = node.getExpression().accept(*this)->value.first;
     value = toBool(value, *this);
     builder.CreateCondBr(value, blockBB, endBB);
 
@@ -2737,8 +2737,8 @@ OpenCL::Codegen::Context::NodeRetType* OpenCL::Codegen::Context::visit(const Ope
     //TODO: Make array size deduction and etc work
     for (auto&[type, name, optionalValue] : node.getDeclarations())
     {
-        auto[constant, sign] = optionalValue ? optionalValue->accept(*this) : decltype(optionalValue
-            ->accept(*this)){};
+        auto [constant, sign] = optionalValue ? optionalValue->accept(*this)->value : decltype(optionalValue
+            ->accept(*this)->value){};
         if (constant
             && (constant->getType() != type->type(*this) || (sign && sign->isSigned()) != type->isSigned()))
         {

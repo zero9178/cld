@@ -137,172 +137,132 @@ namespace OpenCL::Syntax
     {
     public:
 
-        struct ReturnInterface
-        {
-            virtual ~ReturnInterface() = default;
+        virtual void visit(const Expression& node) = 0;
 
-            ReturnInterface(const ReturnInterface&) = delete;
+        virtual void visit(const PrimaryExpressionIdentifier& node) = 0;
 
-            ReturnInterface(ReturnInterface&&) = delete;
+        virtual void visit(const PrimaryExpressionConstant& node) = 0;
 
-            ReturnInterface& operator=(const ReturnInterface&) = delete;
+        virtual void visit(const PrimaryExpressionParenthese& node) = 0;
 
-            ReturnInterface& operator=(ReturnInterface&&) = delete;
-        };
+        virtual void visit(const PrimaryExpression& node) = 0;
 
-    private:
+        virtual void visit(const PostFixExpressionPrimaryExpression& node) = 0;
 
-        using retType = ReturnInterface*;
-        std::vector<std::unique_ptr<ReturnInterface>> m_returnTypes;
+        virtual void visit(const PostFixExpressionSubscript& node) = 0;
 
-    public:
+        virtual void visit(const PostFixExpressionIncrement& node) = 0;
 
-        template <class T,class...Args>
-        T* newReturn(Args&&...arguments)
-        {
-            static_assert(std::is_base_of_v<ReturnInterface, T>);
-            return m_returnTypes.emplace_back(std::make_unique<T>(std::forward<Args>(arguments)...)).get();
-        }
+        virtual void visit(const PostFixExpressionDecrement& node) = 0;
 
-        virtual retType visit(const Expression& node) = 0;
+        virtual void visit(const PostFixExpressionDot& node) = 0;
 
-        virtual retType visit(const PrimaryExpressionIdentifier& node) = 0;
+        virtual void visit(const PostFixExpressionArrow& node) = 0;
 
-        virtual retType visit(const PrimaryExpressionConstant& node) = 0;
+        virtual void visit(const PostFixExpressionFunctionCall& node) = 0;
 
-        virtual retType visit(const PrimaryExpressionParenthese& node) = 0;
+        virtual void visit(const PostFixExpressionTypeInitializer& node) = 0;
 
-        virtual retType visit(const PrimaryExpression& node) = 0;
+        virtual void visit(const PostFixExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpressionPrimaryExpression& node) = 0;
+        virtual void visit(const AssignmentExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpressionSubscript& node) = 0;
+        virtual void visit(const UnaryExpressionPostFixExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpressionIncrement& node) = 0;
+        virtual void visit(const UnaryExpressionUnaryOperator& node) = 0;
 
-        virtual retType visit(const PostFixExpressionDecrement& node) = 0;
+        virtual void visit(const UnaryExpressionSizeOf& node) = 0;
 
-        virtual retType visit(const PostFixExpressionDot& node) = 0;
+        virtual void visit(const UnaryExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpressionArrow& node) = 0;
+        virtual void visit(const CastExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpressionFunctionCall& node) = 0;
+        virtual void visit(const Term& node) = 0;
 
-        virtual retType visit(const PostFixExpressionTypeInitializer& node) = 0;
+        virtual void visit(const AdditiveExpression& node) = 0;
 
-        virtual retType visit(const PostFixExpression& node) = 0;
+        virtual void visit(const ShiftExpression& node) = 0;
 
-        virtual retType visit(const AssignmentExpression& node) = 0;
+        virtual void visit(const RelationalExpression& node) = 0;
 
-        virtual retType visit(const UnaryExpressionPostFixExpression& node) = 0;
+        virtual void visit(const EqualityExpression& node) = 0;
 
-        virtual retType visit(const UnaryExpressionUnaryOperator& node) = 0;
+        virtual void visit(const BitAndExpression& node) = 0;
 
-        virtual retType visit(const UnaryExpressionSizeOf& node) = 0;
+        virtual void visit(const BitXorExpression& node) = 0;
 
-        virtual retType visit(const UnaryExpression& node) = 0;
+        virtual void visit(const BitOrExpression& node) = 0;
 
-        virtual retType visit(const CastExpression& node) = 0;
+        virtual void visit(const LogicalAndExpression& node) = 0;
 
-        virtual retType visit(const Term& node) = 0;
+        virtual void visit(const LogicalOrExpression& node) = 0;
 
-        virtual retType visit(const AdditiveExpression& node) = 0;
+        virtual void visit(const ConditionalExpression& node) = 0;
 
-        virtual retType visit(const ShiftExpression& node) = 0;
+        virtual void visit(const NonCommaExpression& node) = 0;
 
-        virtual retType visit(const RelationalExpression& node) = 0;
+        virtual void visit(const ReturnStatement& node) = 0;
 
-        virtual retType visit(const EqualityExpression& node) = 0;
+        virtual void visit(const ExpressionStatement& node) = 0;
 
-        virtual retType visit(const BitAndExpression& node) = 0;
+        virtual void visit(const IfStatement& node) = 0;
 
-        virtual retType visit(const BitXorExpression& node) = 0;
+        virtual void visit(const SwitchStatement& node) = 0;
 
-        virtual retType visit(const BitOrExpression& node) = 0;
+        virtual void visit(const DefaultStatement& node) = 0;
 
-        virtual retType visit(const LogicalAndExpression& node) = 0;
+        virtual void visit(const CaseStatement& node) = 0;
 
-        virtual retType visit(const LogicalOrExpression& node) = 0;
+        virtual void visit(const BlockStatement& node) = 0;
 
-        virtual retType visit(const ConditionalExpression& node) = 0;
+        virtual void visit(const ForStatement& node) = 0;
 
-        virtual retType visit(const NonCommaExpression& node) = 0;
+        virtual void visit(const InitializerListScalarExpression& node) = 0;
 
-        virtual retType visit(const ReturnStatement& node) = 0;
+        virtual void visit(const InitializerListBlock& node) = 0;
 
-        virtual retType visit(const ExpressionStatement& node) = 0;
+        virtual void visit(const InitializerList& node) = 0;
 
-        virtual retType visit(const IfStatement& node) = 0;
+        virtual void visit(const Declarations& node) = 0;
 
-        virtual retType visit(const SwitchStatement& node) = 0;
+        virtual void visit(const BlockItem& node) = 0;
 
-        virtual retType visit(const DefaultStatement& node) = 0;
+        virtual void visit(const ForDeclarationStatement& node) = 0;
 
-        virtual retType visit(const CaseStatement& node) = 0;
+        virtual void visit(const HeadWhileStatement& node) = 0;
 
-        virtual retType visit(const BlockStatement& node) = 0;
+        virtual void visit(const FootWhileStatement& node) = 0;
 
-        virtual retType visit(const ForStatement& node) = 0;
+        virtual void visit(const BreakStatement& node) = 0;
 
-        virtual retType visit(const InitializerListScalarExpression& node) = 0;
+        virtual void visit(const ContinueStatement& node) = 0;
 
-        virtual retType visit(const InitializerListBlock& node) = 0;
+        virtual void visit(const Statement& node) = 0;
 
-        virtual retType visit(const InitializerList& node) = 0;
+        virtual void visit(const StructOrUnionDeclaration& node) = 0;
 
-        virtual retType visit(const Declarations& node) = 0;
+        virtual void visit(const EnumDeclaration& node) = 0;
 
-        virtual retType visit(const BlockItem& node) = 0;
+        virtual void visit(const TypedefDeclaration& node) = 0;
 
-        virtual retType visit(const ForDeclarationStatement& node) = 0;
+        virtual void visit(const Function& node) = 0;
 
-        virtual retType visit(const HeadWhileStatement& node) = 0;
+        virtual void visit(const GlobalDeclaration& node) = 0;
 
-        virtual retType visit(const FootWhileStatement& node) = 0;
+        virtual void visit(const Global& node) = 0;
 
-        virtual retType visit(const BreakStatement& node) = 0;
-
-        virtual retType visit(const ContinueStatement& node) = 0;
-
-        virtual retType visit(const Statement& node) = 0;
-
-        virtual retType visit(const StructOrUnionDeclaration& node) = 0;
-
-        virtual retType visit(const EnumDeclaration& node) = 0;
-
-        virtual retType visit(const TypedefDeclaration& node) = 0;
-
-        virtual retType visit(const Function& node) = 0;
-
-        virtual retType visit(const GlobalDeclaration& node) = 0;
-
-        virtual retType visit(const Global& node) = 0;
-
-        virtual retType visit(const Program& node) = 0;
+        virtual void visit(const Program& node) = 0;
     };
 
-    template <class T>
     class Visitable
     {
-        struct ReturnType : NodeVisitor::ReturnInterface
-        {
-            T value;
-
-            operator T() const noexcept
-            {
-                return value;
-            }
-        };
-
     public:
 
-        using retType = ReturnType;
-
-        virtual retType* accept(NodeVisitor& visitor) const = 0;
+        virtual void* accept(NodeVisitor& visitor) const = 0;
     };
 
     template <class T>
-    class Node : public Visitable<std::pair<llvm::Value*, std::shared_ptr<Type>>>
+    class Node : public Visitable
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
@@ -332,10 +292,10 @@ namespace OpenCL::Syntax
             return m_column;
         }
 
-        retType* accept(NodeVisitor& visitor) const final
+        void* accept(NodeVisitor& visitor) const final
         {
             static_assert(std::is_final_v<T>);
-            auto ret = dynamic_cast<retType*>(visitor.visit(*static_cast<const T*>(this)));
+            auto ret = dynamic_cast<void*>(visitor.visit(*static_cast<const T*>(this)));
             assert(ret);
             return ret;
         }
