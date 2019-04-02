@@ -5,7 +5,9 @@
 
 namespace OpenCL::Codegen
 {
-    class Context final : public OpenCL::Syntax::NodeVisitor
+    using NodeRetType = std::pair<llvm::Value*,std::shared_ptr<Syntax::Type>>;
+
+    class Context final : public OpenCL::Syntax::NodeVisitor<NodeRetType>
     {
         using tuple = std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>;
 
@@ -18,6 +20,10 @@ namespace OpenCL::Codegen
         std::map<std::string, Function> m_functions;
         std::map<std::string, tuple> m_globalValues;
         std::vector<std::map<std::string, tuple>> m_namedValues;
+
+        void doForLoop(const OpenCL::Syntax::Expression* controlling,
+                                                const OpenCL::Syntax::Expression* post,
+                                                const OpenCL::Syntax::Statement& statement);
 
     public:
 
@@ -97,123 +103,121 @@ namespace OpenCL::Codegen
             pushScope();
         }
 
-        using NodeRetType = OpenCL::Syntax::Node<void>::retType;
+        void visit(const Syntax::Expression& node) override;
 
-        NodeRetType* visit(const Syntax::Expression& node) override;
+        void visit(const Syntax::PrimaryExpressionIdentifier& node) override;
 
-        NodeRetType* visit(const Syntax::PrimaryExpressionIdentifier& node) override;
+        void visit(const Syntax::PrimaryExpressionConstant& node) override;
 
-        NodeRetType* visit(const Syntax::PrimaryExpressionConstant& node) override;
+        void visit(const Syntax::PrimaryExpressionParenthese& node) override;
 
-        NodeRetType* visit(const Syntax::PrimaryExpressionParenthese& node) override;
+        void visit(const Syntax::PrimaryExpression& node) override;
 
-        NodeRetType* visit(const Syntax::PrimaryExpression& node) override;
+        void visit(const Syntax::PostFixExpressionPrimaryExpression& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionPrimaryExpression& node) override;
+        void visit(const Syntax::PostFixExpressionSubscript& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionSubscript& node) override;
+        void visit(const Syntax::PostFixExpressionIncrement& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionIncrement& node) override;
+        void visit(const Syntax::PostFixExpressionDecrement& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionDecrement& node) override;
+        void visit(const Syntax::PostFixExpressionDot& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionDot& node) override;
+        void visit(const Syntax::PostFixExpressionArrow& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionArrow& node) override;
+        void visit(const Syntax::PostFixExpressionFunctionCall& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionFunctionCall& node) override;
+        void visit(const Syntax::PostFixExpressionTypeInitializer& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpressionTypeInitializer& node) override;
+        void visit(const Syntax::PostFixExpression& node) override;
 
-        NodeRetType* visit(const Syntax::PostFixExpression& node) override;
+        void visit(const Syntax::AssignmentExpression& node) override;
 
-        NodeRetType* visit(const Syntax::AssignmentExpression& node) override;
+        void visit(const Syntax::UnaryExpressionPostFixExpression& node) override;
 
-        NodeRetType* visit(const Syntax::UnaryExpressionPostFixExpression& node) override;
+        void visit(const Syntax::UnaryExpressionUnaryOperator& node) override;
 
-        NodeRetType* visit(const Syntax::UnaryExpressionUnaryOperator& node) override;
+        void visit(const Syntax::UnaryExpressionSizeOf& node) override;
 
-        NodeRetType* visit(const Syntax::UnaryExpressionSizeOf& node) override;
+        void visit(const Syntax::UnaryExpression& node) override;
 
-        NodeRetType* visit(const Syntax::UnaryExpression& node) override;
+        void visit(const Syntax::CastExpression& node) override;
 
-        NodeRetType* visit(const Syntax::CastExpression& node) override;
+        void visit(const Syntax::Term& node) override;
 
-        NodeRetType* visit(const Syntax::Term& node) override;
+        void visit(const Syntax::AdditiveExpression& node) override;
 
-        NodeRetType* visit(const Syntax::AdditiveExpression& node) override;
+        void visit(const Syntax::ShiftExpression& node) override;
 
-        NodeRetType* visit(const Syntax::ShiftExpression& node) override;
+        void visit(const Syntax::RelationalExpression& node) override;
 
-        NodeRetType* visit(const Syntax::RelationalExpression& node) override;
+        void visit(const Syntax::EqualityExpression& node) override;
 
-        NodeRetType* visit(const Syntax::EqualityExpression& node) override;
+        void visit(const Syntax::BitAndExpression& node) override;
 
-        NodeRetType* visit(const Syntax::BitAndExpression& node) override;
+        void visit(const Syntax::BitXorExpression& node) override;
 
-        NodeRetType* visit(const Syntax::BitXorExpression& node) override;
+        void visit(const Syntax::BitOrExpression& node) override;
 
-        NodeRetType* visit(const Syntax::BitOrExpression& node) override;
+        void visit(const Syntax::LogicalAndExpression& node) override;
 
-        NodeRetType* visit(const Syntax::LogicalAndExpression& node) override;
+        void visit(const Syntax::LogicalOrExpression& node) override;
 
-        NodeRetType* visit(const Syntax::LogicalOrExpression& node) override;
+        void visit(const Syntax::ConditionalExpression& node) override;
 
-        NodeRetType* visit(const Syntax::ConditionalExpression& node) override;
+        void visit(const Syntax::NonCommaExpression& node) override;
 
-        NodeRetType* visit(const Syntax::NonCommaExpression& node) override;
+        void visit(const Syntax::ReturnStatement& node) override;
 
-        NodeRetType* visit(const Syntax::ReturnStatement& node) override;
+        void visit(const Syntax::ExpressionStatement& node) override;
 
-        NodeRetType* visit(const Syntax::ExpressionStatement& node) override;
+        void visit(const Syntax::IfStatement& node) override;
 
-        NodeRetType* visit(const Syntax::IfStatement& node) override;
+        void visit(const Syntax::SwitchStatement& node) override;
 
-        NodeRetType* visit(const Syntax::SwitchStatement& node) override;
+        void visit(const Syntax::DefaultStatement& node) override;
 
-        NodeRetType* visit(const Syntax::DefaultStatement& node) override;
+        void visit(const Syntax::CaseStatement& node) override;
 
-        NodeRetType* visit(const Syntax::CaseStatement& node) override;
+        void visit(const Syntax::BlockStatement& node) override;
 
-        NodeRetType* visit(const Syntax::BlockStatement& node) override;
+        void visit(const Syntax::ForStatement& node) override;
 
-        NodeRetType* visit(const Syntax::ForStatement& node) override;
+        void visit(const Syntax::InitializerListScalarExpression& node) override;
 
-        NodeRetType* visit(const Syntax::InitializerListScalarExpression& node) override;
+        void visit(const Syntax::InitializerListBlock& node) override;
 
-        NodeRetType* visit(const Syntax::InitializerListBlock& node) override;
+        void visit(const Syntax::InitializerList& node) override;
 
-        NodeRetType* visit(const Syntax::InitializerList& node) override;
+        void visit(const Syntax::Declarations& node) override;
 
-        NodeRetType* visit(const Syntax::Declarations& node) override;
+        void visit(const Syntax::BlockItem& node) override;
 
-        NodeRetType* visit(const Syntax::BlockItem& node) override;
+        void visit(const Syntax::ForDeclarationStatement& node) override;
 
-        NodeRetType* visit(const Syntax::ForDeclarationStatement& node) override;
+        void visit(const Syntax::HeadWhileStatement& node) override;
 
-        NodeRetType* visit(const Syntax::HeadWhileStatement& node) override;
+        void visit(const Syntax::FootWhileStatement& node) override;
 
-        NodeRetType* visit(const Syntax::FootWhileStatement& node) override;
+        void visit(const Syntax::BreakStatement& node) override;
 
-        NodeRetType* visit(const Syntax::BreakStatement& node) override;
+        void visit(const Syntax::ContinueStatement& node) override;
 
-        NodeRetType* visit(const Syntax::ContinueStatement& node) override;
+        void visit(const Syntax::Statement& node) override;
 
-        NodeRetType* visit(const Syntax::Statement& node) override;
+        void visit(const Syntax::StructOrUnionDeclaration& node) override;
 
-        NodeRetType* visit(const Syntax::StructOrUnionDeclaration& node) override;
+        void visit(const Syntax::EnumDeclaration& node) override;
 
-        NodeRetType* visit(const Syntax::EnumDeclaration& node) override;
+        void visit(const Syntax::TypedefDeclaration& node) override;
 
-        NodeRetType* visit(const Syntax::TypedefDeclaration& node) override;
+        void visit(const Syntax::Function& node) override;
 
-        NodeRetType* visit(const Syntax::Function& node) override;
+        void visit(const Syntax::GlobalDeclaration& node) override;
 
-        NodeRetType* visit(const Syntax::GlobalDeclaration& node) override;
+        void visit(const Syntax::Global& node) override;
 
-        NodeRetType* visit(const Syntax::Global& node) override;
-
-        NodeRetType* visit(const Syntax::Program& node) override;
+        void visit(const Syntax::Program& node) override;
     };
 }
 

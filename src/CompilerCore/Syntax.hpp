@@ -133,7 +133,7 @@ namespace OpenCL::Syntax
 
     class Program;
 
-    class NodeVisitor
+    class INodeVisitor
     {
     public:
 
@@ -254,11 +254,33 @@ namespace OpenCL::Syntax
         virtual void visit(const Program& node) = 0;
     };
 
+    template<class...Returns>
+    class NodeVisitor : public INodeVisitor
+    {
+    protected:
+
+        std::variant<Returns...> m_return;
+
+    public:
+
+        template<class T>
+        T& getReturn()
+        {
+            return std::get<T>(m_return);
+        }
+
+        template<class T>
+        const T& getReturn() const
+        {
+            return std::get<T>(m_return);
+        }
+    };
+
     class Visitable
     {
     public:
 
-        virtual void* accept(NodeVisitor& visitor) const = 0;
+        virtual void accept(INodeVisitor& visitor) const = 0;
     };
 
     template <class T>
@@ -292,12 +314,10 @@ namespace OpenCL::Syntax
             return m_column;
         }
 
-        void* accept(NodeVisitor& visitor) const final
+        void accept(INodeVisitor& visitor) const final
         {
             static_assert(std::is_final_v<T>);
-            auto ret = dynamic_cast<void*>(visitor.visit(*static_cast<const T*>(this)));
-            assert(ret);
-            return ret;
+            visitor.visit(*static_cast<const T*>(this));
         }
 
         using constantVariant = std::variant<std::int32_t,
