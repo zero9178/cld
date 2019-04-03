@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <fstream>
-#include <CompilerCore/Syntax.hpp>
+#include <CompilerCore/C/Syntax.hpp>
 
 auto start = R"(typedef struct Point
 {

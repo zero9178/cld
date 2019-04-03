@@ -4,17 +4,11 @@
 #include "Lexer.hpp"
 #include <set>
 #include <vector>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/DIBuilder.h>
-
-namespace OpenCL::Codegen
-{
-    class Context;
-}
+#include <memory>
 
 namespace OpenCL::Syntax
 {
+    template <class T>
     class Type;
 
     class Expression;
@@ -132,6 +126,18 @@ namespace OpenCL::Syntax
     class Global;
 
     class Program;
+
+    class PrimitiveType;
+
+    class PointerType;
+
+    class ArrayType;
+
+    class StructType;
+
+    class UnionType;
+
+    class EnumType;
 
     class INodeVisitor
     {
@@ -252,9 +258,21 @@ namespace OpenCL::Syntax
         virtual void visit(const Global& node) = 0;
 
         virtual void visit(const Program& node) = 0;
+
+        virtual void visit(const PrimitiveType& node) = 0;
+
+        virtual void visit(const PointerType& node) = 0;
+
+        virtual void visit(const ArrayType& node) = 0;
+
+        virtual void visit(const StructType& node) = 0;
+
+        virtual void visit(const UnionType& node) = 0;
+
+        virtual void visit(const EnumType& node) = 0;
     };
 
-    template<class...Returns>
+    template <class...Returns>
     class NodeVisitor : public INodeVisitor
     {
     protected:
@@ -263,13 +281,13 @@ namespace OpenCL::Syntax
 
     public:
 
-        template<class T>
+        template <class T>
         T& getReturn()
         {
             return std::get<T>(m_return);
         }
 
-        template<class T>
+        template <class T>
         const T& getReturn() const
         {
             return std::get<T>(m_return);
@@ -330,10 +348,49 @@ namespace OpenCL::Syntax
 
     };
 
+    class IType : public Visitable
+    {
+    protected:
+
+        IType() = default;
+
+    public:
+
+        virtual ~IType() = default;
+
+        IType(const IType&) = delete;
+
+        IType(IType&& ) = default;
+
+        IType&operator=(const IType&) = delete;
+
+        IType&operator=(IType&&) = default;
+
+        virtual bool isSigned() const
+        {
+            return false;
+        }
+
+        virtual bool isVoid() const
+        {
+            return false;
+        }
+
+        virtual bool isConst() const
+        {
+            return false;
+        }
+
+        virtual std::unique_ptr<IType> clone() const = 0;
+
+        virtual std::string name() const = 0;
+    };
+
     /**
      * <Type> ::= <PrimitiveType> | <PointerType> | <ArrayType> | <StructType>
      */
-    class Type
+    template <class T>
+    class Type : public IType
     {
     protected:
 
@@ -341,25 +398,21 @@ namespace OpenCL::Syntax
 
     public:
 
-        virtual ~Type() = default;
+        ~Type() override = default;
 
-        Type(Type&&) = default;
+        Type(Type&&) noexcept = default;
 
-        Type& operator=(Type&&) = default;
+        Type(const Type&) = delete;
 
-        virtual bool isSigned() const;
+        Type& operator=(Type&&) noexcept = default;
 
-        virtual bool isVoid() const;
+        Type& operator=(const Type&) = delete;
 
-        virtual bool isConst() const;
-
-        virtual llvm::Type* type(Codegen::Context& context) const = 0;
-
-        virtual std::unique_ptr<Type> clone() const = 0;
-
-        virtual std::string name() const = 0;
-
-        virtual llvm::DIType* debugType(Codegen::Context& context) const = 0;
+        void accept(INodeVisitor& visitor) const final
+        {
+            static_assert(std::is_final_v<T>);
+            visitor.visit(*static_cast<const T*>(this));
+        }
     };
 
     /**
@@ -384,7 +437,7 @@ namespace OpenCL::Syntax
      *          | <TokenType::UnsignedKeyword>
      *          | <TokenType::ConstKeyword>}
      */
-    class PrimitiveType final : public Type
+    class PrimitiveType final : public Type<PrimitiveType>
     {
     public:
 
@@ -424,72 +477,60 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
      * <PointerType> ::= <Type> <TokenType::Asterisk> [ <TokenType::ConstKeyword> ]
      */
-    class PointerType final : public Type
+    class PointerType final : public Type<PointerType>
     {
-        std::unique_ptr<Type> m_type;
+        std::unique_ptr<IType> m_type;
         bool m_isConst;
 
     public:
 
-        explicit PointerType(std::unique_ptr<Type>&& type, bool isConst);
+        explicit PointerType(std::unique_ptr<IType>&& type, bool isConst);
 
-        const Type& getType() const;
+        const IType& getType() const;
 
         bool isConst() const override;
 
-        llvm::Type* type(Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
      * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <ConstantNonCommaExpression> <TokenType::CloseSquareBracket>
      */
-    class ArrayType final : public Type
+    class ArrayType final : public Type<ArrayType>
     {
-        std::unique_ptr<Type> m_type;
+        std::unique_ptr<IType> m_type;
         std::size_t m_size;
 
     public:
 
-        ArrayType(std::unique_ptr<Type>&& type, std::size_t size);
+        ArrayType(std::unique_ptr<IType>&& type, std::size_t size);
 
-        const std::unique_ptr<Type>& getType() const;
+        const std::unique_ptr<IType>& getType() const;
 
         std::size_t getSize() const;
 
         void setSize(size_t size);
 
-        llvm::Type* type(Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
      * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer>
      *                  [ <TokenType::ConstKeyword> ]
      */
-    class StructType final : public Type
+    class StructType final : public Type<StructType>
     {
         std::string m_name;
         bool m_isConst;
@@ -502,20 +543,16 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
      * <UnionType> ::= [ <TokenType::ConstKeyword> ] <TokenType::UnionKeyword> <TokenType::Identifer>
      *                  [ <TokenType::ConstKeyword> ]
      */
-    class UnionType final : public Type
+    class UnionType final : public Type<UnionType>
     {
         std::string m_name;
         bool m_isConst;
@@ -528,16 +565,12 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
-    class EnumType final : public Type
+    class EnumType final : public Type<EnumType>
     {
         std::string m_name;
         bool m_isConst;
@@ -550,13 +583,9 @@ namespace OpenCL::Syntax
 
         bool isConst() const override;
 
-        llvm::Type* type(OpenCL::Codegen::Context& context) const override;
-
-        std::unique_ptr<Type> clone() const override;
+        std::unique_ptr<IType> clone() const override;
 
         std::string name() const override;
-
-        llvm::DIType* debugType(Codegen::Context& context) const override;
     };
 
     /**
@@ -794,17 +823,17 @@ namespace OpenCL::Syntax
      */
     class PostFixExpressionTypeInitializer final : public Node<PostFixExpressionTypeInitializer>
     {
-        std::shared_ptr<Type> m_type;
+        std::shared_ptr<IType> m_type;
         std::vector<std::unique_ptr<NonCommaExpression>> m_nonCommaExpressions;
 
     public:
 
         PostFixExpressionTypeInitializer(std::uint64_t line,
                                          std::uint64_t column,
-                                         std::shared_ptr<Type> type,
+                                         std::shared_ptr<IType> type,
                                          std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions);
 
-        const std::shared_ptr<Type>& getType() const;
+        const std::shared_ptr<IType>& getType() const;
 
         const std::vector<std::unique_ptr<NonCommaExpression>>& getNonCommaExpressions() const;
     };
@@ -904,16 +933,16 @@ namespace OpenCL::Syntax
      */
     class UnaryExpressionSizeOf final : public Node<UnaryExpressionSizeOf>
     {
-        std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>> m_unaryOrType;
+        std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<IType>> m_unaryOrType;
 
     public:
 
         UnaryExpressionSizeOf(std::uint64_t line,
                               std::uint64_t column,
                               std::variant<std::unique_ptr<UnaryExpression>,
-                                           std::shared_ptr<Type>>&& unaryOrType);
+                                           std::shared_ptr<IType>>&& unaryOrType);
 
-        const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<Type>>& getUnaryOrType() const;
+        const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<IType>>& getUnaryOrType() const;
     };
 
     /**
@@ -989,16 +1018,16 @@ namespace OpenCL::Syntax
     class CastExpression final : public Node<CastExpression>
     {
         std::variant<UnaryExpression,
-                     std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>> m_unaryOrCast;
+                     std::pair<std::shared_ptr<IType>, std::unique_ptr<CastExpression>>> m_unaryOrCast;
 
     public:
 
         CastExpression(std::uint64_t line, std::uint64_t column, std::variant<UnaryExpression,
-                                                                              std::pair<std::shared_ptr<Type>,
+                                                                              std::pair<std::shared_ptr<IType>,
                                                                                         std::unique_ptr<CastExpression>>>&& unaryOrCast);
 
         const std::variant<UnaryExpression,
-                           std::pair<std::shared_ptr<Type>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
+                           std::pair<std::shared_ptr<IType>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
     };
 
     /**
@@ -1540,19 +1569,19 @@ namespace OpenCL::Syntax
      */
     class Declarations final : public Node<Declarations>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
-        Declarations(std::uint64_t line, std::uint64_t column, std::vector<std::tuple<std::shared_ptr<Type>,
+        Declarations(std::uint64_t line, std::uint64_t column, std::vector<std::tuple<std::shared_ptr<IType>,
                                                                                       std::string,
                                                                                       std::unique_ptr<InitializerList>>>&& declarations);
 
-        const std::vector<std::tuple<std::shared_ptr<Type>,
+        const std::vector<std::tuple<std::shared_ptr<IType>,
                                      std::string,
                                      std::unique_ptr<InitializerList>>>& getDeclarations() const;
 
-        std::vector<std::tuple<std::shared_ptr<Type>,
+        std::vector<std::tuple<std::shared_ptr<IType>,
                                std::string,
                                std::unique_ptr<InitializerList>>>& getDeclarations();
     };
@@ -1718,7 +1747,7 @@ namespace OpenCL::Syntax
     {
         bool m_isUnion;
         std::string m_name;
-        std::vector<std::pair<std::shared_ptr<Type>, std::string>> m_types;
+        std::vector<std::pair<std::shared_ptr<IType>, std::string>> m_types;
 
     public:
 
@@ -1726,14 +1755,14 @@ namespace OpenCL::Syntax
                                  std::uint64_t column,
                                  bool isUnion,
                                  std::string name,
-                                 std::vector<std::pair<std::shared_ptr<Type>,
+                                 std::vector<std::pair<std::shared_ptr<IType>,
                                                        std::string>>&& types);
 
         bool isUnion() const;
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getTypes() const;
+        const std::vector<std::pair<std::shared_ptr<IType>, std::string>>& getTypes() const;
     };
 
     /**
@@ -1792,9 +1821,9 @@ namespace OpenCL::Syntax
      */
     class Function final : public Node<Function>
     {
-        std::shared_ptr<Type> m_returnType;
+        std::shared_ptr<IType> m_returnType;
         std::string m_name;
-        std::vector<std::pair<std::shared_ptr<Type>, std::string>> m_arguments;
+        std::vector<std::pair<std::shared_ptr<IType>, std::string>> m_arguments;
         std::uint64_t m_scopeLine;
         std::unique_ptr<BlockStatement> m_block;
 
@@ -1802,18 +1831,18 @@ namespace OpenCL::Syntax
 
         Function(std::uint64_t line,
                  std::uint64_t column,
-                 std::shared_ptr<Type> returnType,
+                 std::shared_ptr<IType> returnType,
                  std::string name,
-                 std::vector<std::pair<std::shared_ptr<Type>,
+                 std::vector<std::pair<std::shared_ptr<IType>,
                                        std::string>> arguments,
                  std::uint64_t scopeLine = 0,
                  std::unique_ptr<BlockStatement>&& blockItems = nullptr);
 
-        const std::shared_ptr<Type>& getReturnType() const;
+        const std::shared_ptr<IType>& getReturnType() const;
 
         const std::string& getName() const;
 
-        const std::vector<std::pair<std::shared_ptr<Type>, std::string>>& getArguments() const;
+        const std::vector<std::pair<std::shared_ptr<IType>, std::string>>& getArguments() const;
 
         uint64_t getScopeLine() const;
 
@@ -1827,17 +1856,17 @@ namespace OpenCL::Syntax
      */
     class GlobalDeclaration final : public Node<GlobalDeclaration>
     {
-        std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
 
     public:
 
         GlobalDeclaration(std::uint64_t line,
                           std::uint64_t column,
-                          std::vector<std::tuple<std::shared_ptr<Type>,
+                          std::vector<std::tuple<std::shared_ptr<IType>,
                                                  std::string,
                                                  std::unique_ptr<InitializerList>>>&& declarations);
 
-        const std::vector<std::tuple<std::shared_ptr<Type>,
+        const std::vector<std::tuple<std::shared_ptr<IType>,
                                      std::string,
                                      std::unique_ptr<InitializerList>>>& getDeclarations() const;
     };

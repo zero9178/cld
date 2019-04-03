@@ -132,6 +132,18 @@ namespace OpenCL::Codegen
         void visit(const Syntax::Global& node) override;
 
         void visit(const Syntax::Program& node) override;
+
+        void visit(const Syntax::PrimitiveType& node) override;
+
+        void visit(const Syntax::PointerType& node) override;
+
+        void visit(const Syntax::ArrayType& node) override;
+
+        void visit(const Syntax::StructType& node) override;
+
+        void visit(const Syntax::UnionType& node) override;
+
+        void visit(const Syntax::EnumType& node) override;
     };
 }
 

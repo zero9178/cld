@@ -1,5 +1,5 @@
-#include "CompilerCore/Preprocessor.hpp"
-#include <CompilerCore/Lexer.hpp>
+#include "CompilerCore/Preprocessor/Preprocessor.hpp"
+#include <CompilerCore/C/Lexer.hpp>
 #include <iostream>
 #include <fstream>
 

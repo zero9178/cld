@@ -249,13 +249,416 @@ namespace
 
     std::unordered_map<std::string, llvm::DIType*> cache;
 
-    llvm::DIType* toDwarfType(const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Codegen::Context& context)
+    class DebugVisitor : public OpenCL::Syntax::NodeVisitor<llvm::DIType*>
+    {
+        OpenCL::Codegen::Context& context;
+
+    public:
+
+        explicit DebugVisitor(OpenCL::Codegen::Context& context) : context(context)
+        {}
+
+        void visit(const OpenCL::Syntax::Expression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PrimaryExpressionConstant& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PrimaryExpressionParenthese& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PrimaryExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionSubscript& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionIncrement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionDecrement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionDot& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionArrow& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PostFixExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::AssignmentExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::UnaryExpressionSizeOf& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::UnaryExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::CastExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Term& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::AdditiveExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ShiftExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::RelationalExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::EqualityExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BitAndExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BitXorExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BitOrExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::LogicalAndExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::LogicalOrExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ConditionalExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::NonCommaExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ReturnStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ExpressionStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::IfStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::SwitchStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::DefaultStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::CaseStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BlockStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ForStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::InitializerListScalarExpression& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::InitializerListBlock& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::InitializerList& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Declarations& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BlockItem& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ForDeclarationStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::HeadWhileStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::FootWhileStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::BreakStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::ContinueStatement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Statement& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::StructOrUnionDeclaration& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::EnumDeclaration& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::TypedefDeclaration& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Function& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::GlobalDeclaration& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Global& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::Program& ) override
+        {
+
+        }
+
+        void visit(const OpenCL::Syntax::PrimitiveType& node) override
+        {
+            if (node.isVoid())
+            {
+                m_return = nullptr;
+            }
+            auto* result = context.debugBuilder->createBasicType(node.name(), node.getBitCount(), [&node]() -> unsigned int
+            {
+                if (!node.isFloatingPoint() && node.getBitCount())
+                {
+                    if (node.getBitCount() == 8)
+                    {
+                        return node.isSigned() ? llvm::dwarf::DW_ATE_signed_char : llvm::dwarf::DW_ATE_unsigned_char;
+                    }
+                    else
+                    {
+                        return node.isSigned() ? llvm::dwarf::DW_ATE_signed : llvm::dwarf::DW_ATE_unsigned;
+                    }
+                }
+                else
+                {
+                    return llvm::dwarf::DW_ATE_float;
+                }
+            }());
+            if (node.isConst())
+            {
+                m_return = context.debugBuilder->createQualifiedType(llvm::dwarf::DW_TAG_const_type, result);
+            }
+            else
+            {
+                m_return = result;
+            }
+        }
+
+        void visit(const OpenCL::Syntax::PointerType& node) override
+        {
+            node.getType().accept(*this);
+            auto* result = context.debugBuilder->createPointerType(std::get<llvm::DIType*>(m_return), 64, 64);
+            if (node.isConst())
+            {
+                m_return = context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+            }
+            else
+            {
+                m_return = result;
+            }
+        }
+
+        void visit(const OpenCL::Syntax::ArrayType& node) override
+        {
+            node.getType()->accept(*this);
+            auto* elemenType = std::get<llvm::DIType*>(m_return);
+            node.accept(context);
+            auto* llvmArrayType = context.getReturn<llvm::Type*>();
+            m_return = context.debugBuilder->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
+                                                         getAlignment(llvmArrayType),
+                                                         elemenType,
+                                                         llvm::MDTuple::get(context.context,
+                                                                            context.debugBuilder
+                                                                                   ->getOrCreateSubrange(0,node.getSize())));
+        }
+
+        void visit(const OpenCL::Syntax::StructType& node) override
+        {
+            auto* result = cache.at(node.getName());
+            if (node.isConst())
+            {
+                m_return = context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+            }
+            else
+            {
+                m_return = result;
+            }
+        }
+
+        void visit(const OpenCL::Syntax::UnionType& node) override
+        {
+            auto* result = cache.at(node.getName());
+            if (node.isConst())
+            {
+                m_return = context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+            }
+            else
+            {
+                m_return = result;
+            }
+        }
+
+        void visit(const OpenCL::Syntax::EnumType& node) override
+        {
+            auto* result = cache.at(node.getName());
+            if (node.isConst())
+            {
+                m_return = context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
+            }
+            else
+            {
+                m_return = result;
+            }
+        }
+    };
+
+    llvm::DIType* toDwarfType(const std::shared_ptr<OpenCL::Syntax::IType>& type, OpenCL::Codegen::Context& context)
     {
         if (auto result = cache.find(type->name()); result != cache.end())
         {
             return result->second;
         }
-        auto* newDebugType = type->debugType(context);
+        DebugVisitor visitor(context);
+        type->accept(visitor);
+        auto* newDebugType = visitor.getReturn<llvm::DIType*>();
         cache[type->name()] = newDebugType;
         return newDebugType;
     }
@@ -334,9 +737,10 @@ namespace
 
     void match(llvm::ArrayRef<std::pair<std::int64_t, typename OpenCL::Syntax::InitializerListBlock::variant>> list,
                llvm::Value* pointer,
-               const std::shared_ptr<OpenCL::Syntax::Type>& type, OpenCL::Codegen::Context& context)
+               const std::shared_ptr<OpenCL::Syntax::IType>& type, OpenCL::Codegen::Context& context)
     {
-        auto* allocaType = type->type(context);
+        type->accept(context);
+        auto* allocaType = context.getReturn<llvm::Type*>();
         if (list.empty())
         {
             if (allocaType->isStructTy() || allocaType->isArrayTy())
@@ -351,7 +755,7 @@ namespace
         else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
         {
             auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
-                                                                                      std::shared_ptr<OpenCL::Syntax::Type>>
+                                                                                      std::shared_ptr<OpenCL::Syntax::IType>>
                                                 {
                                                     using T = std::decay_t<decltype(value)>;
                                                     if constexpr(std::is_same_v<T,
@@ -380,7 +784,8 @@ namespace
                 auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
                 if (i >= list.size())
                 {
-                    context.builder.CreateStore(getZeroFor(iter->type(context)), member);
+                    iter->accept(context);
+                    context.builder.CreateStore(getZeroFor(context.getReturn<llvm::Type*>()), member);
                 }
                 else
                 {
@@ -395,7 +800,7 @@ namespace
                                    {
                                        value.accept(context);
                                        auto[newValue, otherType] = context.getReturn<OpenCL::Codegen::NodeRetType>();
-                                       if (llvm::LoadInst* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
+                                       if (auto* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
                                            llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
                                            && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
                                        {
@@ -410,9 +815,10 @@ namespace
                                        }
                                        else
                                        {
+                                           iter->accept(context);
                                            castPrimitive(newValue,
                                                          otherType->isSigned(),
-                                                         iter->type(context),
+                                                         context.getReturn<llvm::Type*>(),
                                                          iter->isSigned(),
                                                          context);
                                            context.builder.CreateStore(newValue, member);
@@ -568,169 +974,6 @@ void OpenCL::Codegen::Context::doForLoop(const OpenCL::Syntax::Expression* contr
     continueBlocks.pop_back();
 }
 
-llvm::Type* OpenCL::Syntax::PrimitiveType::type(Codegen::Context& context) const
-{
-    if (isFloatingPoint())
-    {
-        if (getBitCount() == 32)
-        {
-            return context.builder.getFloatTy();
-        }
-        else if (getBitCount() == 64)
-        {
-            return context.builder.getDoubleTy();
-        }
-        else
-        {
-            throw std::runtime_error("Invalid bit size for floating point");
-        }
-    }
-    else if (getBitCount())
-    {
-        return context.builder.getIntNTy(getBitCount());
-    }
-    else
-    {
-        return context.builder.getVoidTy();
-    }
-}
-
-llvm::Type* OpenCL::Syntax::PointerType::type(OpenCL::Codegen::Context& context) const
-{
-    auto* type = getType().type(context);
-    if (!type->isVoidTy())
-    {
-        return llvm::PointerType::getUnqual(type);
-    }
-    else
-    {
-        return context.builder.getInt64Ty();
-    }
-}
-
-//OpenCL::Syntax::Node::constantVariant OpenCL::Syntax::PrimaryExpressionParenthese::solveConstantExpression() const
-//{
-//    return getExpression().solveConstantExpression();
-//}
-
-llvm::Type* OpenCL::Syntax::ArrayType::type(OpenCL::Codegen::Context& context) const
-{
-    return llvm::ArrayType::get(getType()->type(context), getSize());
-}
-
-llvm::Type* OpenCL::Syntax::StructType::type(OpenCL::Codegen::Context& context) const
-{
-    return context.module->getTypeByName("struct." + getName());
-}
-
-llvm::Type* OpenCL::Syntax::UnionType::type(OpenCL::Codegen::Context& context) const
-{
-    return context.module->getTypeByName("union." + getName());
-}
-
-llvm::DIType* OpenCL::Syntax::PrimitiveType::debugType(OpenCL::Codegen::Context& context) const
-{
-    if (isVoid())
-    {
-        return nullptr;
-    }
-    auto* result = context.debugBuilder->createBasicType(name(), getBitCount(), [this]() -> unsigned int
-    {
-        if (!isFloatingPoint() && getBitCount())
-        {
-            if (getBitCount() == 8)
-            {
-                return isSigned() ? llvm::dwarf::DW_ATE_signed_char : llvm::dwarf::DW_ATE_unsigned_char;
-            }
-            else
-            {
-                return isSigned() ? llvm::dwarf::DW_ATE_signed : llvm::dwarf::DW_ATE_unsigned;
-            }
-        }
-        else
-        {
-            return llvm::dwarf::DW_ATE_float;
-        }
-    }());
-    if (isConst())
-    {
-        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
-    }
-    else
-    {
-        return result;
-    }
-}
-
-llvm::DIType* OpenCL::Syntax::PointerType::debugType(OpenCL::Codegen::Context& context) const
-{
-    auto* result = context.debugBuilder->createPointerType(getType().debugType(context), 64, 64);
-    if (isConst())
-    {
-        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
-    }
-    else
-    {
-        return result;
-    }
-}
-
-llvm::DIType* OpenCL::Syntax::ArrayType::debugType(OpenCL::Codegen::Context& context) const
-{
-    auto* elemenType = getType()->debugType(context);
-    auto* llvmArrayType = type(context);
-    return context.debugBuilder->createArrayType(context.module->getDataLayout().getTypeSizeInBits(llvmArrayType),
-                                                 getAlignment(llvmArrayType),
-                                                 elemenType,
-                                                 llvm::MDTuple::get(context.context,
-                                                                    context.debugBuilder
-                                                                           ->getOrCreateSubrange(0, getSize())));
-}
-
-llvm::DIType* OpenCL::Syntax::StructType::debugType(OpenCL::Codegen::Context& context) const
-{
-    auto* result = cache.at(getName());
-    if (isConst())
-    {
-        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
-    }
-    else
-    {
-        return result;
-    }
-}
-
-llvm::DIType* OpenCL::Syntax::UnionType::debugType(OpenCL::Codegen::Context& context) const
-{
-    auto* result = cache.at(getName());
-    if (isConst())
-    {
-        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
-    }
-    else
-    {
-        return result;
-    }
-}
-
-llvm::DIType* OpenCL::Syntax::EnumType::debugType(OpenCL::Codegen::Context& context) const
-{
-    auto* result = cache.at(getName());
-    if (isConst())
-    {
-        return context.debugBuilder->createQualifiedType(llvm::dwarf::DW_AT_const_value, result);
-    }
-    else
-    {
-        return result;
-    }
-}
-
-llvm::Type* OpenCL::Syntax::EnumType::type(OpenCL::Codegen::Context& context) const
-{
-    return context.builder.getInt32Ty();
-}
-
 void OpenCL::Codegen::Context::visit(const Syntax::Expression& node)
 {
     emitLocation(&node, *this);
@@ -757,7 +1000,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionCons
 {
     emitLocation(&node, *this);
     static std::unordered_map<std::string, llvm::Value*> cache;
-    m_return = std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>
+    m_return = std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::IType>>
                           {
                               using T = std::decay_t<decltype(value)>;
                               if constexpr(std::is_same_v<T, std::int32_t>)
@@ -948,7 +1191,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDot&
     {
         auto memberType = structInfo.types.at(structInfo.order.at(node.getIdentifier()));
         auto* pointer = builder.CreateInBoundsGEP(structLoad->getPointerOperand(), {zero, zero});
-        auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(*this)));
+        memberType->accept(*this);
+        auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(std::get<llvm::Type*>(m_return)));
         m_return.emplace<NodeRetType>(builder.CreateLoad(cast), memberType);
     }
 }
@@ -976,7 +1220,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionArro
     {
         auto memberType = structInfo.types.at(structInfo.order.at(node.getIdentifier()));
         auto* pointer = builder.CreateInBoundsGEP(structValue, {zero, zero});
-        auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(memberType->type(*this)));
+        memberType->accept(*this);
+        auto* cast = builder.CreateBitCast(pointer, llvm::PointerType::getUnqual(std::get<llvm::Type*>(m_return)));
         m_return.emplace<NodeRetType>(builder.CreateLoad(cast), memberType);
     }
 }
@@ -1000,9 +1245,10 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunc
         auto[arg, signarg] = std::get<NodeRetType>(m_return);
         if (!dynamic_cast<const Syntax::StructType*>(function.arguments[i]))
         {
+            function.arguments[i]->accept(*this);
             castPrimitive(arg,
                           signarg->isSigned(),
-                          function.arguments[i]->type(*this),
+                          std::get<llvm::Type*>(m_return),
                           function.arguments[i]->isSigned(),
                           *this);
             arguments.emplace_back(arg);
@@ -1037,8 +1283,9 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunc
     {
         llvm::IRBuilder<>
             tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
-        auto* alloca = tmpB.CreateAlloca(function.retType->type(*this));
-        alloca->setAlignment(getAlignment(function.retType->type(*this)));
+        function.retType->accept(*this);
+        auto* alloca = tmpB.CreateAlloca(std::get<llvm::Type*>(m_return));
+        alloca->setAlignment(getAlignment(std::get<llvm::Type*>(m_return)));
         arguments.insert(arguments.begin(), alloca);
         builder.CreateCall(value, arguments);
         m_return.emplace<NodeRetType>(builder.CreateLoad(alloca), function.retType);
@@ -1048,7 +1295,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunc
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
 {
     emitLocation(&node, *this);
-    auto* type = node.getType()->type(*this);
+    node.getType()->accept(*this);
+    auto* type = std::get<llvm::Type*>(m_return);
     llvm::IRBuilder<>
         tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
     auto* alloca = tmpB.CreateAlloca(type);
@@ -1064,8 +1312,9 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionType
         for (std::size_t i = 0; i < type->getStructNumElements(); i++)
         {
             node.getNonCommaExpressions().at(i)->accept(*this);
-            auto&[value, ntype] = std::get<NodeRetType>(m_return);
-            if (ntype->type(*this) != type->getStructElementType(i))
+            auto[value, ntype] = std::get<NodeRetType>(m_return);
+            ntype->accept(*this);
+            if (std::get<llvm::Type*>(m_return) != type->getStructElementType(i))
             {
                 castPrimitive(value,
                               ntype->isSigned(),
@@ -1085,7 +1334,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionType
             throw std::runtime_error("Amount of values unequal to 1");
         }
         node.getNonCommaExpressions()[0]->accept(*this);
-        auto&[value, ntype] = std::get<NodeRetType>(m_return);
+        auto[value, ntype] = std::get<NodeRetType>(m_return);
         builder.CreateStore(value, alloca);
     }
     m_return.emplace<NodeRetType>(builder.CreateLoad(alloca), node.getType());
@@ -1414,7 +1663,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf
                    }
                    else
                    {
-                       auto size = module->getDataLayout().getTypeAllocSize(value->type(*this));
+                       value->accept(*this);
+                       auto size = module->getDataLayout().getTypeAllocSize(std::get<llvm::Type*>(m_return));
                        m_return.emplace<NodeRetType>(builder.getIntN(64, size),
                                                      std::make_unique<Syntax::PrimitiveType>(64, false, false, false));
                    }
@@ -1444,7 +1694,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
                        auto&[type, cast] = value;
                        cast->accept(*this);
                        auto[rhs, sign] = std::get<NodeRetType>(m_return);
-                       castPrimitive(rhs, sign->isSigned(), type->type(*this), type->isSigned(), *this);
+                       type->accept(*this);
+                       castPrimitive(rhs, sign->isSigned(), std::get<llvm::Type*>(m_return), type->isSigned(), *this);
                        m_return.emplace<NodeRetType>(rhs, type);
                    }
                }, node.getUnaryOrCast());
@@ -1947,7 +2198,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression
         return;
     }
     m_return.emplace<NodeRetType>(value, vsign);
-    return;
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::NonCommaExpression& node)
@@ -2100,7 +2350,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
     {
         throw std::runtime_error("case without switch statement");
     }
-    auto[value, sign] = std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Syntax::Type>>
+    auto[value, sign] = std::visit([this](auto&& value) -> std::pair<llvm::Value*, std::shared_ptr<Syntax::IType>>
                                    {
                                        using T = std::decay_t<decltype(value)>;
                                        if constexpr(std::is_same_v<T, std::int32_t>)
@@ -2243,7 +2493,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                     && primitive->getBitCount() == 8)
                 {
                     std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant()).accept(*this);
-                    auto [value, type] = std::get<NodeRetType>(m_return);
+                    auto[value, type] = std::get<NodeRetType>(m_return);
                     auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
                     if (value->getType()->isArrayTy() && load
                         && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
@@ -2262,7 +2512,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
             }
             else
             {
-                auto elementSize = elementsNeededForType(array->getType()->type(*this));
+                array->getType()->accept(*this);
+                auto elementSize = elementsNeededForType(std::get<llvm::Type*>(m_return));
                 std::size_t i = 0, max = std::numeric_limits<std::size_t>::lowest();
                 for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
                      iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
@@ -2317,7 +2568,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                 }
             }
         }
-        auto* allocaType = type->type(*this);
+        type->accept(*this);
+        auto* allocaType = std::get<llvm::Type*>(m_return);
         auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
         auto* sp = debugScope.empty() ? debugUnit : debugScope
             .back();
@@ -2342,7 +2594,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                     && allocaType->getArrayElementType()->getIntegerBitWidth() == 8)
                 {
                     std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant()).accept(*this);
-                    auto [value, type] = std::get<NodeRetType>(m_return);
+                    auto[value, type] = std::get<NodeRetType>(m_return);
                     auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
                     if (value->getType()->isArrayTy() && load
                         && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
@@ -2363,7 +2615,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                 else if (!allocaType->isArrayTy())
                 {
                     optionalExpression->accept(*this);
-                    auto [value, otherType] = std::get<NodeRetType>(m_return);
+                    auto[value, otherType] = std::get<NodeRetType>(m_return);
                     castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), *this);
                     builder.CreateStore(value, alloca);
                 }
@@ -2395,10 +2647,11 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                                        else
                                        {
                                            value.accept(*this);
-                                           auto [newValue, otherType] = std::get<NodeRetType>(m_return);
+                                           auto[newValue, otherType] = std::get<NodeRetType>(m_return);
+                                           type->getType()->accept(*this);
                                            castPrimitive(newValue,
                                                          otherType->isSigned(),
-                                                         type->getType()->type(*this),
+                                                         std::get<llvm::Type*>(m_return),
                                                          type->getType()->isSigned(),
                                                          *this);
                                            builder.CreateStore(newValue, member);
@@ -2525,7 +2778,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructOrUnionDeclarat
     {
         structType.order.insert({pair.second, structType.types.size()});
         structType.types.push_back(pair.first);
-        return pair.first->type(*this);
+        pair.first->accept(*this);
+        return std::get<llvm::Type*>(m_return);
     });
     if (!node.isUnion())
     {
@@ -2555,7 +2809,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructOrUnionDeclarat
     for (auto& iter : structType.types)
     {
         auto* member = toDwarfType(iter, *this);
-        auto* memberType = iter->type(*this);
+        iter->accept(*this);
+        auto* memberType = std::get<llvm::Type*>(m_return);
         subTypes.push_back(debugBuilder->createMemberType(sp,
                                                           std::find_if(structType.order.begin(),
                                                                        structType.order.end(),
@@ -2647,7 +2902,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
     if (!hasFunction(node.getName()))
     {
         {
-            std::vector<const Syntax::Type*> types;
+            std::vector<const Syntax::IType*> types;
             std::transform(node.getArguments().begin(),
                            node.getArguments().end(),
                            std::back_inserter(types),
@@ -2665,22 +2920,24 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
             bool isStruct = dynamic_cast<const Syntax::StructType*>(node.getReturnType().get());
             for (auto&[type, name] : node.getArguments())
             {
+                type->accept(*this);
                 if (!dynamic_cast<const Syntax::StructType*>(type.get()))
                 {
-                    types.emplace_back(type->type(*this));
+                    types.emplace_back(std::get<llvm::Type*>(m_return));
                 }
                 else
                 {
-                    types.emplace_back(llvm::PointerType::getUnqual(type->type(*this)));
+                    types.emplace_back(llvm::PointerType::getUnqual(std::get<llvm::Type*>(m_return)));
                     needsByVal.insert(i + (isStruct ? 2 : 1));
                 }
                 i++;
             }
+            node.getReturnType()->accept(*this);
             if (isStruct)
             {
-                types.insert(types.begin(), llvm::PointerType::getUnqual(node.getReturnType()->type(*this)));
+                types.insert(types.begin(), llvm::PointerType::getUnqual(std::get<llvm::Type*>(m_return)));
             }
-            auto* ft = llvm::FunctionType::get(isStruct ? builder.getVoidTy() : node.getReturnType()->type(*this),
+            auto* ft = llvm::FunctionType::get(isStruct ? builder.getVoidTy() : std::get<llvm::Type*>(m_return),
                                                types,
                                                false);
             auto* fun = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, node.getName(), module.get());
@@ -2792,7 +3049,8 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
     {
         if (!node.getReturnType()->isVoid())
         {
-            auto* type = node.getReturnType()->type(*this);
+            node.getReturnType()->accept(*this);
+            auto* type = std::get<llvm::Type*>(m_return);
             llvm::Value* value = nullptr;
             if (type->isIntegerTy())
             {
@@ -2818,8 +3076,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
         currentFunction->print(llvm::outs());
         std::terminate();
     }
-
-    return;
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& node)
@@ -2827,15 +3083,17 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& no
     //TODO: Make array size deduction and etc work
     for (auto&[type, name, optionalValue] : node.getDeclarations())
     {
-        if(optionalValue)
+        if (optionalValue)
         {
             optionalValue->accept(*this);
         }
         auto[constant, sign] = optionalValue ? std::get<NodeRetType>(m_return) : NodeRetType{};
+        type->accept(*this);
         if (constant
-            && (constant->getType() != type->type(*this) || (sign && sign->isSigned()) != type->isSigned()))
+            && (constant->getType() != std::get<llvm::Type*>(m_return)
+                || (sign && sign->isSigned()) != type->isSigned()))
         {
-            castPrimitive(constant, sign->isSigned(), type->type(*this), type->isSigned(), *this);
+            castPrimitive(constant, sign->isSigned(), std::get<llvm::Type*>(m_return), type->isSigned(), *this);
         }
         if (constant && !llvm::isa<llvm::Constant>(constant))
         {
@@ -2843,11 +3101,11 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& no
         }
 
         auto* newGlobal = new llvm::GlobalVariable(*module,
-                                                   type->type(*this),
+                                                   std::get<llvm::Type*>(m_return),
                                                    type->isConst(),
                                                    llvm::GlobalVariable::LinkageTypes::ExternalLinkage,
                                                    constant ? llvm::cast<llvm::Constant>(constant) :
-                                                   getZeroFor(type->type(*this)),
+                                                   getZeroFor(std::get<llvm::Type*>(m_return)),
                                                    name);
         debugBuilder->createGlobalVariableExpression(debugUnit,
                                                      name,
@@ -2896,4 +3154,67 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Program& node)
         iter.accept(*this);
     }
     debugBuilder->finalize();
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimitiveType& node)
+{
+    if (node.isFloatingPoint())
+    {
+        if (node.getBitCount() == 32)
+        {
+            m_return = builder.getFloatTy();
+            return;
+        }
+        else if (node.getBitCount() == 64)
+        {
+            m_return = builder.getDoubleTy();
+        }
+        else
+        {
+            throw std::runtime_error("Invalid bit size for floating point");
+        }
+    }
+    else if (node.getBitCount())
+    {
+        m_return = builder.getIntNTy(node.getBitCount());
+    }
+    else
+    {
+        m_return = builder.getVoidTy();
+    }
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PointerType& node)
+{
+    node.getType().accept(*this);
+    auto* type = std::get<TypeRetType>(m_return);
+    if (!type->isVoidTy())
+    {
+        m_return = llvm::PointerType::getUnqual(type);
+    }
+    else
+    {
+        m_return = builder.getInt64Ty();
+    }
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ArrayType& node)
+{
+    node.getType()->accept(*this);
+    m_return = llvm::ArrayType::get(std::get<TypeRetType>(m_return), node.getSize());
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructType& node)
+{
+    m_return = module->getTypeByName("struct." + node.getName());
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnionType& node)
+{
+    m_return = module->getTypeByName("union." + node.getName());
+}
+
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EnumType&)
+{
+    m_return = builder.getInt32Ty();
 }

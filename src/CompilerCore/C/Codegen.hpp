@@ -2,19 +2,24 @@
 #define OPENCLPARSER_CODEGEN_HPP
 
 #include "Syntax.hpp"
+#include <map>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/DIBuilder.h>
 
 namespace OpenCL::Codegen
 {
-    using NodeRetType = std::pair<llvm::Value*,std::shared_ptr<Syntax::Type>>;
+    using NodeRetType = std::pair<llvm::Value*,std::shared_ptr<Syntax::IType>>;
 
-    class Context final : public OpenCL::Syntax::NodeVisitor<NodeRetType>
+    using TypeRetType = llvm::Type*;
+
+    class Context final : public OpenCL::Syntax::NodeVisitor<NodeRetType,TypeRetType>
     {
-        using tuple = std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::Type>>;
+        using tuple = std::pair<llvm::Value*, std::shared_ptr<OpenCL::Syntax::IType>>;
 
         struct Function
         {
-            std::shared_ptr<OpenCL::Syntax::Type> retType;
-            std::vector<const OpenCL::Syntax::Type*> arguments;
+            std::shared_ptr<OpenCL::Syntax::IType> retType;
+            std::vector<const OpenCL::Syntax::IType*> arguments;
         };
 
         std::map<std::string, Function> m_functions;
@@ -33,7 +38,7 @@ namespace OpenCL::Codegen
         llvm::DIFile* debugUnit = nullptr;
         std::unique_ptr<llvm::Module> module;
         llvm::Function* currentFunction;
-        const OpenCL::Syntax::Type* functionRetType = nullptr;
+        const OpenCL::Syntax::IType* functionRetType = nullptr;
         std::vector<llvm::BasicBlock*> continueBlocks;
         std::vector<llvm::BasicBlock*> breakBlocks;
         std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
@@ -42,7 +47,7 @@ namespace OpenCL::Codegen
         struct StructOrUnion
         {
             std::map<std::string, std::uint64_t> order;
-            std::vector<std::shared_ptr<OpenCL::Syntax::Type>> types;
+            std::vector<std::shared_ptr<OpenCL::Syntax::IType>> types;
             bool isUnion = false;
         };
 
@@ -218,6 +223,18 @@ namespace OpenCL::Codegen
         void visit(const Syntax::Global& node) override;
 
         void visit(const Syntax::Program& node) override;
+
+        void visit(const Syntax::PrimitiveType& node) override;
+
+        void visit(const Syntax::PointerType& node) override;
+
+        void visit(const Syntax::ArrayType& node) override;
+
+        void visit(const Syntax::StructType& node) override;
+
+        void visit(const Syntax::UnionType& node) override;
+
+        void visit(const Syntax::EnumType& node) override;
     };
 }
 

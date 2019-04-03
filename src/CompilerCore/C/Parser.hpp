@@ -2,6 +2,7 @@
 #define OPENCLPARSER_PARSER_HPP
 
 #include "Syntax.hpp"
+#include <map>
 
 namespace OpenCL::Parser
 {
@@ -14,7 +15,7 @@ namespace OpenCL::Parser
 
     public:
 
-        std::map<std::string, std::shared_ptr<OpenCL::Syntax::Type>> typedefs;
+        std::map<std::string, std::shared_ptr<OpenCL::Syntax::IType>> typedefs;
         std::set<std::string> functions;
 
         ParsingContext()
@@ -147,7 +148,7 @@ namespace OpenCL::Parser
 
     Syntax::PrimaryExpression parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
 
-    std::unique_ptr<OpenCL::Syntax::Type> parseType(Tokens& tokens, ParsingContext& context);
+    std::unique_ptr<OpenCL::Syntax::IType> parseType(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::PrimitiveType parsePrimitiveType(Tokens& tokens, ParsingContext& context);
 

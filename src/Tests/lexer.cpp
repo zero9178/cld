@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <CompilerCore/Lexer.hpp>
+#include <CompilerCore/C/Lexer.hpp>
 
 TEST(Lexer,IntegerLiterals)
 {

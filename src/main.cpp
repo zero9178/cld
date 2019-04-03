@@ -1,7 +1,7 @@
-#include "CompilerCore/Lexer.hpp"
-#include "CompilerCore/Parser.hpp"
-#include "CompilerCore/Preprocessor.hpp"
-#include "CompilerCore/Codegen.hpp"
+#include "CompilerCore/C/Lexer.hpp"
+#include "CompilerCore/C/Parser.hpp"
+#include "CompilerCore/Preprocessor/Preprocessor.hpp"
+#include "CompilerCore/C/Codegen.hpp"
 
 #include <iostream>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>

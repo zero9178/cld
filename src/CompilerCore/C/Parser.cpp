@@ -1,6 +1,9 @@
 #include "Parser.hpp"
 
+#include "ConstantEvaluator.hpp"
+
 #include <stack>
+#include <algorithm>
 
 OpenCL::Syntax::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
 {
@@ -48,7 +51,7 @@ namespace
                 && context.typedefs.count(std::get<std::string>(type.getValue())));
     }
 
-    std::unique_ptr<Type> makeConst(const std::unique_ptr<Type>& type)
+    std::unique_ptr<IType> makeConst(const std::unique_ptr<IType>& type)
     {
         auto clone = type->clone();
         if (dynamic_cast<PrimitiveType*>(clone.get()))
@@ -162,7 +165,7 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
         throw std::runtime_error("Expected { after struct definition");
     }
     tokens.pop_back();
-    std::vector<std::pair<std::shared_ptr<Type>, std::string>> fields;
+    std::vector<std::pair<std::shared_ptr<IType>, std::string>> fields;
     while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
     {
         auto type = parseType(tokens, context);
@@ -180,7 +183,9 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
             {
                 tokens.pop_back();
                 auto constant = parseNonCommaExpression(tokens, context);
-                /*sizes.push_back(std::visit([](auto&& value) -> std::size_t
+                Codegen::ConstantEvaluator evaluator;
+                constant.accept(evaluator);
+                sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                            {
                                                using T = std::decay_t<decltype(value)>;
                                                if constexpr(std::is_integral_v<T>)
@@ -192,7 +197,7 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
                                                    throw std::runtime_error(
                                                        "Only integral type supported for array size");
                                                }
-                                           }, constant->solveConstantExpression()));*/
+                                           },evaluator.getReturn<Codegen::ConstRetType>()));
                 if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
                 {
                     throw std::runtime_error("Expected ] after array declaration");
@@ -252,7 +257,9 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
         {
             tokens.pop_back();
             auto constant = parseNonCommaExpression(tokens, context);
-            /*value = std::visit([](auto&& value) -> std::int32_t
+            Codegen::ConstantEvaluator evaluator;
+            constant.accept(evaluator);
+            value = std::visit([](auto&& value) -> std::int32_t
                                {
                                    using T = std::decay_t<decltype(value)>;
                                    if constexpr(std::is_same_v<T, void*>)
@@ -263,7 +270,7 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
                                    {
                                        return value;
                                    }
-                               }, constant->solveConstantExpression());*/
+                               },evaluator.getReturn<Codegen::ConstRetType>());
         }
         if (tokens.back().getTokenType() == TokenType::Comma)
         {
@@ -309,7 +316,7 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
     auto column = tokens.back().getColumn();
     tokens.pop_back();
     std::unique_ptr<StructOrUnionDeclaration> optionalDeclaration;
-    std::unique_ptr<Type> type;
+    std::unique_ptr<IType> type;
     if (tokens.back().getTokenType() == TokenType::StructKeyword
         || tokens.back().getTokenType() == TokenType::UnionKeyword)
     {
@@ -353,7 +360,9 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
         {
             tokens.pop_back();
             auto constant = parseNonCommaExpression(tokens, context);
-            /*sizes.push_back(std::visit([](auto&& value) -> std::size_t
+            Codegen::ConstantEvaluator evaluator;
+            constant.accept(evaluator);
+            sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                        {
                                            using T = std::decay_t<decltype(value)>;
                                            if constexpr(std::is_integral_v<T>)
@@ -365,7 +374,7 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
                                                throw std::runtime_error(
                                                    "Only integral type supported for array size");
                                            }
-                                       }, constant->solveConstantExpression()));*/
+                                       },evaluator.getReturn<Codegen::ConstRetType>()));
             if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
             {
                 throw std::runtime_error("Expected ] after array declaration");
@@ -426,7 +435,7 @@ OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingCo
     {
         throw std::runtime_error("Expected Opening Parantheses after function identifier");
     }
-    std::vector<std::pair<std::shared_ptr<Type>, std::string>> arguments;
+    std::vector<std::pair<std::shared_ptr<IType>, std::string>> arguments;
     context.pushScope();
     currToken = tokens.back();
     if (currToken.getTokenType() != TokenType::CloseParenthese)
@@ -479,7 +488,7 @@ OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingCo
 
         return Function(line,
                         column,
-                        std::shared_ptr<Type>(rettype.release()),
+                        std::shared_ptr<IType>(rettype.release()),
                         std::move(name),
                         std::move(arguments),
                         scopeLine,
@@ -491,7 +500,7 @@ OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingCo
         tokens.pop_back();
         return Function(line,
                         column,
-                        std::shared_ptr<Type>(rettype.release()),
+                        std::shared_ptr<IType>(rettype.release()),
                         std::move(name),
                         std::move(arguments));
     }
@@ -501,9 +510,9 @@ OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingCo
     }
 }
 
-std::unique_ptr<OpenCL::Syntax::Type> OpenCL::Parser::parseType(Tokens& tokens, ParsingContext& context)
+std::unique_ptr<OpenCL::Syntax::IType> OpenCL::Parser::parseType(Tokens& tokens, ParsingContext& context)
 {
-    std::stack<std::unique_ptr<Type>> types;
+    std::stack<std::unique_ptr<IType>> types;
     for (auto iter = tokens.rbegin(); iter != tokens.rend();)
     {
         switch (iter->getTokenType())
@@ -771,7 +780,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
     auto line = tokens.back().getLine();
     auto column = tokens.back().getColumn();
     auto type = parseType(tokens, context);
-    std::vector<std::tuple<std::shared_ptr<Type>, std::string, std::unique_ptr<InitializerList>>> declarations;
+    std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<InitializerList>>> declarations;
     while (true)
     {
         auto currToken = tokens.back();
@@ -792,7 +801,9 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
             if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
             {
                 auto constant = parseNonCommaExpression(tokens, context);
-                /*sizes.push_back(std::visit([](auto&& value) -> std::size_t
+                Codegen::ConstantEvaluator evaluator;
+                constant.accept(evaluator);
+                sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                            {
                                                using T = std::decay_t<decltype(value)>;
                                                if constexpr(std::is_integral_v<T>)
@@ -804,7 +815,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
                                                    throw std::runtime_error(
                                                        "Only integral type supported for array size");
                                                }
-                                           }, constant->solveConstantExpression()));*/
+                                           },evaluator.getReturn<Codegen::ConstRetType>()));
                 if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
                 {
                     throw std::runtime_error("Expected ] after array declaration");
@@ -832,7 +843,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
         currToken = tokens.back();
         if (allowInitialization && currToken.getTokenType() == TokenType::Assignment)
         {
-            auto shared = std::shared_ptr<Type>(std::move(thisType));
+            auto shared = std::shared_ptr<IType>(std::move(thisType));
             tokens.pop_back();
             declarations
                 .emplace_back(shared, name,std::make_unique<InitializerList>(parseInitializerList(tokens, context)));
@@ -895,7 +906,9 @@ OpenCL::Syntax::InitializerListBlock OpenCL::Parser::parseInitializerListBlock(T
                 throw std::runtime_error("Expected = after designator in initializer list");
             }
             tokens.pop_back();
-            /*index = std::visit([](auto&& value) -> std::int64_t
+            Codegen::ConstantEvaluator evaluator;
+            constant.accept(evaluator);
+            index = std::visit([](auto&& value) -> std::int64_t
                                {
                                    using T = std::decay_t<decltype(value)>;
                                    if constexpr(std::is_integral_v<T>)
@@ -906,7 +919,7 @@ OpenCL::Syntax::InitializerListBlock OpenCL::Parser::parseInitializerListBlock(T
                                    {
                                        throw std::runtime_error("Invalid type of constanst expression");
                                    }
-                               }, constant->solveConstantExpression());*/
+                               },evaluator.getReturn<Codegen::ConstRetType>());
         }
         if (tokens.back().getTokenType() == TokenType::OpenBrace)
         {
@@ -1182,9 +1195,10 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
                 throw std::runtime_error("Expected : after constant expression of case");
             }
             tokens.pop_back();
+            Codegen::ConstantEvaluator evaluator;
+            expression.accept(evaluator);
             return Statement(line, column, CaseStatement(line, column,
-                                                         0,
-                //expression->solveConstantExpression(),
+                                                         std::move(evaluator.getReturn<Codegen::ConstRetType>()),
                                                          tokens.back().getTokenType() != TokenType::CaseKeyword
                                                          ? std::make_unique<Statement>(parseStatement(tokens, context))
                                                          : nullptr));
@@ -1698,7 +1712,7 @@ OpenCL::Syntax::CastExpression OpenCL::Parser::parseCastExpression(Tokens& token
                 tokens.pop_back();
                 return CastExpression(line,
                                       column,
-                                      std::pair<std::unique_ptr<Type>, std::unique_ptr<CastExpression>>{
+                                      std::pair<std::unique_ptr<IType>, std::unique_ptr<CastExpression>>{
                                           std::move(type),
                                           std::make_unique<CastExpression>(parseCastExpression(tokens, context))});
             }
