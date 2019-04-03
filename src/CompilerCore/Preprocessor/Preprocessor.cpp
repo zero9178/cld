@@ -348,8 +348,42 @@ namespace
     }
 }
 
+
 std::string OpenCL::PP::preprocess(std::string&& source)
 {
     unordered_map defines;
+    std::time_t time = std::time(nullptr);
+    std::string buffer(100,'\0');
+    auto* tm = std::localtime(&time);
+    auto size = std::strftime(buffer.data(),buffer.size(),"%m %d %Y",tm);
+    buffer.resize(size);
+    std::stringstream ss(buffer);
+    std::size_t month,day,year;
+    ss>>month>>day>>year;
+    buffer.clear();
+    buffer += [month]()->std::string{
+        switch(month)
+        {
+        case 1:return "Jan";
+        case 2:return "Feb";
+        case 3:return "Mar";
+        case 4:return "Apr";
+        case 5:return "May";
+        case 6:return "Jun";
+        case 7:return "Jul";
+        case 8:return "Aug";
+        case 9:return "Sep";
+        case 10:return "Oct";
+        case 11:return "Nov";
+        case 12:return "Dec";
+        default:break;
+        }
+        return "ERR";
+    }() + " " + std::to_string(day) + " " + std::to_string(year);
+    defines.insert({"__DATE__",{{},buffer}});
+    defines.insert({"__FILE__",{{},"input.c"}});
+    defines.insert({"__LINE__",{}});
+    defines.insert({"__STDC__",{}});
+    defines.insert({"__TIME__",{}});
     return recursivePreprocess(std::move(source), defines);
 }
