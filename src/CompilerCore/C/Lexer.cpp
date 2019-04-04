@@ -229,7 +229,7 @@ namespace
         throw std::runtime_error("Invalid keyword " + characters);
     }
 
-    OpenCL::Lexer::Token charactersToNumber(std::string lastText,std::uint64_t line,std::uint64_t column)
+    OpenCL::Lexer::Token charactersToNumber(std::string lastText, std::uint64_t line, std::uint64_t column)
     {
         static std::regex integerLiteralMatch("(0x)?[0-9a-fA-F]+([uU]?(l{0,2}|L{0,2})|(l{0,2}|L{0,2})[uU]?)?");
         static std::regex floatLiteralMatch("[0-9]+(\\.[0-9]*)?[fF]?");
@@ -272,18 +272,21 @@ namespace
                     ss >> number;
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
-                        return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                        return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, static_cast<std::uint32_t>(number));
+                        return OpenCL::Lexer::Token(line,
+                                                    column,
+                                                    OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::uint32_t>(number));
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
                     std::uint64_t number;
                     ss >> number;
-                    return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                    return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                 }
                 else
                 {
@@ -298,25 +301,31 @@ namespace
                     ss >> number;
                     if (number > std::numeric_limits<std::int32_t>::max())
                     {
-                        if(number <= std::numeric_limits<std::uint32_t>::max())
+                        if (number <= std::numeric_limits<std::uint32_t>::max())
                         {
-                            return OpenCL::Lexer::Token(line,  column,OpenCL::Lexer::TokenType::Literal, static_cast<std::uint32_t>(number));
+                            return OpenCL::Lexer::Token(line,
+                                                        column,
+                                                        OpenCL::Lexer::TokenType::Literal,
+                                                        static_cast<std::uint32_t>(number));
                         }
                         else
                         {
-                            return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                            return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                         }
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, static_cast<std::int32_t>(number));
+                        return OpenCL::Lexer::Token(line,
+                                                    column,
+                                                    OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::int32_t>(number));
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
                     std::int64_t number;
                     ss >> number;
-                    return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                    return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                 }
                 else
                 {
@@ -331,14 +340,14 @@ namespace
                 std::istringstream ss(lastText.substr(0, lastText.size() - 1));
                 float number;
                 ss >> number;
-                return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
             }
             else
             {
                 std::istringstream ss(lastText);
                 double number;
                 ss >> number;
-                return OpenCL::Lexer::Token(line,  column, OpenCL::Lexer::TokenType::Literal, number);
+                return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
             }
         }
         else
@@ -361,6 +370,10 @@ namespace
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
 {
+    if (source.back() != ' ')
+    {
+        source += ' ';
+    }
     State currentState = State::Start;
     std::string characters;
     std::regex identifierMatch("[a-zA-Z_]\\w*");
@@ -377,7 +390,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
         if (iter == '\n')
         {
             lastTokenIsAmbiguous = false;
-            if(currentState == State::LineComment)
+            if (currentState == State::LineComment)
             {
                 currentState = State::Start;
             }
@@ -425,25 +438,20 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     break;
                 case '?':result.emplace_back(line, column, TokenType::QuestionMark);
                     break;
-                case '~':
-                    result.emplace_back(line, column,TokenType::BitWiseNegation);
+                case '~':result.emplace_back(line, column, TokenType::BitWiseNegation);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '^':
-                    result.emplace_back(line,column,TokenType::BitXor);
+                case '^':result.emplace_back(line, column, TokenType::BitXor);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '%':
-                    result.emplace_back(line,column,TokenType::Modulo);
+                case '%':result.emplace_back(line, column, TokenType::Modulo);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '!':
-                    result.emplace_back(line,column,TokenType::LogicalNegation);
+                case '!':result.emplace_back(line, column, TokenType::LogicalNegation);
                     lastTokenIsAmbiguous = true;
                     break;
                 case ' ':break;
-                default:
-                    handeled = false;
+                default:handeled = false;
                     characters.clear();
                     if ((iter >= '0' && iter <= '9')
                         || (iter >= 'a' && iter <= 'z')
@@ -505,7 +513,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     }
                     else
                     {
-                        result.push_back(charactersToNumber(characters,line,column));
+                        result.push_back(charactersToNumber(characters, line, column));
                     }
                     characters.clear();
                     currentState = State::Start;
@@ -517,7 +525,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             {
                 lastTokenIsAmbiguous = false;
                 characters += iter;
-                if(characters.size() > 2 && characters.back() == '/' && characters.at(characters.size()-2) == '*')
+                if (characters.size() > 2 && characters.back() == '/' && characters.at(characters.size() - 2) == '*')
                 {
                     currentState = State::Start;
                 }
@@ -525,225 +533,211 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             }
             case State::Ambiguous:
             {
-                switch(iter)
+                switch (iter)
                 {
                 case '/':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
                     {
                         currentState = State::LineComment;
                         result.pop_back();
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Division);
+                        result.emplace_back(line, column, TokenType::Division);
                     }
                     break;
                 }
                 case '*':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
                     {
                         currentState = State::BlockComment;
                         result.pop_back();
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Asterisk);
+                        result.emplace_back(line, column, TokenType::Asterisk);
                     }
                     break;
                 }
                 case '.':
                 {
-                    if(result.size() > 2 && result.back().getTokenType() == TokenType::Dot && result.at(result.size()-2).getTokenType() == TokenType::Dot)
+                    if (result.size() > 2 && result.back().getTokenType() == TokenType::Dot
+                        && result.at(result.size() - 2).getTokenType() == TokenType::Dot)
                     {
                         result.pop_back();
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::Ellipse);
+                        result.emplace_back(line, column, TokenType::Ellipse);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Dot);
+                        result.emplace_back(line, column, TokenType::Dot);
                     }
                     break;
                 }
                 case '>':
                 {
-                    if(lastTokenIsAmbiguous)
+                    if (lastTokenIsAmbiguous)
                     {
-                        if(result.back().getTokenType() == TokenType::Negation)
+                        if (result.back().getTokenType() == TokenType::Negation)
                         {
                             result.pop_back();
-                            result.emplace_back(line,column,TokenType::Arrow);
+                            result.emplace_back(line, column, TokenType::Arrow);
                         }
-                        else if(result.back().getTokenType() == TokenType::GreaterThan)
+                        else if (result.back().getTokenType() == TokenType::GreaterThan)
                         {
                             result.pop_back();
-                            result.emplace_back(line,column,TokenType::ShiftRight);
+                            result.emplace_back(line, column, TokenType::ShiftRight);
                         }
                         else
                         {
-                            result.emplace_back(line,column,TokenType::GreaterThan);
+                            result.emplace_back(line, column, TokenType::GreaterThan);
                         }
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::GreaterThan);
+                        result.emplace_back(line, column, TokenType::GreaterThan);
                     }
                     break;
                 }
                 case '<':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::LessThan)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::LessThan)
                     {
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::ShiftLeft);
+                        result.emplace_back(line, column, TokenType::ShiftLeft);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::LessThan);
+                        result.emplace_back(line, column, TokenType::LessThan);
                     }
                     break;
                 }
                 case '&':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Ampersand)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Ampersand)
                     {
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::LogicAnd);
+                        result.emplace_back(line, column, TokenType::LogicAnd);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Ampersand);
+                        result.emplace_back(line, column, TokenType::Ampersand);
                     }
                     break;
                 }
                 case '|':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::BitOr)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::BitOr)
                     {
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::LogicOr);
+                        result.emplace_back(line, column, TokenType::LogicOr);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::BitOr);
+                        result.emplace_back(line, column, TokenType::BitOr);
                     }
                     break;
                 }
                 case '+':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Addition)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Addition)
                     {
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::Increment);
+                        result.emplace_back(line, column, TokenType::Increment);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Addition);
+                        result.emplace_back(line, column, TokenType::Addition);
                     }
                     break;
                 }
                 case '-':
                 {
-                    if(lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Negation)
+                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Negation)
                     {
                         result.pop_back();
-                        result.emplace_back(line,column,TokenType::Decrement);
+                        result.emplace_back(line, column, TokenType::Decrement);
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Negation);
+                        result.emplace_back(line, column, TokenType::Negation);
                     }
                     break;
                 }
                 case '=':
                 {
-                    if(lastTokenIsAmbiguous)
+                    if (lastTokenIsAmbiguous)
                     {
-                        switch(result.back().getTokenType())
+                        switch (result.back().getTokenType())
                         {
-                        case TokenType::Assignment:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::Equal);
+                        case TokenType::Assignment:result.pop_back();
+                            result.emplace_back(line, column, TokenType::Equal);
                             break;
-                        case TokenType::LogicalNegation:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::NotEqual);
+                        case TokenType::LogicalNegation:result.pop_back();
+                            result.emplace_back(line, column, TokenType::NotEqual);
                             break;
-                        case TokenType::GreaterThan:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::GreaterThanOrEqual);
+                        case TokenType::GreaterThan:result.pop_back();
+                            result.emplace_back(line, column, TokenType::GreaterThanOrEqual);
                             break;
-                        case TokenType::LessThan:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::LessThanOrEqual);
+                        case TokenType::LessThan:result.pop_back();
+                            result.emplace_back(line, column, TokenType::LessThanOrEqual);
                             break;
-                        case TokenType::Addition:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::PlusAssign);
+                        case TokenType::Addition:result.pop_back();
+                            result.emplace_back(line, column, TokenType::PlusAssign);
                             break;
-                        case TokenType::Negation:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::MinusAssign);
+                        case TokenType::Negation:result.pop_back();
+                            result.emplace_back(line, column, TokenType::MinusAssign);
                             break;
-                        case TokenType::Division:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::DivideAssign);
+                        case TokenType::Division:result.pop_back();
+                            result.emplace_back(line, column, TokenType::DivideAssign);
                             break;
-                        case TokenType::Asterisk:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::MultiplyAssign);
+                        case TokenType::Asterisk:result.pop_back();
+                            result.emplace_back(line, column, TokenType::MultiplyAssign);
                             break;
-                        case TokenType::Modulo:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::ModuloAssign);
+                        case TokenType::Modulo:result.pop_back();
+                            result.emplace_back(line, column, TokenType::ModuloAssign);
                             break;
-                        case TokenType::Ampersand:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::BitAndAssign);
+                        case TokenType::Ampersand:result.pop_back();
+                            result.emplace_back(line, column, TokenType::BitAndAssign);
                             break;
-                        case TokenType::BitOr:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::BitOrAssign);
+                        case TokenType::BitOr:result.pop_back();
+                            result.emplace_back(line, column, TokenType::BitOrAssign);
                             break;
-                        case TokenType::BitXor:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::BitXorAssign);
+                        case TokenType::BitXor:result.pop_back();
+                            result.emplace_back(line, column, TokenType::BitXorAssign);
                             break;
-                        case TokenType::ShiftLeft:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::ShiftLeftAssign);
+                        case TokenType::ShiftLeft:result.pop_back();
+                            result.emplace_back(line, column, TokenType::ShiftLeftAssign);
                             break;
-                        case TokenType::ShiftRight:
-                            result.pop_back();
-                            result.emplace_back(line,column,TokenType::ShiftRightAssign);
+                        case TokenType::ShiftRight:result.pop_back();
+                            result.emplace_back(line, column, TokenType::ShiftRightAssign);
                             break;
-                        default:
-                            result.emplace_back(line,column,TokenType::Assignment);
+                        default:result.emplace_back(line, column, TokenType::Assignment);
                             break;
                         }
                     }
                     else
                     {
-                        result.emplace_back(line,column,TokenType::Assignment);
+                        result.emplace_back(line, column, TokenType::Assignment);
                     }
                     break;
                 }
-                default:
-                    lastTokenIsAmbiguous = false;
+                default:lastTokenIsAmbiguous = false;
                     currentState = State::Start;
                     handeled = false;
                     break;
                 }
-                if(handeled)
+                if (handeled)
                 {
                     lastTokenIsAmbiguous = true;
                 }
                 break;
             }
             }
-        } while (!handeled);
+        }
+        while (!handeled);
     }
 
     std::reverse(result.begin(), result.end());

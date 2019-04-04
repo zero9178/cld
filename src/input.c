@@ -5,8 +5,7 @@
 
 typedef struct TreeNode
 {
-    char vorname[DOUBLE(NAMESIZE)];
-    char nachname[DOUBLE(NAMESIZE)];
+    char vorname[DOUBLE(NAMESIZE)], nachname[DOUBLE(NAMESIZE)];
     char anrede[5];
     float umsatz;
     char wohnort[DOUBLE(NAMESIZE)];
@@ -217,14 +216,29 @@ enum Name
     LeadingValue
 };
 
+#undef NAMESIZE
+
+#ifndef NAMESIZE
+
+    #if __LINE__ < 219
+    wgdiewzfgewfgewifewgtfzwetf
+    #endif
+
+#else
+
+dwaipudgawzdbwaodzwabdawzdbaw
+
+#endif
+
 int main()
 {
     char ct[SomeConstant];
     enum Name hopefullyInt = SomeConstant;
     hopefullyInt = LeadingValue;
     char c[] = STRINGIFY(NAMESIZE);
-    TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
-    TreeNode newNode = {"Lukas","Damianschitz"};
+    char time[] = __TIME__;
+    TreeNode root = {"Markus", "Boeck", "Herr", __LINE__, "Kammersdorf", 2033};
+    TreeNode newNode = {"Lukas", "Damianschitz"};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);

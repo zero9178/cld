@@ -4,6 +4,9 @@
 #include <numeric>
 #include <unordered_map>
 
+#include "../C/ConstantEvaluator.hpp"
+#include "../C/Parser.hpp"
+
 namespace
 {
     std::vector<std::string> split(const std::string& str, char delim)
@@ -32,11 +35,12 @@ namespace
         IncludeRegion
     };
 
-    using unordered_map = std::unordered_map<std::string, std::pair<std::vector<std::string>, std::string>>;
+    using unordered_map = std::unordered_map<std::string,
+                                             std::tuple<std::vector<std::string>, std::string, std::regex>>;
 
     using MacroStrings = std::vector<std::pair<std::string, bool>>;
 
-    std::string recursivePreprocess(std::string source, unordered_map& defines);
+    std::string recursivePreprocess(std::string source, unordered_map& defines, std::uint64_t startLine);
 
     void removeTrailingWhitespace(std::string& text)
     {
@@ -58,74 +62,86 @@ namespace
         removeTrailingWhitespace(text);
     }
 
+    std::regex getDefineRegex(const std::string& name)
+    {
+        return std::regex("([^a-zA-Z_]|^)" + name + "([^a-zA-Z_]|$)",std::regex_constants::optimize);
+    }
+
     void resolveMacro(std::size_t current,
                       std::size_t pos,
                       std::size_t nameSize,
                       unordered_map& defines,
                       MacroStrings& strings,
-                      const std::pair<std::vector<std::string>, std::string>& thisDefine,
-                      const std::string& iter)
+                      const unordered_map::mapped_type& thisDefine,
+                      std::uint64_t line)
     {
-        if (iter[pos + nameSize] != '(')
+        const auto string = strings[current].first;
+        if (string[pos + nameSize] != '(')
         {
             throw std::runtime_error("Expected ( after macro function");
         }
-        auto result = std::find(iter.begin() + pos + nameSize, iter.end(), ')');
-        if (result == iter.end())
+        auto result = std::find(string.begin() + pos + nameSize, string.end(), ')');
+        if (result == string.end())
         {
             throw std::runtime_error("Expected ) after macro function");
         }
-        strings.emplace(strings.begin() + current + 1, iter.substr(result - iter.begin() + 1), false);
-        auto argumentStrings = std::string(iter.begin() + pos + nameSize + 1, result);
+        strings.emplace(strings.begin() + current + 1, string.substr(result - string.begin() + 1), false);
+        auto argumentStrings = std::string(string.begin() + pos + nameSize + 1, result);
         auto rawArgumentStringsSplit = split(argumentStrings, ',');
-        auto rawArguments = recursivePreprocess({iter.begin() + pos + nameSize + 1, result}, defines);
+        auto rawArguments = recursivePreprocess({string.begin() + pos + nameSize + 1, result}, defines, line-1);
         auto argumentList = split(rawArguments, ',');
-        auto replacement = thisDefine.second;
-        if (thisDefine.first.size() != argumentList.size())
+        auto replacement = std::get<1>(thisDefine);
+        if (std::get<0>(thisDefine).size() != argumentList.size())
         {
             throw std::runtime_error("Not the same amount of arguments supplied as needed");
         }
         std::size_t i = 0;
-        for (auto& argNames : thisDefine.first)
+        for (auto& argName : std::get<0>(thisDefine))
         {
-            std::size_t argPos = replacement.find(argNames, 0);
-            while (argPos != std::string::npos)
+            auto regex = getDefineRegex(argName);
+            std::smatch matches;
+            while(std::regex_search(replacement,matches,regex))
             {
+                auto argPos = matches.position(0);
+                if(argName[0] != replacement[argPos])
+                {
+                    argPos++;
+                }
                 if (argPos == 0 || replacement[argPos - 1] != '#')
                 {
                     replacement = replacement.substr(0, argPos) + " " + argumentList[i] + " "
-                        + replacement.substr(argPos + argNames.size());
+                        + replacement.substr(argPos + argName.size());
                 }
                 else if (argPos == 1 || (replacement[argPos - 1] == '#' && replacement[argPos - 2] != '#'))
                 {
                     replacement = replacement.substr(0, argPos - 1) + "\"" + rawArgumentStringsSplit[i] + "\""
-                        + replacement.substr(argPos + argNames.size());
+                        + replacement.substr(argPos + argName.size());
                 }
                 else
                 {
                     replacement = replacement.substr(0, argPos - 2) + argumentList[i]
-                        + replacement.substr(argPos + argNames.size());
+                        + replacement.substr(argPos + argName.size());
                 }
-                argPos = replacement.find(argNames, argPos);
             }
             i++;
         }
         strings.emplace(strings.begin() + current + 1, replacement, true);
-        strings.emplace(strings.begin() + current + 1, iter.substr(0, pos), false);
+        strings.emplace(strings.begin() + current + 1, string.substr(0, pos), false);
         strings.erase(strings.begin() + current);
     }
 
-    std::string recursivePreprocess(std::string source, unordered_map& defines)
+    std::string recursivePreprocess(std::string source, unordered_map& defines, std::uint64_t startLine)
     {
         static std::regex isPreprocessor("\\s*#.*", std::regex_constants::optimize);
         States currentState = States::Start;
         bool hasPreprocessorTokens;
         std::string* currentDefine = nullptr;
+        std::uint64_t nestedIfs = 0;
         do
         {
             hasPreprocessorTokens = false;
             auto lines = split(source, '\n');
-            std::uint64_t line = 0;
+            std::uint64_t line = startLine;
             for (auto& iter : lines)
             {
                 line++;
@@ -139,17 +155,17 @@ namespace
                     }
                     if (!std::regex_match(iter, isPreprocessor))
                     {
-                        std::vector<std::pair<std::size_t,std::size_t>> stringLiterals;
+                        std::vector<std::pair<std::size_t, std::size_t>> stringLiterals;
                         bool lastWasBackslash = false;
                         bool inString = false;
                         std::size_t column = 0;
-                        for(auto cha : iter)
+                        for (auto cha : iter)
                         {
-                            if(cha == '"' && !lastWasBackslash)
+                            if (cha == '"' && !lastWasBackslash)
                             {
-                                if(!inString)
+                                if (!inString)
                                 {
-                                    stringLiterals.emplace_back(column,0);
+                                    stringLiterals.emplace_back(column, 0);
                                     inString = true;
                                 }
                                 else
@@ -158,7 +174,7 @@ namespace
                                     inString = false;
                                 }
                             }
-                            else if(cha == '\\')
+                            else if (cha == '\\')
                             {
                                 lastWasBackslash = !lastWasBackslash;
                             }
@@ -176,27 +192,63 @@ namespace
                                     continue;
                                 }
 
-                                std::size_t pos = strings[current].first.find(name, 0);
-                                if (pos != std::string::npos && !std::any_of(stringLiterals.begin(),stringLiterals.end(),[pos](const std::pair<std::size_t,std::size_t>& pair)
+                                std::smatch matches;
+                                if (std::regex_search(strings[current].first, matches, std::get<2>(replacement)))
                                 {
-                                    return pair.first < pos && pos < pair.second;
-                                }))
-                                {
-                                    hasPreprocessorTokens = true;
-                                    if (replacement.first.empty())
+                                    std::size_t pos = matches.position(0);
+                                    if (strings[current].first[pos] != name[0])
                                     {
-                                        strings.emplace(strings.begin() + current + 1,
-                                                        iter.substr(pos + name.size()),
-                                                        false);
-                                        strings.emplace(strings.begin() + current + 1, replacement.second, true);
-                                        strings.emplace(strings.begin() + current + 1, iter.substr(0, pos), false);
-                                        strings.erase(strings.begin() + current);
-                                        current += 2;
+                                        pos++;
+                                    }
+                                    if (!std::any_of(stringLiterals.begin(),
+                                                     stringLiterals.end(),
+                                                     [pos](const std::pair<std::size_t, std::size_t>& pair)
+                                                     {
+                                                         return pair.first < pos && pos < pair.second;
+                                                     }))
+                                    {
+                                        hasPreprocessorTokens = true;
+                                        if (std::get<0>(replacement).empty())
+                                        {
+                                            strings.emplace(strings.begin() + current + 1,
+                                                            iter.substr(pos + name.size()),
+                                                            false);
+                                            if (name == "__LINE__")
+                                            {
+                                                strings.emplace(strings.begin() + current + 1,std::to_string(line),true);
+                                            }
+                                            else if (name == "__TIME__")
+                                            {
+                                                std::time_t time = std::time(nullptr);
+                                                std::string buffer(100, '\0');
+                                                auto* tm = std::localtime(&time);
+                                                auto size = sprintf(buffer.data(),"\"%.2d:%.2d:%.2d\"",tm->tm_hour,tm->tm_min,tm->tm_sec);
+                                                buffer.resize(size);
+                                                strings.emplace(strings.begin() + current + 1,buffer,true);
+                                            }
+                                            else
+                                            {
+                                                strings
+                                                    .emplace(strings.begin() + current + 1, std::get<1>(replacement), true);
+                                            }
+                                            strings.emplace(strings.begin() + current + 1, iter.substr(0, pos), false);
+                                            strings.erase(strings.begin() + current);
+                                            current += 2;
+                                        }
+                                        else
+                                        {
+                                            resolveMacro(current,
+                                                         pos,
+                                                         name.size(),
+                                                         defines,
+                                                         strings,
+                                                         replacement, line);
+                                            current += 2;
+                                        }
                                     }
                                     else
                                     {
-                                        resolveMacro(current, pos, name.size(), defines, strings, replacement, iter);
-                                        current += 2;
+                                        current++;
                                     }
                                 }
                                 else
@@ -215,7 +267,7 @@ namespace
                     }
                     else
                     {
-                        iter.erase(iter.begin(),iter.begin() + iter.find('#') + 1);
+                        iter.erase(iter.begin(), iter.begin() + iter.find('#') + 1);
                         if (iter.rfind("define", 0) == 0)
                         {
                             iter = iter.substr(6, iter.size() - 6);
@@ -250,12 +302,12 @@ namespace
                                 iter.resize(iter.size() - 1);
                                 currentState = States::ContinueDefine;
                             }
-                            auto pair = defines.insert({name, {arguments, iter}});
+                            auto pair = defines.insert({name, {arguments, iter,getDefineRegex(name)}});
                             if (!pair.second)
                             {
                                 throw std::runtime_error(name + " is already defined");
                             }
-                            currentDefine = &pair.first->second.second;
+                            currentDefine = &std::get<1>(pair.first->second);
                             iter = "";
                         }
                         else if (iter.rfind("undef", 0) == 0)
@@ -265,12 +317,13 @@ namespace
                             defines.erase(iter);
                             iter = "";
                         }
-                        else if (iter.rfind("ifdef",0) == 0 || iter.rfind("ifndef",0) == 0)
+                        else if (iter.rfind("ifdef", 0) == 0 || iter.rfind("ifndef", 0) == 0)
                         {
-                            bool negate = iter.rfind("ifdef",0);
+                            nestedIfs = 0;
+                            bool negate = iter.rfind("ifdef", 0);
                             iter = iter.substr(negate ? 6 : 5);
                             trimWhitespace(iter);
-                            if(defines.count(iter))
+                            if (defines.count(iter))
                             {
                                 currentState = negate ? States::RemoveRegion : States::IncludeRegion;
                             }
@@ -278,10 +331,28 @@ namespace
                             {
                                 currentState = negate ? States::IncludeRegion : States::RemoveRegion;
                             }
-                            if(currentState == States::IncludeRegion)
+                            if (currentState == States::IncludeRegion)
                             {
                                 hasPreprocessorTokens = true;
                             }
+                            iter = "";
+                        }
+                        else if (iter.rfind("if") == 0)
+                        {
+                            nestedIfs = 0;
+                            iter = iter.substr(2);
+                            auto result = recursivePreprocess(iter, defines, line-1);
+                            OpenCL::Parser::ParsingContext context;
+                            auto tokens = OpenCL::Lexer::tokenize(result);
+                            auto expression = OpenCL::Parser::parseNonCommaExpression(tokens,context);
+                            OpenCL::Codegen::ConstantEvaluator evaluator;
+                            expression.accept(evaluator);
+                            bool isTrue = std::visit([](auto&& value)-> bool
+                                                     {
+                                return value != 0;
+                                                     },evaluator.getReturn<OpenCL::Codegen::ConstRetType>());
+                            currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
+                            hasPreprocessorTokens = isTrue;
                             iter = "";
                         }
                         else
@@ -310,7 +381,7 @@ namespace
                 }
                 case States::RemoveRegion:
                 {
-                    if(iter.rfind("#endif",0) == 0)
+                    if (iter.rfind("#endif", 0) == 0)
                     {
                         currentState = States::Start;
                     }
@@ -319,16 +390,24 @@ namespace
                 }
                 case States::IncludeRegion:
                 {
-                    if(iter.rfind("#endif",0) == 0)
+
+                    if (iter.rfind("#endif", 0) == 0)
                     {
-                        currentState = States::Start;
-                        iter = "";
+                        if(!nestedIfs)
+                        {
+                            currentState = States::Start;
+                            iter = "";
+                        }
+                        else
+                        {
+                            nestedIfs--;
+                        }
                     }
                     break;
                 }
                 }
             }
-            if(currentState == States::IncludeRegion || currentState == States::RemoveRegion)
+            if (currentState == States::IncludeRegion || currentState == States::RemoveRegion)
             {
                 throw std::runtime_error("No matching #endif after #if*");
             }
@@ -348,21 +427,21 @@ namespace
     }
 }
 
-
 std::string OpenCL::PP::preprocess(std::string&& source)
 {
     unordered_map defines;
     std::time_t time = std::time(nullptr);
-    std::string buffer(100,'\0');
+    std::string buffer(100, '\0');
     auto* tm = std::localtime(&time);
-    auto size = std::strftime(buffer.data(),buffer.size(),"%m %d %Y",tm);
+    auto size = std::strftime(buffer.data(), buffer.size(), "%m %d %Y", tm);
     buffer.resize(size);
     std::stringstream ss(buffer);
-    std::size_t month,day,year;
-    ss>>month>>day>>year;
+    std::size_t month, day, year;
+    ss >> month >> day >> year;
     buffer.clear();
-    buffer += [month]()->std::string{
-        switch(month)
+    buffer += [month]() -> std::string
+    {
+        switch (month)
         {
         case 1:return "Jan";
         case 2:return "Feb";
@@ -380,10 +459,10 @@ std::string OpenCL::PP::preprocess(std::string&& source)
         }
         return "ERR";
     }() + " " + std::to_string(day) + " " + std::to_string(year);
-    defines.insert({"__DATE__",{{},buffer}});
-    defines.insert({"__FILE__",{{},"input.c"}});
-    defines.insert({"__LINE__",{}});
-    defines.insert({"__STDC__",{}});
-    defines.insert({"__TIME__",{}});
-    return recursivePreprocess(std::move(source), defines);
+    defines.insert({"__DATE__", {{},'"' + buffer + '"',getDefineRegex("__DATE__")}});
+    defines.insert({"__FILE__", {{},"\"input.c\"",getDefineRegex("__FILE__")}});
+    defines.insert({"__LINE__", {{},"",getDefineRegex("__LINE__")}});
+    defines.insert({"__STDC__", {{},"",getDefineRegex("__STDC__")}});
+    defines.insert({"__TIME__", {{},"",getDefineRegex("__TIME__")}});
+    return recursivePreprocess(std::move(source), defines, 0);
 }
