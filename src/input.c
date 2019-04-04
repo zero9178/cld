@@ -221,7 +221,13 @@ enum Name
 #ifndef NAMESIZE
 
     #if __LINE__ < 219
+
     wgdiewzfgewfgewifewgtfzwetf
+
+    #elif __LINE__ > 220
+
+    int GLOBAL = 5;
+
     #endif
 
 #else
@@ -229,6 +235,10 @@ enum Name
 dwaipudgawzdbwaodzwabdawzdbaw
 
 #endif
+
+/*
+ #define __LINE__ 5
+ */
 
 int main()
 {
