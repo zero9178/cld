@@ -1160,7 +1160,7 @@ std::unique_ptr<OpenCL::Syntax::IType> OpenCL::Syntax::EnumType::clone() const
 
 std::string OpenCL::Syntax::EnumType::name() const
 {
-    return  "enum " + getName();
+    return "enum " + getName();
 }
 
 bool OpenCL::Syntax::EnumType::isConst() const
@@ -1209,7 +1209,7 @@ const OpenCL::Syntax::UnaryExpression::variant& OpenCL::Syntax::UnaryExpression:
 OpenCL::Syntax::NonCommaExpression::NonCommaExpression(std::uint64_t line,
                                                        std::uint64_t column,
                                                        std::variant<OpenCL::Syntax::AssignmentExpression,
-                                                                          OpenCL::Syntax::ConditionalExpression>&& variant)
+                                                                    OpenCL::Syntax::ConditionalExpression>&& variant)
     : Node(line, column), m_variant(std::move(variant))
 {}
 
@@ -1222,9 +1222,10 @@ const std::variant<OpenCL::Syntax::AssignmentExpression,
 OpenCL::Syntax::InitializerList::InitializerList(std::uint64_t line,
                                                  std::uint64_t column,
                                                  OpenCL::Syntax::InitializerList::variant&& variant) : Node(line,
-                                                                                                                 column),
-                                                                                                            m_variant(
-                                                                                                                std::move(variant))
+                                                                                                            column),
+                                                                                                       m_variant(
+                                                                                                           std::move(
+                                                                                                               variant))
 {}
 
 const OpenCL::Syntax::InitializerList::variant& OpenCL::Syntax::InitializerList::getVariant() const
@@ -1232,7 +1233,9 @@ const OpenCL::Syntax::InitializerList::variant& OpenCL::Syntax::InitializerList:
     return m_variant;
 }
 
-OpenCL::Syntax::BlockItem::BlockItem(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::BlockItem::variant&& variant)
+OpenCL::Syntax::BlockItem::BlockItem(std::uint64_t line,
+                                     std::uint64_t column,
+                                     OpenCL::Syntax::BlockItem::variant&& variant)
     : Node(line, column), m_variant(std::move(variant))
 {}
 
@@ -1246,7 +1249,9 @@ OpenCL::Syntax::BlockItem::variant& OpenCL::Syntax::BlockItem::getVariant()
     return m_variant;
 }
 
-OpenCL::Syntax::Statement::Statement(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::Statement::variant&& variant)
+OpenCL::Syntax::Statement::Statement(std::uint64_t line,
+                                     std::uint64_t column,
+                                     OpenCL::Syntax::Statement::variant&& variant)
     : Node(line, column), m_variant(std::move(variant))
 {}
 
@@ -1260,7 +1265,8 @@ OpenCL::Syntax::Statement::variant& OpenCL::Syntax::Statement::getVariant()
     return m_variant;
 }
 
-OpenCL::Syntax::Global::Global(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::Global::variant&& variant) : Node(
+OpenCL::Syntax::Global::Global(std::uint64_t line, std::uint64_t column, OpenCL::Syntax::Global::variant&& variant)
+    : Node(
     line,
     column), m_variant(std::move(variant))
 {}
@@ -1273,4 +1279,68 @@ const OpenCL::Syntax::Global::variant& OpenCL::Syntax::Global::getVariant() cons
 OpenCL::Syntax::BreakStatement::BreakStatement(std::uint64_t line, std::uint64_t column) : Node(line, column)
 {
 
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpression& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Statement& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Global& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::NonCommaExpression& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::InitializerList& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BlockItem& node)
+{
+    std::visit([this](auto&& value)
+               {
+                   return value.accept(*this);
+               }, node.getVariant());
 }

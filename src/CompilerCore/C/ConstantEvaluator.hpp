@@ -1,6 +1,7 @@
 #ifndef OPENCLPARSER_CONSTANTEVALUATOR_HPP
 #define OPENCLPARSER_CONSTANTEVALUATOR_HPP
 
+#include <map>
 #include "Syntax.hpp"
 
 namespace OpenCL::Codegen
@@ -15,7 +16,11 @@ namespace OpenCL::Codegen
 
     class ConstantEvaluator final : public OpenCL::Syntax::NodeVisitor<ConstRetType>
     {
+        const std::map<std::string,const OpenCL::Syntax::StructOrUnionDeclaration*>& m_structOrUnions;
+
     public:
+
+        explicit ConstantEvaluator(const std::map<std::string, const Syntax::StructOrUnionDeclaration*>& structOrUnions = {});
 
         void visit(const Syntax::Expression& node) override;
 
@@ -24,8 +29,6 @@ namespace OpenCL::Codegen
         void visit(const Syntax::PrimaryExpressionConstant& node) override;
 
         void visit(const Syntax::PrimaryExpressionParenthese& node) override;
-
-        void visit(const Syntax::PrimaryExpression& node) override;
 
         void visit(const Syntax::PostFixExpressionPrimaryExpression& node) override;
 
@@ -43,8 +46,6 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::PostFixExpressionTypeInitializer& node) override;
 
-        void visit(const Syntax::PostFixExpression& node) override;
-
         void visit(const Syntax::AssignmentExpression& node) override;
 
         void visit(const Syntax::UnaryExpressionPostFixExpression& node) override;
@@ -52,8 +53,6 @@ namespace OpenCL::Codegen
         void visit(const Syntax::UnaryExpressionUnaryOperator& node) override;
 
         void visit(const Syntax::UnaryExpressionSizeOf& node) override;
-
-        void visit(const Syntax::UnaryExpression& node) override;
 
         void visit(const Syntax::CastExpression& node) override;
 
@@ -79,8 +78,6 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::ConditionalExpression& node) override;
 
-        void visit(const Syntax::NonCommaExpression& node) override;
-
         void visit(const Syntax::ReturnStatement& node) override;
 
         void visit(const Syntax::ExpressionStatement& node) override;
@@ -101,11 +98,7 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::InitializerListBlock& node) override;
 
-        void visit(const Syntax::InitializerList& node) override;
-
         void visit(const Syntax::Declarations& node) override;
-
-        void visit(const Syntax::BlockItem& node) override;
 
         void visit(const Syntax::ForDeclarationStatement& node) override;
 
@@ -117,8 +110,6 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::ContinueStatement& node) override;
 
-        void visit(const Syntax::Statement& node) override;
-
         void visit(const Syntax::StructOrUnionDeclaration& node) override;
 
         void visit(const Syntax::EnumDeclaration& node) override;
@@ -128,8 +119,6 @@ namespace OpenCL::Codegen
         void visit(const Syntax::Function& node) override;
 
         void visit(const Syntax::GlobalDeclaration& node) override;
-
-        void visit(const Syntax::Global& node) override;
 
         void visit(const Syntax::Program& node) override;
 

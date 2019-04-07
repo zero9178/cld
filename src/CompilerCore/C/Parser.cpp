@@ -101,11 +101,25 @@ OpenCL::Syntax::Global OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContex
         {
             throw std::runtime_error("Expected ; after struct or union declaration");
         }
-        return Global(structOrUnion.getLine(), structOrUnion.getColumn(), std::move(structOrUnion));
+        auto line = structOrUnion.getLine();
+        auto column = structOrUnion.getColumn();
+        auto global = Global(line, column, std::move(structOrUnion));
+        auto& structOrUnionRef = std::get<StructOrUnionDeclaration>(global.getVariant());
+        context.structOrUnions.emplace(structOrUnionRef.getName(), &structOrUnionRef);
+        return global;
     }
     else if (!tokens.empty() && tokens.back().getTokenType() == TokenType::TypedefKeyword)
     {
-        return Global(tokens.back().getLine(), tokens.back().getColumn(), parseTypedefDeclaration(tokens, context));
+        auto global = Global(tokens.back().getLine(),
+                             tokens.back().getColumn(),
+                             parseTypedefDeclaration(tokens, context));
+        auto& typedefDecl = std::get<TypedefDeclaration>(global.getVariant());
+        if (typedefDecl.getOptionalStructOrUnion())
+        {
+            context.structOrUnions.emplace(typedefDecl.getOptionalStructOrUnion()->getName(),
+                                           typedefDecl.getOptionalStructOrUnion().get());
+        }
+        return global;
     }
     else if (!tokens.empty() && tokens.back().getTokenType() == TokenType::EnumKeyword)
     {
@@ -183,7 +197,7 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
             {
                 tokens.pop_back();
                 auto constant = parseNonCommaExpression(tokens, context);
-                Codegen::ConstantEvaluator evaluator;
+                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
                 constant.accept(evaluator);
                 sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                            {
@@ -197,7 +211,7 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
                                                    throw std::runtime_error(
                                                        "Only integral type supported for array size");
                                                }
-                                           },evaluator.getReturn<Codegen::ConstRetType>()));
+                                           }, evaluator.getReturn<Codegen::ConstRetType>()));
                 if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
                 {
                     throw std::runtime_error("Expected ] after array declaration");
@@ -257,7 +271,7 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
         {
             tokens.pop_back();
             auto constant = parseNonCommaExpression(tokens, context);
-            Codegen::ConstantEvaluator evaluator;
+            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
             constant.accept(evaluator);
             value = std::visit([](auto&& value) -> std::int32_t
                                {
@@ -270,7 +284,7 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
                                    {
                                        return value;
                                    }
-                               },evaluator.getReturn<Codegen::ConstRetType>());
+                               }, evaluator.getReturn<Codegen::ConstRetType>());
         }
         if (tokens.back().getTokenType() == TokenType::Comma)
         {
@@ -282,7 +296,8 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
         }
         values.emplace_back(valueName, value);
         context.addEnumConstant(valueName, value);
-    } while (tokens.back().getTokenType() != TokenType::CloseBrace);
+    }
+    while (tokens.back().getTokenType() != TokenType::CloseBrace);
     tokens.pop_back();
     if (tokens.back().getTokenType() != TokenType::SemiColon)
     {
@@ -360,7 +375,7 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
         {
             tokens.pop_back();
             auto constant = parseNonCommaExpression(tokens, context);
-            Codegen::ConstantEvaluator evaluator;
+            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
             constant.accept(evaluator);
             sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                        {
@@ -374,7 +389,7 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
                                                throw std::runtime_error(
                                                    "Only integral type supported for array size");
                                            }
-                                       },evaluator.getReturn<Codegen::ConstRetType>()));
+                                       }, evaluator.getReturn<Codegen::ConstRetType>()));
             if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
             {
                 throw std::runtime_error("Expected ] after array declaration");
@@ -801,7 +816,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
             if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
             {
                 auto constant = parseNonCommaExpression(tokens, context);
-                Codegen::ConstantEvaluator evaluator;
+                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
                 constant.accept(evaluator);
                 sizes.push_back(std::visit([](auto&& value) -> std::size_t
                                            {
@@ -815,7 +830,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
                                                    throw std::runtime_error(
                                                        "Only integral type supported for array size");
                                                }
-                                           },evaluator.getReturn<Codegen::ConstRetType>()));
+                                           }, evaluator.getReturn<Codegen::ConstRetType>()));
                 if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
                 {
                     throw std::runtime_error("Expected ] after array declaration");
@@ -846,7 +861,7 @@ OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
             auto shared = std::shared_ptr<IType>(std::move(thisType));
             tokens.pop_back();
             declarations
-                .emplace_back(shared, name,std::make_unique<InitializerList>(parseInitializerList(tokens, context)));
+                .emplace_back(shared, name, std::make_unique<InitializerList>(parseInitializerList(tokens, context)));
         }
         else
         {
@@ -906,7 +921,7 @@ OpenCL::Syntax::InitializerListBlock OpenCL::Parser::parseInitializerListBlock(T
                 throw std::runtime_error("Expected = after designator in initializer list");
             }
             tokens.pop_back();
-            Codegen::ConstantEvaluator evaluator;
+            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
             constant.accept(evaluator);
             index = std::visit([](auto&& value) -> std::int64_t
                                {
@@ -919,7 +934,7 @@ OpenCL::Syntax::InitializerListBlock OpenCL::Parser::parseInitializerListBlock(T
                                    {
                                        throw std::runtime_error("Invalid type of constanst expression");
                                    }
-                               },evaluator.getReturn<Codegen::ConstRetType>());
+                               }, evaluator.getReturn<Codegen::ConstRetType>());
         }
         if (tokens.back().getTokenType() == TokenType::OpenBrace)
         {
@@ -1073,7 +1088,8 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
                                                                        std::move(post)));
             }
             else if (auto
-                    expressionStatement = std::get_if<ExpressionStatement>(&std::get<Statement>(blockitem.getVariant()).getVariant());expressionStatement)
+                    expressionStatement = std::get_if<ExpressionStatement>(&std::get<Statement>(blockitem.getVariant())
+                    .getVariant());expressionStatement)
             {
                 return Statement(line,
                                  column,
@@ -1195,7 +1211,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
                 throw std::runtime_error("Expected : after constant expression of case");
             }
             tokens.pop_back();
-            Codegen::ConstantEvaluator evaluator;
+            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
             expression.accept(evaluator);
             return Statement(line, column, CaseStatement(line, column,
                                                          std::move(evaluator.getReturn<Codegen::ConstRetType>()),
@@ -1859,7 +1875,8 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
                 std::vector<std::unique_ptr<NonCommaExpression>> nonCommaExpressions;
                 while (true)
                 {
-                    nonCommaExpressions.push_back(std::make_unique<NonCommaExpression>(parseNonCommaExpression(tokens, context)));
+                    nonCommaExpressions
+                        .push_back(std::make_unique<NonCommaExpression>(parseNonCommaExpression(tokens, context)));
                     if (tokens.back().getTokenType() == TokenType::Comma)
                     {
                         tokens.pop_back();
@@ -1874,19 +1891,22 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
                     throw std::runtime_error("Expected { after type around parenthesis");
                 }
                 tokens.pop_back();
-                stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionTypeInitializer(line,
-                                                                              column,
-                                                                              std::move(type),
-                                                                              std::move(nonCommaExpressions))));
+                stack.push(std::make_unique<PostFixExpression>(line, column, PostFixExpressionTypeInitializer(line,
+                                                                                                              column,
+                                                                                                              std::move(
+                                                                                                                  type),
+                                                                                                              std::move(
+                                                                                                                  nonCommaExpressions))));
             }
             else
             {
                 auto line = currToken.getLine();
                 auto column = currToken.getColumn();
-                stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionPrimaryExpression(line,
-                                                                                column,
-                                                                                parsePrimaryExpression(tokens,
-                                                                                                       context))));
+                stack.push(std::make_unique<PostFixExpression>(line, column, PostFixExpressionPrimaryExpression(line,
+                                                                                                                column,
+                                                                                                                parsePrimaryExpression(
+                                                                                                                    tokens,
+                                                                                                                    context))));
             }
         }
         else if (currToken.getTokenType() == TokenType::OpenParenthese)
@@ -1895,7 +1915,8 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             std::vector<std::unique_ptr<NonCommaExpression>> nonCommaExpressions;
             while (tokens.back().getTokenType() != TokenType::CloseParenthese)
             {
-                nonCommaExpressions.push_back(std::make_unique<NonCommaExpression>(parseNonCommaExpression(tokens, context)));
+                nonCommaExpressions
+                    .push_back(std::make_unique<NonCommaExpression>(parseNonCommaExpression(tokens, context)));
                 if (tokens.back().getTokenType() == TokenType::CloseParenthese)
                 {
                     break;
@@ -1911,8 +1932,12 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionFunctionCall(line, column, std::move(postExpression),
-                                                                       std::move(nonCommaExpressions))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionFunctionCall(line,
+                                                                                         column,
+                                                                                         std::move(postExpression),
+                                                                                         std::move(nonCommaExpressions))));
         }
         else if (currToken.getTokenType() == TokenType::OpenSquareBracket)
         {
@@ -1950,8 +1975,12 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionSubscript(line, column, std::move(postExpression),
-                                                                    std::move(expression))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionSubscript(line,
+                                                                                      column,
+                                                                                      std::move(postExpression),
+                                                                                      std::move(expression))));
         }
         else if (currToken.getTokenType() == TokenType::Increment)
         {
@@ -1960,7 +1989,11 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionIncrement(line, column, std::move(postExpression))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionIncrement(line,
+                                                                                      column,
+                                                                                      std::move(postExpression))));
         }
         else if (currToken.getTokenType() == TokenType::Decrement)
         {
@@ -1969,7 +2002,11 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionDecrement(line, column, std::move(postExpression))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionDecrement(line,
+                                                                                      column,
+                                                                                      std::move(postExpression))));
         }
         else if (currToken.getTokenType() == TokenType::Dot)
         {
@@ -1984,8 +2021,11 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionDot(line, column, std::move(postExpression),
-                                                              std::get<std::string>(currToken.getValue()))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionDot(line, column, std::move(postExpression),
+                                                                                std::get<std::string>(currToken
+                                                                                                          .getValue()))));
         }
         else if (currToken.getTokenType() == TokenType::Arrow)
         {
@@ -2000,8 +2040,13 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             stack.pop();
             auto line = currToken.getLine();
             auto column = currToken.getColumn();
-            stack.push(std::make_unique<PostFixExpression>(line,column,PostFixExpressionArrow(line, column, std::move(postExpression),
-                                                                std::get<std::string>(currToken.getValue()))));
+            stack.push(std::make_unique<PostFixExpression>(line,
+                                                           column,
+                                                           PostFixExpressionArrow(line,
+                                                                                  column,
+                                                                                  std::move(postExpression),
+                                                                                  std::get<std::string>(currToken
+                                                                                                            .getValue()))));
         }
     }
     if (stack.size() != 1)
@@ -2025,13 +2070,13 @@ PrimaryExpression OpenCL::Parser::parsePrimaryExpression(Tokens& tokens,
         const auto& name = std::get<std::string>(currToken.getValue());
         if (context.isInScope(name))
         {
-            return PrimaryExpression(line,column,PrimaryExpressionIdentifier(line,
-                                                                 column,
-                                                                 name));
+            return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line,
+                                                                               column,
+                                                                               name));
         }
         else if (context.functions.count(name))
         {
-            return PrimaryExpression(line,column,PrimaryExpressionIdentifier(line,column,name));
+            return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line, column, name));
         }
         else
         {
@@ -2040,29 +2085,30 @@ PrimaryExpression OpenCL::Parser::parsePrimaryExpression(Tokens& tokens,
             {
                 throw std::runtime_error("Unknown reference to variable or enum constant " + name);
             }
-            return PrimaryExpression(line,column,PrimaryExpressionConstant(line, column, *result));
+            return PrimaryExpression(line, column, PrimaryExpressionConstant(line, column, *result));
         }
     }
     else if (currToken.getTokenType() == TokenType::Literal)
     {
-        return PrimaryExpression(line,column,PrimaryExpressionConstant(line,
-                                                           column,
-                                                           std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
-                                                                      {
-                                                                          using T = std::decay_t<decltype(value)>;
-                                                                          if constexpr(std::is_constructible_v<
-                                                                              typename PrimaryExpressionConstant::variant,
-                                                                              T>)
-                                                                          {
-                                                                              return {std::forward<decltype(value)>(
-                                                                                  value)};
-                                                                          }
-                                                                          else
-                                                                          {
-                                                                              throw std::runtime_error(
-                                                                                  "Can't convert type of variant to constant expression");
-                                                                          }
-                                                                      }, currToken.getValue())));
+        return PrimaryExpression(line, column, PrimaryExpressionConstant(line,
+                                                                         column,
+                                                                         std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
+                                                                                    {
+                                                                                        using T = std::decay_t<decltype(value)>;
+                                                                                        if constexpr(std::is_constructible_v<
+                                                                                            typename PrimaryExpressionConstant::variant,
+                                                                                            T>)
+                                                                                        {
+                                                                                            return {
+                                                                                                std::forward<decltype(value)>(
+                                                                                                    value)};
+                                                                                        }
+                                                                                        else
+                                                                                        {
+                                                                                            throw std::runtime_error(
+                                                                                                "Can't convert type of variant to constant expression");
+                                                                                        }
+                                                                                    }, currToken.getValue())));
     }
     else if (currToken.getTokenType() == TokenType::OpenParenthese)
     {
@@ -2072,7 +2118,7 @@ PrimaryExpression OpenCL::Parser::parsePrimaryExpression(Tokens& tokens,
             throw std::runtime_error("Expected Close Parenthese after expression in primary expression");
         }
         tokens.pop_back();
-        return PrimaryExpression(line,column,PrimaryExpressionParenthese(line, column, std::move(expression)));
+        return PrimaryExpression(line, column, PrimaryExpressionParenthese(line, column, std::move(expression)));
     }
     else
     {

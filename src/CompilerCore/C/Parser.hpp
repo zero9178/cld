@@ -16,6 +16,7 @@ namespace OpenCL::Parser
     public:
 
         std::map<std::string, std::shared_ptr<OpenCL::Syntax::IType>> typedefs;
+        std::map<std::string,const OpenCL::Syntax::StructOrUnionDeclaration*> structOrUnions;
         std::set<std::string> functions;
 
         ParsingContext()

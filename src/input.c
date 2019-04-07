@@ -242,7 +242,7 @@ dwaipudgawzdbwaodzwabdawzdbaw
 
 int main()
 {
-    char ct[SomeConstant];
+    char ct[sizeof(TreeNode)];
     enum Name hopefullyInt = SomeConstant;
     hopefullyInt = LeadingValue;
     char c[] = STRINGIFY(NAMESIZE);

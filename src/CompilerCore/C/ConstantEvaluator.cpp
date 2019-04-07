@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ConstantEvaluator.hpp"
 
 namespace
@@ -248,25 +249,17 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpr
     node.getExpression().accept(*this);
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
-{
-    std::visit([this](auto&& value)
-               {
-                   value.accept(*this);
-               }, node.getVariant());
-}
-
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     node.getPrimaryExpression().accept(*this);
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionIncrement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionIncrement&)
 {
     throw std::runtime_error("Post increment not allowed to occur in constant expression");
 }
@@ -276,35 +269,27 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpr
     throw std::runtime_error("Post decrement not allowed to occur in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall&)
 {
     throw std::runtime_error("Function calls are not allowed in constant expressions");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer&)
 {
     throw std::runtime_error("Type initializer are not allowed in constant expressions");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
-{
-    std::visit([this](auto&& value)
-    {
-        value.accept(*this);
-    },node.getVariant());
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression&)
 {
     throw std::runtime_error("Assignment expressios not allowed in constant expressions");
 }
@@ -381,17 +366,168 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpres
     }
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& )
+namespace
 {
-    throw std::runtime_error("Not implemented yet");
+    std::size_t getAlignment(const std::shared_ptr<OpenCL::Syntax::IType>& ptr,const std::map<std::string,const OpenCL::Syntax::StructOrUnionDeclaration*>& map)
+    {
+        if (auto primitives = std::dynamic_pointer_cast<OpenCL::Syntax::PrimitiveType>(ptr))
+        {
+            return primitives->getBitCount() / 8;
+        }
+        else if (std::dynamic_pointer_cast<OpenCL::Syntax::PointerType>(ptr))
+        {
+            return 8;
+        }
+        else if (std::dynamic_pointer_cast<OpenCL::Syntax::EnumType>(ptr))
+        {
+            return 4;
+        }
+        else if (auto array = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(ptr))
+        {
+            return getAlignment(array->getType()->clone(),map);
+        }
+        else if (auto structType = std::dynamic_pointer_cast<OpenCL::Syntax::StructType>(ptr))
+        {
+            auto result = map.find(structType->getName());
+            if (result == map.end() || result->second->isUnion())
+            {
+                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+            }
+            std::size_t currentAlignment = 0;
+            for (auto& iter : result->second->getTypes())
+            {
+                currentAlignment = std::max(getAlignment(iter.first,map),currentAlignment);
+            }
+            return currentAlignment;
+        }
+        else
+        {
+            auto unionType = std::dynamic_pointer_cast<OpenCL::Syntax::UnionType>(ptr);
+            auto result = map.find(unionType->getName());
+            if (result == map.end() || !result->second->isUnion())
+            {
+                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+            }
+            std::vector<std::pair<std::size_t,std::shared_ptr<OpenCL::Syntax::IType>>> sizes;
+            std::transform(result->second->getTypes().begin(),
+                           result->second->getTypes().end(),
+                           std::back_inserter(sizes),
+                           [&map](const std::pair<std::shared_ptr<OpenCL::Syntax::IType>, std::string>& pair) -> std::pair<std::size_t,std::shared_ptr<OpenCL::Syntax::IType>>
+                           {
+                               return {getAlignment(pair.first, map),pair.first};
+                           });
+            return getAlignment(std::max_element(sizes.begin(), sizes.end())->second,map);
+        }
+    }
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-               },node.getVariant());
+    auto sizeOf = [this](const std::shared_ptr<Syntax::IType>& ptr, auto&& self) -> OpenCL::Codegen::ConstRetType
+    {
+        if (auto primitives = std::dynamic_pointer_cast<Syntax::PrimitiveType>(ptr))
+        {
+            return primitives->getBitCount() / 8;
+        }
+        else if (std::dynamic_pointer_cast<Syntax::PointerType>(ptr))
+        {
+            return 8;
+        }
+        else if (std::dynamic_pointer_cast<Syntax::EnumType>(ptr))
+        {
+            return 4;
+        }
+        else if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(ptr))
+        {
+            return std::visit([&array](auto&& value) -> ConstRetType
+                              {
+                                  using T = std::decay_t<decltype(value)>;
+                                  if constexpr(hasMultiply<std::size_t, T>{})
+                                  {
+                                      return array->getSize() * value;
+                                  }
+                                  else
+                                  {
+                                      throw std::runtime_error("Invalid operands for multiply in constant expression");
+                                  }
+                                  return {};
+                              }, self(array->getType()->clone(), self));
+        }
+        else if (auto structType = std::dynamic_pointer_cast<Syntax::StructType>(ptr))
+        {
+            auto result = m_structOrUnions.find(structType->getName());
+            if (result == m_structOrUnions.end() || result->second->isUnion())
+            {
+                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+            }
+            std::size_t currentSize = 0;
+            for (auto& iter : result->second->getTypes())
+            {
+                auto alignment = getAlignment(iter.first,m_structOrUnions);
+                auto rest = currentSize % alignment;
+                if (rest != 0)
+                {
+                    currentSize += alignment - rest;
+                }
+                currentSize += std::visit([](auto&& value) -> std::size_t
+                                          {
+                                              using T = std::decay_t<decltype(value)>;
+                                              if constexpr(std::is_convertible_v<T, std::size_t>)
+                                              {
+                                                  return value;
+                                              }
+                                              else
+                                              {
+                                                  throw std::runtime_error("Size returned as void*");
+                                              }
+                                              return {};
+                                          }, self(iter.first, self));
+            }
+            return currentSize;
+        }
+        else
+        {
+            auto unionType = std::dynamic_pointer_cast<Syntax::UnionType>(ptr);
+            auto result = m_structOrUnions.find(unionType->getName());
+            if (result == m_structOrUnions.end() || !result->second->isUnion())
+            {
+                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+            }
+            std::vector<std::size_t> sizes;
+            std::transform(result->second->getTypes().begin(),
+                           result->second->getTypes().end(),
+                           std::back_inserter(sizes),
+                           [&self](const std::pair<std::shared_ptr<Syntax::IType>, std::string>& pair)
+                           {
+                               return std::visit([](auto&& value) -> std::size_t
+                                                 {
+                                                     using T = std::decay_t<decltype(value)>;
+                                                     if constexpr(std::is_convertible_v<T, std::size_t>)
+                                                     {
+                                                         return value;
+                                                     }
+                                                     else
+                                                     {
+                                                         throw std::runtime_error("Size returned as void*");
+                                                     }
+                                                     return {};
+                                                 }, self(pair.first, self));
+                           });
+            return *std::max_element(sizes.begin(), sizes.end());
+        }
+    };
+    m_return = std::visit([&sizeOf](auto&& value) -> OpenCL::Codegen::ConstRetType
+                          {
+                              using T = std::decay_t<decltype(value)>;
+                              if constexpr(std::is_same_v<T, std::shared_ptr<Syntax::IType>>)
+                              {
+                                  return sizeOf(value, sizeOf);
+                              }
+                              else
+                              {
+                                  throw std::runtime_error("Not implemented yet");
+                              }
+                          }, node.getUnaryOrType());
 }
 
 namespace
@@ -1083,70 +1219,54 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExp
 #pragma GCC diagnostic pop
 #pragma GCC diagnostic pop
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::NonCommaExpression& node)
-{
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-               },node.getVariant());
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ReturnStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ReturnStatement&)
 {
     throw std::runtime_error("Return statement not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ExpressionStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ExpressionStatement&)
 {
     throw std::runtime_error("Expression statement not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::IfStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::IfStatement&)
 {
     throw std::runtime_error("If not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::SwitchStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::SwitchStatement&)
 {
     throw std::runtime_error("switch not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::DefaultStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::DefaultStatement&)
 {
     throw std::runtime_error("default not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CaseStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CaseStatement&)
 {
     throw std::runtime_error("case not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BlockStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BlockStatement&)
 {
     throw std::runtime_error("block not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ForStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ForStatement&)
 {
     throw std::runtime_error("for loop not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListScalarExpression& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListScalarExpression&)
 {
     throw std::runtime_error("scalar initializer not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListBlock& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListBlock&)
 {
     throw std::runtime_error("initializer list not allowed in constant expression");
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerList& node)
-{
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-        },node.getVariant());
 }
 
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Declarations&)
@@ -1154,45 +1274,29 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Declaration
     throw std::runtime_error("Declartaion not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BlockItem& node)
-{
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-               },node.getVariant());
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ForDeclarationStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ForDeclarationStatement&)
 {
     throw std::runtime_error("For loop not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::HeadWhileStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::HeadWhileStatement&)
 {
     throw std::runtime_error("while loop not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::FootWhileStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::FootWhileStatement&)
 {
     throw std::runtime_error("do while loop not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BreakStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BreakStatement&)
 {
     throw std::runtime_error("break not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ContinueStatement& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ContinueStatement&)
 {
     throw std::runtime_error("continue not allowed in constant expression");
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Statement& node)
-{
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-               },node.getVariant());
 }
 
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::StructOrUnionDeclaration&)
@@ -1200,12 +1304,12 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::StructOrUni
     throw std::runtime_error("struct or union declaration not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumDeclaration& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumDeclaration&)
 {
     throw std::runtime_error("Enum declartaion not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::TypedefDeclaration& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::TypedefDeclaration&)
 {
     throw std::runtime_error("Typedef declaration not allowed in constant expression");
 }
@@ -1215,17 +1319,9 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Function&)
     throw std::runtime_error("Function declaration or definition not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::GlobalDeclaration& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::GlobalDeclaration&)
 {
     throw std::runtime_error("Global declaration not allowed in constant expression");
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Global& node)
-{
-    std::visit([this](auto&& value)
-               {
-        value.accept(*this);
-               },node.getVariant());
 }
 
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Program&)
@@ -1233,32 +1329,37 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Program&)
     throw std::runtime_error("Program not allowed in constant expressions");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimitiveType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimitiveType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PointerType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PointerType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ArrayType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ArrayType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::StructType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::StructType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnionType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnionType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumType& )
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumType&)
 {
     throw std::runtime_error("Type not allowed in constant expression");
 }
+
+OpenCL::Codegen::ConstantEvaluator::ConstantEvaluator(const std::map<std::string,
+                                                                     const OpenCL::Syntax::StructOrUnionDeclaration*>& structOrUnions)
+    : m_structOrUnions(structOrUnions)
+{}

@@ -278,11 +278,6 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::PrimaryExpression& ) override
-        {
-
-        }
-
         void visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& ) override
         {
 
@@ -323,11 +318,6 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::PostFixExpression& ) override
-        {
-
-        }
-
         void visit(const OpenCL::Syntax::AssignmentExpression& ) override
         {
 
@@ -344,11 +334,6 @@ namespace
         }
 
         void visit(const OpenCL::Syntax::UnaryExpressionSizeOf& ) override
-        {
-
-        }
-
-        void visit(const OpenCL::Syntax::UnaryExpression& ) override
         {
 
         }
@@ -413,11 +398,6 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::NonCommaExpression& ) override
-        {
-
-        }
-
         void visit(const OpenCL::Syntax::ReturnStatement& ) override
         {
 
@@ -468,17 +448,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::InitializerList& ) override
-        {
-
-        }
-
         void visit(const OpenCL::Syntax::Declarations& ) override
-        {
-
-        }
-
-        void visit(const OpenCL::Syntax::BlockItem& ) override
         {
 
         }
@@ -508,11 +478,6 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::Statement& ) override
-        {
-
-        }
-
         void visit(const OpenCL::Syntax::StructOrUnionDeclaration& ) override
         {
 
@@ -534,11 +499,6 @@ namespace
         }
 
         void visit(const OpenCL::Syntax::GlobalDeclaration& ) override
-        {
-
-        }
-
-        void visit(const OpenCL::Syntax::Global& ) override
         {
 
         }
@@ -1066,14 +1026,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionPare
     return node.getExpression().accept(*this);
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
-}
-
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     emitLocation(&node, *this);
@@ -1338,14 +1290,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionType
         builder.CreateStore(value, alloca);
     }
     m_return.emplace<NodeRetType>(builder.CreateLoad(alloca), node.getType());
-}
-
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
@@ -1669,14 +1613,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf
                                                      std::make_unique<Syntax::PrimitiveType>(64, false, false, false));
                    }
                }, node.getUnaryOrType());
-}
-
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
@@ -2200,14 +2136,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression
     m_return.emplace<NodeRetType>(value, vsign);
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::NonCommaExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
-}
-
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ReturnStatement& node)
 {
     emitLocation(&node, *this);
@@ -2466,14 +2394,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerListBlock&
     }
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
-}
-
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
 {
     emitLocation(&node, *this);
@@ -2665,14 +2585,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
     }
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BlockItem& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
-}
-
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
 {
     emitLocation(&node, *this);
@@ -2757,14 +2669,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& no
 {
     emitLocation(&node, *this);
     builder.CreateBr(continueBlocks.back());
-}
-
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Statement& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructOrUnionDeclaration& node)
@@ -3116,14 +3020,6 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& no
                                                      false);
         addGlobal(name, {newGlobal, type});
     }
-}
-
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Global& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return value.accept(*this);
-                      }, node.getVariant());
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Program& node)

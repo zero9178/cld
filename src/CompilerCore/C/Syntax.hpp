@@ -151,7 +151,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const PrimaryExpressionParenthese& node) = 0;
 
-        virtual void visit(const PrimaryExpression& node) = 0;
+        void visit(const PrimaryExpression& node);
 
         virtual void visit(const PostFixExpressionPrimaryExpression& node) = 0;
 
@@ -169,7 +169,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const PostFixExpressionTypeInitializer& node) = 0;
 
-        virtual void visit(const PostFixExpression& node) = 0;
+        void visit(const PostFixExpression& node);
 
         virtual void visit(const AssignmentExpression& node) = 0;
 
@@ -179,7 +179,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const UnaryExpressionSizeOf& node) = 0;
 
-        virtual void visit(const UnaryExpression& node) = 0;
+        void visit(const UnaryExpression& node);
 
         virtual void visit(const CastExpression& node) = 0;
 
@@ -205,7 +205,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const ConditionalExpression& node) = 0;
 
-        virtual void visit(const NonCommaExpression& node) = 0;
+        void visit(const NonCommaExpression& node);
 
         virtual void visit(const ReturnStatement& node) = 0;
 
@@ -227,11 +227,11 @@ namespace OpenCL::Syntax
 
         virtual void visit(const InitializerListBlock& node) = 0;
 
-        virtual void visit(const InitializerList& node) = 0;
+        void visit(const InitializerList& node);
 
         virtual void visit(const Declarations& node) = 0;
 
-        virtual void visit(const BlockItem& node) = 0;
+        void visit(const BlockItem& node);
 
         virtual void visit(const ForDeclarationStatement& node) = 0;
 
@@ -243,7 +243,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const ContinueStatement& node) = 0;
 
-        virtual void visit(const Statement& node) = 0;
+        void visit(const Statement& node);
 
         virtual void visit(const StructOrUnionDeclaration& node) = 0;
 
@@ -255,7 +255,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const GlobalDeclaration& node) = 0;
 
-        virtual void visit(const Global& node) = 0;
+        void visit(const Global& node);
 
         virtual void visit(const Program& node) = 0;
 

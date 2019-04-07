@@ -359,6 +359,11 @@ namespace
                                 hasPreprocessorTokens = isTrue;
                                 iter = "";
                             }
+                            else if (iter.rfind("error") == 0)
+                            {
+                                iter = iter.substr(5);
+                                throw std::runtime_error(iter);
+                            }
                             else
                             {
                                 throw std::runtime_error("Invalid preprocessor directive");
