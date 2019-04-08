@@ -318,7 +318,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::AssignmentExpression& ) override
+        void visit(const OpenCL::Syntax::AssignmentExpressionAssignment& ) override
         {
 
         }
@@ -438,12 +438,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::InitializerListScalarExpression& ) override
-        {
-
-        }
-
-        void visit(const OpenCL::Syntax::InitializerListBlock& ) override
+        void visit(const OpenCL::Syntax::InitializerList& ) override
         {
 
         }
@@ -695,159 +690,159 @@ namespace
         }
     }
 
-    void match(llvm::ArrayRef<std::pair<std::int64_t, typename OpenCL::Syntax::InitializerListBlock::variant>> list,
-               llvm::Value* pointer,
-               const std::shared_ptr<OpenCL::Syntax::IType>& type, OpenCL::Codegen::Context& context)
-    {
-        type->accept(context);
-        auto* allocaType = context.getReturn<llvm::Type*>();
-        if (list.empty())
-        {
-            if (allocaType->isStructTy() || allocaType->isArrayTy())
-            {
-                context.builder.CreateStore(getZeroFor(allocaType), pointer);
-            }
-            else
-            {
-                throw std::runtime_error("Scalar initializer can not be empty");
-            }
-        }
-        else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
-        {
-            auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
-                                                                                      std::shared_ptr<OpenCL::Syntax::IType>>
-                                                {
-                                                    using T = std::decay_t<decltype(value)>;
-                                                    if constexpr(std::is_same_v<T,
-                                                                                OpenCL::Syntax::InitializerListBlock>)
-                                                    {
-                                                        throw std::runtime_error(
-                                                            "Only single level of braces allowed for scalar initialization");
-                                                    }
-                                                    else
-                                                    {
-                                                        value.accept(context);
-                                                        return context.getReturn<OpenCL::Codegen::NodeRetType>();
-                                                    }
-                                                }, list[0].second);
-            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
-            context.builder.CreateStore(value, pointer);
-        }
-        else if (allocaType->isStructTy())
-        {
-            auto& structInfo = context.structs.at(allocaType->getStructName());
-            std::size_t i = 0;
-            for (auto& iter : structInfo.types)
-            {
-                auto* zero = context.builder.getInt32(0);
-                auto* index = context.builder.getInt32(i);
-                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                if (i >= list.size())
-                {
-                    iter->accept(context);
-                    context.builder.CreateStore(getZeroFor(context.getReturn<llvm::Type*>()), member);
-                }
-                else
-                {
-                    std::visit([&context, member, iter](auto&& value)
-                               {
-                                   using T = std::decay_t<decltype(value)>;
-                                   if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
-                                   {
-                                       match(value.getNonCommaExpressionsAndBlocks(), member, iter, context);
-                                   }
-                                   else
-                                   {
-                                       value.accept(context);
-                                       auto[newValue, otherType] = context.getReturn<OpenCL::Codegen::NodeRetType>();
-                                       if (auto* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
-                                           llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
-                                           && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
-                                       {
-                                           auto* zero = context.builder.getInt32(0);
-                                           context.builder.CreateMemCpy(member,
-                                                                        0,
-                                                                        context.builder
-                                                                               .CreateInBoundsGEP(load->getPointerOperand(),
-                                                                                                  {zero, zero}),
-                                                                        0,
-                                                                        load->getType()->getArrayNumElements());
-                                       }
-                                       else
-                                       {
-                                           iter->accept(context);
-                                           castPrimitive(newValue,
-                                                         otherType->isSigned(),
-                                                         context.getReturn<llvm::Type*>(),
-                                                         iter->isSigned(),
-                                                         context);
-                                           context.builder.CreateStore(newValue, member);
-                                       }
-                                   }
-                               }, list[i].second);
-                }
-                i++;
-            }
-        }
-        else if (allocaType->isArrayTy())
-        {
-            auto* zero = context.builder.getInt32(0);
-            auto arrayType = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(type);
-            auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
-            std::shared_ptr heldType = arrayType->getType()->clone();
-            std::size_t i = 0;
-            std::set<std::size_t> needsNullInitialization;
-            std::generate_n(std::inserter(needsNullInitialization, needsNullInitialization.end()),
-                            allocaType->getArrayNumElements(),
-                            [&]
-                            {
-                                return needsNullInitialization.size();
-                            });
-            for (auto iter = list.begin(); iter < list.end(); i++)
-            {
-                if (iter->first != -1)
-                {
-                    i = iter->first;
-                }
-                if (i >= allocaType->getArrayNumElements())
-                {
-                    throw std::runtime_error("More elements specified in initializer list than elements in array");
-                }
-                needsNullInitialization.erase(i);
-                auto* index = context.builder.getInt32(i);
-                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
-                auto result = std::find_if(iter, end, [](auto&& value)
-                {
-                    return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(value.second);
-                });
-                if (result == iter && std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(result->second))
-                {
-                    match(std::get<OpenCL::Syntax::InitializerListBlock>(result->second)
-                              .getNonCommaExpressionsAndBlocks(),
-                          member,
-                          heldType,
-                          context);
-                    iter++;
-                }
-                else
-                {
-                    if (iter == result)
-                    {
-                        result++;
-                    }
-                    match({iter, result}, member, heldType, context);
-                    iter = result;
-                }
-            }
-            for (auto iter : needsNullInitialization)
-            {
-                auto* index = context.builder.getInt32(iter);
-                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
-                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()), member);
-            }
-        }
-    }
+//    void match(llvm::ArrayRef<std::pair<std::int64_t, typename OpenCL::Syntax::InitializerList::variant>> list,
+//               llvm::Value* pointer,
+//               const std::shared_ptr<OpenCL::Syntax::IType>& type, OpenCL::Codegen::Context& context)
+//    {
+//        type->accept(context);
+//        auto* allocaType = context.getReturn<llvm::Type*>();
+//        if (list.empty())
+//        {
+//            if (allocaType->isStructTy() || allocaType->isArrayTy())
+//            {
+//                context.builder.CreateStore(getZeroFor(allocaType), pointer);
+//            }
+//            else
+//            {
+//                throw std::runtime_error("Scalar initializer can not be empty");
+//            }
+//        }
+//        else if (!allocaType->isStructTy() && !allocaType->isArrayTy())
+//        {
+//            auto[value, otherType] = std::visit([&context](auto&& value) -> std::pair<llvm::Value*,
+//                                                                                      std::shared_ptr<OpenCL::Syntax::IType>>
+//                                                {
+//                                                    using T = std::decay_t<decltype(value)>;
+//                                                    if constexpr(std::is_same_v<T,
+//                                                                                OpenCL::Syntax::InitializerList>)
+//                                                    {
+//                                                        throw std::runtime_error(
+//                                                            "Only single level of braces allowed for scalar initialization");
+//                                                    }
+//                                                    else
+//                                                    {
+//                                                        value.accept(context);
+//                                                        return context.getReturn<OpenCL::Codegen::NodeRetType>();
+//                                                    }
+//                                                }, list[0].second);
+//            castPrimitive(value, otherType->isSigned(), allocaType, type->isSigned(), context);
+//            context.builder.CreateStore(value, pointer);
+//        }
+//        else if (allocaType->isStructTy())
+//        {
+//            auto& structInfo = context.structs.at(allocaType->getStructName());
+//            std::size_t i = 0;
+//            for (auto& iter : structInfo.types)
+//            {
+//                auto* zero = context.builder.getInt32(0);
+//                auto* index = context.builder.getInt32(i);
+//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+//                if (i >= list.size())
+//                {
+//                    iter->accept(context);
+//                    context.builder.CreateStore(getZeroFor(context.getReturn<llvm::Type*>()), member);
+//                }
+//                else
+//                {
+//                    std::visit([&context, member, iter](auto&& value)
+//                               {
+//                                   using T = std::decay_t<decltype(value)>;
+//                                   if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerList>)
+//                                   {
+//                                       match(value.getNonCommaExpressionsAndBlocks(), member, iter, context);
+//                                   }
+//                                   else
+//                                   {
+//                                       value.accept(context);
+//                                       auto[newValue, otherType] = context.getReturn<OpenCL::Codegen::NodeRetType>();
+//                                       if (auto* load = llvm::dyn_cast<llvm::LoadInst>(newValue);load &&
+//                                           llvm::isa<llvm::GlobalValue>(load->getPointerOperand())
+//                                           && load->getType()->getArrayElementType() == context.builder.getInt8Ty())
+//                                       {
+//                                           auto* zero = context.builder.getInt32(0);
+//                                           context.builder.CreateMemCpy(member,
+//                                                                        0,
+//                                                                        context.builder
+//                                                                               .CreateInBoundsGEP(load->getPointerOperand(),
+//                                                                                                  {zero, zero}),
+//                                                                        0,
+//                                                                        load->getType()->getArrayNumElements());
+//                                       }
+//                                       else
+//                                       {
+//                                           iter->accept(context);
+//                                           castPrimitive(newValue,
+//                                                         otherType->isSigned(),
+//                                                         context.getReturn<llvm::Type*>(),
+//                                                         iter->isSigned(),
+//                                                         context);
+//                                           context.builder.CreateStore(newValue, member);
+//                                       }
+//                                   }
+//                               }, list[i].second);
+//                }
+//                i++;
+//            }
+//        }
+//        else if (allocaType->isArrayTy())
+//        {
+//            auto* zero = context.builder.getInt32(0);
+//            auto arrayType = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(type);
+//            auto elementSize = elementsNeededForType(allocaType->getArrayElementType());
+//            std::shared_ptr heldType = arrayType->getType()->clone();
+//            std::size_t i = 0;
+//            std::set<std::size_t> needsNullInitialization;
+//            std::generate_n(std::inserter(needsNullInitialization, needsNullInitialization.end()),
+//                            allocaType->getArrayNumElements(),
+//                            [&]
+//                            {
+//                                return needsNullInitialization.size();
+//                            });
+//            for (auto iter = list.begin(); iter < list.end(); i++)
+//            {
+//                if (iter->first != -1)
+//                {
+//                    i = iter->first;
+//                }
+//                if (i >= allocaType->getArrayNumElements())
+//                {
+//                    throw std::runtime_error("More elements specified in initializer list than elements in array");
+//                }
+//                needsNullInitialization.erase(i);
+//                auto* index = context.builder.getInt32(i);
+//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+//                auto end = iter + elementSize > list.end() ? list.end() : iter + elementSize;
+//                auto result = std::find_if(iter, end, [](auto&& value)
+//                {
+//                    return std::holds_alternative<OpenCL::Syntax::InitializerList>(value.second);
+//                });
+//                if (result == iter && std::holds_alternative<OpenCL::Syntax::InitializerList>(result->second))
+//                {
+//                    match(std::get<OpenCL::Syntax::InitializerList>(result->second)
+//                              .getNonCommaExpressionsAndBlocks(),
+//                          member,
+//                          heldType,
+//                          context);
+//                    iter++;
+//                }
+//                else
+//                {
+//                    if (iter == result)
+//                    {
+//                        result++;
+//                    }
+//                    match({iter, result}, member, heldType, context);
+//                    iter = result;
+//                }
+//            }
+//            for (auto iter : needsNullInitialization)
+//            {
+//                auto* index = context.builder.getInt32(iter);
+//                auto* member = context.builder.CreateInBoundsGEP(pointer, {zero, index});
+//                context.builder.CreateStore(getZeroFor(allocaType->getArrayElementType()), member);
+//            }
+//        }
+//    }
 
     llvm::Value* toBool(llvm::Value* value, OpenCL::Codegen::Context& context)
     {
@@ -1292,7 +1287,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionType
     m_return.emplace<NodeRetType>(builder.CreateLoad(alloca), node.getType());
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpressionAssignment& node)
 {
     emitLocation(&node, *this);
     node.getUnaryFactor().accept(*this);
@@ -1308,7 +1303,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
     }
     switch (node.getAssignOperator())
     {
-    case Syntax::AssignmentExpression::AssignOperator::NoOperator:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator:
     {
         node.getNonCommaExpression().accept(*this);
         auto[value, sign] = std::get<NodeRetType>(m_return);
@@ -1316,7 +1311,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(value, load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::PlusAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign:
     {
         llvm::Value* current = left;
         node.getNonCommaExpression().accept(*this);
@@ -1334,7 +1329,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(current, load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::MinusAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1352,7 +1347,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(current, load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::DivideAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1377,7 +1372,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(current, load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::MultiplyAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1395,7 +1390,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(current, load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::ModuloAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1404,7 +1399,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(builder.CreateSRem(current, newValue), load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::LeftShiftAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1413,7 +1408,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(builder.CreateShl(current, newValue), load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::RightShiftAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1422,7 +1417,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(builder.CreateAShr(current, newValue), load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::BitAndAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1431,7 +1426,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(builder.CreateAnd(current, newValue), load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::BitOrAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -1440,7 +1435,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression&
         builder.CreateStore(builder.CreateOr(current, newValue), load->getPointerOperand());
         break;
     }
-    case Syntax::AssignmentExpression::AssignOperator::BitXorAssign:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign:
     {
         llvm::Value* current = builder.CreateLoad(left);
         node.getNonCommaExpression().accept(*this);
@@ -2374,24 +2369,9 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node)
     doForLoop(node.getControlling(), node.getPost(), node.getStatement());
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerListScalarExpression& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
 {
-    return node.getExpression().accept(*this);
-}
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerListBlock& node)
-{
-    if (node.getNonCommaExpressionsAndBlocks().size() == 1)
-    {
-        return std::visit([this](auto&& value)
-                          {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr(std::is_same_v<T, Syntax::NonCommaExpression>)
-                              {
-                                  return value.accept(*this);
-                              }
-                          }, node.getNonCommaExpressionsAndBlocks()[0].second);
-    }
 }
 
 void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
@@ -2400,94 +2380,94 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
     llvm::IRBuilder<> tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
     for (auto&[type, name, optionalExpression] : node.getDeclarations())
     {
-        if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(type);array && array->getSize() == 0)
-        {
-            if (!optionalExpression)
-            {
-                throw std::runtime_error("Initializer list needed to deduce size of array");
-            }
-            auto* result = std::get_if<Syntax::InitializerListBlock>(&optionalExpression->getVariant());
-            if (!result)
-            {
-                if (auto* primitive = dynamic_cast<const Syntax::PrimitiveType*>(array->getType().get());primitive
-                    && primitive->getBitCount() == 8)
-                {
-                    std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant()).accept(*this);
-                    auto[value, type] = std::get<NodeRetType>(m_return);
-                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
-                    if (value->getType()->isArrayTy() && load
-                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
-                    {
-                        array->setSize(value->getType()->getArrayNumElements());
-                    }
-                    else
-                    {
-                        throw std::runtime_error("Can only initialize char array with a string literal");
-                    }
-                }
-                else
-                {
-                    throw std::runtime_error("Initializer list needed to deduce size of array");
-                }
-            }
-            else
-            {
-                array->getType()->accept(*this);
-                auto elementSize = elementsNeededForType(std::get<llvm::Type*>(m_return));
-                std::size_t i = 0, max = std::numeric_limits<std::size_t>::lowest();
-                for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
-                     iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
-                {
-                    if (iter->first != -1)
-                    {
-                        max = std::max(i, max);
-                        i = iter->first;
-                    }
-                    auto end = std::find_if(iter,
-                                            iter + elementSize > result->getNonCommaExpressionsAndBlocks().end()
-                                            ? result
-                                                ->getNonCommaExpressionsAndBlocks().end() : iter + elementSize,
-                                            [](auto&& value)
-                                            {
-                                                return std::holds_alternative<OpenCL::Syntax::InitializerListBlock>(
-                                                    value
-                                                        .second);
-                                            });
-                    if (iter == end)
-                    {
-                        iter++;
-                    }
-                    else
-                    {
-                        iter = end;
-                    }
-                }
-                max = std::max(i, max);
-                array->setSize(max);
-                if (!array->getSize())
-                {
-                    throw std::runtime_error("Array can't be of size 0");
-                }
-            }
-        }
-        else
-        {
-            if (optionalExpression)
-            {
-                if (auto* result = std::get_if<Syntax::InitializerListBlock>(&optionalExpression->getVariant()))
-                {
-                    if (std::any_of(result->getNonCommaExpressionsAndBlocks().begin(),
-                                    result->getNonCommaExpressionsAndBlocks().end(),
-                                    [](const auto& pair)
-                                    {
-                                        return pair.first != -1;
-                                    }))
-                    {
-                        throw std::runtime_error("Designators are only allowed in initializers for arrays");
-                    }
-                }
-            }
-        }
+//        if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(type);array && array->getSize() == 0)
+//        {
+//            if (!optionalExpression)
+//            {
+//                throw std::runtime_error("Initializer list needed to deduce size of array");
+//            }
+//            auto* result = std::get_if<Syntax::InitializerList>(&optionalExpression->getVariant());
+//            if (!result)
+//            {
+//                if (auto* primitive = dynamic_cast<const Syntax::PrimitiveType*>(array->getType().get());primitive
+//                    && primitive->getBitCount() == 8)
+//                {
+//                    std::get<Syntax::AssignmentExpression>(optionalExpression->getVariant()).accept(*this);
+//                    auto[value, type] = std::get<NodeRetType>(m_return);
+//                    auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
+//                    if (value->getType()->isArrayTy() && load
+//                        && llvm::isa<llvm::GlobalValue>(load->getPointerOperand()))
+//                    {
+//                        array->setSize(value->getType()->getArrayNumElements());
+//                    }
+//                    else
+//                    {
+//                        throw std::runtime_error("Can only initialize char array with a string literal");
+//                    }
+//                }
+//                else
+//                {
+//                    throw std::runtime_error("Initializer list needed to deduce size of array");
+//                }
+//            }
+//            else
+//            {
+//                array->getType()->accept(*this);
+//                auto elementSize = elementsNeededForType(std::get<llvm::Type*>(m_return));
+//                std::size_t i = 0, max = std::numeric_limits<std::size_t>::lowest();
+//                for (auto iter = result->getNonCommaExpressionsAndBlocks().begin();
+//                     iter < result->getNonCommaExpressionsAndBlocks().end(); i++)
+//                {
+//                    if (iter->first != -1)
+//                    {
+//                        max = std::max(i, max);
+//                        i = iter->first;
+//                    }
+//                    auto end = std::find_if(iter,
+//                                            iter + elementSize > result->getNonCommaExpressionsAndBlocks().end()
+//                                            ? result
+//                                                ->getNonCommaExpressionsAndBlocks().end() : iter + elementSize,
+//                                            [](auto&& value)
+//                                            {
+//                                                return std::holds_alternative<OpenCL::Syntax::InitializerList>(
+//                                                    value
+//                                                        .second);
+//                                            });
+//                    if (iter == end)
+//                    {
+//                        iter++;
+//                    }
+//                    else
+//                    {
+//                        iter = end;
+//                    }
+//                }
+//                max = std::max(i, max);
+//                array->setSize(max);
+//                if (!array->getSize())
+//                {
+//                    throw std::runtime_error("Array can't be of size 0");
+//                }
+//            }
+//        }
+//        else
+//        {
+//            if (optionalExpression)
+//            {
+//                if (auto* result = std::get_if<Syntax::InitializerList>(&optionalExpression->getVariant()))
+//                {
+//                    if (std::any_of(result->getNonCommaExpressionsAndBlocks().begin(),
+//                                    result->getNonCommaExpressionsAndBlocks().end(),
+//                                    [](const auto& pair)
+//                                    {
+//                                        return pair.first != -1;
+//                                    }))
+//                    {
+//                        throw std::runtime_error("Designators are only allowed in initializers for arrays");
+//                    }
+//                }
+//            }
+//        }
         type->accept(*this);
         auto* allocaType = std::get<llvm::Type*>(m_return);
         auto* alloca = tmpB.CreateAlloca(allocaType, nullptr);
@@ -2508,12 +2488,12 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
         addValueToScope(name, {alloca, type});
         if (optionalExpression)
         {
-            if (std::holds_alternative<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant()))
+            if (std::holds_alternative<Syntax::AssignmentExpression>(optionalExpression->getVariant()))
             {
                 if (allocaType->isArrayTy() && allocaType->getArrayElementType()->isIntegerTy()
                     && allocaType->getArrayElementType()->getIntegerBitWidth() == 8)
                 {
-                    std::get<Syntax::InitializerListScalarExpression>(optionalExpression->getVariant()).accept(*this);
+                    std::get<Syntax::AssignmentExpression>(optionalExpression->getVariant()).accept(*this);
                     auto[value, type] = std::get<NodeRetType>(m_return);
                     auto* load = llvm::dyn_cast<llvm::LoadInst>(value);
                     if (value->getType()->isArrayTy() && load
@@ -2544,42 +2524,42 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
                     throw std::runtime_error("Can't initialize array with scalar initializer");
                 }
             }
-            else if (auto result = std::get_if<Syntax::InitializerListBlock>(&optionalExpression->getVariant()))
+            else if (auto result = std::get_if<Syntax::InitializerList>(&optionalExpression->getVariant()))
             {
-                if (allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
-                {
-                    auto* zero = builder.getInt32(0);
-                    for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
-                    {
-                        auto* index = builder.getInt32(i);
-                        auto* member = builder.CreateInBoundsGEP(alloca, {zero, index});
-                        std::visit([this, member,
-                                       type = std::dynamic_pointer_cast<Syntax::ArrayType>(type)](auto&& value)
-                                   {
-                                       using T = std::decay_t<decltype(value)>;
-                                       if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerListBlock>)
-                                       {
-                                           match(value.getNonCommaExpressionsAndBlocks(),
-                                                 member,
-                                                 type->getType()->clone(),
-                                                 *this);
-                                       }
-                                       else
-                                       {
-                                           value.accept(*this);
-                                           auto[newValue, otherType] = std::get<NodeRetType>(m_return);
-                                           type->getType()->accept(*this);
-                                           castPrimitive(newValue,
-                                                         otherType->isSigned(),
-                                                         std::get<llvm::Type*>(m_return),
-                                                         type->getType()->isSigned(),
-                                                         *this);
-                                           builder.CreateStore(newValue, member);
-                                       }
-                                   }, result->getNonCommaExpressionsAndBlocks()[0].second);
-                    }
-                }
-                match(result->getNonCommaExpressionsAndBlocks(), alloca, type, *this);
+//                if (allocaType->isArrayTy() && result->getNonCommaExpressionsAndBlocks().size() == 1)
+//                {
+//                    auto* zero = builder.getInt32(0);
+//                    for (std::size_t i = 0; i < allocaType->getArrayNumElements(); i++)
+//                    {
+//                        auto* index = builder.getInt32(i);
+//                        auto* member = builder.CreateInBoundsGEP(alloca, {zero, index});
+//                        std::visit([this, member,
+//                                       type = std::dynamic_pointer_cast<Syntax::ArrayType>(type)](auto&& value)
+//                                   {
+//                                       using T = std::decay_t<decltype(value)>;
+//                                       if constexpr(std::is_same_v<T, OpenCL::Syntax::InitializerList>)
+//                                       {
+//                                           match(value.getNonCommaExpressionsAndBlocks(),
+//                                                 member,
+//                                                 type->getType()->clone(),
+//                                                 *this);
+//                                       }
+//                                       else
+//                                       {
+//                                           value.accept(*this);
+//                                           auto[newValue, otherType] = std::get<NodeRetType>(m_return);
+//                                           type->getType()->accept(*this);
+//                                           castPrimitive(newValue,
+//                                                         otherType->isSigned(),
+//                                                         std::get<llvm::Type*>(m_return),
+//                                                         type->getType()->isSigned(),
+//                                                         *this);
+//                                           builder.CreateStore(newValue, member);
+//                                       }
+//                                   }, result->getNonCommaExpressionsAndBlocks()[0].second);
+//                    }
+//                }
+//                match(result->getNonCommaExpressionsAndBlocks(), alloca, type, *this);
             }
         }
     }

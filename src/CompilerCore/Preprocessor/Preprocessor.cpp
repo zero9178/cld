@@ -348,7 +348,7 @@ namespace
                                 auto result = recursivePreprocess(iter, defines, line-1);
                                 OpenCL::Parser::ParsingContext context;
                                 auto tokens = OpenCL::Lexer::tokenize(result);
-                                auto expression = OpenCL::Parser::parseNonCommaExpression(tokens,context);
+                                auto expression = OpenCL::Parser::parseAssignmentExpression(tokens, context);
                                 OpenCL::Codegen::ConstantEvaluator evaluator;
                                 expression.accept(evaluator);
                                 bool isTrue = std::visit([](auto&& value)-> bool

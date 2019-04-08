@@ -39,7 +39,7 @@ namespace OpenCL::Syntax
 
     class PostFixExpression;
 
-    class AssignmentExpression;
+    class AssignmentExpressionAssignment;
 
     class UnaryExpressionPostFixExpression;
 
@@ -73,7 +73,7 @@ namespace OpenCL::Syntax
 
     class ConditionalExpression;
 
-    class NonCommaExpression;
+    class AssignmentExpression;
 
     class ReturnStatement;
 
@@ -91,11 +91,9 @@ namespace OpenCL::Syntax
 
     class ForStatement;
 
-    class InitializerListScalarExpression;
-
-    class InitializerListBlock;
-
     class InitializerList;
+
+    class Initializer;
 
     class Declarations;
 
@@ -171,7 +169,7 @@ namespace OpenCL::Syntax
 
         void visit(const PostFixExpression& node);
 
-        virtual void visit(const AssignmentExpression& node) = 0;
+        virtual void visit(const AssignmentExpressionAssignment& node) = 0;
 
         virtual void visit(const UnaryExpressionPostFixExpression& node) = 0;
 
@@ -205,7 +203,7 @@ namespace OpenCL::Syntax
 
         virtual void visit(const ConditionalExpression& node) = 0;
 
-        void visit(const NonCommaExpression& node);
+        void visit(const AssignmentExpression& node);
 
         virtual void visit(const ReturnStatement& node) = 0;
 
@@ -223,11 +221,9 @@ namespace OpenCL::Syntax
 
         virtual void visit(const ForStatement& node) = 0;
 
-        virtual void visit(const InitializerListScalarExpression& node) = 0;
+        virtual void visit(const InitializerList& node) = 0;
 
-        virtual void visit(const InitializerListBlock& node) = 0;
-
-        void visit(const InitializerList& node);
+        void visit(const Initializer& node);
 
         virtual void visit(const Declarations& node) = 0;
 
@@ -360,11 +356,11 @@ namespace OpenCL::Syntax
 
         IType(const IType&) = delete;
 
-        IType(IType&& ) = default;
+        IType(IType&&) = default;
 
-        IType&operator=(const IType&) = delete;
+        IType& operator=(const IType&) = delete;
 
-        IType&operator=(IType&&) = default;
+        IType& operator=(IType&&) = default;
 
         virtual bool isSigned() const
         {
@@ -593,19 +589,19 @@ namespace OpenCL::Syntax
      */
     class Expression final : public Node<Expression>
     {
-        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
-        std::unique_ptr<NonCommaExpression> m_optionalNonCommaExpression;
+        std::unique_ptr<AssignmentExpression> m_nonCommaExpression;
+        std::unique_ptr<AssignmentExpression> m_optionalNonCommaExpression;
 
     public:
 
         Expression(std::uint64_t line,
                    std::uint64_t column,
-                   std::unique_ptr<NonCommaExpression>&& nonCommaExpression,
-                   std::unique_ptr<NonCommaExpression>&& optionalNonCommaExpression);
+                   std::unique_ptr<AssignmentExpression>&& nonCommaExpression,
+                   std::unique_ptr<AssignmentExpression>&& optionalNonCommaExpression);
 
-        const NonCommaExpression& getNonCommaExpression() const;
+        const AssignmentExpression& getNonCommaExpression() const;
 
-        const NonCommaExpression* getOptionalNonCommaExpression() const;
+        const AssignmentExpression* getOptionalNonCommaExpression() const;
     };
 
     /**
@@ -802,18 +798,18 @@ namespace OpenCL::Syntax
     class PostFixExpressionFunctionCall final : public Node<PostFixExpressionFunctionCall>
     {
         std::unique_ptr<PostFixExpression> m_postFixExpression;
-        std::vector<std::unique_ptr<NonCommaExpression>> m_optionalAssignmanetExpressions;
+        std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmanetExpressions;
 
     public:
 
         PostFixExpressionFunctionCall(std::uint64_t line,
                                       std::uint64_t column,
                                       std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                      std::vector<std::unique_ptr<NonCommaExpression>>&& optionalAssignmanetExpressions);
+                                      std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
 
-        const std::vector<std::unique_ptr<NonCommaExpression>>& getOptionalAssignmentExpressions() const;
+        const std::vector<std::unique_ptr<AssignmentExpression>>& getOptionalAssignmentExpressions() const;
     };
 
     /**
@@ -824,18 +820,18 @@ namespace OpenCL::Syntax
     class PostFixExpressionTypeInitializer final : public Node<PostFixExpressionTypeInitializer>
     {
         std::shared_ptr<IType> m_type;
-        std::vector<std::unique_ptr<NonCommaExpression>> m_nonCommaExpressions;
+        std::vector<std::unique_ptr<AssignmentExpression>> m_nonCommaExpressions;
 
     public:
 
         PostFixExpressionTypeInitializer(std::uint64_t line,
                                          std::uint64_t column,
                                          std::shared_ptr<IType> type,
-                                         std::vector<std::unique_ptr<NonCommaExpression>>&& nonCommaExpressions);
+                                         std::vector<std::unique_ptr<AssignmentExpression>>&& nonCommaExpressions);
 
         const std::shared_ptr<IType>& getType() const;
 
-        const std::vector<std::unique_ptr<NonCommaExpression>>& getNonCommaExpressions() const;
+        const std::vector<std::unique_ptr<AssignmentExpression>>& getNonCommaExpressions() const;
     };
 
     /**
@@ -967,7 +963,7 @@ namespace OpenCL::Syntax
     /**
      * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
      */
-    class AssignmentExpression final : public Node<AssignmentExpression>
+    class AssignmentExpressionAssignment final : public Node<AssignmentExpressionAssignment>
     {
         UnaryExpression m_unaryFactor;
 
@@ -994,19 +990,19 @@ namespace OpenCL::Syntax
     private:
 
         AssignOperator m_assignOperator;
-        std::unique_ptr<NonCommaExpression> m_nonCommaExpression;
+        std::unique_ptr<AssignmentExpression> m_nonCommaExpression;
 
     public:
 
-        AssignmentExpression(std::uint64_t line,
-                             std::uint64_t column,
-                             UnaryExpression&& unaryFactor,
-                             AssignOperator assignOperator,
-                             std::unique_ptr<NonCommaExpression>&& nonCommaExpression);
+        AssignmentExpressionAssignment(std::uint64_t line,
+                                       std::uint64_t column,
+                                       UnaryExpression&& unaryFactor,
+                                       AssignOperator assignOperator,
+                                       std::unique_ptr<AssignmentExpression>&& nonCommaExpression);
 
         const UnaryExpression& getUnaryFactor() const;
 
-        const NonCommaExpression& getNonCommaExpression() const;
+        const AssignmentExpression& getNonCommaExpression() const;
 
         AssignOperator getAssignOperator() const;
     };
@@ -1333,18 +1329,18 @@ namespace OpenCL::Syntax
     /**
      * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
      */
-    class NonCommaExpression final : public Node<NonCommaExpression>
+    class AssignmentExpression final : public Node<AssignmentExpression>
     {
 
-        std::variant<AssignmentExpression, ConditionalExpression> m_variant;
+        std::variant<AssignmentExpressionAssignment, ConditionalExpression> m_variant;
 
     public:
 
-        NonCommaExpression(std::uint64_t line,
-                           std::uint64_t column,
-                           std::variant<AssignmentExpression, ConditionalExpression>&& variant);
+        AssignmentExpression(std::uint64_t line,
+                             std::uint64_t column,
+                             std::variant<AssignmentExpressionAssignment, ConditionalExpression>&& variant);
 
-        const std::variant<AssignmentExpression, ConditionalExpression>& getVariant() const;
+        const std::variant<AssignmentExpressionAssignment, ConditionalExpression>& getVariant() const;
     };
 
     /**
@@ -1506,33 +1502,25 @@ namespace OpenCL::Syntax
         const Expression* getPost() const;
     };
 
-    /**
-     * <InitializerListScalarExpression> ::= <Expression>
-     */
-    class InitializerListScalarExpression final : public Node<InitializerListScalarExpression>
-    {
-        Expression m_expression;
-
-    public:
-
-        InitializerListScalarExpression(uint64_t line, uint64_t column, Expression&& expression);
-
-        const Expression& getExpression() const;
-    };
+    class Initializer;
 
     /**
-     * <InitializerListBlockItem> ::= [ <TokenType::OpenSquareBracket> <ConstantNonCommaExpression> <TokenType::CloseSquareBracket> <TokenType::Assign> ] <InitializerListBlock> | <NonCommaExpression>
+     * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
+     *                | <TokenType::Dot> <TokenType::Identifier>
      *
-     * <InitializerListBlock> ::= <TokenType::OpenBrace> <TokenType::CloseBrace>
-     *                          | <TokenType::OpenBrace> <InitializerListBlockItem> { <TokenType::Comma> <InitializerListBlockItem> } <TokenType::CloseBrace>
+     * <DesignatorList> ::= <Designator> { <Designator> }
+     *
+     * <Designation> ::= <DesignatorList> <TokenType::Assignment>
+     *
+     * <InitializerList> ::= [Designation] Initializer { <TokenType::Comma> [Designation] Initializer }
      */
-    class InitializerListBlock final : public Node<InitializerListBlock>
+    class InitializerList final : public Node<InitializerList>
     {
     public:
 
-        using variant = std::variant<NonCommaExpression, InitializerListBlock>;
+        using DesignatorList = std::vector<std::variant<std::size_t, std::string>>;
 
-        using vector = std::vector<std::pair<std::int64_t, variant>>;
+        using vector = std::vector<std::pair<Initializer, DesignatorList>>;
 
     private:
 
@@ -1540,24 +1528,24 @@ namespace OpenCL::Syntax
 
     public:
 
-        InitializerListBlock(std::uint64_t line,
-                             std::uint64_t column,
-                             vector&& nonCommaExpressionsAndBlocks);
+        InitializerList(std::uint64_t line,
+                        std::uint64_t column,
+                        vector&& nonCommaExpressionsAndBlocks);
 
         const vector& getNonCommaExpressionsAndBlocks() const;
     };
 
     /**
-     * <InitializerList> ::= <InitializerListScalarExpression> | <InitializerListBlock>
+     * <Initializer> ::= <AssignmentExpression> | <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>] <TokenType::CloseBrace>
      */
-    class InitializerList final : public Node<InitializerList>
+    class Initializer final : public Node<Initializer>
     {
-        using variant = std::variant<InitializerListScalarExpression, InitializerListBlock>;
+        using variant = std::variant<AssignmentExpression, InitializerList>;
         variant m_variant;
 
     public:
 
-        InitializerList(std::uint64_t line, std::uint64_t column, variant&& variant);
+        Initializer(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
     };
@@ -1569,21 +1557,21 @@ namespace OpenCL::Syntax
      */
     class Declarations final : public Node<Declarations>
     {
-        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<Initializer>>> m_declarations;
 
     public:
 
         Declarations(std::uint64_t line, std::uint64_t column, std::vector<std::tuple<std::shared_ptr<IType>,
                                                                                       std::string,
-                                                                                      std::unique_ptr<InitializerList>>>&& declarations);
+                                                                                      std::unique_ptr<Initializer>>>&& declarations);
 
         const std::vector<std::tuple<std::shared_ptr<IType>,
                                      std::string,
-                                     std::unique_ptr<InitializerList>>>& getDeclarations() const;
+                                     std::unique_ptr<Initializer>>>& getDeclarations() const;
 
         std::vector<std::tuple<std::shared_ptr<IType>,
                                std::string,
-                               std::unique_ptr<InitializerList>>>& getDeclarations();
+                               std::unique_ptr<Initializer>>>& getDeclarations();
     };
 
     /**
@@ -1856,7 +1844,7 @@ namespace OpenCL::Syntax
      */
     class GlobalDeclaration final : public Node<GlobalDeclaration>
     {
-        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<InitializerList>>> m_declarations;
+        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<Initializer>>> m_declarations;
 
     public:
 
@@ -1864,11 +1852,11 @@ namespace OpenCL::Syntax
                           std::uint64_t column,
                           std::vector<std::tuple<std::shared_ptr<IType>,
                                                  std::string,
-                                                 std::unique_ptr<InitializerList>>>&& declarations);
+                                                 std::unique_ptr<Initializer>>>&& declarations);
 
         const std::vector<std::tuple<std::shared_ptr<IType>,
                                      std::string,
-                                     std::unique_ptr<InitializerList>>>& getDeclarations() const;
+                                     std::unique_ptr<Initializer>>>& getDeclarations() const;
     };
 
     /**

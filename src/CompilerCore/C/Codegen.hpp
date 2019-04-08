@@ -132,7 +132,7 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::PostFixExpressionTypeInitializer& node) override;
 
-        void visit(const Syntax::AssignmentExpression& node) override;
+        void visit(const Syntax::AssignmentExpressionAssignment& node) override;
 
         void visit(const Syntax::UnaryExpressionPostFixExpression& node) override;
 
@@ -180,9 +180,7 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::ForStatement& node) override;
 
-        void visit(const Syntax::InitializerListScalarExpression& node) override;
-
-        void visit(const Syntax::InitializerListBlock& node) override;
+        void visit(const Syntax::InitializerList& node) override;
 
         void visit(const Syntax::Declarations& node) override;
 

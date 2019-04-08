@@ -289,7 +289,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpr
     throw std::runtime_error("Type initializer are not allowed in constant expressions");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpressionAssignment&)
 {
     throw std::runtime_error("Assignment expressios not allowed in constant expressions");
 }
@@ -1259,12 +1259,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ForStatemen
     throw std::runtime_error("for loop not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListScalarExpression&)
-{
-    throw std::runtime_error("scalar initializer not allowed in constant expression");
-}
-
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerListBlock&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::InitializerList&)
 {
     throw std::runtime_error("initializer list not allowed in constant expression");
 }

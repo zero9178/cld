@@ -108,16 +108,16 @@ namespace OpenCL::Parser
                                                    bool allowEmptyArray = true,
                                                    bool allowNoName = false);
 
-    Syntax::InitializerList parseInitializerList(Tokens& tokens, ParsingContext& context);
+    Syntax::Initializer parseInitializer(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::InitializerListBlock parseInitializerListBlock(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::InitializerList parseInitializerList(Tokens& tokens, ParsingContext& context);
 
     Syntax::Statement parseStatement(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::Expression parseExpression(Tokens& tokens, ParsingContext& context);
 
-    Syntax::NonCommaExpression parseNonCommaExpression(Tokens& tokens,
-                                                       ParsingContext& context);
+    Syntax::AssignmentExpression parseAssignmentExpression(Tokens& tokens,
+                                                           ParsingContext& context);
 
     OpenCL::Syntax::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context);
 
