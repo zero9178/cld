@@ -785,7 +785,7 @@ BlockItem OpenCL::Parser::parseBlockItem(Tokens& tokens, ParsingContext& context
     }
 }
 
-OpenCL::Syntax::Declarations OpenCL::Parser::parseDeclarations(Tokens& tokens,
+OpenCL::Syntax::Declaration OpenCL::Parser::parseDeclarations(Tokens& tokens,
                                                                ParsingContext& context,
                                                                bool multiple,
                                                                bool allowInitialization,
@@ -886,12 +886,26 @@ Initializer OpenCL::Parser::parseInitializer(Tokens& tokens,
     if (tokens.back().getTokenType() != TokenType::OpenBrace)
     {
         return Initializer(tokens.back().getLine(),
-                               tokens.back().getColumn(), parseAssignmentExpression(tokens, context));
+                           tokens.back().getColumn(), parseAssignmentExpression(tokens, context));
     }
     else
     {
-        return {tokens.back().getLine(), tokens.back().getColumn(),
-                {parseInitializerList(tokens, context)}};
+        tokens.pop_back();
+        auto initializerList = parseInitializerList(tokens, context);
+        if (tokens.back().getTokenType() != TokenType::CloseBrace && tokens.back().getTokenType() != TokenType::Comma)
+        {
+            throw std::runtime_error("Expected } after initializer list");
+        }
+        if (tokens.back().getTokenType() == TokenType::Comma)
+        {
+            tokens.pop_back();
+        }
+        if (tokens.back().getTokenType() != TokenType::CloseBrace)
+        {
+            throw std::runtime_error("Expected } after initializer list");
+        }
+        tokens.pop_back();
+        return {tokens.back().getLine(), tokens.back().getColumn(), std::move(initializerList)};
     }
 }
 
@@ -899,53 +913,64 @@ OpenCL::Syntax::InitializerList OpenCL::Parser::parseInitializerList(Tokens& tok
 {
     auto line = tokens.back().getLine();
     auto column = tokens.back().getColumn();
-    tokens.pop_back();
     typename OpenCL::Syntax::InitializerList::vector vector;
     while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
     {
-        std::int64_t index = -1;
-        if (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
+        std::vector<std::variant<std::size_t, std::string>> variants;
+        while (tokens.back().getTokenType() == TokenType::OpenSquareBracket
+            || tokens.back().getTokenType() == TokenType::Dot)
         {
-            tokens.pop_back();
-            auto constant = parseAssignmentExpression(tokens, context);
-            if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+            if (tokens.back().getTokenType() == TokenType::OpenSquareBracket)
             {
-                throw std::runtime_error("Expected ] to close designator in initializer list");
+                tokens.pop_back();
+                auto constant = parseAssignmentExpression(tokens, context);
+                if (tokens.back().getTokenType() != TokenType::CloseSquareBracket)
+                {
+                    throw std::runtime_error("Expected ] to close designator in initializer list");
+                }
+                tokens.pop_back();
+                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
+                constant.accept(evaluator);
+                variants.emplace_back(std::visit([](auto&& value) -> std::size_t
+                                                 {
+                                                     using T = std::decay_t<decltype(value)>;
+                                                     if constexpr(std::is_convertible_v<T, std::size_t>)
+                                                     {
+                                                         return value;
+                                                     }
+                                                     else
+                                                     {
+                                                         throw std::runtime_error("Invalid type of constanst expression");
+                                                     }
+                                                 }, evaluator.getReturn<Codegen::ConstRetType>()));
             }
-            tokens.pop_back();
-            if (tokens.back().getTokenType() != TokenType::Assignment)
+            else if (tokens.back().getTokenType() == TokenType::Dot)
             {
-                throw std::runtime_error("Expected = after designator in initializer list");
+                tokens.pop_back();
+                variants.emplace_back(std::get<std::string>(tokens.back().getValue()));
+                tokens.pop_back();
             }
-            tokens.pop_back();
-            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
-            constant.accept(evaluator);
-            index = std::visit([](auto&& value) -> std::int64_t
-                               {
-                                   using T = std::decay_t<decltype(value)>;
-                                   if constexpr(std::is_integral_v<T>)
-                                   {
-                                       return value;
-                                   }
-                                   else
-                                   {
-                                       throw std::runtime_error("Invalid type of constanst expression");
-                                   }
-                               }, evaluator.getReturn<Codegen::ConstRetType>());
         }
-        vector.push_back({parseInitializer(tokens, context),{index}});
+        if (!variants.empty())
+        {
+            if (tokens.back().getTokenType() == TokenType::Assignment)
+            {
+                tokens.pop_back();
+            }
+            else
+            {
+                throw std::runtime_error("Expected = after designators");
+            }
+        }
+        vector.push_back({parseInitializer(tokens, context), variants});
         if (tokens.back().getTokenType() == TokenType::Comma)
         {
             tokens.pop_back();
         }
-    }
-    if (tokens.empty() || tokens.back().getTokenType() != TokenType::CloseBrace)
-    {
-        throw std::runtime_error("Expected } to end Initializer list");
-    }
-    else
-    {
-        tokens.pop_back();
+        else if (tokens.back().getTokenType() != TokenType::CloseBrace)
+        {
+            throw std::runtime_error("Expected , between initializers in initializer list");
+        }
     }
     return {line, column, std::move(vector)};
 }
@@ -1029,7 +1054,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
 
             auto control = [&]() -> std::unique_ptr<Expression>
             {
-                if (std::holds_alternative<Declarations>(blockitem.getVariant())
+                if (std::holds_alternative<Declaration>(blockitem.getVariant())
                     || tokens.back().getTokenType() != TokenType::SemiColon)
                 {
                     auto expression = parseExpression(tokens, context);
@@ -1068,7 +1093,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
 
             auto statement = parseStatement(tokens, context);
 
-            if (auto declaration = std::get_if<Declarations>(&blockitem.getVariant());declaration)
+            if (auto declaration = std::get_if<Declaration>(&blockitem.getVariant());declaration)
             {
                 return Statement(line, column, ForDeclarationStatement(line,
                                                                        column,
@@ -1250,19 +1275,19 @@ OpenCL::Syntax::Expression OpenCL::Parser::parseExpression(Tokens& tokens, Parsi
 {
     auto line = tokens.back().getLine();
     auto column = tokens.back().getColumn();
-    auto expression = std::make_unique<AssignmentExpression>(parseAssignmentExpression(tokens, context));
+    std::vector<AssignmentExpression> expressions;
+    expressions.push_back(parseAssignmentExpression(tokens, context));
 
-    std::unique_ptr<AssignmentExpression> optional;
     if (!tokens.empty())
     {
         auto currToken = tokens.back();
-        if (currToken.getTokenType() == TokenType::Comma)
+        while (currToken.getTokenType() == TokenType::Comma)
         {
             tokens.pop_back();
-            optional = std::make_unique<AssignmentExpression>(parseAssignmentExpression(tokens, context));
+            expressions.push_back(parseAssignmentExpression(tokens, context));
         }
     }
-    return Expression(line, column, std::move(expression), std::move(optional));
+    return Expression(line, column, std::move(expressions));
 }
 
 AssignmentExpression OpenCL::Parser::parseAssignmentExpression(Tokens& tokens,
@@ -1334,30 +1359,32 @@ AssignmentExpression OpenCL::Parser::parseAssignmentExpression(Tokens& tokens,
         auto currentToken = tokens.back();
         tokens.pop_back();
         return AssignmentExpression(line, column, AssignmentExpressionAssignment(line,
-                                                                     column,
-                                                                     std::move(unary),
-                                                                     [assignment = currentToken.getTokenType()]
-                                                                     {
-                                                                         switch (assignment)
-                                                                         {
-                                                                         case TokenType::Assignment:return AssignmentExpressionAssignment::AssignOperator::NoOperator;
-                                                                         case TokenType::PlusAssign:return AssignmentExpressionAssignment::AssignOperator::PlusAssign;
-                                                                         case TokenType::MinusAssign:return AssignmentExpressionAssignment::AssignOperator::MinusAssign;
-                                                                         case TokenType::DivideAssign:return AssignmentExpressionAssignment::AssignOperator::DivideAssign;
-                                                                         case TokenType::MultiplyAssign:return AssignmentExpressionAssignment::AssignOperator::MultiplyAssign;
-                                                                         case TokenType::ModuloAssign:return AssignmentExpressionAssignment::AssignOperator::ModuloAssign;
-                                                                         case TokenType::ShiftLeftAssign:return AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign;
-                                                                         case TokenType::ShiftRightAssign:return AssignmentExpressionAssignment::AssignOperator::RightShiftAssign;
-                                                                         case TokenType::BitAndAssign:return AssignmentExpressionAssignment::AssignOperator::BitAndAssign;
-                                                                         case TokenType::BitOrAssign:return AssignmentExpressionAssignment::AssignOperator::BitOrAssign;
-                                                                         case TokenType::BitXorAssign:return AssignmentExpressionAssignment::AssignOperator::BitXorAssign;
-                                                                         default:
-                                                                             throw std::runtime_error(
-                                                                                 "Invalid token for assignment");
-                                                                         }
-                                                                     }(),
-                                                                     std::make_unique<AssignmentExpression>(
-                                                                         parseAssignmentExpression(tokens, context))));
+                                                                                 column,
+                                                                                 std::move(unary),
+                                                                                 [assignment = currentToken
+                                                                                     .getTokenType()]
+                                                                                 {
+                                                                                     switch (assignment)
+                                                                                     {
+                                                                                     case TokenType::Assignment:return AssignmentExpressionAssignment::AssignOperator::NoOperator;
+                                                                                     case TokenType::PlusAssign:return AssignmentExpressionAssignment::AssignOperator::PlusAssign;
+                                                                                     case TokenType::MinusAssign:return AssignmentExpressionAssignment::AssignOperator::MinusAssign;
+                                                                                     case TokenType::DivideAssign:return AssignmentExpressionAssignment::AssignOperator::DivideAssign;
+                                                                                     case TokenType::MultiplyAssign:return AssignmentExpressionAssignment::AssignOperator::MultiplyAssign;
+                                                                                     case TokenType::ModuloAssign:return AssignmentExpressionAssignment::AssignOperator::ModuloAssign;
+                                                                                     case TokenType::ShiftLeftAssign:return AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign;
+                                                                                     case TokenType::ShiftRightAssign:return AssignmentExpressionAssignment::AssignOperator::RightShiftAssign;
+                                                                                     case TokenType::BitAndAssign:return AssignmentExpressionAssignment::AssignOperator::BitAndAssign;
+                                                                                     case TokenType::BitOrAssign:return AssignmentExpressionAssignment::AssignOperator::BitOrAssign;
+                                                                                     case TokenType::BitXorAssign:return AssignmentExpressionAssignment::AssignOperator::BitXorAssign;
+                                                                                     default:
+                                                                                         throw std::runtime_error(
+                                                                                             "Invalid token for assignment");
+                                                                                     }
+                                                                                 }(),
+                                                                                 std::make_unique<AssignmentExpression>(
+                                                                                     parseAssignmentExpression(tokens,
+                                                                                                               context))));
     }
     else
     {
@@ -1862,19 +1889,10 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
                     throw std::runtime_error("Expected { after type around parenthesis");
                 }
                 tokens.pop_back();
-                std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
-                while (true)
+                auto initializer = parseInitializerList(tokens, context);
+                if (tokens.back().getTokenType() == TokenType::Comma)
                 {
-                    nonCommaExpressions
-                        .push_back(std::make_unique<AssignmentExpression>(parseAssignmentExpression(tokens, context)));
-                    if (tokens.back().getTokenType() == TokenType::Comma)
-                    {
-                        tokens.pop_back();
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    tokens.pop_back();
                 }
                 if (tokens.back().getTokenType() != TokenType::CloseBrace)
                 {
@@ -1886,7 +1904,7 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
                                                                                                               std::move(
                                                                                                                   type),
                                                                                                               std::move(
-                                                                                                                  nonCommaExpressions))));
+                                                                                                                  initializer))));
             }
             else
             {

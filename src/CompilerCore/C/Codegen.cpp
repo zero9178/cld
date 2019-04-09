@@ -443,7 +443,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::Declarations& ) override
+        void visit(const OpenCL::Syntax::Declaration& ) override
         {
 
         }
@@ -932,10 +932,9 @@ void OpenCL::Codegen::Context::doForLoop(const OpenCL::Syntax::Expression* contr
 void OpenCL::Codegen::Context::visit(const Syntax::Expression& node)
 {
     emitLocation(&node, *this);
-    node.getNonCommaExpression().accept(*this);
-    if (node.getOptionalNonCommaExpression())
+    for(auto& iter : node.getAssignmentExpressions())
     {
-        return node.getOptionalNonCommaExpression()->accept(*this);
+        iter.accept(*this);
     }
 }
 
@@ -1248,42 +1247,42 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionType
         tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());
     auto* alloca = tmpB.CreateAlloca(type);
     alloca->setAlignment(getAlignment(type));
-    if (type->isStructTy())
-    {
-        auto* zero = builder.getInt32(0);
-        auto& structInfo = structs.at(type->getStructName());
-        if (node.getNonCommaExpressions().size() < type->getStructNumElements())
-        {
-            throw std::runtime_error("Amount of values in intializer not equal to fields in struct");
-        }
-        for (std::size_t i = 0; i < type->getStructNumElements(); i++)
-        {
-            node.getNonCommaExpressions().at(i)->accept(*this);
-            auto[value, ntype] = std::get<NodeRetType>(m_return);
-            ntype->accept(*this);
-            if (std::get<llvm::Type*>(m_return) != type->getStructElementType(i))
-            {
-                castPrimitive(value,
-                              ntype->isSigned(),
-                              type->getStructElementType(i),
-                              structInfo.types.at(i)->isSigned(),
-                              *this);
-            }
-            auto* index = builder.getInt32(i);
-            auto* field = builder.CreateInBoundsGEP(alloca, {zero, index});
-            builder.CreateStore(value, field);
-        }
-    }
-    else
-    {
-        if (node.getNonCommaExpressions().empty())
-        {
-            throw std::runtime_error("Amount of values unequal to 1");
-        }
-        node.getNonCommaExpressions()[0]->accept(*this);
-        auto[value, ntype] = std::get<NodeRetType>(m_return);
-        builder.CreateStore(value, alloca);
-    }
+//    if (type->isStructTy())
+//    {
+//        auto* zero = builder.getInt32(0);
+//        auto& structInfo = structs.at(type->getStructName());
+//        if (node.getNonCommaExpressions().size() < type->getStructNumElements())
+//        {
+//            throw std::runtime_error("Amount of values in intializer not equal to fields in struct");
+//        }
+//        for (std::size_t i = 0; i < type->getStructNumElements(); i++)
+//        {
+//            node.getNonCommaExpressions().at(i)->accept(*this);
+//            auto[value, ntype] = std::get<NodeRetType>(m_return);
+//            ntype->accept(*this);
+//            if (std::get<llvm::Type*>(m_return) != type->getStructElementType(i))
+//            {
+//                castPrimitive(value,
+//                              ntype->isSigned(),
+//                              type->getStructElementType(i),
+//                              structInfo.types.at(i)->isSigned(),
+//                              *this);
+//            }
+//            auto* index = builder.getInt32(i);
+//            auto* field = builder.CreateInBoundsGEP(alloca, {zero, index});
+//            builder.CreateStore(value, field);
+//        }
+//    }
+//    else
+//    {
+//        if (node.getNonCommaExpressions().empty())
+//        {
+//            throw std::runtime_error("Amount of values unequal to 1");
+//        }
+//        node.getNonCommaExpressions()[0]->accept(*this);
+//        auto[value, ntype] = std::get<NodeRetType>(m_return);
+//        builder.CreateStore(value, alloca);
+//    }
     m_return.emplace<NodeRetType>(builder.CreateLoad(alloca), node.getType());
 }
 
@@ -2374,7 +2373,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node
 
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declarations& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declaration& node)
 {
     emitLocation(&node, *this);
     llvm::IRBuilder<> tmpB(&currentFunction->getEntryBlock(), currentFunction->getEntryBlock().begin());

@@ -101,7 +101,7 @@ namespace OpenCL::Parser
 
     Syntax::BlockItem parseBlockItem(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::Declarations parseDeclarations(Tokens& tokens,
+    OpenCL::Syntax::Declaration parseDeclarations(Tokens& tokens,
                                                    ParsingContext& context,
                                                    bool multiple = true,
                                                    bool allowInitialization = true,

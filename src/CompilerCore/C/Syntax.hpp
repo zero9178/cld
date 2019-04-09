@@ -95,7 +95,7 @@ namespace OpenCL::Syntax
 
     class Initializer;
 
-    class Declarations;
+    class Declaration;
 
     class BlockItem;
 
@@ -225,7 +225,7 @@ namespace OpenCL::Syntax
 
         void visit(const Initializer& node);
 
-        virtual void visit(const Declarations& node) = 0;
+        virtual void visit(const Declaration& node) = 0;
 
         void visit(const BlockItem& node);
 
@@ -344,264 +344,20 @@ namespace OpenCL::Syntax
 
     };
 
-    class IType : public Visitable
-    {
-    protected:
-
-        IType() = default;
-
-    public:
-
-        virtual ~IType() = default;
-
-        IType(const IType&) = delete;
-
-        IType(IType&&) = default;
-
-        IType& operator=(const IType&) = delete;
-
-        IType& operator=(IType&&) = default;
-
-        virtual bool isSigned() const
-        {
-            return false;
-        }
-
-        virtual bool isVoid() const
-        {
-            return false;
-        }
-
-        virtual bool isConst() const
-        {
-            return false;
-        }
-
-        virtual std::unique_ptr<IType> clone() const = 0;
-
-        virtual std::string name() const = 0;
-    };
-
-    /**
-     * <Type> ::= <PrimitiveType> | <PointerType> | <ArrayType> | <StructType>
-     */
-    template <class T>
-    class Type : public IType
-    {
-    protected:
-
-        Type() = default;
-
-    public:
-
-        ~Type() override = default;
-
-        Type(Type&&) noexcept = default;
-
-        Type(const Type&) = delete;
-
-        Type& operator=(Type&&) noexcept = default;
-
-        Type& operator=(const Type&) = delete;
-
-        void accept(INodeVisitor& visitor) const final
-        {
-            static_assert(std::is_final_v<T>);
-            visitor.visit(*static_cast<const T*>(this));
-        }
-    };
-
-    /**
-     * <PrimitiveType> ::= <TokenType::VoidKeyword>
-     *          | <TokenType::CharKeyword>
-     *          | <TokenType::ShortKeyword>
-     *          | <TokenType::IntKeyword>
-     *          | <TokenType::LongKeyword>
-     *          | <TokenType::FloatKeyword>
-     *          | <TokenType::DoubleKeyword>
-     *          | <TokenType::SignedKeyword>
-     *          | <TokenType::UnsignedKeyword>
-     *          | <TokenType::ConstKeyword>
-     *          {<TokenType::VoidKeyword>
-     *          | <TokenType::CharKeyword>
-     *          | <TokenType::ShortKeyword>
-     *          | <TokenType::IntKeyword>
-     *          | <TokenType::LongKeyword>
-     *          | <TokenType::FloatKeyword>
-     *          | <TokenType::DoubleKeyword>
-     *          | <TokenType::SignedKeyword>
-     *          | <TokenType::UnsignedKeyword>
-     *          | <TokenType::ConstKeyword>}
-     */
-    class PrimitiveType final : public Type<PrimitiveType>
-    {
-    public:
-
-        enum class Types
-        {
-            Char,
-            Short,
-            Int,
-            Long,
-            Float,
-            Double,
-            Unsigned,
-            Signed,
-            Const
-        };
-
-    private:
-
-        std::uint64_t m_bitCount;
-        bool m_isConst;
-        bool m_isFloatingPoint;
-        bool m_isSigned;
-
-    public:
-
-        explicit PrimitiveType(std::vector<OpenCL::Syntax::PrimitiveType::Types>&& types);
-
-        PrimitiveType(std::uint64_t bitCount, bool isConst, bool isFloatingPoint, bool isSigned);
-
-        std::uint64_t getBitCount() const;
-
-        bool isFloatingPoint() const;
-
-        bool isSigned() const override;
-
-        bool isVoid() const override;
-
-        bool isConst() const override;
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
-    /**
-     * <PointerType> ::= <Type> <TokenType::Asterisk> [ <TokenType::ConstKeyword> ]
-     */
-    class PointerType final : public Type<PointerType>
-    {
-        std::unique_ptr<IType> m_type;
-        bool m_isConst;
-
-    public:
-
-        explicit PointerType(std::unique_ptr<IType>&& type, bool isConst);
-
-        const IType& getType() const;
-
-        bool isConst() const override;
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
-    /**
-     * <ArrayType> ::= <Type> <TokenType::OpenSquareBracket> <ConstantNonCommaExpression> <TokenType::CloseSquareBracket>
-     */
-    class ArrayType final : public Type<ArrayType>
-    {
-        std::unique_ptr<IType> m_type;
-        std::size_t m_size;
-
-    public:
-
-        ArrayType(std::unique_ptr<IType>&& type, std::size_t size);
-
-        const std::unique_ptr<IType>& getType() const;
-
-        std::size_t getSize() const;
-
-        void setSize(size_t size);
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
-    /**
-     * <StructType> ::= [ <TokenType::ConstKeyword> ] <TokenType::StructKeyword> <TokenType::Identifer>
-     *                  [ <TokenType::ConstKeyword> ]
-     */
-    class StructType final : public Type<StructType>
-    {
-        std::string m_name;
-        bool m_isConst;
-
-    public:
-
-        explicit StructType(std::string name, bool isConst);
-
-        const std::string& getName() const;
-
-        bool isConst() const override;
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
-    /**
-     * <UnionType> ::= [ <TokenType::ConstKeyword> ] <TokenType::UnionKeyword> <TokenType::Identifer>
-     *                  [ <TokenType::ConstKeyword> ]
-     */
-    class UnionType final : public Type<UnionType>
-    {
-        std::string m_name;
-        bool m_isConst;
-
-    public:
-
-        UnionType(std::string name, bool isConst);
-
-        const std::string& getName() const;
-
-        bool isConst() const override;
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
-    class EnumType final : public Type<EnumType>
-    {
-        std::string m_name;
-        bool m_isConst;
-
-    public:
-
-        EnumType(std::string name, bool isConst);
-
-        const std::string& getName() const;
-
-        bool isConst() const override;
-
-        std::unique_ptr<IType> clone() const override;
-
-        std::string name() const override;
-    };
-
     /**
      * <Expression> ::= <NonCommaExpression> [ <TokenType::Comma> <NonCommaExpression>]
      */
     class Expression final : public Node<Expression>
     {
-        std::unique_ptr<AssignmentExpression> m_nonCommaExpression;
-        std::unique_ptr<AssignmentExpression> m_optionalNonCommaExpression;
+        std::vector<AssignmentExpression> m_assignmentExpressions;
 
     public:
 
         Expression(std::uint64_t line,
                    std::uint64_t column,
-                   std::unique_ptr<AssignmentExpression>&& nonCommaExpression,
-                   std::unique_ptr<AssignmentExpression>&& optionalNonCommaExpression);
+                   std::vector<AssignmentExpression> assignmanetExpressions);
 
-        const AssignmentExpression& getNonCommaExpression() const;
-
-        const AssignmentExpression* getOptionalNonCommaExpression() const;
+        const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
     };
 
     /**
@@ -813,25 +569,21 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
-     *                                        <TokenType::OpenBrace> <NonCommaExpression>
-     *                                        { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseBrace>
+     * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParenthese>
+     *                                        <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>] <TokenType::CloseBrace>
      */
     class PostFixExpressionTypeInitializer final : public Node<PostFixExpressionTypeInitializer>
     {
-        std::shared_ptr<IType> m_type;
-        std::vector<std::unique_ptr<AssignmentExpression>> m_nonCommaExpressions;
+
+        std::unique_ptr<InitializerList> m_initializerList;
 
     public:
 
         PostFixExpressionTypeInitializer(std::uint64_t line,
                                          std::uint64_t column,
-                                         std::shared_ptr<IType> type,
-                                         std::vector<std::unique_ptr<AssignmentExpression>>&& nonCommaExpressions);
+                                         InitializerList&& initializerList);
 
-        const std::shared_ptr<IType>& getType() const;
-
-        const std::vector<std::unique_ptr<AssignmentExpression>>& getNonCommaExpressions() const;
+        const InitializerList& getInitializerList() const;
     };
 
     /**
@@ -925,7 +677,7 @@ namespace OpenCL::Syntax
 
     /**
      * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
-     *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <Type> <TokenType::CloseParenthese>
+     *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParenthese>
      */
     class UnaryExpressionSizeOf final : public Node<UnaryExpressionSizeOf>
     {
@@ -1304,6 +1056,8 @@ namespace OpenCL::Syntax
 
     /**
      * <ConditionalExpression> ::= <LogicalOrExpression> [ <TokenType::QuestionMark> <Expression> <TokenType::Colon> <ConditionalExpression> ]
+     *
+     * <ConstantExpression> ::= <ConditionalExpression>
      */
     class ConditionalExpression final : public Node<ConditionalExpression>
     {
@@ -1551,27 +1305,102 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <Declaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> [<ConstantNonCommaExpression>]
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ] { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <ConstantNonCommaExpression>
-     * <TokenType::CloseSquareBracket>} [ <TokenType::Assignment> <InitializerList> ]} <TokenType::SemiColon>
+     * <DeclarationSpecifiers> ::= <StorageClassSpecifiers> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpeicifier>
+     *
+     * <StorageClassSpecifiers> ::= <TokenType::TypedefKeyword>
+     *                            | <TokenType::ExternKeyword>
+     *                            | <TokenType::StaticKeyword>
+     *                            | <TokenType::AutoKeyword>
+     *                            | <TokenType::RegisterKeyword>
+     *
+     * <TypeSpecifier> ::= <TokenType::VoidKeyword>
+     *                   | <TokenType::CharKeyword>
+     *                   | <TokenType::ShortKeyword>
+     *                   | <TokenType::IntKeyword>
+     *                   | <TokenType::LongKeyword>
+     *                   | <TokenType::FloatKeyword>
+     *                   | <TokenType::DoubleKeyword>
+     *                   | <TokenType::SignedKeyword>
+     *                   | <TokenType::UnsignedKeyword>
+     *                   | <StructOrUnionSpecifier>
+     *                   | <EnumSpecifier>
+     *                   | <TypedefName>
+     *
+     * <InitDeclarator> ::= <Declarator> | <Declarator> <TokenType::Assignment> <Initializer>
+     *
+     * <Declaration> ::= <DeclarationSpecifiers> {<DeclarationSpecifiers>} [<InitDeclarator>
+     *                   { <TokenType::Comma> <InitDeclarator> } ] <TokenType::SemiColon>
      */
-    class Declarations final : public Node<Declarations>
+    class Declaration final : public Node<Declaration>
     {
-        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<Initializer>>> m_declarations;
 
     public:
 
-        Declarations(std::uint64_t line, std::uint64_t column, std::vector<std::tuple<std::shared_ptr<IType>,
-                                                                                      std::string,
-                                                                                      std::unique_ptr<Initializer>>>&& declarations);
+    };
 
-        const std::vector<std::tuple<std::shared_ptr<IType>,
-                                     std::string,
-                                     std::unique_ptr<Initializer>>>& getDeclarations() const;
+    /**
+     *
+     * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
+     *
+     * <SpecifierQualifierList> ::= <TypeSpecifier> | <TypeQualifier>
+     *
+     * <StructDeclaration> ::= <SpecifierQualifierList> { <SpecifierQualifierList> } <StructDeclarator> { <StructDeclarator> } <TokenType::SemiColon>
+     *
+     * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
+     *
+     * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
+     *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> } <TokenType::CloseBrace>
+     *                            | <StructOrUnion> <TokenType::Identifier>
+     */
+    class StructOrUnionSpecifier final : public Node<StructOrUnionSpecifier>
+    {
 
-        std::vector<std::tuple<std::shared_ptr<IType>,
-                               std::string,
-                               std::unique_ptr<Initializer>>>& getDeclarations();
+    };
+
+    /**
+    * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
+    *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
+    *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
+    *                       [ <TokenType::Comma> ] <TokenType::CloseBrace> <TokenType::SemiColon>
+    */
+    class EnumDeclaration final : public Node<EnumDeclaration>
+    {
+        std::string m_name;
+        std::vector<std::pair<std::string, std::int32_t>> m_values;
+
+    public:
+
+        EnumDeclaration(std::uint64_t line,
+                        std::uint64_t column,
+                        std::string name,
+                        std::vector<std::pair<std::string, std::int32_t>> values);
+
+        const std::string& getName() const;
+
+        const std::vector<std::pair<std::string, std::int32_t>>& getValues() const;
+    };
+
+    /**
+     * <TypeQualifiers> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
+     */
+
+    /**
+     * <FunctionSpecifier> ::= <TokenType::InlineKeyword>
+     */
+
+    /**
+     * <DirectDeclarator> ::= <TokenType::Identifier>
+     *                      | <TokenType::OpenParenthese> <Declarator> <TokenType::CloseParenthese>
+     *                      | <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier>} [<AssignmentExpression>] <TokenType::CloseBrace>
+     *
+     *
+     * <Pointer> ::= <TokenType::Asterisk> { <TypeQualifier> }
+     *
+     * <Declarator> ::= { <Pointer> } <DirectDeclarator>
+     */
+    class Declarator final : public Node<Declarator>
+    {
+
     };
 
     /**
@@ -1581,7 +1410,7 @@ namespace OpenCL::Syntax
     class ForDeclarationStatement final : public Node<ForDeclarationStatement>
     {
         std::unique_ptr<Statement> m_statement;
-        Declarations m_initial;
+        Declaration m_initial;
         std::unique_ptr<Expression> m_controlling;
         std::unique_ptr<Expression> m_post;
 
@@ -1590,13 +1419,13 @@ namespace OpenCL::Syntax
         ForDeclarationStatement(std::uint64_t line,
                                 std::uint64_t column,
                                 std::unique_ptr<Statement>&& statement,
-                                Declarations&& initial,
+                                Declaration&& initial,
                                 std::unique_ptr<Expression>&& controlling = nullptr,
                                 std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
 
-        const Declarations& getInitial() const;
+        const Declaration& getInitial() const;
 
         const Expression* getControlling() const;
 
@@ -1711,7 +1540,7 @@ namespace OpenCL::Syntax
      */
     class BlockItem final : public Node<BlockItem>
     {
-        using variant = std::variant<Statement, Declarations>;
+        using variant = std::variant<Statement, Declaration>;
         variant m_variant;
 
     public:
@@ -1751,29 +1580,6 @@ namespace OpenCL::Syntax
         const std::string& getName() const;
 
         const std::vector<std::pair<std::shared_ptr<IType>, std::string>>& getTypes() const;
-    };
-
-    /**
-     * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
-     *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
-     *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
-     *                       [ <TokenType::Comma> ] <TokenType::CloseBrace> <TokenType::SemiColon>
-     */
-    class EnumDeclaration final : public Node<EnumDeclaration>
-    {
-        std::string m_name;
-        std::vector<std::pair<std::string, std::int32_t>> m_values;
-
-    public:
-
-        EnumDeclaration(std::uint64_t line,
-                        std::uint64_t column,
-                        std::string name,
-                        std::vector<std::pair<std::string, std::int32_t>> values);
-
-        const std::string& getName() const;
-
-        const std::vector<std::pair<std::string, std::int32_t>>& getValues() const;
     };
 
     /**

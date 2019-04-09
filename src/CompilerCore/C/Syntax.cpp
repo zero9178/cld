@@ -50,7 +50,7 @@ OpenCL::Syntax::Function::Function(std::uint64_t line,
     { return static_cast<bool>(pair.first); }));
 }
 
-OpenCL::Syntax::Declarations::Declarations(std::uint64_t line,
+OpenCL::Syntax::Declaration::Declarations(std::uint64_t line,
                                            std::uint64_t column,
                                            std::vector<std::tuple<std::shared_ptr<IType>,
                                                                   std::string,
@@ -63,14 +63,14 @@ OpenCL::Syntax::Declarations::Declarations(std::uint64_t line,
 
 const std::vector<std::tuple<std::shared_ptr<OpenCL::Syntax::IType>,
                              std::string,
-                             std::unique_ptr<OpenCL::Syntax::Initializer>>>& OpenCL::Syntax::Declarations::getDeclarations() const
+                             std::unique_ptr<OpenCL::Syntax::Initializer>>>& OpenCL::Syntax::Declaration::getDeclarations() const
 {
     return m_declarations;
 }
 
 std::vector<std::tuple<std::shared_ptr<OpenCL::Syntax::IType>,
                        std::string,
-                       std::unique_ptr<OpenCL::Syntax::Initializer>>>& OpenCL::Syntax::Declarations::getDeclarations()
+                       std::unique_ptr<OpenCL::Syntax::Initializer>>>& OpenCL::Syntax::Declaration::getDeclarations()
 {
     return m_declarations;
 }
@@ -173,7 +173,7 @@ const OpenCL::Syntax::Expression* OpenCL::Syntax::ForStatement::getPost() const
 OpenCL::Syntax::ForDeclarationStatement::ForDeclarationStatement(std::uint64_t line,
                                                                  std::uint64_t column,
                                                                  std::unique_ptr<Statement>&& statement,
-                                                                 Declarations&& initial,
+                                                                 Declaration&& initial,
                                                                  std::unique_ptr<Expression>&& controlling,
                                                                  std::unique_ptr<Expression>&& post)
     : Node(line, column), m_statement(std::move(statement)), m_initial(std::move(initial)),
@@ -183,7 +183,7 @@ OpenCL::Syntax::ForDeclarationStatement::ForDeclarationStatement(std::uint64_t l
     assert(m_statement);
 }
 
-const OpenCL::Syntax::Declarations& OpenCL::Syntax::ForDeclarationStatement::getInitial() const
+const OpenCL::Syntax::Declaration& OpenCL::Syntax::ForDeclarationStatement::getInitial() const
 {
     return m_initial;
 }
@@ -239,23 +239,13 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::FootWhileStatement::getExpress
 
 OpenCL::Syntax::Expression::Expression(std::uint64_t line,
                                        std::uint64_t column,
-                                       std::unique_ptr<AssignmentExpression>&& nonCommaExpression,
-                                       std::unique_ptr<AssignmentExpression>&& optionalNonCommaExpression)
-    : Node(line, column), m_nonCommaExpression(std::move(nonCommaExpression)),
-      m_optionalNonCommaExpression(std::move(optionalNonCommaExpression))
+                                       std::vector<AssignmentExpression> assignmentExpressions)
+    : Node(line, column), m_assignmentExpressions(std::move(assignmentExpressions))
 {
-    assert(m_nonCommaExpression);
+    assert(!m_assignmentExpressions.empty());
 }
 
-const OpenCL::Syntax::AssignmentExpression& OpenCL::Syntax::Expression::getNonCommaExpression() const
-{
-    return *m_nonCommaExpression;
-}
 
-const OpenCL::Syntax::AssignmentExpression* OpenCL::Syntax::Expression::getOptionalNonCommaExpression() const
-{
-    return m_optionalNonCommaExpression.get();
-}
 
 OpenCL::Syntax::AssignmentExpressionAssignment::AssignOperator OpenCL::Syntax::AssignmentExpressionAssignment::getAssignOperator() const
 {
@@ -1075,9 +1065,8 @@ std::string OpenCL::Syntax::UnionType::name() const
 OpenCL::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(std::uint64_t line,
                                                                                    std::uint64_t column,
                                                                                    std::shared_ptr<IType> type,
-                                                                                   std::vector<std::unique_ptr<
-                                                                                       AssignmentExpression>>&& nonCommaExpressions)
-    : Node(line, column), m_type(std::move(type)), m_nonCommaExpressions(std::move(nonCommaExpressions))
+                                                                                   InitializerList&& initializerList)
+    : Node(line, column), m_type(std::move(type)), m_initializerList(std::make_unique<InitializerList>(std::move(initializerList)))
 {}
 
 const std::shared_ptr<OpenCL::Syntax::IType>& OpenCL::Syntax::PostFixExpressionTypeInitializer::getType() const
@@ -1085,9 +1074,9 @@ const std::shared_ptr<OpenCL::Syntax::IType>& OpenCL::Syntax::PostFixExpressionT
     return m_type;
 }
 
-const std::vector<std::unique_ptr<OpenCL::Syntax::AssignmentExpression>>& OpenCL::Syntax::PostFixExpressionTypeInitializer::getNonCommaExpressions() const
+const OpenCL::Syntax::InitializerList& OpenCL::Syntax::PostFixExpressionTypeInitializer::getInitializerList() const
 {
-    return m_nonCommaExpressions;
+    return *m_initializerList;
 }
 
 OpenCL::Syntax::TypedefDeclaration::TypedefDeclaration(std::uint64_t line,
@@ -1332,4 +1321,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BlockItem& node)
                {
                    return value.accept(*this);
                }, node.getVariant());
+}
+
+const std::vector<OpenCL::Syntax::AssignmentExpression>& OpenCL::Syntax::Expression::getAssignmentExpressions() const
+{
+    return m_assignmentExpressions;
 }

@@ -182,7 +182,7 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::InitializerList& node) override;
 
-        void visit(const Syntax::Declarations& node) override;
+        void visit(const Syntax::Declaration& node) override;
 
         void visit(const Syntax::ForDeclarationStatement& node) override;
 

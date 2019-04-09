@@ -248,7 +248,7 @@ int main()
     char c[] = STRINGIFY(NAMESIZE);
     char time[] = __TIME__;
     TreeNode root = {"Markus", "Boeck", "Herr", __LINE__, "Kammersdorf", 2033};
-    TreeNode newNode = {"Lukas", "Damianschitz",.anrede [2] = '5'};
+    TreeNode newNode = {"Lukas", "Damianschitz",.anrede[2] = '5',};
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);

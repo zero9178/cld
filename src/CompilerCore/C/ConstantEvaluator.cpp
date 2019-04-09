@@ -216,11 +216,10 @@ namespace
 
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
 {
-    if (node.getOptionalNonCommaExpression())
+    for(auto& iter : node.getAssignmentExpressions())
     {
-        node.getOptionalNonCommaExpression()->accept(*this);
+        iter.accept(*this);
     }
-    node.getNonCommaExpression().accept(*this);
 }
 
 void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier&)
@@ -1264,7 +1263,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Initializer
     throw std::runtime_error("initializer list not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Declarations&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Declaration&)
 {
     throw std::runtime_error("Declartaion not allowed in constant expression");
 }
