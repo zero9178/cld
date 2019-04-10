@@ -8,9 +8,6 @@
 
 namespace OpenCL::Syntax
 {
-    template <class T>
-    class Type;
-
     class Expression;
 
     class PrimaryExpressionIdentifier;
@@ -87,7 +84,7 @@ namespace OpenCL::Syntax
 
     class CaseStatement;
 
-    class BlockStatement;
+    class CompoundStatement;
 
     class ForStatement;
 
@@ -97,7 +94,7 @@ namespace OpenCL::Syntax
 
     class Declaration;
 
-    class BlockItem;
+    class CompoundItem;
 
     class ForDeclarationStatement;
 
@@ -111,161 +108,195 @@ namespace OpenCL::Syntax
 
     class Statement;
 
-    class StructOrUnionDeclaration;
+    class EnumSpecifier;
+
+    class FunctionDefinition;
+
+    class ExternalDeclaration;
+
+    class TranslationUnit;
+
+    class TypeName;
+
+    class Declarator;
 
     class EnumDeclaration;
 
-    class TypedefDeclaration;
+    class StructOrUnionSpecifier;
 
-    class Function;
+    class TypeSpecifier;
 
-    class GlobalDeclaration;
+    class DirectDeclarator;
 
-    class Global;
+    class DirectDeclaratorNoStaticOrAsterisk;
 
-    class Program;
+    class DirectDeclaratorStatic;
 
-    class PrimitiveType;
+    class DirectDeclaratorAsterisk;
 
-    class PointerType;
+    class DirectDeclaratorParentheseParameters;
 
-    class ArrayType;
+    class DirectDeclaratorParentheseIdentifiers;
 
-    class StructType;
+    class AbstractDeclarator;
 
-    class UnionType;
+    class DirectAbstractDeclarator;
 
-    class EnumType;
+    class DirectAbstractDeclaratorParameterTypeList;
+
+    class DirectAbstractDeclaratorAssignmentExpression;
+
+    class Pointer;
+
+    class ParameterTypeList;
+
+    class ParameterList;
 
     class INodeVisitor
     {
     public:
 
-        virtual void visit(const Expression& node) = 0;
+        virtual void visit(const Expression& node);
 
-        virtual void visit(const PrimaryExpressionIdentifier& node) = 0;
+        virtual void visit(const PrimaryExpressionIdentifier& node);
 
-        virtual void visit(const PrimaryExpressionConstant& node) = 0;
+        virtual void visit(const PrimaryExpressionConstant& node);
 
-        virtual void visit(const PrimaryExpressionParenthese& node) = 0;
+        virtual void visit(const PrimaryExpressionParenthese& node);
 
         void visit(const PrimaryExpression& node);
 
-        virtual void visit(const PostFixExpressionPrimaryExpression& node) = 0;
+        virtual void visit(const PostFixExpressionPrimaryExpression& node);
 
-        virtual void visit(const PostFixExpressionSubscript& node) = 0;
+        virtual void visit(const PostFixExpressionSubscript& node);
 
-        virtual void visit(const PostFixExpressionIncrement& node) = 0;
+        virtual void visit(const PostFixExpressionIncrement& node);
 
-        virtual void visit(const PostFixExpressionDecrement& node) = 0;
+        virtual void visit(const PostFixExpressionDecrement& node);
 
-        virtual void visit(const PostFixExpressionDot& node) = 0;
+        virtual void visit(const PostFixExpressionDot& node);
 
-        virtual void visit(const PostFixExpressionArrow& node) = 0;
+        virtual void visit(const PostFixExpressionArrow& node);
 
-        virtual void visit(const PostFixExpressionFunctionCall& node) = 0;
+        virtual void visit(const PostFixExpressionFunctionCall& node);
 
-        virtual void visit(const PostFixExpressionTypeInitializer& node) = 0;
+        virtual void visit(const PostFixExpressionTypeInitializer& node);
 
         void visit(const PostFixExpression& node);
 
-        virtual void visit(const AssignmentExpressionAssignment& node) = 0;
+        virtual void visit(const AssignmentExpressionAssignment& node);
 
-        virtual void visit(const UnaryExpressionPostFixExpression& node) = 0;
+        virtual void visit(const UnaryExpressionPostFixExpression& node);
 
-        virtual void visit(const UnaryExpressionUnaryOperator& node) = 0;
+        virtual void visit(const UnaryExpressionUnaryOperator& node);
 
-        virtual void visit(const UnaryExpressionSizeOf& node) = 0;
+        virtual void visit(const UnaryExpressionSizeOf& node);
 
         void visit(const UnaryExpression& node);
 
-        virtual void visit(const CastExpression& node) = 0;
+        virtual void visit(const CastExpression& node);
 
-        virtual void visit(const Term& node) = 0;
+        virtual void visit(const Term& node);
 
-        virtual void visit(const AdditiveExpression& node) = 0;
+        virtual void visit(const AdditiveExpression& node);
 
-        virtual void visit(const ShiftExpression& node) = 0;
+        virtual void visit(const ShiftExpression& node);
 
-        virtual void visit(const RelationalExpression& node) = 0;
+        virtual void visit(const RelationalExpression& node);
 
-        virtual void visit(const EqualityExpression& node) = 0;
+        virtual void visit(const EqualityExpression& node);
 
-        virtual void visit(const BitAndExpression& node) = 0;
+        virtual void visit(const BitAndExpression& node);
 
-        virtual void visit(const BitXorExpression& node) = 0;
+        virtual void visit(const BitXorExpression& node);
 
-        virtual void visit(const BitOrExpression& node) = 0;
+        virtual void visit(const BitOrExpression& node);
 
-        virtual void visit(const LogicalAndExpression& node) = 0;
+        virtual void visit(const LogicalAndExpression& node);
 
-        virtual void visit(const LogicalOrExpression& node) = 0;
+        virtual void visit(const LogicalOrExpression& node);
 
-        virtual void visit(const ConditionalExpression& node) = 0;
+        virtual void visit(const ConditionalExpression& node);
 
         void visit(const AssignmentExpression& node);
 
-        virtual void visit(const ReturnStatement& node) = 0;
+        virtual void visit(const ReturnStatement& node);
 
-        virtual void visit(const ExpressionStatement& node) = 0;
+        virtual void visit(const ExpressionStatement& node);
 
-        virtual void visit(const IfStatement& node) = 0;
+        virtual void visit(const IfStatement& node);
 
-        virtual void visit(const SwitchStatement& node) = 0;
+        virtual void visit(const SwitchStatement& node);
 
-        virtual void visit(const DefaultStatement& node) = 0;
+        virtual void visit(const DefaultStatement& node);
 
-        virtual void visit(const CaseStatement& node) = 0;
+        virtual void visit(const CaseStatement& node);
 
-        virtual void visit(const BlockStatement& node) = 0;
+        virtual void visit(const CompoundStatement& node);
 
-        virtual void visit(const ForStatement& node) = 0;
+        virtual void visit(const ForStatement& node);
 
-        virtual void visit(const InitializerList& node) = 0;
+        virtual void visit(const InitializerList& node);
 
         void visit(const Initializer& node);
 
-        virtual void visit(const Declaration& node) = 0;
+        virtual void visit(const Declaration& node);
 
-        void visit(const BlockItem& node);
+        void visit(const CompoundItem& node);
 
-        virtual void visit(const ForDeclarationStatement& node) = 0;
+        virtual void visit(const ForDeclarationStatement& node);
 
-        virtual void visit(const HeadWhileStatement& node) = 0;
+        virtual void visit(const HeadWhileStatement& node);
 
-        virtual void visit(const FootWhileStatement& node) = 0;
+        virtual void visit(const FootWhileStatement& node);
 
-        virtual void visit(const BreakStatement& node) = 0;
+        virtual void visit(const BreakStatement& node);
 
-        virtual void visit(const ContinueStatement& node) = 0;
+        virtual void visit(const ContinueStatement& node);
 
         void visit(const Statement& node);
 
-        virtual void visit(const StructOrUnionDeclaration& node) = 0;
+        virtual void visit(const EnumSpecifier& node);
 
-        virtual void visit(const EnumDeclaration& node) = 0;
+        virtual void visit(const FunctionDefinition& node);
 
-        virtual void visit(const TypedefDeclaration& node) = 0;
+        void visit(const ExternalDeclaration& node);
 
-        virtual void visit(const Function& node) = 0;
+        virtual void visit(const TranslationUnit& node);
 
-        virtual void visit(const GlobalDeclaration& node) = 0;
+        virtual void visit(const TypeName& node);
 
-        void visit(const Global& node);
+        virtual void visit(const Declarator& node);
 
-        virtual void visit(const Program& node) = 0;
+        virtual void visit(const EnumDeclaration& node);
 
-        virtual void visit(const PrimitiveType& node) = 0;
+        virtual void visit(const StructOrUnionSpecifier& node);
 
-        virtual void visit(const PointerType& node) = 0;
+        virtual void visit(const TypeSpecifier& node);
 
-        virtual void visit(const ArrayType& node) = 0;
+        virtual void visit(const DirectDeclarator& node);
 
-        virtual void visit(const StructType& node) = 0;
+        virtual void visit(const DirectDeclaratorNoStaticOrAsterisk& node);
 
-        virtual void visit(const UnionType& node) = 0;
+        virtual void visit(const DirectDeclaratorStatic& node);
 
-        virtual void visit(const EnumType& node) = 0;
+        virtual void visit(const DirectDeclaratorAsterisk& node);
+
+        virtual void visit(const DirectDeclaratorParentheseParameters& node);
+
+        virtual void visit(const DirectDeclaratorParentheseIdentifiers& node);
+
+        virtual void visit(const DirectAbstractDeclarator& node);
+
+        virtual void visit(const DirectAbstractDeclaratorParameterTypeList& node);
+
+        virtual void visit(const DirectAbstractDeclaratorAssignmentExpression& node);
+
+        virtual void visit(const Pointer& node);
+
+        virtual void visit(const ParameterTypeList& node);
+
+        virtual void visit(const ParameterList& node);
     };
 
     template <class...Returns>
@@ -345,7 +376,7 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <Expression> ::= <NonCommaExpression> [ <TokenType::Comma> <NonCommaExpression>]
+     * <Expression> ::= <AssignmentExpression> { <TokenType::Comma> <AssignmentExpression>}
      */
     class Expression final : public Node<Expression>
     {
@@ -681,16 +712,15 @@ namespace OpenCL::Syntax
      */
     class UnaryExpressionSizeOf final : public Node<UnaryExpressionSizeOf>
     {
-        std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<IType>> m_unaryOrType;
+        using variant = std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<TypeName>>;
+
+        variant m_variant;
 
     public:
 
-        UnaryExpressionSizeOf(std::uint64_t line,
-                              std::uint64_t column,
-                              std::variant<std::unique_ptr<UnaryExpression>,
-                                           std::shared_ptr<IType>>&& unaryOrType);
+        UnaryExpressionSizeOf(std::uint64_t line, std::uint64_t column, variant&& variant);
 
-        const std::variant<std::unique_ptr<UnaryExpression>, std::shared_ptr<IType>>& getUnaryOrType() const;
+        const variant& getVariant() const;
     };
 
     /**
@@ -742,7 +772,7 @@ namespace OpenCL::Syntax
     private:
 
         AssignOperator m_assignOperator;
-        std::unique_ptr<AssignmentExpression> m_nonCommaExpression;
+        std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
     public:
 
@@ -750,32 +780,31 @@ namespace OpenCL::Syntax
                                        std::uint64_t column,
                                        UnaryExpression&& unaryFactor,
                                        AssignOperator assignOperator,
-                                       std::unique_ptr<AssignmentExpression>&& nonCommaExpression);
+                                       std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
         const UnaryExpression& getUnaryFactor() const;
 
-        const AssignmentExpression& getNonCommaExpression() const;
-
         AssignOperator getAssignOperator() const;
+
+        const AssignmentExpression& getAssignmentExpression() const;
     };
 
     /**
      * <CastExpression> ::= <UnaryExpression>
-     *                    | <TokenType::OpenParenthese> <Type> <TokenType::CloseParentheses> <CastExpression>
+     *                    | <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParentheses> <CastExpression>
      */
     class CastExpression final : public Node<CastExpression>
     {
-        std::variant<UnaryExpression,
-                     std::pair<std::shared_ptr<IType>, std::unique_ptr<CastExpression>>> m_unaryOrCast;
+        using variant = std::variant<UnaryExpression,
+                                     std::pair<std::unique_ptr<TypeName>, std::unique_ptr<CastExpression>>>;
+
+        variant m_variant;
 
     public:
 
-        CastExpression(std::uint64_t line, std::uint64_t column, std::variant<UnaryExpression,
-                                                                              std::pair<std::shared_ptr<IType>,
-                                                                                        std::unique_ptr<CastExpression>>>&& unaryOrCast);
+        CastExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
 
-        const std::variant<UnaryExpression,
-                           std::pair<std::shared_ptr<IType>, std::unique_ptr<CastExpression>>>& getUnaryOrCast() const;
+        const variant& getVariant() const;
     };
 
     /**
@@ -1212,19 +1241,31 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <BlockStatement> ::= <TokenType::OpenBrace> { <BlockItem> } <TokenType::CloseBrace>
+     * <LabelStatement> ::= <TokenType::Identifier> <TokenType::Colon>
      */
-    class BlockStatement final : public Node<BlockStatement>
+    class LabelStatement final : public Node<LabelStatement>
     {
-        std::vector<BlockItem> m_blockItems;
+        std::string m_identifier;
 
     public:
 
-        BlockStatement(std::uint64_t line,
-                       std::uint64_t column,
-                       std::vector<BlockItem> blockItems);
+        LabelStatement(std::uint64_t line, std::uint64_t column, const std::string& identifier);
+    };
 
-        const std::vector<BlockItem>& getBlockItems() const;
+    /**
+     * <CompoundStatement> ::= <TokenType::OpenBrace> { <CompoundItem> } <TokenType::CloseBrace>
+     */
+    class CompoundStatement final : public Node<CompoundStatement>
+    {
+        std::vector<CompoundItem> m_blockItems;
+
+    public:
+
+        CompoundStatement(std::uint64_t line,
+                          std::uint64_t column,
+                          std::vector<CompoundItem> blockItems);
+
+        const std::vector<CompoundItem>& getBlockItems() const;
     };
 
     /**
@@ -1256,14 +1297,7 @@ namespace OpenCL::Syntax
         const Expression* getPost() const;
     };
 
-    class Initializer;
-
     /**
-     * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
-     *                | <TokenType::Dot> <TokenType::Identifier>
-     *
-     * <DesignatorList> ::= <Designator> { <Designator> }
-     *
      * <Designation> ::= <DesignatorList> <TokenType::Assignment>
      *
      * <InitializerList> ::= [Designation] Initializer { <TokenType::Comma> [Designation] Initializer }
@@ -1272,7 +1306,16 @@ namespace OpenCL::Syntax
     {
     public:
 
-        using DesignatorList = std::vector<std::variant<std::size_t, std::string>>;
+        /**
+         * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
+         *                | <TokenType::Dot> <TokenType::Identifier>
+         */
+        using Designator = std::variant<std::size_t, std::string>;
+
+        /**
+         * <DesignatorList> ::= <Designator> { <Designator> }
+         */
+        using DesignatorList = std::vector<Designator>;
 
         using vector = std::vector<std::pair<Initializer, DesignatorList>>;
 
@@ -1305,14 +1348,6 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DeclarationSpecifiers> ::= <StorageClassSpecifiers> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpeicifier>
-     *
-     * <StorageClassSpecifiers> ::= <TokenType::TypedefKeyword>
-     *                            | <TokenType::ExternKeyword>
-     *                            | <TokenType::StaticKeyword>
-     *                            | <TokenType::AutoKeyword>
-     *                            | <TokenType::RegisterKeyword>
-     *
      * <TypeSpecifier> ::= <TokenType::VoidKeyword>
      *                   | <TokenType::CharKeyword>
      *                   | <TokenType::ShortKeyword>
@@ -1325,27 +1360,110 @@ namespace OpenCL::Syntax
      *                   | <StructOrUnionSpecifier>
      *                   | <EnumSpecifier>
      *                   | <TypedefName>
+     */
+    class TypeSpecifier final : public Node<TypeSpecifier>
+    {
+    public:
+
+        enum class PrimitiveTypeSpecifier
+        {
+            Void,
+            Char,
+            Short,
+            Int,
+            Long,
+            Float,
+            Double,
+            Signed,
+            Unsigned,
+        };
+
+    private:
+
+        using variant = std::variant<PrimitiveTypeSpecifier,
+                                     std::unique_ptr<StructOrUnionSpecifier>,
+                                     std::unique_ptr<EnumSpecifier>,
+                                     std::string>;
+
+        variant m_variant;
+
+    public:
+
+        TypeSpecifier(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
+    };
+
+    /**
+     * <StorageClassSpecifiers> ::= <TokenType::TypedefKeyword>
+     *                            | <TokenType::ExternKeyword>
+     *                            | <TokenType::StaticKeyword>
+     *                            | <TokenType::AutoKeyword>
+     *                            | <TokenType::RegisterKeyword>
+     */
+    enum class StorageClassSpecifier
+    {
+        Typedef,
+        Extern,
+        Static,
+        Auto,
+        Register
+    };
+
+    /**
+    * <TypeQualifier> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
+    */
+    enum class TypeQualifier
+    {
+        Const,
+        Restrict,
+        Volatile
+    };
+
+    /**
+     * <FunctionSpecifier> ::= <TokenType::InlineKeyword>
+     */
+    struct FunctionSpecifier
+    {
+    };
+
+    /**
+      * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpeicifier>
+      */
+    using DeclarationSpecifier = std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier>;
+
+    /**
      *
-     * <InitDeclarator> ::= <Declarator> | <Declarator> <TokenType::Assignment> <Initializer>
+     * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
      *
-     * <Declaration> ::= <DeclarationSpecifiers> {<DeclarationSpecifiers>} [<InitDeclarator>
+     * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
      *                   { <TokenType::Comma> <InitDeclarator> } ] <TokenType::SemiColon>
      */
     class Declaration final : public Node<Declaration>
     {
+        std::vector<DeclarationSpecifier> m_declarationSpecifiers;
+        std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> m_initDeclarators;
 
     public:
 
+        Declaration(std::uint64_t line,
+                    std::uint64_t column,
+                    std::vector<DeclarationSpecifier>&& declarationSpecifiers,
+                    std::vector<std::pair<std::unique_ptr<Declarator>,
+                                          std::unique_ptr<Initializer>>>&& initDeclarators);
+
+        const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
+
+        const std::vector<std::pair<std::unique_ptr<Declarator>,
+                                    std::unique_ptr<Initializer>>>& getInitDeclarators() const;
     };
 
     /**
-     *
-     * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
-     *
-     * <SpecifierQualifierList> ::= <TypeSpecifier> | <TypeQualifier>
-     *
-     * <StructDeclaration> ::= <SpecifierQualifierList> { <SpecifierQualifierList> } <StructDeclarator> { <StructDeclarator> } <TokenType::SemiColon>
-     *
+     * <SpecifierQualifier> ::= <TypeSpecifier> | <TypeQualifier>
+     */
+    using SpecifierQualifier = std::variant<TypeSpecifier, TypeQualifier>;
+
+    /**
      * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
      *
      * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
@@ -1354,14 +1472,48 @@ namespace OpenCL::Syntax
      */
     class StructOrUnionSpecifier final : public Node<StructOrUnionSpecifier>
     {
+        bool m_isUnion;
+        std::string m_identifier;
 
+    public:
+
+        /**
+         *
+         * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
+         *
+         * <StructDeclaration> ::= <SpecifierQualifier> { <SpecifierQualifier> }
+         *                         <StructDeclarator> { <StructDeclarator> } <TokenType::SemiColon>
+         */
+        struct StructDeclaration
+        {
+            std::vector<SpecifierQualifier> specifierQualifiers;
+            std::vector<std::pair<std::unique_ptr<Declarator>, std::int64_t>> structDeclarators;
+        };
+
+    private:
+
+        std::vector<StructDeclaration> m_structDeclarations;
+
+    public:
+
+        StructOrUnionSpecifier(std::uint64_t line,
+                               std::uint64_t column,
+                               bool isUnion,
+                               const std::string& identifier,
+                               std::vector<StructDeclaration>&& structDeclarations);
+
+        bool isUnion() const;
+
+        const std::string& getIdentifier() const;
+
+        const std::vector<StructDeclaration>& getStructDeclarations() const;
     };
 
     /**
     * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
     *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
     *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
-    *                       [ <TokenType::Comma> ] <TokenType::CloseBrace> <TokenType::SemiColon>
+    *                       [ <TokenType::Comma> ] <TokenType::CloseBrace>
     */
     class EnumDeclaration final : public Node<EnumDeclaration>
     {
@@ -1370,10 +1522,13 @@ namespace OpenCL::Syntax
 
     public:
 
-        EnumDeclaration(std::uint64_t line,
+        EnumDeclaration(std::uint64_t
+                        line,
                         std::uint64_t column,
-                        std::string name,
-                        std::vector<std::pair<std::string, std::int32_t>> values);
+                        std::string
+                        name,
+                        std::vector<std::pair<std::string, std::int32_t>> values
+        );
 
         const std::string& getName() const;
 
@@ -1381,30 +1536,326 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <TypeQualifiers> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
-     */
+    * <EnumSpecifier> ::= <EnumDeclaration> | <TokenType::EnumKeyword> <TokenType::Identifier>
+    */
+    class EnumSpecifier final : public Node<EnumSpecifier>
+    {
+        using variant = std::variant<EnumDeclaration, std::string>;
+
+        variant m_variant;
+
+    public:
+
+        EnumSpecifier(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
+    };
 
     /**
-     * <FunctionSpecifier> ::= <TokenType::InlineKeyword>
+     * <ParameterList> ::= <ParameterDeclaration> { <TokenType::Comma> <ParameterDeclaration> }
      */
+    class ParameterList final : public Node<ParameterList>
+    {
+        /**
+         * <ParameterDeclaration> ::= <DeclarationSpecifiers> <Declarator>
+         *                          | <DelcarationSpecifiers> [ <AbstractDeclarator> ]
+         */
+        using ParameterDeclaration = std::pair<DeclarationSpecifier,
+                                               std::variant<std::unique_ptr<Declarator>,
+                                                            std::unique_ptr<AbstractDeclarator>>>;
+
+        std::vector<ParameterDeclaration> m_parameterList;
+
+    public:
+
+        ParameterList(std::uint64_t line, std::uint64_t column, std::vector<ParameterDeclaration>&& parameterList);
+
+        const std::vector<ParameterDeclaration>& getParameterList() const;
+    };
+
+    /**
+     * <ParameterTypeList> ::= <ParameterList> [ <TokenType::Comma> <TokenType::Ellipse> ]
+     */
+    class ParameterTypeList final : public Node<ParameterTypeList>
+    {
+        ParameterList m_parameterList;
+        bool hasEllipse;
+
+    public:
+
+        ParameterTypeList(std::uint64_t line, std::uint64_t column, ParameterList&& parameterList, bool hasEllipse);
+
+        const ParameterList& getParameterList() const;
+
+        bool isHasEllipse() const;
+    };
+
+    /**
+     * <Pointer> ::= <TokenType::Asterisk> { <TypeQualifier> }
+     */
+    class Pointer final : public Node<Pointer>
+    {
+        std::vector<TypeQualifier> m_typeQualifiers;
+
+    public:
+
+        Pointer(std::uint64_t line, std::uint64_t column, std::vector<TypeQualifier>&& typeQualifiers);
+
+        const std::vector<TypeQualifier>& getTypeQualifiers() const;
+    };
+
+    /**
+     * <DirectDeclaratorNoStaticOrAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier>} [<AssignmentExpression>] <TokenType::CloseSquareBracket>
+     */
+    class DirectDeclaratorNoStaticOrAsterisk final : public Node<DirectDeclaratorNoStaticOrAsterisk>
+    {
+        std::unique_ptr<DirectDeclarator> m_directDeclarator;
+        std::vector<TypeQualifier> m_typeQualifiers;
+        std::unique_ptr<AssignmentExpression> m_assignmentExpression;
+
+    public:
+
+        DirectDeclaratorNoStaticOrAsterisk(std::uint64_t line,
+                                           std::uint64_t column,
+                                           std::unique_ptr<DirectDeclarator>&& directDeclarator,
+                                           std::vector<TypeQualifier>&& typeQualifiers,
+                                           std::unique_ptr<AssignmentExpression>&& assignmentExpression);
+
+        const DirectDeclarator& getDirectDeclarator() const;
+
+        const std::vector<TypeQualifier>& getTypeQualifiers() const;
+
+        const std::unique_ptr<AssignmentExpression>& getAssignmentExpression() const;
+    };
+
+    /**
+     * <DirectDeclaratorStatic> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> <TokenType::StaticKeyword> {<TypeQualifier>} <AssignmentExpression> <TokenType::CloseSquareBracket>
+     *                            | <DirectDeclarator> <TokenType::OpenSquareBracket> <TypeQualifier> {<TypeQualifier>} <TokenType::StaticKeyword> <AssignmentExpression> <TokenType::CloseSquareBracket>
+     */
+    class DirectDeclaratorStatic final : public Node<DirectDeclaratorStatic>
+    {
+        std::unique_ptr<DirectDeclarator> m_directDeclarator;
+        std::vector<TypeQualifier> m_typeQualifiers;
+        AssignmentExpression m_assignmentExpression;
+
+    public:
+
+        DirectDeclaratorStatic(std::uint64_t line,
+                               std::uint64_t column,
+                               std::unique_ptr<DirectDeclarator>&& directDeclarator,
+                               std::vector<TypeQualifier>&& typeQualifiers,
+                               AssignmentExpression&& assignmentExpression);
+
+        const DirectDeclarator& getDirectDeclarator() const;
+
+        const std::vector<TypeQualifier>& getTypeQualifiers() const;
+
+        const AssignmentExpression& getAssignmentExpression() const;
+    };
+
+    /**
+     * <DirectDeclaratorAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier> } <TokenType::Asterisk> <TokenType::CloseSquareBracket>
+     */
+    class DirectDeclaratorAsterisk final : public Node<DirectDeclaratorAsterisk>
+    {
+        std::unique_ptr<DirectDeclarator> m_directDeclarator;
+        std::vector<TypeQualifier> m_typeQualifiers;
+
+    public:
+
+        DirectDeclaratorAsterisk(std::uint64_t line,
+                                 std::uint64_t column,
+                                 DirectDeclarator&& directDeclarator,
+                                 std::vector<TypeQualifier>&& typeQualifiers);
+
+        const DirectDeclarator& getDirectDeclarator() const;
+
+        const std::vector<TypeQualifier>& getTypeQualifiers() const;
+    };
+
+    /**
+     * <DirectDeclaratorParentheseParameters> ::= <DirectDeclarator> <TokenType::OpenParenthese> <ParameterTypeList> <TokenType::CloseParenthese>
+     */
+    class DirectDeclaratorParentheseParameters final : public Node<DirectDeclaratorParentheseParameters>
+    {
+        std::unique_ptr<DirectDeclarator> m_directDeclarator;
+        ParameterTypeList m_parameterTypeList;
+
+    public:
+
+        DirectDeclaratorParentheseParameters(std::uint64_t line,
+                                             std::uint64_t column,
+                                             DirectDeclarator&& directDeclarator,
+                                             ParameterTypeList&& parameterTypeList);
+
+        const DirectDeclarator& getDirectDeclarator() const;
+
+        const ParameterTypeList& getParameterTypeList() const;
+    };
+
+    /**
+     * <DirectDeclaratorParentheseIdentifiers> ::= <DirectDeclarator> <TokenType::OpenParenthese> [ <TokenType::Identifier> {<TokenType::Comma> <TokenType::Identifier>}] <TokenType::CloseParenthese>
+     */
+    class DirectDeclaratorParentheseIdentifiers final : public Node<DirectDeclaratorParentheseIdentifiers>
+    {
+        std::unique_ptr<DirectDeclarator> m_directDeclarator;
+        std::vector<std::string> m_identifiers;
+
+    public:
+
+        DirectDeclaratorParentheseIdentifiers(std::uint64_t line,
+                                              std::uint64_t column,
+                                              DirectDeclarator&& directDeclarator,
+                                              std::vector<std::string>&& identifiers);
+
+        const DirectDeclarator& getDirectDeclarator() const;
+
+        const std::vector<std::string>& getIdentifiers() const;
+    };
 
     /**
      * <DirectDeclarator> ::= <TokenType::Identifier>
      *                      | <TokenType::OpenParenthese> <Declarator> <TokenType::CloseParenthese>
-     *                      | <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier>} [<AssignmentExpression>] <TokenType::CloseBrace>
-     *
-     *
-     * <Pointer> ::= <TokenType::Asterisk> { <TypeQualifier> }
-     *
+     *                      | <DirectDeclaratorNoStaticOrAsterisk>
+     *                      | <DirectDeclaratorStatic>
+     *                      | <DirectDeclaratorAsterisk>
+     *                      | <DirectDeclaratorParentheseParameters>
+     *                      | <DirectDeclaratorParentheseIdentifiers>
+     */
+    class DirectDeclarator final : public Node<DirectDeclarator>
+    {
+        using variant = std::variant<std::string,
+                                     std::unique_ptr<Declarator>,
+                                     DirectDeclaratorNoStaticOrAsterisk,
+                                     DirectDeclaratorStatic,
+                                     DirectDeclaratorAsterisk,
+                                     DirectDeclaratorParentheseParameters,
+                                     DirectDeclaratorParentheseIdentifiers>;
+
+        variant m_variant;
+
+    public:
+
+        DirectDeclarator(std::uint64_t line, std::uint64_t column, variant&& variant);
+
+        const variant& getVariant() const;
+    };
+
+    /**
      * <Declarator> ::= { <Pointer> } <DirectDeclarator>
      */
     class Declarator final : public Node<Declarator>
     {
+        std::vector<Pointer> m_pointers;
+        DirectDeclarator m_directDeclarator;
 
+    public:
+
+        Declarator(std::uint64_t line,
+                   std::uint64_t column,
+                   std::vector<Pointer>&& pointers,
+                   DirectDeclarator&& directDeclarator);
+
+        const std::vector<Pointer>& getPointers() const;
+
+        const DirectDeclarator& getDirectDeclarator() const;
     };
 
     /**
-     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration> [<Expression>]
+     * <DirectAbstractDeclaratorAssignmentExpression> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> [<AssignmentExpression>] <TokenType::CloseSquareBracket>
+     */
+    class DirectAbstractDeclaratorAssignmentExpression final : public Node<DirectAbstractDeclaratorAssignmentExpression>
+    {
+        std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
+        std::unique_ptr<AssignmentExpression> m_assignmentExpression;
+
+    public:
+
+        DirectAbstractDeclaratorAssignmentExpression(std::uint64_t line,
+                                                     std::uint64_t column,
+                                                     std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+                                                     std::unique_ptr<AssignmentExpression>&& assignmentExpression);
+
+        const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
+
+        const AssignmentExpression* getAssignmentExpression() const;
+    };
+
+    /**
+     * <DirectAbstractDeclaratorParameterTypeList> ::= [<DirectAbstractDeclarator>] <TokenType::OpenParenthese> [ <ParameterTypeList>] <TokenType::CloseParenthese>
+     */
+    class DirectAbstractDeclaratorParameterTypeList final : public Node<DirectAbstractDeclaratorParameterTypeList>
+    {
+        std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
+        std::unique_ptr<ParameterTypeList> m_parameterTypeList;
+
+    public:
+
+        DirectAbstractDeclaratorParameterTypeList(std::uint64_t line,
+                                                  std::uint64_t column,
+                                                  std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+                                                  std::unique_ptr<ParameterTypeList>&& parameterTypeList);
+
+        const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
+
+        const ParameterTypeList* getParameterTypeList() const;
+    };
+
+    /**
+     * <DirectAbstractDeclarator> ::= <TokenType::OpenParenthese> <AbstractDeclarator> <TokenType::CloseParenthese>
+     *                              | <DirectAbstractDeclaratorAssignmentExpression>
+     *                              | [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> <TokenType::Asterisk> <TokenType::CloseSquareBracket>
+     *                              | <DirectAbstractDeclaratorParameterTypeList>
+     */
+    class DirectAbstractDeclarator final : public Node<Declarator>
+    {
+        using variant = std::variant<std::unique_ptr<AbstractDeclarator>,
+                                                     DirectAbstractDeclaratorAssignmentExpression,
+                                                     std::unique_ptr<DirectAbstractDeclarator>,DirectAbstractDeclaratorParameterTypeList>;
+    };
+
+    /**
+     * <AbstractDeclarator> ::= { <Pointer> } <DirectAbstractDeclarator>
+     */
+    class AbstractDeclarator final : public Node<Declarator>
+    {
+        std::vector<Pointer> m_pointers;
+        DirectAbstractDeclarator m_directAbstractDeclarator;
+
+    public:
+
+        AbstractDeclarator(std::uint64_t line,
+                           std::uint64_t column,
+                           std::vector<Pointer>&& pointers,
+                           DirectAbstractDeclarator&& directAbstractDeclarator);
+
+        const std::vector<Pointer>& getPointers() const;
+
+        const DirectAbstractDeclarator& getDirectAbstractDeclarator() const;
+    };
+
+    /**
+     * <TypeName> ::= <SpecifierQualifier> { <SpecifierQualifier> } [ <AbstractDeclarator> ]
+     */
+    class TypeName final : public Node<TypeName>
+    {
+        std::vector<SpecifierQualifier> m_specifierQualifiers;
+        std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
+
+    public:
+
+        TypeName(std::uint64_t line,
+                 std::uint64_t column,
+                 std::vector<SpecifierQualifier>&& specifierQualifiers,
+                 std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
+
+        const std::vector<SpecifierQualifier>& getSpecifierQualifiers() const;
+
+        const AbstractDeclarator* getAbstractDeclarator() const;
+    };
+
+    /**
+     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration> <TokenType::SemiColon> [<Expression>]
      *                           <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese> <Statement>
      */
     class ForDeclarationStatement final : public Node<ForDeclarationStatement>
@@ -1494,27 +1945,41 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <Statement>
-     * ::=  <ReturnStatement>
-     * |    <ExpressionStatement>
-     * |    <IfStatement>
-     * |    <BlockStatement>
-     * |    <ForStatement>
-     * |    <ForDeclarationStatement>
-     * |    <HeadWhileStatement>
-     * |    <FootWhileStatement>
-     * |    <BreakStatement>
-     * |    <ContinueStatement>
-     * |    <SwitchStatement>
-     * |    <DefaultStatement>
-     * |    <CaseStatement>
+     * <GotoStatement> ::= <TokenType::GotoStatement> <TokenType::Identifier> <TokenType::SemiColon>
+     */
+    class GotoStatement final : public Node<GotoStatement>
+    {
+        std::string m_identifier;
+
+    public:
+
+        GotoStatement(std::uint64_t line, std::uint64_t column, const std::string& identifier);
+
+        const std::string& getIdentifier() const;
+    };
+
+    /**
+     * <LabeledStatement> ::= <LabelStatement> | <CaseStatement> | <DefaultStatement>
+     *
+     * <SelectionStatement> ::= <IfStatement> | <SwitchStatement>
+     *
+     * <IterationStatement> ::= <ForStatement> | <ForDeclarationStatement> | <HeadWhileStatement> | <FootWhileStatement>
+     *
+     * <JumpStatement> ::= <GotoStatement> | <ContinueStatement> | <BreakStatement> | <ReturnStatement>
+     *
+     * <Statement> ::= <LabeledStatement>
+     *               | <CompoundStatement>
+     *               | <ExpressionStatement>
+     *               | <SelectionStatement>
+     *               | <IterationStatement>
+     *               | <JumpStatement>
      */
     class Statement final : public Node<Statement>
     {
         using variant = std::variant<ReturnStatement,
                                      ExpressionStatement,
                                      IfStatement,
-                                     BlockStatement,
+                                     CompoundStatement,
                                      ForStatement,
                                      ForDeclarationStatement,
                                      HeadWhileStatement,
@@ -1523,7 +1988,7 @@ namespace OpenCL::Syntax
                                      ContinueStatement,
                                      SwitchStatement,
                                      DefaultStatement,
-                                     CaseStatement>;
+                                     CaseStatement,GotoStatement,LabelStatement>;
 
         variant m_variant;
     public:
@@ -1538,14 +2003,14 @@ namespace OpenCL::Syntax
     /**
      * <BlockItem> ::= <Statement> | <Declaration>
      */
-    class BlockItem final : public Node<BlockItem>
+    class CompoundItem final : public Node<CompoundItem>
     {
         using variant = std::variant<Statement, Declaration>;
         variant m_variant;
 
     public:
 
-        BlockItem(std::uint64_t line, std::uint64_t column, variant&& variant);
+        CompoundItem(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
 
@@ -1553,149 +2018,40 @@ namespace OpenCL::Syntax
     };
 
     /**
-      * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
-      *
-      * <StructOrUnionDeclaration> ::= <StructOrUnion> <TokenType::Identifier> <TokenType::OpenBrace>
-      *                 <Type> <TokenType::Identifier> <TokenType::Semicolon>
-      *                { <Type> <TokenType::Identifier> <TokenType::Semicolon> }
-      *                <TokenType::CloseBrace>
-      */
-    class StructOrUnionDeclaration final : public Node<StructOrUnionDeclaration>
-    {
-        bool m_isUnion;
-        std::string m_name;
-        std::vector<std::pair<std::shared_ptr<IType>, std::string>> m_types;
-
-    public:
-
-        StructOrUnionDeclaration(std::uint64_t line,
-                                 std::uint64_t column,
-                                 bool isUnion,
-                                 std::string name,
-                                 std::vector<std::pair<std::shared_ptr<IType>,
-                                                       std::string>>&& types);
-
-        bool isUnion() const;
-
-        const std::string& getName() const;
-
-        const std::vector<std::pair<std::shared_ptr<IType>, std::string>>& getTypes() const;
-    };
-
-    /**
-     * <TypeOrStructOrUnionDeclaration> ::= <Type> | <StructOrUnionDeclaration>
-     *
-     * <TypedefDeclaration> ::= <TokenType::TypedefKeyword> <TypeOrStructOrUnionDeclaration> [ <TokenType::Asterisk> ] <TokenType::Identifier>
-     * [ {<TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket> }]
-     * { <TokenType::Comma> [ <TokenType::Asterisk> ] <TokenType::Identifier>
-     * [ {<TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket> }] }
-     * <TokenType::SemiColon>
+     * <FunctionDefinition> ::= <DeclarationSpecifiers> <Declarator> { <Declaration> } <CompoundStatement>
      */
-    class TypedefDeclaration final : public Node<TypedefDeclaration>
+    class FunctionDefinition final : public Node<FunctionDefinition>
     {
-        std::unique_ptr<StructOrUnionDeclaration> m_optionalStructOrUnion;
 
-    public:
-
-        TypedefDeclaration(std::uint64_t line,
-                           std::uint64_t column,
-                           std::unique_ptr<StructOrUnionDeclaration>&& optionalStructOrUnion = nullptr);
-
-        const std::unique_ptr<StructOrUnionDeclaration>& getOptionalStructOrUnion() const;
     };
 
     /**
-     * <Function> ::= <Type> <TokenType::Identifier> <TokenType::OpenParenthese>
-     *                [ <Type> [<TokenType::Identifier>] {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     *                <TokenType::CloseSquareBracket> }
-     *                { <TokenType::Comma> <Type>
-     *                [<TokenType::Identifier>] [<TokenType::OpenSquareBracket> <TokenType::Literal>
-     *                <TokenType::CloseSquareBracket> ] } ] <TokenType::CloseParenthese>
-     *                ( <TokenType::OpenBrace>  { <BlockItem> } <TokenType::CloseBrace>  | <TokenType::SemiColon>  )
-     */
-    class Function final : public Node<Function>
-    {
-        std::shared_ptr<IType> m_returnType;
-        std::string m_name;
-        std::vector<std::pair<std::shared_ptr<IType>, std::string>> m_arguments;
-        std::uint64_t m_scopeLine;
-        std::unique_ptr<BlockStatement> m_block;
-
-    public:
-
-        Function(std::uint64_t line,
-                 std::uint64_t column,
-                 std::shared_ptr<IType> returnType,
-                 std::string name,
-                 std::vector<std::pair<std::shared_ptr<IType>,
-                                       std::string>> arguments,
-                 std::uint64_t scopeLine = 0,
-                 std::unique_ptr<BlockStatement>&& blockItems = nullptr);
-
-        const std::shared_ptr<IType>& getReturnType() const;
-
-        const std::string& getName() const;
-
-        const std::vector<std::pair<std::shared_ptr<IType>, std::string>>& getArguments() const;
-
-        uint64_t getScopeLine() const;
-
-        const BlockStatement* getBlockStatement() const;
-    };
-
-    /**
-     * <GlobalDeclaration> ::= <Type> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     *                <TokenType::CloseSquareBracket> } { <TokenType::Comma> <TokenType::Identifier> {<TokenType::OpenSquareBracket> <TokenType::Literal>
-     *                <TokenType::CloseSquareBracket> }}
-     */
-    class GlobalDeclaration final : public Node<GlobalDeclaration>
-    {
-        std::vector<std::tuple<std::shared_ptr<IType>, std::string, std::unique_ptr<Initializer>>> m_declarations;
-
-    public:
-
-        GlobalDeclaration(std::uint64_t line,
-                          std::uint64_t column,
-                          std::vector<std::tuple<std::shared_ptr<IType>,
-                                                 std::string,
-                                                 std::unique_ptr<Initializer>>>&& declarations);
-
-        const std::vector<std::tuple<std::shared_ptr<IType>,
-                                     std::string,
-                                     std::unique_ptr<Initializer>>>& getDeclarations() const;
-    };
-
-    /**
-    * <Global> ::= <StructOrUnionDeclaration> | <TypedefDeclaration> | <GlobalDeclaration> | <EnumDeclaration> | <Function>
+    * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
     */
-    class Global final : public Node<Global>
+    class ExternalDeclaration final : public Node<ExternalDeclaration>
     {
-        using variant = std::variant<StructOrUnionDeclaration,
-                                     TypedefDeclaration,
-                                     GlobalDeclaration,
-                                     EnumDeclaration,
-                                     Function>;
+        using variant = std::variant<Declaration, FunctionDefinition>;
         variant m_variant;
 
     public:
 
-        Global(std::uint64_t line, std::uint64_t column, variant&& variant);
+        ExternalDeclaration(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
     };
 
     /**
-     * <program> ::= {<Global>}
+     * <TranslationUnit> ::= <ExternalDeclaration> {<ExternalDeclaration>}
      */
-    class Program final
+    class TranslationUnit final
     {
-        std::vector<Global> m_globals;
+        std::vector<ExternalDeclaration> m_globals;
 
     public:
 
-        explicit Program(std::vector<Global>&& globals) noexcept;
+        explicit TranslationUnit(std::vector<ExternalDeclaration>&& globals) noexcept;
 
-        const std::vector<Global>& getGlobals() const;
+        const std::vector<ExternalDeclaration>& getGlobals() const;
     };
 }
 

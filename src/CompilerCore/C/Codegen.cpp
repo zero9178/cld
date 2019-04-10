@@ -428,7 +428,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::BlockStatement& ) override
+        void visit(const OpenCL::Syntax::CompoundStatement& ) override
         {
 
         }
@@ -478,7 +478,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::EnumDeclaration& ) override
+        void visit(const OpenCL::Syntax::EnumSpecifier& ) override
         {
 
         }
@@ -488,7 +488,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::Function& ) override
+        void visit(const OpenCL::Syntax::FunctionDefinition& ) override
         {
 
         }
@@ -498,7 +498,7 @@ namespace
 
         }
 
-        void visit(const OpenCL::Syntax::Program& ) override
+        void visit(const OpenCL::Syntax::TranslationUnit& ) override
         {
 
         }
@@ -2334,7 +2334,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
     }
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BlockStatement& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundStatement& node)
 {
     pushScope();
     debugScope.push_back(debugBuilder->createLexicalBlock(debugScope.back(),
@@ -2746,7 +2746,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::StructOrUnionDeclarat
     structs[(node.isUnion() ? "union." : "struct.") + node.getName()] = structType;
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EnumDeclaration& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EnumSpecifier& node)
 {
     if (!node.getName().empty())
     {
@@ -2780,7 +2780,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::TypedefDeclaration& n
     }
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Function& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FunctionDefinition& node)
 {
     if (!hasFunction(node.getName()))
     {
@@ -3001,7 +3001,7 @@ void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GlobalDeclaration& no
     }
 }
 
-void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Program& node)
+void OpenCL::Codegen::Context::visit(const OpenCL::Syntax::TranslationUnit& node)
 {
     module = std::make_unique<llvm::Module>("main", context);
     std::string error;

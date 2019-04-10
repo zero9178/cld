@@ -83,23 +83,23 @@ namespace OpenCL::Parser
         }
     };
 
-    OpenCL::Syntax::Program buildTree(std::vector<Lexer::Token>&& tokens);
+    OpenCL::Syntax::TranslationUnit buildTree(std::vector<Lexer::Token>&& tokens);
 
-    OpenCL::Syntax::Program parseProgram(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::TranslationUnit parseProgram(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::Global parseGlobal(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::ExternalDeclaration parseGlobal(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::StructOrUnionDeclaration parseStructOrUnion(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::EnumDeclaration parseEnumDeclaration(Tokens& tokens,ParsingContext& context);
+    OpenCL::Syntax::EnumSpecifier parseEnumDeclaration(Tokens& tokens,ParsingContext& context);
 
     OpenCL::Syntax::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::Function parseFunction(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::FunctionDefinition parseFunction(Tokens& tokens, ParsingContext& context);
 
-    Syntax::BlockItem parseBlockItem(Tokens& tokens, ParsingContext& context);
+    Syntax::CompoundItem parseBlockItem(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::Declaration parseDeclarations(Tokens& tokens,
                                                    ParsingContext& context,

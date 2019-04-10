@@ -176,7 +176,7 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::CaseStatement& node) override;
 
-        void visit(const Syntax::BlockStatement& node) override;
+        void visit(const Syntax::CompoundStatement& node) override;
 
         void visit(const Syntax::ForStatement& node) override;
 
@@ -196,15 +196,15 @@ namespace OpenCL::Codegen
 
         void visit(const Syntax::StructOrUnionDeclaration& node) override;
 
-        void visit(const Syntax::EnumDeclaration& node) override;
+        void visit(const Syntax::EnumSpecifier& node) override;
 
         void visit(const Syntax::TypedefDeclaration& node) override;
 
-        void visit(const Syntax::Function& node) override;
+        void visit(const Syntax::FunctionDefinition& node) override;
 
         void visit(const Syntax::GlobalDeclaration& node) override;
 
-        void visit(const Syntax::Program& node) override;
+        void visit(const Syntax::TranslationUnit& node) override;
 
         void visit(const Syntax::PrimitiveType& node) override;
 

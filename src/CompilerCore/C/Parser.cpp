@@ -5,7 +5,7 @@
 #include <stack>
 #include <algorithm>
 
-OpenCL::Syntax::Program OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
+OpenCL::Syntax::TranslationUnit OpenCL::Parser::buildTree(std::vector<OpenCL::Lexer::Token>&& tokens)
 {
     ParsingContext context;
     return parseProgram(tokens, context);
@@ -80,17 +80,17 @@ namespace
     }
 }
 
-OpenCL::Syntax::Program OpenCL::Parser::parseProgram(Tokens& tokens, ParsingContext& context)
+OpenCL::Syntax::TranslationUnit OpenCL::Parser::parseProgram(Tokens& tokens, ParsingContext& context)
 {
-    std::vector<Global> global;
+    std::vector<ExternalDeclaration> global;
     while (!tokens.empty())
     {
         global.push_back(parseGlobal(tokens, context));
     }
-    return Program(std::move(global));
+    return TranslationUnit(std::move(global));
 }
 
-OpenCL::Syntax::Global OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContext& context)
+OpenCL::Syntax::ExternalDeclaration OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContext& context)
 {
     if (!tokens.empty() && (tokens.back().getTokenType() == TokenType::StructKeyword
         || tokens.back().getTokenType() == TokenType::UnionKeyword) && tokens.size() > 2
@@ -103,14 +103,14 @@ OpenCL::Syntax::Global OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContex
         }
         auto line = structOrUnion.getLine();
         auto column = structOrUnion.getColumn();
-        auto global = Global(line, column, std::move(structOrUnion));
+        auto global = ExternalDeclaration(line, column, std::move(structOrUnion));
         auto& structOrUnionRef = std::get<StructOrUnionDeclaration>(global.getVariant());
         context.structOrUnions.emplace(structOrUnionRef.getName(), &structOrUnionRef);
         return global;
     }
     else if (!tokens.empty() && tokens.back().getTokenType() == TokenType::TypedefKeyword)
     {
-        auto global = Global(tokens.back().getLine(),
+        auto global = ExternalDeclaration(tokens.back().getLine(),
                              tokens.back().getColumn(),
                              parseTypedefDeclaration(tokens, context));
         auto& typedefDecl = std::get<TypedefDeclaration>(global.getVariant());
@@ -123,7 +123,7 @@ OpenCL::Syntax::Global OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContex
     }
     else if (!tokens.empty() && tokens.back().getTokenType() == TokenType::EnumKeyword)
     {
-        return Global(tokens.back().getLine(), tokens.back().getColumn(), parseEnumDeclaration(tokens, context));
+        return ExternalDeclaration(tokens.back().getLine(), tokens.back().getColumn(), parseEnumDeclaration(tokens, context));
     }
     else if (tokens.empty())
     {
@@ -140,12 +140,12 @@ OpenCL::Syntax::Global OpenCL::Parser::parseGlobal(Tokens& tokens, ParsingContex
     }
     if (result->getTokenType() == TokenType::OpenParenthese)
     {
-        return Global(result->getLine(), result->getColumn(), parseFunction(tokens, context));
+        return ExternalDeclaration(result->getLine(), result->getColumn(), parseFunction(tokens, context));
     }
     else if (result->getTokenType() == TokenType::SemiColon
         || result->getTokenType() == TokenType::Assignment)
     {
-        return Global(result->getLine(), result->getColumn(), parseGlobalDeclaration(tokens, context));
+        return ExternalDeclaration(result->getLine(), result->getColumn(), parseGlobalDeclaration(tokens, context));
     }
     else
     {
@@ -241,7 +241,7 @@ OpenCL::Syntax::StructOrUnionDeclaration OpenCL::Parser::parseStructOrUnion(Toke
     return StructOrUnionDeclaration(line, column, isUnion, std::move(name), std::move(fields));
 }
 
-OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tokens, ParsingContext& context)
+OpenCL::Syntax::EnumSpecifier OpenCL::Parser::parseEnumDeclaration(Tokens& tokens, ParsingContext& context)
 {
     auto line = tokens.back().getLine();
     auto column = tokens.back().getColumn();
@@ -304,7 +304,7 @@ OpenCL::Syntax::EnumDeclaration OpenCL::Parser::parseEnumDeclaration(Tokens& tok
         throw std::runtime_error("Expected ; after enum declaration");
     }
     tokens.pop_back();
-    return EnumDeclaration(line, column, std::move(name), values);
+    return EnumSpecifier(line, column, std::move(name), values);
 }
 
 OpenCL::Syntax::GlobalDeclaration OpenCL::Parser::parseGlobalDeclaration(Tokens& tokens, ParsingContext& context)
@@ -427,7 +427,7 @@ TypedefDeclaration OpenCL::Parser::parseTypedefDeclaration(Tokens& tokens, Parsi
     return TypedefDeclaration(line, column, std::move(optionalDeclaration));
 }
 
-OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingContext& context)
+OpenCL::Syntax::FunctionDefinition OpenCL::Parser::parseFunction(Tokens& tokens, ParsingContext& context)
 {
     auto rettype = parseType(tokens, context);
     auto currToken = tokens.back();
@@ -495,25 +495,25 @@ OpenCL::Syntax::Function OpenCL::Parser::parseFunction(Tokens& tokens, ParsingCo
         }
         auto statement = parseStatement(tokens, context);
         context.popScope();
-        auto pointer = std::get_if<BlockStatement>(&statement.getVariant());
+        auto pointer = std::get_if<CompoundStatement>(&statement.getVariant());
         if (!pointer)
         {
             throw std::runtime_error("Expected Block statement after function");
         }
 
-        return Function(line,
+        return FunctionDefinition(line,
                         column,
                         std::shared_ptr<IType>(rettype.release()),
                         std::move(name),
                         std::move(arguments),
                         scopeLine,
-                        std::make_unique<BlockStatement>(std::move(*pointer)));
+                        std::make_unique<CompoundStatement>(std::move(*pointer)));
     }
     else if (currToken.getTokenType() == TokenType::SemiColon)
     {
         context.popScope();
         tokens.pop_back();
-        return Function(line,
+        return FunctionDefinition(line,
                         column,
                         std::shared_ptr<IType>(rettype.release()),
                         std::move(name),
@@ -763,7 +763,7 @@ OpenCL::Syntax::EnumType OpenCL::Parser::parseEnumType(Tokens& tokens, ParsingCo
     return EnumType(name, isConst);
 }
 
-BlockItem OpenCL::Parser::parseBlockItem(Tokens& tokens, ParsingContext& context)
+CompoundItem OpenCL::Parser::parseBlockItem(Tokens& tokens, ParsingContext& context)
 {
     auto currToken = tokens.back();
     if (isType(currToken, context) && currToken.getTokenType() != TokenType::Asterisk)
@@ -1028,7 +1028,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
         {
             tokens.pop_back();
             context.pushScope();
-            std::vector<BlockItem> blockItems;
+            std::vector<CompoundItem> blockItems;
             while (!tokens.empty() && tokens.back().getTokenType() != TokenType::CloseBrace)
             {
                 blockItems.push_back(parseBlockItem(tokens, context));
@@ -1039,7 +1039,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
             }
             tokens.pop_back();
             context.popScope();
-            return {line, column, BlockStatement(line, column, std::move(blockItems))};
+            return {line, column, CompoundStatement(line, column, std::move(blockItems))};
         }
         case TokenType::ForKeyword:
         {

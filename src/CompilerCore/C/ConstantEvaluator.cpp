@@ -1248,7 +1248,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CaseStateme
     throw std::runtime_error("case not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BlockStatement&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CompoundStatement&)
 {
     throw std::runtime_error("block not allowed in constant expression");
 }
@@ -1298,7 +1298,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::StructOrUni
     throw std::runtime_error("struct or union declaration not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumDeclaration&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EnumSpecifier&)
 {
     throw std::runtime_error("Enum declartaion not allowed in constant expression");
 }
@@ -1308,7 +1308,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::TypedefDecl
     throw std::runtime_error("Typedef declaration not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Function&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::FunctionDefinition&)
 {
     throw std::runtime_error("Function declaration or definition not allowed in constant expression");
 }
@@ -1318,7 +1318,7 @@ void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::GlobalDecla
     throw std::runtime_error("Global declaration not allowed in constant expression");
 }
 
-void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Program&)
+void OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::TranslationUnit&)
 {
     throw std::runtime_error("Program not allowed in constant expressions");
 }
