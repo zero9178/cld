@@ -23,12 +23,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression&)
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression&)
@@ -71,12 +68,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpressionAssignment&)
@@ -99,12 +93,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionSi
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpression& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpression& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CastExpression&)
@@ -167,12 +158,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ConditionalExpres
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpression& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpression& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ReturnStatement&)
@@ -220,12 +208,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::InitializerList&)
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Initializer& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Initializer& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declaration&)
@@ -233,12 +218,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declaration&)
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundItem& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundItem& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ForDeclarationStatement&)
@@ -266,12 +248,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ContinueStatement
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Statement& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Statement& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EnumSpecifier&)
@@ -284,12 +263,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::FunctionDefinitio
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExternalDeclaration& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExternalDeclaration& )
 {
-    std::visit([this](auto&& value)
-               {
-                   return value.accept(*this);
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TranslationUnit&)
@@ -322,27 +298,9 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TypeSpecifier&)
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclarator& node)
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclarator& )
 {
-    std::visit([this](auto&& value)
-               {
-                   using T = std::decay_t<decltype(value)>;
-                   if constexpr(!std::is_same_v<std::string, T>)
-                   {
-                       if constexpr (std::is_same_v<T, std::unique_ptr<Declarator>>)
-                       {
-                           value->accept(*this);
-                       }
-                       else
-                       {
-                           value.accept(*this);
-                       }
-                   }
-                   else
-                   {
-                       throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
-                   }
-               }, node.getVariant());
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorNoStaticOrAsterisk&)
@@ -396,6 +354,16 @@ void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterTypeList
 }
 
 void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterList&)
+{
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LabelStatement& )
+{
+    throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
+}
+
+void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::GotoStatement& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
@@ -1137,7 +1105,7 @@ const OpenCL::Syntax::Statement* OpenCL::Syntax::CaseStatement::getStatement() c
     return m_statement.get();
 }
 
-const OpenCL::Syntax::Node<OpenCL::Syntax::CaseStatement>::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
+const OpenCL::Syntax::CaseStatement::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
 {
     return m_constant;
 }
@@ -1582,3 +1550,27 @@ OpenCL::Syntax::LabelStatement::LabelStatement(std::uint64_t line, std::uint64_t
     line,
     column), m_identifier(identifier)
 {}
+
+OpenCL::Syntax::ExternalDeclaration::ExternalDeclaration(std::uint64_t line,
+                                                         std::uint64_t column,
+                                                         OpenCL::Syntax::ExternalDeclaration::variant&& variant)
+                                                         : Node(line,column), m_variant(std::move(variant))
+{
+
+}
+
+const OpenCL::Syntax::ExternalDeclaration::variant& OpenCL::Syntax::ExternalDeclaration::getVariant() const
+{
+    return m_variant;
+}
+
+OpenCL::Syntax::TranslationUnit::TranslationUnit(std::vector<OpenCL::Syntax::ExternalDeclaration>&& globals) noexcept
+: m_globals(std::move(globals))
+{
+
+}
+
+const std::vector<OpenCL::Syntax::ExternalDeclaration>& OpenCL::Syntax::TranslationUnit::getGlobals() const
+{
+    return m_globals;
+}
