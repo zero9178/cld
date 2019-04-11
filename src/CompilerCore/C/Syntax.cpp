@@ -3,367 +3,367 @@
 #include <cassert>
 #include <algorithm>
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Expression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Expression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionConstant&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionConstant&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionParenthese&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpressionParenthese&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PrimaryExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionIncrement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionIncrement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionDecrement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionDecrement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionDot&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionDot&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::PostFixExpression& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpressionAssignment&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpressionAssignment&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionSizeOf&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpressionSizeOf&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpression& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::UnaryExpression& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CastExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CastExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Term&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Term&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AdditiveExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AdditiveExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ShiftExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ShiftExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::RelationalExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::RelationalExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EqualityExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EqualityExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitAndExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitAndExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitXorExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitXorExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitOrExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BitOrExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LogicalAndExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LogicalAndExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LogicalOrExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LogicalOrExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ConditionalExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ConditionalExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpression& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::AssignmentExpression& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ReturnStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ReturnStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExpressionStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExpressionStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::IfStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::IfStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::SwitchStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::SwitchStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DefaultStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DefaultStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CaseStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CaseStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ForStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ForStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::InitializerList&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::InitializerList&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Initializer& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Initializer& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declaration&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declaration&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundItem& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::CompoundItem& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ForDeclarationStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ForDeclarationStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::HeadWhileStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::HeadWhileStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::FootWhileStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::FootWhileStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BreakStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::BreakStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ContinueStatement&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ContinueStatement&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Statement& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Statement& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EnumSpecifier&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EnumSpecifier&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::FunctionDefinition&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::FunctionDefinition&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExternalDeclaration& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ExternalDeclaration& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TranslationUnit&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TranslationUnit&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TypeName&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TypeName&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declarator&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Declarator&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EnumDeclaration&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::EnumDeclaration&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::StructOrUnionSpecifier&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::StructOrUnionSpecifier&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TypeSpecifier&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::TypeSpecifier&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclarator& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclarator& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorNoStaticOrAsterisk&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorNoStaticOrAsterisk&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorStatic&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorStatic&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorAsterisk&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorAsterisk&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorParentheseParameters&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorParentheseParameters&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclarator&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclarator&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclaratorParameterTypeList&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclaratorParameterTypeList&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclaratorAssignmentExpression&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::DirectAbstractDeclaratorAssignmentExpression&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Pointer&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::Pointer&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterTypeList&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterTypeList&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterList&)
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::ParameterList&)
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LabelStatement& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::LabelStatement& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }
 
-void OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::GotoStatement& )
+OpenCL::Syntax::INodeVisitor::ReturnType* OpenCL::Syntax::INodeVisitor::visit(const OpenCL::Syntax::GotoStatement& )
 {
     throw std::runtime_error(std::string(__FUNCTION__) + " not overwritten in visitor");
 }

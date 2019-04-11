@@ -15,8 +15,8 @@ namespace OpenCL::Parser
 
     public:
 
-        std::map<std::string, std::shared_ptr<OpenCL::Syntax::IType>> typedefs;
-        std::map<std::string,const OpenCL::Syntax::StructOrUnionDeclaration*> structOrUnions;
+        //std::map<std::string, std::shared_ptr<OpenCL::Syntax::IType>> typedefs;
+        std::map<std::string,const OpenCL::Syntax::StructOrUnionSpecifier*> structOrUnions;
         std::set<std::string> functions;
 
         ParsingContext()
@@ -85,28 +85,15 @@ namespace OpenCL::Parser
 
     OpenCL::Syntax::TranslationUnit buildTree(std::vector<Lexer::Token>&& tokens);
 
-    OpenCL::Syntax::TranslationUnit parseProgram(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::TranslationUnit parseTranslationUnit(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::ExternalDeclaration parseGlobal(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::ExternalDeclaration parseExternalDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::StructOrUnionDeclaration parseStructOrUnion(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::Declaration parseDeclaration(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::TypedefDeclaration parseTypedefDeclaration(Tokens& tokens, ParsingContext& context);
+    OpenCL::Syntax::FunctionDefinition parseFunctionDefinition(Tokens& tokens, ParsingContext& context);
 
-    OpenCL::Syntax::EnumSpecifier parseEnumDeclaration(Tokens& tokens,ParsingContext& context);
-
-    OpenCL::Syntax::GlobalDeclaration parseGlobalDeclaration(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::FunctionDefinition parseFunction(Tokens& tokens, ParsingContext& context);
-
-    Syntax::CompoundItem parseBlockItem(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::Declaration parseDeclarations(Tokens& tokens,
-                                                   ParsingContext& context,
-                                                   bool multiple = true,
-                                                   bool allowInitialization = true,
-                                                   bool allowEmptyArray = true,
-                                                   bool allowNoName = false);
+    Syntax::CompoundItem parseCompoundItem(Tokens& tokens, ParsingContext& context);
 
     Syntax::Initializer parseInitializer(Tokens& tokens, ParsingContext& context);
 
@@ -148,16 +135,6 @@ namespace OpenCL::Parser
     Syntax::PostFixExpression parsePostFixExpression(Tokens& tokens, ParsingContext& context);
 
     Syntax::PrimaryExpression parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
-
-    std::unique_ptr<OpenCL::Syntax::IType> parseType(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::PrimitiveType parsePrimitiveType(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::StructType parseStructType(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::UnionType parseUnionType(Tokens& tokens, ParsingContext& context);
-
-    OpenCL::Syntax::EnumType parseEnumType(Tokens& tokens, ParsingContext& context);
 }
 
 #endif //OPENCLPARSER_PARSER_HPP
