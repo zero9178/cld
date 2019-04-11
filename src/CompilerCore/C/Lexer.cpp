@@ -91,8 +91,9 @@ namespace
             || characters == "union" || characters == "const" || characters == "float" || characters == "short"
             || characters == "unsigned" || characters == "continue" || characters == "for"
             || characters == "signed" || characters == "void" || characters == "default"
-            || characters == "goto" || characters == "sizeof" || characters == "volatile"
-            || characters == "do" || characters == "if" || characters == "static" || characters == "while";
+            || characters == "goto" || characters == "sizeof" || characters == "volatile" || characters == "restrict"
+            || characters == "do" || characters == "if" || characters == "static" || characters == "while"
+            || characters == "inline";
     }
 
     OpenCL::Lexer::TokenType charactersToKeyword(const std::string& characters)
@@ -225,6 +226,14 @@ namespace
         if (characters == "void")
         {
             return TokenType::VoidKeyword;
+        }
+        if (characters == "restrict")
+        {
+            return TokenType::RestrictKeyword;
+        }
+        if (characters == "inline")
+        {
+            return TokenType::InlineKeyword;
         }
         throw std::runtime_error("Invalid keyword " + characters);
     }
@@ -846,6 +855,8 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::EnumKeyword:return "enum";
     case TokenType::GotoKeyword:return "goto";
     case TokenType::Ellipse:return "...";
+    case TokenType::RestrictKeyword:return "restrict";
+    case TokenType::InlineKeyword:return "inline";
     }
     return "";
 }

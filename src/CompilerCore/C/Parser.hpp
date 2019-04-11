@@ -15,7 +15,7 @@ namespace OpenCL::Parser
 
     public:
 
-        //std::map<std::string, std::shared_ptr<OpenCL::Syntax::IType>> typedefs;
+        std::set<std::string> typedefs;
         std::map<std::string,const OpenCL::Syntax::StructOrUnionSpecifier*> structOrUnions;
         std::set<std::string> functions;
 
@@ -90,6 +90,12 @@ namespace OpenCL::Parser
     OpenCL::Syntax::ExternalDeclaration parseExternalDeclaration(Tokens& tokens, ParsingContext& context);
 
     OpenCL::Syntax::Declaration parseDeclaration(Tokens& tokens, ParsingContext& context);
+
+    OpenCL::Syntax::DeclarationSpecifier parseDeclarationSpecifier(Tokens& tokens,ParsingContext& context);
+
+    OpenCL::Syntax::StructOrUnionSpecifier parseStructOrUnionSpecifier(Tokens& tokens,ParsingContext& context);
+
+    OpenCL::Syntax::EnumSpecifier parseEnumSpecifier(Tokens& tokens,ParsingContext& context);
 
     OpenCL::Syntax::FunctionDefinition parseFunctionDefinition(Tokens& tokens, ParsingContext& context);
 

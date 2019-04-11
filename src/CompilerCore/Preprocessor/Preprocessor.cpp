@@ -350,11 +350,11 @@ namespace
                                 auto tokens = OpenCL::Lexer::tokenize(result);
                                 auto expression = OpenCL::Parser::parseAssignmentExpression(tokens, context);
                                 OpenCL::Codegen::ConstantEvaluator evaluator;
-                                expression.accept(evaluator);
+
                                 bool isTrue = std::visit([](auto&& value)-> bool
                                                          {
                                                              return value != 0;
-                                                         },evaluator.getReturn<OpenCL::Codegen::ConstRetType>());
+                                                         },*evaluator.visit(expression));
                                 currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
                                 hasPreprocessorTokens = isTrue;
                                 iter = "";

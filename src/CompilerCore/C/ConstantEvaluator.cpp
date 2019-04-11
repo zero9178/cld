@@ -214,7 +214,7 @@ namespace
     };
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     return makeReturn(std::visit([](auto&& value) -> Codegen::ConstRetType
                           {
@@ -230,24 +230,24 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
                           }, node.getValue()));
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
 {
     return visit(node.getExpression());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
-    auto ref = visit(node.getUnaryExpression());
+    auto& ref = visit(node.getUnaryExpression());
     auto value = *ref;
     switch (node.getAnOperator())
     {
@@ -271,7 +271,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
                                       throw std::runtime_error("Can't apply - to constant operator");
                                       return {};
                                   }
-                              }, value.value()));
+                              }, value));
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
     {
@@ -287,7 +287,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
                                       throw std::runtime_error("Can't apply - to constant operator");
                                       return {};
                                   }
-                              }, value.value()));
+                              }, value));
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
     {
@@ -303,7 +303,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
                                       throw std::runtime_error("Can't apply - to constant operator");
                                       return {};
                                   }
-                              }, value.value()));
+                              }, value));
     }
     }
 }
@@ -366,7 +366,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
 //    }
 //}
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
 //    auto sizeOf = [this](const std::shared_ptr<Syntax::IType>& ptr, auto&& self) -> OpenCL::Codegen::ConstRetType
 //    {
@@ -496,9 +496,8 @@ namespace
     }
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
 {
-    using T = decltype(INodeVisitor::visit(std::declval<Syntax::PrimaryExpressionIdentifier>()));
 //    m_return = std::visit([this](auto&& value) -> ConstRetType
 //                          {
 //                              using T = std::decay_t<decltype(value)>;
@@ -585,13 +584,13 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
 {
     if(node.getOptionalCastExpressions().empty())
     {
         return visit(node.getCastExpression());
     }
-    auto value = *visit(node.getCastExpression());
+    auto value = visit(node.getCastExpression());
     for (auto&[op, exp] : node.getOptionalCastExpressions())
     {
         switch (op)
@@ -601,7 +600,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             value = makeReturn(std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -624,7 +623,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             value = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -647,7 +646,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             value = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -670,14 +669,14 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(value.value());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
     if (node.getOptionalTerms().empty())
     {
         return visit(node.getTerm());
     }
 
-    auto currentValue = *visit(node.getTerm());
+    auto currentValue = visit(node.getTerm());
     for (auto&[op, exp] : node.getOptionalTerms())
     {
         switch (op)
@@ -687,7 +686,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -710,7 +709,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -743,13 +742,13 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(currentValue.value());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
     if (node.getOptionalAdditiveExpressions().empty())
     {
         return visit(node.getAdditiveExpression());
     }
-    auto currentValue = *visit(node.getAdditiveExpression());
+    auto currentValue = visit(node.getAdditiveExpression());
     for (auto&[op, exp] : node.getOptionalAdditiveExpressions())
     {
         switch (op)
@@ -759,7 +758,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -782,7 +781,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -805,19 +804,19 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(currentValue.value());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
     if (node.getOptionalEqualityExpressions().empty())
     {
         return visit(node.getEqualityExpression());
     }
-    auto currentValue = *visit(node.getEqualityExpression());
+    auto currentValue = visit(node.getEqualityExpression());
     for (auto& exp : node.getOptionalEqualityExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = *visit(exp);
+                                      auto second = visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
@@ -837,19 +836,19 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
     if (node.getOptionalBitAndExpressions().empty())
     {
         return visit(node.getBitAndExpression());
     }
-    auto currentValue = *visit(node.getBitAndExpression());
+    auto currentValue = visit(node.getBitAndExpression());
     for (auto& exp : node.getOptionalBitAndExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = *visit(exp);
+                                      auto second = visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
@@ -869,19 +868,19 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
     if (node.getOptionalBitXorExpressions().empty())
     {
         return visit(node.getBitXorExpression());
     }
-    auto currentValue = *visit(node.getBitXorExpression());
+    auto currentValue = visit(node.getBitXorExpression());
     for (auto& exp : node.getOptionalBitXorExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = *visit(exp);
+                                      auto second = visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
@@ -901,19 +900,19 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
     if(node.getOptionalBitOrExpressions().empty())
     {
         return visit(node.getBitOrExpression());
     }
-    auto currentValue = *visit(node.getBitOrExpression());
+    auto currentValue = visit(node.getBitOrExpression());
     for (auto& exp : node.getOptionalBitOrExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = *visit(exp);
+                                      auto second = visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
@@ -933,19 +932,19 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
     if (node.getOptionalAndExpressions().empty())
     {
         return visit(node.getAndExpression());
     }
-    auto currentValue = *visit(node.getAndExpression());
+    auto currentValue = visit(node.getAndExpression());
     for (auto& exp : node.getOptionalAndExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = *visit(exp);
+                                      auto second = visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
@@ -965,12 +964,12 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
 
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
-        auto value = *visit(node.getLogicalOrExpression());
+        auto value = visit(node.getLogicalOrExpression());
         bool first = std::visit([](auto&& value) -> bool
                                 { return value; }, *value);
         if (first)
@@ -991,13 +990,13 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
     if (node.getOptionalShiftExpressions().empty())
     {
         return visit(node.getShiftExpression());
     }
-    auto currentValue = *visit(node.getShiftExpression());
+    auto currentValue = visit(node.getShiftExpression());
     for (auto&[op, exp] : node.getOptionalShiftExpressions())
     {
         switch (op)
@@ -1007,7 +1006,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1030,7 +1029,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1053,7 +1052,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1076,7 +1075,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1099,13 +1098,13 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
     return makeReturn(*currentValue);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
     if (node.getOptionalRelationalExpressions().empty())
     {
         return visit(node.getRelationalExpression());
     }
-    auto currentValue = *visit(node.getRelationalExpression());
+    auto currentValue = visit(node.getRelationalExpression());
     for (auto&[op, exp] : node.getOptionalRelationalExpressions())
     {
         switch (op)
@@ -1115,7 +1114,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1138,7 +1137,7 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = *visit(*exp);
+                                          auto second = visit(*exp);
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -1169,65 +1168,79 @@ OpenCL::Codegen::ConstantEvaluator::ConstantEvaluator(const std::map<std::string
     : m_structOrUnions(structOrUnions)
 {}
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript& )
 {
-    return nullptr;
+    throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow& )
 {
-    return nullptr;
+    throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot& )
 {
-    return nullptr;
+    throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
-    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>*
+    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
-                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>*>)
+                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
                           {
                               return visit(value);
                           }
                           else
                           {
-                              return nullptr;
+                              throw std::runtime_error("Not allowed in constant expression");
                           }
                       },node.getVariant());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
-    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>*
+    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
-                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>*>)
+                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
                           {
                               return visit(value);
                           }
                           else
                           {
-                              return nullptr;
+                              throw std::runtime_error("Not allowed in constant expression");
                           }
                       },node.getVariant());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value)
+    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
                           return visit(value);
                       },node.getVariant());
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
 {
-    return INodeVisitor::visit(node);
+    if(node.getAssignmentExpressions().size() != 1)
+    {
+        throw std::runtime_error(", operator not allowed in constant expression");
+    }
+    return visit(node.getAssignmentExpressions()[0]);
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>* OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
-    return INodeVisitor::visit(node);
+    return std::visit([this](auto&& value)->Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+                      {
+                          if constexpr(std::is_same_v<decltype(visit(value)),Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
+                          {
+                              return visit(value);
+                          }
+                          else
+                          {
+                              throw std::runtime_error("Not allowed in constant expression");
+                          }
+                      },node.getVariant());
 }

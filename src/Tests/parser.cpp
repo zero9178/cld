@@ -102,45 +102,22 @@ TEST(Parser,Declarations)
 
 TEST(Parser,InputFile)
 {
-    #ifdef _WIN32
-    EXPECT_EXIT({
-                    std::ifstream file("../src/input.c",std::ios_base::binary);
-                    if(!file.is_open())
-                    {
-                        std::cerr<<"Could not open source file";
-                        std::exit(-1);
-                    }
-                    std::string source;
-                    file.seekg(0,std::ios_base::end);
-                    std::size_t pos = file.tellg();
-                    source.resize(pos);
-                    file.seekg(0,std::ios_base::beg);
-                    file.read(source.data(),source.size());
+    std::ifstream file("../../../src/input.c",std::ios_base::binary);
+    if(!file.is_open())
+    {
+        std::cerr<<"Could not open source file";
+        FAIL();
+    }
+    std::string source;
+    file.seekg(0,std::ios_base::end);
+    std::size_t pos = file.tellg();
+    source.resize(pos);
+    file.seekg(0,std::ios_base::beg);
+    file.read(source.data(),source.size());
 
-                    source.erase(std::remove(source.begin(),source.end(),'\r'),source.end());
+    source.erase(std::remove(source.begin(),source.end(),'\r'),source.end());
 
-                    auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
-                    auto node = OpenCL::Parser::buildTree(std::move(result));
-                    std::exit(0);
-    },::testing::ExitedWithCode(0),".*");
-    #else
-    EXPECT_EXIT({
-                    std::ifstream file("../src/input.c",std::ios_base::binary);
-                    if(!file.is_open())
-                    {
-                        std::cerr<<"Could not open source file";
-                        std::exit(-1);
-                    }
-                    std::string source;
-                    file.seekg(0,std::ios_base::end);
-                    std::size_t pos = file.tellg();
-                    source.resize(pos);
-                    file.seekg(0,std::ios_base::beg);
-                    file.read(source.data(),source.size());
-
-                    auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
-                    auto node = OpenCL::Parser::buildTree(std::move(result));
-                    std::exit(0);
-    },::testing::ExitedWithCode(0),".*");
-    #endif
+    auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
+    auto node = OpenCL::Parser::buildTree(std::move(result));
+    SUCCEED();
 }

@@ -164,151 +164,151 @@ namespace OpenCL::Syntax
 
         struct ReturnType{};
 
-        virtual ReturnType* visit(const Expression& node);
+        virtual ReturnType& visit(const Expression& node);
 
-        virtual ReturnType* visit(const PrimaryExpressionIdentifier& node);
+        virtual ReturnType& visit(const PrimaryExpressionIdentifier& node);
 
-        virtual ReturnType* visit(const PrimaryExpressionConstant& node);
+        virtual ReturnType& visit(const PrimaryExpressionConstant& node);
 
-        virtual ReturnType* visit(const PrimaryExpressionParenthese& node);
+        virtual ReturnType& visit(const PrimaryExpressionParenthese& node);
 
-        virtual ReturnType* visit(const PrimaryExpression& node);
+        virtual ReturnType& visit(const PrimaryExpression& node);
 
-        virtual ReturnType* visit(const PostFixExpressionPrimaryExpression& node);
+        virtual ReturnType& visit(const PostFixExpressionPrimaryExpression& node);
 
-        virtual ReturnType* visit(const PostFixExpressionSubscript& node);
+        virtual ReturnType& visit(const PostFixExpressionSubscript& node);
 
-        virtual ReturnType* visit(const PostFixExpressionIncrement& node);
+        virtual ReturnType& visit(const PostFixExpressionIncrement& node);
 
-        virtual ReturnType* visit(const PostFixExpressionDecrement& node);
+        virtual ReturnType& visit(const PostFixExpressionDecrement& node);
 
-        virtual ReturnType* visit(const PostFixExpressionDot& node);
+        virtual ReturnType& visit(const PostFixExpressionDot& node);
 
-        virtual ReturnType* visit(const PostFixExpressionArrow& node);
+        virtual ReturnType& visit(const PostFixExpressionArrow& node);
 
-        virtual ReturnType* visit(const PostFixExpressionFunctionCall& node);
+        virtual ReturnType& visit(const PostFixExpressionFunctionCall& node);
 
-        virtual ReturnType* visit(const PostFixExpressionTypeInitializer& node);
+        virtual ReturnType& visit(const PostFixExpressionTypeInitializer& node);
 
-        virtual ReturnType* visit(const PostFixExpression& node);
+        virtual ReturnType& visit(const PostFixExpression& node);
 
-        virtual ReturnType* visit(const AssignmentExpressionAssignment& node);
+        virtual ReturnType& visit(const AssignmentExpressionAssignment& node);
 
-        virtual ReturnType* visit(const UnaryExpressionPostFixExpression& node);
+        virtual ReturnType& visit(const UnaryExpressionPostFixExpression& node);
 
-        virtual ReturnType* visit(const UnaryExpressionUnaryOperator& node);
+        virtual ReturnType& visit(const UnaryExpressionUnaryOperator& node);
 
-        virtual ReturnType* visit(const UnaryExpressionSizeOf& node);
+        virtual ReturnType& visit(const UnaryExpressionSizeOf& node);
 
-        virtual ReturnType* visit(const UnaryExpression& node);
+        virtual ReturnType& visit(const UnaryExpression& node);
 
-        virtual ReturnType* visit(const CastExpression& node);
+        virtual ReturnType& visit(const CastExpression& node);
 
-        virtual ReturnType* visit(const Term& node);
+        virtual ReturnType& visit(const Term& node);
 
-        virtual ReturnType* visit(const AdditiveExpression& node);
+        virtual ReturnType& visit(const AdditiveExpression& node);
 
-        virtual ReturnType* visit(const ShiftExpression& node);
+        virtual ReturnType& visit(const ShiftExpression& node);
 
-        virtual ReturnType* visit(const RelationalExpression& node);
+        virtual ReturnType& visit(const RelationalExpression& node);
 
-        virtual ReturnType* visit(const EqualityExpression& node);
+        virtual ReturnType& visit(const EqualityExpression& node);
 
-        virtual ReturnType* visit(const BitAndExpression& node);
+        virtual ReturnType& visit(const BitAndExpression& node);
 
-        virtual ReturnType* visit(const BitXorExpression& node);
+        virtual ReturnType& visit(const BitXorExpression& node);
 
-        virtual ReturnType* visit(const BitOrExpression& node);
+        virtual ReturnType& visit(const BitOrExpression& node);
 
-        virtual ReturnType* visit(const LogicalAndExpression& node);
+        virtual ReturnType& visit(const LogicalAndExpression& node);
 
-        virtual ReturnType* visit(const LogicalOrExpression& node);
+        virtual ReturnType& visit(const LogicalOrExpression& node);
 
-        virtual ReturnType* visit(const ConditionalExpression& node);
+        virtual ReturnType& visit(const ConditionalExpression& node);
 
-        virtual ReturnType* visit(const AssignmentExpression& node);
+        virtual ReturnType& visit(const AssignmentExpression& node);
 
-        virtual ReturnType* visit(const ReturnStatement& node);
+        virtual ReturnType& visit(const ReturnStatement& node);
 
-        virtual ReturnType* visit(const ExpressionStatement& node);
+        virtual ReturnType& visit(const ExpressionStatement& node);
 
-        virtual ReturnType* visit(const IfStatement& node);
+        virtual ReturnType& visit(const IfStatement& node);
 
-        virtual ReturnType* visit(const SwitchStatement& node);
+        virtual ReturnType& visit(const SwitchStatement& node);
 
-        virtual ReturnType* visit(const DefaultStatement& node);
+        virtual ReturnType& visit(const DefaultStatement& node);
 
-        virtual ReturnType* visit(const CaseStatement& node);
+        virtual ReturnType& visit(const CaseStatement& node);
 
-        virtual ReturnType* visit(const CompoundStatement& node);
+        virtual ReturnType& visit(const CompoundStatement& node);
 
-        virtual ReturnType* visit(const ForStatement& node);
+        virtual ReturnType& visit(const ForStatement& node);
 
-        virtual ReturnType* visit(const InitializerList& node);
+        virtual ReturnType& visit(const InitializerList& node);
 
-        virtual ReturnType* visit(const Initializer& node);
+        virtual ReturnType& visit(const Initializer& node);
 
-        virtual ReturnType* visit(const Declaration& node);
+        virtual ReturnType& visit(const Declaration& node);
 
-        virtual ReturnType* visit(const CompoundItem& node);
+        virtual ReturnType& visit(const CompoundItem& node);
 
-        virtual ReturnType* visit(const ForDeclarationStatement& node);
+        virtual ReturnType& visit(const ForDeclarationStatement& node);
 
-        virtual ReturnType* visit(const HeadWhileStatement& node);
+        virtual ReturnType& visit(const HeadWhileStatement& node);
 
-        virtual ReturnType* visit(const FootWhileStatement& node);
+        virtual ReturnType& visit(const FootWhileStatement& node);
 
-        virtual ReturnType* visit(const BreakStatement& node);
+        virtual ReturnType& visit(const BreakStatement& node);
 
-        virtual ReturnType* visit(const ContinueStatement& node);
+        virtual ReturnType& visit(const ContinueStatement& node);
 
-        virtual ReturnType* visit(const Statement& node);
+        virtual ReturnType& visit(const Statement& node);
 
-        virtual ReturnType* visit(const EnumSpecifier& node);
+        virtual ReturnType& visit(const EnumSpecifier& node);
 
-        virtual ReturnType* visit(const FunctionDefinition& node);
+        virtual ReturnType& visit(const FunctionDefinition& node);
 
-        virtual ReturnType* visit(const ExternalDeclaration& node);
+        virtual ReturnType& visit(const ExternalDeclaration& node);
 
-        virtual ReturnType* visit(const TranslationUnit& node);
+        virtual ReturnType& visit(const TranslationUnit& node);
 
-        virtual ReturnType* visit(const TypeName& node);
+        virtual ReturnType& visit(const TypeName& node);
 
-        virtual ReturnType* visit(const Declarator& node);
+        virtual ReturnType& visit(const Declarator& node);
 
-        virtual ReturnType* visit(const EnumDeclaration& node);
+        virtual ReturnType& visit(const EnumDeclaration& node);
 
-        virtual ReturnType* visit(const StructOrUnionSpecifier& node);
+        virtual ReturnType& visit(const StructOrUnionSpecifier& node);
 
-        virtual ReturnType* visit(const TypeSpecifier& node);
+        virtual ReturnType& visit(const TypeSpecifier& node);
 
-        virtual ReturnType* visit(const DirectDeclarator& node);
+        virtual ReturnType& visit(const DirectDeclarator& node);
 
-        virtual ReturnType* visit(const DirectDeclaratorNoStaticOrAsterisk& node);
+        virtual ReturnType& visit(const DirectDeclaratorNoStaticOrAsterisk& node);
 
-        virtual ReturnType* visit(const DirectDeclaratorStatic& node);
+        virtual ReturnType& visit(const DirectDeclaratorStatic& node);
 
-        virtual ReturnType* visit(const DirectDeclaratorAsterisk& node);
+        virtual ReturnType& visit(const DirectDeclaratorAsterisk& node);
 
-        virtual ReturnType* visit(const DirectDeclaratorParentheseParameters& node);
+        virtual ReturnType& visit(const DirectDeclaratorParentheseParameters& node);
 
-        virtual ReturnType* visit(const DirectDeclaratorParentheseIdentifiers& node);
+        virtual ReturnType& visit(const DirectDeclaratorParentheseIdentifiers& node);
 
-        virtual ReturnType* visit(const DirectAbstractDeclarator& node);
+        virtual ReturnType& visit(const DirectAbstractDeclarator& node);
 
-        virtual ReturnType* visit(const DirectAbstractDeclaratorParameterTypeList& node);
+        virtual ReturnType& visit(const DirectAbstractDeclaratorParameterTypeList& node);
 
-        virtual ReturnType* visit(const DirectAbstractDeclaratorAssignmentExpression& node);
+        virtual ReturnType& visit(const DirectAbstractDeclaratorAssignmentExpression& node);
 
-        virtual ReturnType* visit(const Pointer& node);
+        virtual ReturnType& visit(const Pointer& node);
 
-        virtual ReturnType* visit(const ParameterTypeList& node);
+        virtual ReturnType& visit(const ParameterTypeList& node);
 
-        virtual ReturnType* visit(const ParameterList& node);
+        virtual ReturnType& visit(const ParameterList& node);
 
-        virtual ReturnType* visit(const LabelStatement& node);
+        virtual ReturnType& visit(const LabelStatement& node);
 
-        virtual ReturnType* visit(const GotoStatement& node);
+        virtual ReturnType& visit(const GotoStatement& node);
     };
 
     template<class T>
@@ -398,16 +398,16 @@ namespace OpenCL::Syntax
 
         public:
 
-            StrongTypedef<T>* makeReturn(const T& value) noexcept
+            StrongTypedef<T>& makeReturn(const T& value) noexcept
             {
                 m_return = value;
-                return &m_return;
+                return m_return;
             }
 
-            StrongTypedef<T>* makeReturn(T&& value) noexcept
+            StrongTypedef<T>& makeReturn(T&& value) noexcept
             {
                 m_return = std::move(value);
-                return &m_return;
+                return m_return;
             }
         };
     }
@@ -1503,7 +1503,7 @@ namespace OpenCL::Syntax
     };
 
     /**
-      * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpeicifier>
+      * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpecifier>
       */
     using DeclarationSpecifier = std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier>;
 
@@ -2094,11 +2094,31 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <FunctionDefinition> ::= <DeclarationSpecifiers> <Declarator> { <Declaration> } <CompoundStatement>
+     * <FunctionDefinition> ::= <DeclarationSpecifiers> {<DeclarationSpecifiers>} <Declarator> { <Declaration> } <CompoundStatement>
      */
     class FunctionDefinition final : public Node
     {
+        std::vector<DeclarationSpecifier> m_declarationSpecifiers;
+        Declarator m_declarator;
+        std::vector<Declaration> m_declarations;
+        CompoundStatement m_compoundStatement;
 
+    public:
+
+        FunctionDefinition(std::uint64_t line,
+                           std::uint64_t column,
+                           std::vector<DeclarationSpecifier>&& declarationSpecifiers,
+                           Declarator&& declarator,
+                           std::vector<Declaration>&& declarations,
+                           CompoundStatement&& compoundStatement);
+
+        const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
+
+        const Declarator& getDeclarator() const;
+
+        const std::vector<Declaration>& getDeclarations() const;
+
+        const CompoundStatement& getCompoundStatement() const;
     };
 
     /**

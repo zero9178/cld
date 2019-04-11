@@ -44,6 +44,160 @@ OpenCL::Syntax::TranslationUnit OpenCL::Parser::parseTranslationUnit(Tokens& tok
 
 OpenCL::Syntax::ExternalDeclaration OpenCL::Parser::parseExternalDeclaration(Tokens& tokens, ParsingContext& context)
 {
+    std::size_t i = 0;
+    auto result = std::find_if(tokens.rbegin(), tokens.rend(), [&i](const Token& token)
+    {
+        switch (token.getTokenType())
+        {
+        case TokenType::SemiColon:return true;
+        case TokenType::OpenBrace:
+        {
+            if (!i)
+            {
+                return true;
+            }
+            else
+            {
+                i++;
+            }
+            break;
+        }
+        case TokenType::OpenParenthese:
+        case TokenType::OpenSquareBracket:
+        {
+            i++;
+            break;
+        }
+        case TokenType::CloseBrace:
+        case TokenType::CloseParenthese:
+        case TokenType::CloseSquareBracket:
+        {
+            i--;
+            break;
+        }
+        case TokenType::TypedefKeyword:
+        case TokenType::AutoKeyword:
+        case TokenType::RegisterKeyword:
+            return true;
+        default:return false;
+        }
+        return false;
+    });
+    if (result == tokens.rend())
+    {
+        throw std::runtime_error("Unexpected end of tokens");
+    }
+
+    auto line = tokens.back().getLine();
+    auto column = tokens.back().getColumn();
+    if (result->getTokenType() == TokenType::OpenBrace)
+    {
+        return ExternalDeclaration(line, column, parseFunctionDefinition(tokens, context));
+    }
+    else
+    {
+        return ExternalDeclaration(line, column, parseDeclaration(tokens, context));
+    }
+}
+
+namespace
+{
+    bool backIsDeclarationSpecifier(OpenCL::Parser::Tokens& tokens,OpenCL::Parser::ParsingContext& context)
+    {
+        switch(tokens.back().getTokenType())
+        {
+        case TokenType::TypedefKeyword:
+        case TokenType::ExternKeyword:
+        case TokenType::StaticKeyword:
+        case TokenType::AutoKeyword:
+        case TokenType::RegisterKeyword:
+        case TokenType::VoidKeyword:
+        case TokenType::CharKeyword:
+        case TokenType::ShortKeyword:
+        case TokenType::IntKeyword:
+        case TokenType::LongKeyword:
+        case TokenType::FloatKeyword:
+        case TokenType::DoubleKeyword:
+        case TokenType::SignedKeyword:
+        case TokenType::UnsignedKeyword:
+        case TokenType::EnumKeyword:
+        case TokenType::StructKeyword:
+        case TokenType::UnionKeyword:
+        case TokenType::ConstKeyword:
+        case TokenType::RestrictKeyword:
+        case TokenType::VolatileKeyword:
+        case TokenType::InlineKeyword:
+            return true;
+        case TokenType::Identifier:
+            return !context.isInScope(std::get<std::string>(tokens.back().getValue()))
+                && context.typedefs.count(std::get<std::string>(tokens.back().getValue()));
+        default:return false;
+        }
+    }
+}
+
+OpenCL::Syntax::Declaration OpenCL::Parser::parseDeclaration(Tokens& tokens,ParsingContext& context)
+{
+    std::vector<DeclarationSpecifier> declarationSpecifiers;
+    while(backIsDeclarationSpecifier(tokens,context))
+    {
+        declarationSpecifiers.push_back(parseDeclarationSpecifier(tokens,context));
+    }
+}
+
+OpenCL::Syntax::DeclarationSpecifier OpenCL::Parser::parseDeclarationSpecifier(OpenCL::Parser::Tokens& tokens,
+                                                                               OpenCL::Parser::ParsingContext& context)
+{
+    auto currToken = tokens.back();
+    tokens.pop_back();
+    auto line = currToken.getLine();
+    auto column = currToken.getColumn();
+    switch(currToken.getTokenType())
+    {
+    case TokenType::TypedefKeyword:return StorageClassSpecifier::Typedef;
+    case TokenType::ExternKeyword:return StorageClassSpecifier::Extern;
+    case TokenType::StaticKeyword:return StorageClassSpecifier::Static;
+    case TokenType::AutoKeyword:return StorageClassSpecifier::Auto;
+    case TokenType::RegisterKeyword:return StorageClassSpecifier::Register;
+    case TokenType::ConstKeyword:return TypeQualifier::Const;
+    case TokenType::RestrictKeyword: return TypeQualifier::Restrict;
+    case TokenType::VolatileKeyword:return TypeQualifier::Volatile;
+    case TokenType::InlineKeyword:return FunctionSpecifier{};
+    case TokenType::VoidKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Void);
+    case TokenType::CharKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Char);
+    case TokenType::ShortKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Short);
+    case TokenType::IntKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Int);
+    case TokenType::LongKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Long);
+    case TokenType::FloatKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Float);
+    case TokenType::DoubleKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Double);
+    case TokenType::SignedKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Signed);
+    case TokenType::UnsignedKeyword:return TypeSpecifier(line,column,TypeSpecifier::PrimitiveTypeSpecifier::Unsigned);
+    case TokenType::UnionKeyword:
+    case TokenType::StructKeyword:return TypeSpecifier(line,column,std::make_unique<StructOrUnionSpecifier>(parseStructOrUnionSpecifier(tokens,context)));
+    case TokenType::EnumKeyword:return TypeSpecifier(line,column,std::make_unique<EnumSpecifier>(parseEnumSpecifier(tokens,context)));
+    case TokenType::Identifier:
+    {
+        auto name = std::get<std::string>(currToken.getValue());
+        if(!context.isInScope(name) && context.typedefs.count(name))
+        {
+            return TypeSpecifier(line,column,name);
+        }
+        break;
+    }
+    default:break;
+    }
+    throw std::runtime_error("Invalid token for declaration specifier");
+}
+
+OpenCL::Syntax::StructOrUnionSpecifier OpenCL::Parser::parseStructOrUnionSpecifier(OpenCL::Parser::Tokens& tokens,
+                                                                                   OpenCL::Parser::ParsingContext& context)
+{
+
+}
+
+OpenCL::Syntax::EnumSpecifier OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::Tokens& tokens,
+                                                                 OpenCL::Parser::ParsingContext& context)
+{
 
 }
 
@@ -118,7 +272,7 @@ OpenCL::Syntax::InitializerList OpenCL::Parser::parseInitializerList(Tokens& tok
                                                      {
                                                          throw std::runtime_error("Invalid type of constanst expression");
                                                      }
-                                                 },**evaluator.visit(constant)));
+                                                 }, *evaluator.visit(constant)));
             }
             else if (tokens.back().getTokenType() == TokenType::Dot)
             {
@@ -404,7 +558,7 @@ Statement OpenCL::Parser::parseStatement(Tokens& tokens, ParsingContext& context
             tokens.pop_back();
             Codegen::ConstantEvaluator evaluator(context.structOrUnions);
             return Statement(line, column, CaseStatement(line, column,
-                                                         std::move(**evaluator.visit(expression)),
+                                                         std::move(*evaluator.visit(expression)),
                                                          tokens.back().getTokenType() != TokenType::CaseKeyword
                                                          ? std::make_unique<Statement>(parseStatement(tokens, context))
                                                          : nullptr));
@@ -898,33 +1052,33 @@ OpenCL::Syntax::CastExpression OpenCL::Parser::parseCastExpression(Tokens& token
             throw std::runtime_error("Unexpected end of tokens");
         }
         closing++;
-//        if (isType(*currToken, context) && closing->getTokenType() != TokenType::OpenBrace)
-//        {
-//            auto result = std::find_if(currToken + 1, tokens.rend(), [](const Token& token)
-//            {
-//                return token.getTokenType() == TokenType::CloseParenthese
-//                    || token.getTokenType() == TokenType::OpenBrace;
-//            });
-//            if (result == tokens.rend())
-//            {
-//                throw std::runtime_error("Unexpected end of tokens");
-//            }
-//            if (result->getTokenType() == TokenType::CloseParenthese)
-//            {
-//                tokens.pop_back();
-//                auto type = parseType(tokens, context);
-//                if (tokens.back().getTokenType() != TokenType::CloseParenthese)
-//                {
-//                    throw std::runtime_error("Expected Close Parenthese after type cast");
-//                }
-//                tokens.pop_back();
-//                return CastExpression(line,
-//                                      column,
-//                                      std::pair<std::unique_ptr<IType>, std::unique_ptr<CastExpression>>{
-//                                          std::move(type),
-//                                          std::make_unique<CastExpression>(parseCastExpression(tokens, context))});
-//            }
-//        }
+        //        if (isType(*currToken, context) && closing->getTokenType() != TokenType::OpenBrace)
+        //        {
+        //            auto result = std::find_if(currToken + 1, tokens.rend(), [](const Token& token)
+        //            {
+        //                return token.getTokenType() == TokenType::CloseParenthese
+        //                    || token.getTokenType() == TokenType::OpenBrace;
+        //            });
+        //            if (result == tokens.rend())
+        //            {
+        //                throw std::runtime_error("Unexpected end of tokens");
+        //            }
+        //            if (result->getTokenType() == TokenType::CloseParenthese)
+        //            {
+        //                tokens.pop_back();
+        //                auto type = parseType(tokens, context);
+        //                if (tokens.back().getTokenType() != TokenType::CloseParenthese)
+        //                {
+        //                    throw std::runtime_error("Expected Close Parenthese after type cast");
+        //                }
+        //                tokens.pop_back();
+        //                return CastExpression(line,
+        //                                      column,
+        //                                      std::pair<std::unique_ptr<IType>, std::unique_ptr<CastExpression>>{
+        //                                          std::move(type),
+        //                                          std::make_unique<CastExpression>(parseCastExpression(tokens, context))});
+        //            }
+        //        }
     }
     return CastExpression(line, column, parseUnaryExpression(tokens, context));
 }
@@ -941,15 +1095,15 @@ UnaryExpression OpenCL::Parser::parseUnaryExpression(Tokens& tokens,
         currToken = tokens.back();
         if (currToken.getTokenType() == TokenType::OpenParenthese)
         {
-//            tokens.pop_back();
-//            auto type = parseType(tokens, context);
-//            currToken = tokens.back();
-//            if (currToken.getTokenType() != TokenType::CloseParenthese)
-//            {
-//                throw std::runtime_error("Expected Close Parenthese after type in sizeof");
-//            }
-//            tokens.pop_back();
-//            return UnaryExpression(line, column, UnaryExpressionSizeOf(line, column, std::move(type)));
+            //            tokens.pop_back();
+            //            auto type = parseType(tokens, context);
+            //            currToken = tokens.back();
+            //            if (currToken.getTokenType() != TokenType::CloseParenthese)
+            //            {
+            //                throw std::runtime_error("Expected Close Parenthese after type in sizeof");
+            //            }
+            //            tokens.pop_back();
+            //            return UnaryExpression(line, column, UnaryExpressionSizeOf(line, column, std::move(type)));
         }
         else
         {
@@ -1042,46 +1196,46 @@ PostFixExpression OpenCL::Parser::parsePostFixExpression(Tokens& tokens,
             {
                 throw std::runtime_error("Unexpected end of token");
             }
-//            if (isType(tokens.at(tokens.size() - 2), context))
-//            {
-//                auto line = currToken.getLine();
-//                auto column = currToken.getColumn();
-//                if (!stack.empty())
-//                {
-//                    throw std::runtime_error("Can't combine post fix expressions");
-//                }
-//                tokens.pop_back();
-//                auto type = parseType(tokens, context);
-//                currToken = tokens.back();
-//                if (currToken.getTokenType() != TokenType::CloseParenthese)
-//                {
-//                    throw std::runtime_error("Expected ) after type in type initialization");
-//                }
-//                tokens.pop_back();
-//                currToken = tokens.back();
-//                if (currToken.getTokenType() != TokenType::OpenBrace)
-//                {
-//                    throw std::runtime_error("Expected { after type around parenthesis");
-//                }
-//                tokens.pop_back();
-//                auto initializer = parseInitializerList(tokens, context);
-//                if (tokens.back().getTokenType() == TokenType::Comma)
-//                {
-//                    tokens.pop_back();
-//                }
-//                if (tokens.back().getTokenType() != TokenType::CloseBrace)
-//                {
-//                    throw std::runtime_error("Expected { after type around parenthesis");
-//                }
-//                tokens.pop_back();
-//                stack.push(std::make_unique<PostFixExpression>(line, column, PostFixExpressionTypeInitializer(line,
-//                                                                                                              column,
-//                                                                                                              std::move(
-//                                                                                                                  type),
-//                                                                                                              std::move(
-//                                                                                                                  initializer))));
-//            }
-//            else
+            //            if (isType(tokens.at(tokens.size() - 2), context))
+            //            {
+            //                auto line = currToken.getLine();
+            //                auto column = currToken.getColumn();
+            //                if (!stack.empty())
+            //                {
+            //                    throw std::runtime_error("Can't combine post fix expressions");
+            //                }
+            //                tokens.pop_back();
+            //                auto type = parseType(tokens, context);
+            //                currToken = tokens.back();
+            //                if (currToken.getTokenType() != TokenType::CloseParenthese)
+            //                {
+            //                    throw std::runtime_error("Expected ) after type in type initialization");
+            //                }
+            //                tokens.pop_back();
+            //                currToken = tokens.back();
+            //                if (currToken.getTokenType() != TokenType::OpenBrace)
+            //                {
+            //                    throw std::runtime_error("Expected { after type around parenthesis");
+            //                }
+            //                tokens.pop_back();
+            //                auto initializer = parseInitializerList(tokens, context);
+            //                if (tokens.back().getTokenType() == TokenType::Comma)
+            //                {
+            //                    tokens.pop_back();
+            //                }
+            //                if (tokens.back().getTokenType() != TokenType::CloseBrace)
+            //                {
+            //                    throw std::runtime_error("Expected { after type around parenthesis");
+            //                }
+            //                tokens.pop_back();
+            //                stack.push(std::make_unique<PostFixExpression>(line, column, PostFixExpressionTypeInitializer(line,
+            //                                                                                                              column,
+            //                                                                                                              std::move(
+            //                                                                                                                  type),
+            //                                                                                                              std::move(
+            //                                                                                                                  initializer))));
+            //            }
+            //            else
             {
                 auto line = currToken.getLine();
                 auto column = currToken.getColumn();
