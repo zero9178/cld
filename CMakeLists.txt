@@ -8,6 +8,10 @@ set(CMAKE_C_STANDARD 99)
 find_package(LLVM REQUIRED)
 find_package(Threads REQUIRED)
 
+if(MINGW)
+    add_compile_options("-Wa,-mbig-obj")
+endif()
+
 if(UNIX)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
     set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")

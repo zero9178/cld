@@ -62,7 +62,7 @@ TEST(Parser, RandomTokens)
                         output.close();
                         try
                         {
-                            auto node = OpenCL::Parser::buildTree(std::move(copy));
+                            auto node = OpenCL::Parser::buildTree(copy);
                         }
                         catch (std::exception&)
                         {
@@ -77,14 +77,14 @@ TEST(Parser,Failure1)
 {
     auto failure1 = "const * & ; main ] two next { next ; i typedef { ( current next Point . array ++ ) ( ; one } i } struct . , ) current three Point ( ; one = two . -> int getListCount = long first unsigned 5 long & one int current = three unsigned ; i = return ; ; Point ) next ) ; struct three long { ; 0 while [ current Point Point ; next ; const = two first = ; } } Point & 0 long * ( * { ; getListCount , return ";
     auto tokens = OpenCL::Lexer::tokenize(failure1);
-    ASSERT_ANY_THROW(OpenCL::Parser::buildTree(std::move(tokens)));
+    ASSERT_FALSE(OpenCL::Parser::buildTree(tokens));
 }
 
 TEST(Parser,Failure2)
 {
     auto failure2 = "struct main { } next ; int first ( & } ) three ; two long ; ( ; one . current next getListCount ; -> first next ; 5 = 0 long unsigned } { ; { long three getListCount array = unsigned next = ) * * ( ; struct current ] Point { i long current ; two = 0 one return , return i two ++ Point const const one next Point . , * ; = ; Point . typedef int = i [ Point } while ; ) ; & Point current three & ) ( ";
     auto tokens = OpenCL::Lexer::tokenize(failure2);
-    ASSERT_ANY_THROW(OpenCL::Parser::buildTree(std::move(tokens)));
+    ASSERT_FALSE(OpenCL::Parser::buildTree(tokens));
 }
 
 TEST(Parser,Declarations)
@@ -97,7 +97,7 @@ TEST(Parser,Declarations)
 }
 )";
     auto tokens = OpenCL::Lexer::tokenize(program);
-    ASSERT_ANY_THROW(OpenCL::Parser::buildTree(std::move(tokens)));
+    ASSERT_TRUE(OpenCL::Parser::buildTree(tokens));
 }
 
 TEST(Parser,InputFile)
@@ -118,6 +118,6 @@ TEST(Parser,InputFile)
     source.erase(std::remove(source.begin(),source.end(),'\r'),source.end());
 
     auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
-    auto node = OpenCL::Parser::buildTree(std::move(result));
-    SUCCEED();
+    auto node = OpenCL::Parser::buildTree(result);
+    ASSERT_TRUE(node);
 }

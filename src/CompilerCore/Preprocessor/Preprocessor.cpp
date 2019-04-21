@@ -348,13 +348,22 @@ namespace
                                 auto result = recursivePreprocess(iter, defines, line-1);
                                 OpenCL::Parser::ParsingContext context;
                                 auto tokens = OpenCL::Lexer::tokenize(result);
-                                auto expression = OpenCL::Parser::parseAssignmentExpression(tokens, context);
+                                auto begin = tokens.cbegin();
+                                auto expression = OpenCL::Parser::parseAssignmentExpression(begin,tokens.cend(),context);
+                                if(!expression)
+                                {
+                                    throw std::runtime_error("Invalid expression");
+                                }
                                 OpenCL::Codegen::ConstantEvaluator evaluator;
-
+                                auto value = *evaluator.visit(*expression);
+                                if(!value)
+                                {
+                                    throw std::runtime_error("Failed at evaluating constant expression");
+                                }
                                 bool isTrue = std::visit([](auto&& value)-> bool
                                                          {
                                                              return value != 0;
-                                                         },*evaluator.visit(expression));
+                                                         },*value);
                                 currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
                                 hasPreprocessorTokens = isTrue;
                                 iter = "";

@@ -2,6 +2,8 @@
 #define OPENCLPARSER_PARSER_HPP
 
 #include "Syntax.hpp"
+#include "Expected.hpp"
+#include "FailureReason.hpp"
 #include <map>
 
 namespace OpenCL::Parser
@@ -11,13 +13,13 @@ namespace OpenCL::Parser
     class ParsingContext final
     {
         std::vector<std::set<std::string>> m_currentScope;
-        std::map<std::string,std::int32_t> m_enumConstants;
+        std::map<std::string, std::int32_t> m_enumConstants;
 
     public:
 
         std::set<std::string> typedefs;
-        std::map<std::string,const OpenCL::Syntax::StructOrUnionSpecifier*> structOrUnions;
         std::set<std::string> functions;
+        std::map<std::string, const OpenCL::Syntax::StructOrUnionSpecifier*> structOrUnions;
 
         ParsingContext()
         {
@@ -64,15 +66,11 @@ namespace OpenCL::Parser
             m_currentScope.pop_back();
         }
 
-        void addEnumConstant(const std::string& name,std::int32_t value)
+        void addEnumConstant(const std::string& name, std::int32_t value)
         {
-            if(!m_enumConstants.insert({name,value}).second)
+            if (!m_enumConstants.insert({name, value}).second)
             {
                 throw std::runtime_error("Enum constant called " + name + " alreaedy exists");
-            }
-            if(functions.count(name))
-            {
-                throw std::runtime_error("Symbol " + name + " previously declared as function");
             }
         }
 
@@ -83,64 +81,165 @@ namespace OpenCL::Parser
         }
     };
 
-    OpenCL::Syntax::TranslationUnit buildTree(std::vector<Lexer::Token>&& tokens);
+    Expected<Syntax::TranslationUnit, FailureReason> buildTree(const std::vector<Lexer::Token>& tokens);
 
-    OpenCL::Syntax::TranslationUnit parseTranslationUnit(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::TranslationUnit, FailureReason> parseTranslationUnit(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
 
-    OpenCL::Syntax::ExternalDeclaration parseExternalDeclaration(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::ExternalDeclaration, FailureReason> parseExternalDeclaration(Tokens::const_iterator& begin,
+                                                                                  Tokens::const_iterator end,
+                                                                                  ParsingContext& context);
 
-    OpenCL::Syntax::Declaration parseDeclaration(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::FunctionDefinition, FailureReason> parseFunctionDefinition(Tokens::const_iterator& begin,
+                                                                                Tokens::const_iterator end,
+                                                                                ParsingContext& context);
 
-    OpenCL::Syntax::DeclarationSpecifier parseDeclarationSpecifier(Tokens& tokens,ParsingContext& context);
+    Expected<Syntax::Declaration, FailureReason> parseDeclaration(Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end,
+                                                                  ParsingContext& context);
 
-    OpenCL::Syntax::StructOrUnionSpecifier parseStructOrUnionSpecifier(Tokens& tokens,ParsingContext& context);
+    Expected<Syntax::DeclarationSpecifier, OpenCL::FailureReason> parseDeclarationSpecifier(
+        Tokens::const_iterator& begin,
+        Tokens::const_iterator end,
+        ParsingContext& context);
 
-    OpenCL::Syntax::EnumSpecifier parseEnumSpecifier(Tokens& tokens,ParsingContext& context);
+    Expected<Syntax::SpecifierQualifier, FailureReason> parseSpecifierQualifier(
+        Tokens::const_iterator& begin,
+        Tokens::const_iterator end,
+        ParsingContext& context);
 
-    OpenCL::Syntax::FunctionDefinition parseFunctionDefinition(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::Declarator, FailureReason> parseDeclarator(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, ParsingContext& context);
 
-    Syntax::CompoundItem parseCompoundItem(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::DirectDeclarator, FailureReason> parseDirectDeclarator(Tokens::const_iterator& begin,
+                                                                            Tokens::const_iterator end,
+                                                                            ParsingContext& context);
 
-    Syntax::Initializer parseInitializer(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::ParameterTypeList, FailureReason> parseParameterTypeList(Tokens::const_iterator& tokens,
+                                                                              Tokens::const_iterator end,
+                                                                              ParsingContext& context);
 
-    OpenCL::Syntax::InitializerList parseInitializerList(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::AbstractDeclarator, FailureReason> parseAbstractDeclarator(Tokens::const_iterator& tokens,
+                                                                                Tokens::const_iterator end,
+                                                                                ParsingContext& context);
 
-    Syntax::Statement parseStatement(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::DirectAbstractDeclarator,
+             FailureReason> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
+                                                          Tokens::const_iterator end,
+                                                          ParsingContext& context);
 
-    OpenCL::Syntax::Expression parseExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::ParameterList, FailureReason> parseParameterList(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end,
+                                                                      ParsingContext& context);
 
-    Syntax::AssignmentExpression parseAssignmentExpression(Tokens& tokens,
-                                                           ParsingContext& context);
+    Expected<Syntax::Pointer, FailureReason> parsePointer(Tokens::const_iterator& begin,
+                                                          Tokens::const_iterator end,
+                                                          ParsingContext& context);
 
-    OpenCL::Syntax::ConditionalExpression parseConditionalExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::StructOrUnionSpecifier, FailureReason> parseStructOrUnionSpecifier(Tokens::const_iterator& begin,
+                                                                                        Tokens::const_iterator end,
+                                                                                        ParsingContext& context);
 
-    OpenCL::Syntax::LogicalOrExpression parseLogicalOrExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::EnumSpecifier, FailureReason> parseEnumSpecifier(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end,
+                                                                      ParsingContext& context);
 
-    OpenCL::Syntax::LogicalAndExpression parseLogicalAndExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::EnumDeclaration, FailureReason> parseEnumDeclaration(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
 
-    OpenCL::Syntax::BitOrExpression parseBitOrExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::CompoundStatement, FailureReason> parseCompoundStatement(Tokens::const_iterator& begin,
+                                                                              Tokens::const_iterator end,
+                                                                              ParsingContext& context);
 
-    OpenCL::Syntax::BitXorExpression parseBitXorExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::CompoundItem, FailureReason> parseCompoundItem(Tokens::const_iterator& begin,
+                                                                    Tokens::const_iterator end,
+                                                                    ParsingContext& context);
 
-    OpenCL::Syntax::BitAndExpression parseBitAndExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::Initializer, FailureReason> parseInitializer(Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end,
+                                                                  ParsingContext& context);
 
-    OpenCL::Syntax::EqualityExpression parseEqualityExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::InitializerList, FailureReason> parseInitializerList(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
 
-    OpenCL::Syntax::RelationalExpression parseRelationalExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::Statement, FailureReason> parseStatement(Tokens::const_iterator& begin,
+                                                              Tokens::const_iterator end,
+                                                              ParsingContext& context);
 
-    OpenCL::Syntax::ShiftExpression parseShiftExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::Expression, FailureReason> parseExpression(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end,
+                                                                ParsingContext& context);
 
-    OpenCL::Syntax::AdditiveExpression parseAdditiveExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::AssignmentExpression, FailureReason> parseAssignmentExpression(Tokens::const_iterator& begin,
+                                                                                    Tokens::const_iterator end,
+                                                                                    ParsingContext& context);
 
-    OpenCL::Syntax::Term parseTerm(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::ConditionalExpression, FailureReason> parseConditionalExpression(Tokens::const_iterator& begin,
+                                                                                      Tokens::const_iterator end,
+                                                                                      ParsingContext& context);
 
-    OpenCL::Syntax::CastExpression parseCastExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::LogicalOrExpression, FailureReason> parseLogicalOrExpression(Tokens::const_iterator& begin,
+                                                                                  Tokens::const_iterator end,
+                                                                                  ParsingContext& context);
 
-    Syntax::UnaryExpression parseUnaryExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::LogicalAndExpression, FailureReason> parseLogicalAndExpression(Tokens::const_iterator& begin,
+                                                                                    Tokens::const_iterator end,
+                                                                                    ParsingContext& context);
 
-    Syntax::PostFixExpression parsePostFixExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::BitOrExpression, FailureReason> parseBitOrExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
 
-    Syntax::PrimaryExpression parsePrimaryExpression(Tokens& tokens, ParsingContext& context);
+    Expected<Syntax::BitXorExpression, FailureReason> parseBitXorExpression(Tokens::const_iterator& begin,
+                                                                            Tokens::const_iterator end,
+                                                                            ParsingContext& context);
+
+    Expected<Syntax::BitAndExpression, FailureReason> parseBitAndExpression(Tokens::const_iterator& begin,
+                                                                            Tokens::const_iterator end,
+                                                                            ParsingContext& context);
+
+    Expected<Syntax::EqualityExpression, FailureReason> parseEqualityExpression(Tokens::const_iterator& begin,
+                                                                                Tokens::const_iterator end,
+                                                                                ParsingContext& context);
+
+    Expected<Syntax::RelationalExpression, FailureReason> parseRelationalExpression(Tokens::const_iterator& begin,
+                                                                                    Tokens::const_iterator end,
+                                                                                    ParsingContext& context);
+
+    Expected<Syntax::ShiftExpression, FailureReason> parseShiftExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
+
+    Expected<Syntax::AdditiveExpression, FailureReason> parseAdditiveExpression(Tokens::const_iterator& begin,
+                                                                                Tokens::const_iterator end,
+                                                                                ParsingContext& context);
+
+    Expected<Syntax::Term, FailureReason> parseTerm(Tokens::const_iterator& begin,
+                                                    Tokens::const_iterator end,
+                                                    ParsingContext& context);
+
+    Expected<Syntax::TypeName, FailureReason> parseTypeName(Tokens::const_iterator& begin,
+                                                            Tokens::const_iterator end,
+                                                            ParsingContext& context);
+
+    Expected<Syntax::CastExpression, FailureReason> parseCastExpression(Tokens::const_iterator& begin,
+                                                                        Tokens::const_iterator end,
+                                                                        ParsingContext& context);
+
+    Expected<Syntax::UnaryExpression, FailureReason> parseUnaryExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end,
+                                                                          ParsingContext& context);
+
+    Expected<Syntax::PostFixExpression, FailureReason> parsePostFixExpression(Tokens::const_iterator& begin,
+                                                                              Tokens::const_iterator end,
+                                                                              ParsingContext& context);
+
+    Expected<Syntax::PrimaryExpression, FailureReason> parsePrimaryExpression(Tokens::const_iterator& begin,
+                                                                              Tokens::const_iterator end,
+                                                                              ParsingContext& context);
 }
 
 #endif //OPENCLPARSER_PARSER_HPP

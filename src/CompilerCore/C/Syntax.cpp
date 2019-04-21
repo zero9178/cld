@@ -541,8 +541,10 @@ OpenCL::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(std
 
 OpenCL::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(std::uint64_t line,
                                                                                    std::uint64_t column,
+                                                                                   TypeName&& typeName,
                                                                                    OpenCL::Syntax::InitializerList&& initializerList)
-    : Node(line, column), m_initializerList(std::make_unique<InitializerList>(std::move(initializerList)))
+    : Node(line, column), m_typeName(std::make_unique<TypeName>(std::move(typeName))),
+    m_initializerList(std::make_unique<InitializerList>(std::move(initializerList)))
 {
 
 }
@@ -550,6 +552,11 @@ OpenCL::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializ
 const OpenCL::Syntax::InitializerList& OpenCL::Syntax::PostFixExpressionTypeInitializer::getInitializerList() const
 {
     return *m_initializerList;
+}
+
+const OpenCL::Syntax::TypeName& OpenCL::Syntax::PostFixExpressionTypeInitializer::getTypeName() const
+{
+    return *m_typeName;
 }
 
 OpenCL::Syntax::PostFixExpression::PostFixExpression(std::uint64_t line,
@@ -772,7 +779,7 @@ const OpenCL::Syntax::Statement* OpenCL::Syntax::IfStatement::getElseBranch() co
 
 OpenCL::Syntax::CompoundStatement::CompoundStatement(std::uint64_t line,
                                                      std::uint64_t column,
-                                                     std::vector<CompoundItem> blockItems)
+                                                     std::vector<CompoundItem>&& blockItems)
     : Node(line, column), m_blockItems(std::move(blockItems))
 {}
 
@@ -1093,7 +1100,7 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::DefaultStatement::getStatement(
 
 OpenCL::Syntax::CaseStatement::CaseStatement(std::uint64_t line,
                                              std::uint64_t column,
-                                             constantVariant&& constant,
+                                             const constantVariant& constant,
                                              std::unique_ptr<Statement>&& statement)
     : Node(line, column), m_constant(constant), m_statement(std::move(statement))
 {
@@ -1284,11 +1291,11 @@ const std::vector<OpenCL::Syntax::StructOrUnionSpecifier::StructDeclaration>& Op
 
 OpenCL::Syntax::ParameterList::ParameterList(std::uint64_t line,
                                              std::uint64_t column,
-                                             std::vector<OpenCL::Syntax::ParameterList::ParameterDeclaration>&& parameterList)
+                                             std::vector<OpenCL::Syntax::ParameterDeclaration>&& parameterList)
     : Node(line, column), m_parameterList(std::move(parameterList))
 {}
 
-const std::vector<OpenCL::Syntax::ParameterList::ParameterDeclaration>& OpenCL::Syntax::ParameterList::getParameterList() const
+const std::vector<OpenCL::Syntax::ParameterDeclaration>& OpenCL::Syntax::ParameterList::getParameterList() const
 {
     return m_parameterList;
 }
@@ -1298,7 +1305,7 @@ OpenCL::Syntax::ParameterTypeList::ParameterTypeList(uint64_t line,
                                                      OpenCL::Syntax::ParameterList&& parameterList,
                                                      bool hasEllipse) : Node(line, column),
                                                                         m_parameterList(std::move(parameterList)),
-                                                                        hasEllipse(hasEllipse)
+                                                                        m_hasEllipse(hasEllipse)
 {}
 
 const OpenCL::Syntax::ParameterList& OpenCL::Syntax::ParameterTypeList::getParameterList() const
@@ -1306,9 +1313,9 @@ const OpenCL::Syntax::ParameterList& OpenCL::Syntax::ParameterTypeList::getParam
     return m_parameterList;
 }
 
-bool OpenCL::Syntax::ParameterTypeList::isHasEllipse() const
+bool OpenCL::Syntax::ParameterTypeList::hasEllipse() const
 {
-    return hasEllipse;
+    return m_hasEllipse;
 }
 
 OpenCL::Syntax::Pointer::Pointer(std::uint64_t line,
@@ -1603,4 +1610,15 @@ const std::vector<OpenCL::Syntax::Declaration>& OpenCL::Syntax::FunctionDefiniti
 const OpenCL::Syntax::CompoundStatement& OpenCL::Syntax::FunctionDefinition::getCompoundStatement() const
 {
     return m_compoundStatement;
+}
+
+OpenCL::Syntax::DirectAbstractDeclarator::DirectAbstractDeclarator(std::uint64_t line,
+                                                                   std::uint64_t column,
+                                                                   OpenCL::Syntax::DirectAbstractDeclarator::variant&& variant)
+    : Node(line, column), m_variant(std::move(variant))
+{}
+
+const OpenCL::Syntax::DirectAbstractDeclarator::variant& OpenCL::Syntax::DirectAbstractDeclarator::getVariant() const
+{
+    return m_variant;
 }

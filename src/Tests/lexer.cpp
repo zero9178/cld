@@ -88,7 +88,6 @@ TEST(Lexer,IntegerLiterals)
 TEST(Lexer,AmbiguousOperators)
 {
     auto result = OpenCL::Lexer::tokenize(". ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>=");
-    std::reverse(result.begin(),result.end());
     ASSERT_EQ(result.size(),30);
     EXPECT_EQ(result.at(0).getTokenType(),OpenCL::Lexer::TokenType::Dot);
     EXPECT_EQ(result.at(1).getTokenType(),OpenCL::Lexer::TokenType::Ellipse);
@@ -132,20 +131,10 @@ TEST(Lexer,Comments)
     ASSERT_EQ(result.size(),2);
     EXPECT_EQ(result.at(0).getTokenType(),OpenCL::Lexer::TokenType::Addition);
     EXPECT_EQ(result.at(1).getTokenType(),OpenCL::Lexer::TokenType::Addition);
+    EXPECT_EQ(result.at(1).getLine(),1);
 }
 
 TEST(Lexer,Tests)
 {
-    auto text = R"(int main()
-    {
-        TreeNode root = {"Markus", "Boeck","Herr",10000,"Kammersdorf",2033};
-        TreeNode newNode = {"Lukas","Damianschitz"};
-        TreeNode newNode2 = {"Philip", "Oberndorfer"};
-        addNode(&root, &newNode);
-        addNode(&root, &newNode2);
-        return newNode.height;
-    })";
-    auto result = OpenCL::Lexer::tokenize(text);
-    std::reverse(result.begin(),result.end());
-    //ASSERT_EQ(result.size(),);
+
 }

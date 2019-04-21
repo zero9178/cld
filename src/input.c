@@ -58,7 +58,7 @@ int strcmp(const char* lhs, const char* rhs)
     return 0;
 }
 
-int abs(int number)
+int abs(number) int number;
 {
     return number < 0 ? -number : number;
 }

@@ -749,7 +749,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
         while (!handeled);
     }
 
-    std::reverse(result.begin(), result.end());
     return result;
 }
 

@@ -217,17 +217,17 @@ namespace
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     return makeReturn(std::visit([](auto&& value) -> Codegen::ConstRetType
-                          {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr(!std::is_same_v<T, std::string>)
-                              {
-                                  return value;
-                              }
-                              else
-                              {
-                                  throw std::runtime_error("Can't use string literal in constant expression");
-                              }
-                          }, node.getValue()));
+                                 {
+                                     using T = std::decay_t<decltype(value)>;
+                                     if constexpr(!std::is_same_v<T, std::string>)
+                                     {
+                                         return Codegen::ConstRetType::ValueType(value);
+                                     }
+                                     else
+                                     {
+                                         return FailureReason("Can't use string literal in constant expression");
+                                     }
+                                 }, node.getValue()));
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
@@ -249,63 +249,65 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
 {
     auto& ref = visit(node.getUnaryExpression());
     auto value = *ref;
+    if(!value)
+    {
+        return ref;
+    }
     switch (node.getAnOperator())
     {
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
-        throw std::runtime_error("Unary Operator not allowed in constant expression");
+        return makeReturn(FailureReason("Unary Operator not allowed in constant expression"));
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:return ref;
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
     {
         return makeReturn(std::visit([](auto&& value) -> ConstRetType
-                              {
-                                  using T = std::decay_t<decltype(value)>;
-                                  if constexpr(hasNegate<T>{})
-                                  {
-                                      return -value;
-                                  }
-                                  else
-                                  {
-                                      throw std::runtime_error("Can't apply - to constant operator");
-                                      return {};
-                                  }
-                              }, value));
+                                     {
+                                         using T = std::decay_t<decltype(value)>;
+                                         if constexpr(hasNegate<T>{})
+                                         {
+                                             return Codegen::ConstRetType::ValueType(-value);
+                                         }
+                                         else
+                                         {
+                                             return FailureReason("Can't apply - to constant operator");
+                                         }
+                                     }, *value));
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
     {
         return makeReturn(std::visit([](auto&& value) -> ConstRetType
-                              {
-                                  using T = std::decay_t<decltype(value)>;
-                                  if constexpr(hasBitNegate<T>{})
-                                  {
-                                      return ~value;
-                                  }
-                                  else
-                                  {
-                                      throw std::runtime_error("Can't apply - to constant operator");
-                                      return {};
-                                  }
-                              }, value));
+                                     {
+                                         using T = std::decay_t<decltype(value)>;
+                                         if constexpr(hasBitNegate<T>{})
+                                         {
+                                             return Codegen::ConstRetType::ValueType(~value);
+                                         }
+                                         else
+                                         {
+                                             return FailureReason("Can't apply - to constant operator");
+                                         }
+                                     }, *value));
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
     {
         return makeReturn(std::visit([](auto&& value) -> ConstRetType
-                              {
-                                  using T = std::decay_t<decltype(value)>;
-                                  if constexpr(hasLogicNegate<T>{})
-                                  {
-                                      return !value;
-                                  }
-                                  else
-                                  {
-                                      throw std::runtime_error("Can't apply - to constant operator");
-                                      return {};
-                                  }
-                              }, value));
+                                     {
+                                         using T = std::decay_t<decltype(value)>;
+                                         if constexpr(hasLogicNegate<T>{})
+                                         {
+                                             return Codegen::ConstRetType::ValueType(!value);
+                                         }
+                                         else
+                                         {
+                                             return FailureReason("Can't apply - to constant operator");
+                                         }
+                                     }, *value));
     }
     }
+    return ref;
 }
 
 //namespace
@@ -366,113 +368,114 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
 //    }
 //}
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf&)
 {
-//    auto sizeOf = [this](const std::shared_ptr<Syntax::IType>& ptr, auto&& self) -> OpenCL::Codegen::ConstRetType
-//    {
-//        if (auto primitives = std::dynamic_pointer_cast<Syntax::PrimitiveType>(ptr))
-//        {
-//            return primitives->getBitCount() / 8;
-//        }
-//        else if (std::dynamic_pointer_cast<Syntax::PointerType>(ptr))
-//        {
-//            return 8;
-//        }
-//        else if (std::dynamic_pointer_cast<Syntax::EnumType>(ptr))
-//        {
-//            return 4;
-//        }
-//        else if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(ptr))
-//        {
-//            return std::visit([&array](auto&& value) -> ConstRetType
-//                              {
-//                                  using T = std::decay_t<decltype(value)>;
-//                                  if constexpr(hasMultiply<std::size_t, T>{})
-//                                  {
-//                                      return array->getSize() * value;
-//                                  }
-//                                  else
-//                                  {
-//                                      throw std::runtime_error("Invalid operands for multiply in constant expression");
-//                                  }
-//                                  return {};
-//                              }, self(array->getType()->clone(), self));
-//        }
-//        else if (auto structType = std::dynamic_pointer_cast<Syntax::StructType>(ptr))
-//        {
-//            auto result = m_structOrUnions.find(structType->getName());
-//            if (result == m_structOrUnions.end() || result->second->isUnion())
-//            {
-//                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-//            }
-//            std::size_t currentSize = 0;
-//            for (auto& iter : result->second->getTypes())
-//            {
-//                auto alignment = getAlignment(iter.first, m_structOrUnions);
-//                auto rest = currentSize % alignment;
-//                if (rest != 0)
-//                {
-//                    currentSize += alignment - rest;
-//                }
-//                currentSize += std::visit([](auto&& value) -> std::size_t
-//                                          {
-//                                              using T = std::decay_t<decltype(value)>;
-//                                              if constexpr(std::is_convertible_v<T, std::size_t>)
-//                                              {
-//                                                  return value;
-//                                              }
-//                                              else
-//                                              {
-//                                                  throw std::runtime_error("Size returned as void*");
-//                                              }
-//                                              return {};
-//                                          }, self(iter.first, self));
-//            }
-//            return currentSize;
-//        }
-//        else
-//        {
-//            auto unionType = std::dynamic_pointer_cast<Syntax::UnionType>(ptr);
-//            auto result = m_structOrUnions.find(unionType->getName());
-//            if (result == m_structOrUnions.end() || !result->second->isUnion())
-//            {
-//                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-//            }
-//            std::vector<std::size_t> sizes;
-//            std::transform(result->second->getTypes().begin(),
-//                           result->second->getTypes().end(),
-//                           std::back_inserter(sizes),
-//                           [&self](const std::pair<std::shared_ptr<Syntax::IType>, std::string>& pair)
-//                           {
-//                               return std::visit([](auto&& value) -> std::size_t
-//                                                 {
-//                                                     using T = std::decay_t<decltype(value)>;
-//                                                     if constexpr(std::is_convertible_v<T, std::size_t>)
-//                                                     {
-//                                                         return value;
-//                                                     }
-//                                                     else
-//                                                     {
-//                                                         throw std::runtime_error("Size returned as void*");
-//                                                     }
-//                                                     return {};
-//                                                 }, self(pair.first, self));
-//                           });
-//            return *std::max_element(sizes.begin(), sizes.end());
-//        }
-//    };
-//    m_return = std::visit([&sizeOf](auto&& value) -> OpenCL::Codegen::ConstRetType
-//                          {
-//                              using T = std::decay_t<decltype(value)>;
-//                              if constexpr(std::is_same_v<T, std::shared_ptr<Syntax::IType>>)
-//                              {
-//                                  return sizeOf(value, sizeOf);
-//                              }
-//                              else
-//                              {
-//                                  throw std::runtime_error("Not implemented yet");
-//                              }
-//                          }, node.getUnaryOrType());
+    //    auto sizeOf = [this](const std::shared_ptr<Syntax::IType>& ptr, auto&& self) -> OpenCL::Codegen::ConstRetType
+    //    {
+    //        if (auto primitives = std::dynamic_pointer_cast<Syntax::PrimitiveType>(ptr))
+    //        {
+    //            return primitives->getBitCount() / 8;
+    //        }
+    //        else if (std::dynamic_pointer_cast<Syntax::PointerType>(ptr))
+    //        {
+    //            return 8;
+    //        }
+    //        else if (std::dynamic_pointer_cast<Syntax::EnumType>(ptr))
+    //        {
+    //            return 4;
+    //        }
+    //        else if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(ptr))
+    //        {
+    //            return std::visit([&array](auto&& value) -> ConstRetType
+    //                              {
+    //                                  using T = std::decay_t<decltype(value)>;
+    //                                  if constexpr(hasMultiply<std::size_t, T>{})
+    //                                  {
+    //                                      return array->getSize() * value;
+    //                                  }
+    //                                  else
+    //                                  {
+    //                                      throw std::runtime_error("Invalid operands for multiply in constant expression");
+    //                                  }
+    //                                  return {};
+    //                              }, self(array->getType()->clone(), self));
+    //        }
+    //        else if (auto structType = std::dynamic_pointer_cast<Syntax::StructType>(ptr))
+    //        {
+    //            auto result = m_structOrUnions.find(structType->getName());
+    //            if (result == m_structOrUnions.end() || result->second->isUnion())
+    //            {
+    //                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+    //            }
+    //            std::size_t currentSize = 0;
+    //            for (auto& iter : result->second->getTypes())
+    //            {
+    //                auto alignment = getAlignment(iter.first, m_structOrUnions);
+    //                auto rest = currentSize % alignment;
+    //                if (rest != 0)
+    //                {
+    //                    currentSize += alignment - rest;
+    //                }
+    //                currentSize += std::visit([](auto&& value) -> std::size_t
+    //                                          {
+    //                                              using T = std::decay_t<decltype(value)>;
+    //                                              if constexpr(std::is_convertible_v<T, std::size_t>)
+    //                                              {
+    //                                                  return value;
+    //                                              }
+    //                                              else
+    //                                              {
+    //                                                  throw std::runtime_error("Size returned as void*");
+    //                                              }
+    //                                              return {};
+    //                                          }, self(iter.first, self));
+    //            }
+    //            return currentSize;
+    //        }
+    //        else
+    //        {
+    //            auto unionType = std::dynamic_pointer_cast<Syntax::UnionType>(ptr);
+    //            auto result = m_structOrUnions.find(unionType->getName());
+    //            if (result == m_structOrUnions.end() || !result->second->isUnion())
+    //            {
+    //                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
+    //            }
+    //            std::vector<std::size_t> sizes;
+    //            std::transform(result->second->getTypes().begin(),
+    //                           result->second->getTypes().end(),
+    //                           std::back_inserter(sizes),
+    //                           [&self](const std::pair<std::shared_ptr<Syntax::IType>, std::string>& pair)
+    //                           {
+    //                               return std::visit([](auto&& value) -> std::size_t
+    //                                                 {
+    //                                                     using T = std::decay_t<decltype(value)>;
+    //                                                     if constexpr(std::is_convertible_v<T, std::size_t>)
+    //                                                     {
+    //                                                         return value;
+    //                                                     }
+    //                                                     else
+    //                                                     {
+    //                                                         throw std::runtime_error("Size returned as void*");
+    //                                                     }
+    //                                                     return {};
+    //                                                 }, self(pair.first, self));
+    //                           });
+    //            return *std::max_element(sizes.begin(), sizes.end());
+    //        }
+    //    };
+    //    m_return = std::visit([&sizeOf](auto&& value) -> OpenCL::Codegen::ConstRetType
+    //                          {
+    //                              using T = std::decay_t<decltype(value)>;
+    //                              if constexpr(std::is_same_v<T, std::shared_ptr<Syntax::IType>>)
+    //                              {
+    //                                  return sizeOf(value, sizeOf);
+    //                              }
+    //                              else
+    //                              {
+    //                                  throw std::runtime_error("Not implemented yet");
+    //                              }
+    //                          }, node.getUnaryOrType());
+    throw std::runtime_error("Not implemented yet");
 }
 
 namespace
@@ -489,96 +492,94 @@ namespace
                               }
                               else
                               {
-                                  throw std::runtime_error("Invalid constant cast");
+                                  return OpenCL::FailureReason("Invalid constant cast");
                               }
-                              return {};
                           }, variant);
     }
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
 {
-//    m_return = std::visit([this](auto&& value) -> ConstRetType
-//                          {
-//                              using T = std::decay_t<decltype(value)>;
-//                              if constexpr(std::is_same_v<T, OpenCL::Syntax::UnaryExpression>)
-//                              {
-//                                  value.accept(*this);
-//                                  return std::get<ConstRetType>(m_return);
-//                              }
-//                              else
-//                              {
-//                                  value.second->accept(*this);
-//                                  auto old = std::get<ConstRetType>(m_return);
-//                                  if (std::shared_ptr<Syntax::PrimitiveType>
-//                                          primitive = std::dynamic_pointer_cast<Syntax::PrimitiveType>(value
-//                                                                                                           .first);primitive)
-//                                  {
-//                                      if (primitive->isFloatingPoint())
-//                                      {
-//                                          if (primitive->getBitCount() == 32)
-//                                          {
-//                                              return castVariant<float>(old);
-//                                          }
-//                                          else if (primitive->getBitCount() == 64)
-//                                          {
-//                                              return castVariant<double>(old);
-//                                          }
-//                                          else
-//                                          {
-//                                              throw std::runtime_error("Invalid bitcount for floating point type");
-//                                          }
-//                                      }
-//                                      else
-//                                      {
-//                                          switch (primitive->getBitCount())
-//                                          {
-//                                          case 8:
-//                                              if (primitive->isSigned())
-//                                              {
-//                                                  return castVariant<std::int8_t>(old);
-//                                              }
-//                                              else
-//                                              {
-//                                                  return castVariant<std::uint8_t>(old);
-//                                              }
-//                                          case 16:
-//                                              if (primitive->isSigned())
-//                                              {
-//                                                  return castVariant<std::int16_t>(old);
-//                                              }
-//                                              else
-//                                              {
-//                                                  return castVariant<std::uint16_t>(old);
-//                                              }
-//                                          case 32:
-//                                              if (primitive->isSigned())
-//                                              {
-//                                                  return castVariant<std::int32_t>(old);
-//                                              }
-//                                              else
-//                                              {
-//                                                  return castVariant<std::uint32_t>(old);
-//                                              }
-//                                          case 64:
-//                                              if (primitive->isSigned())
-//                                              {
-//                                                  return castVariant<std::int64_t>(old);
-//                                              }
-//                                              else
-//                                              {
-//                                                  return castVariant<std::uint64_t>(old);
-//                                              }
-//                                          default:throw std::runtime_error("Invalid bitcount for integer type");
-//                                          }
-//                                      }
-//                                  }
-//                                  else
-//                                  {
-//                                      throw std::runtime_error("Not implemented yet");
-//                                  }
-//                              }
-//                          }, node.getUnaryOrCast());
+    return std::visit([this](auto&& value) -> OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+                      {
+                          using T = std::decay_t<decltype(value)>;
+                          if constexpr(std::is_same_v<T, OpenCL::Syntax::UnaryExpression>)
+                          {
+                              return visit(value);
+                          }
+                          else
+                          {
+                              //                                  value.second->accept(*this);
+                              //                                  auto old = std::get<ConstRetType>(m_return);
+                              //                                  if (std::shared_ptr<Syntax::PrimitiveType>
+                              //                                          primitive = std::dynamic_pointer_cast<Syntax::PrimitiveType>(value
+                              //                                                                                                           .first);primitive)
+                              //                                  {
+                              //                                      if (primitive->isFloatingPoint())
+                              //                                      {
+                              //                                          if (primitive->getBitCount() == 32)
+                              //                                          {
+                              //                                              return castVariant<float>(old);
+                              //                                          }
+                              //                                          else if (primitive->getBitCount() == 64)
+                              //                                          {
+                              //                                              return castVariant<double>(old);
+                              //                                          }
+                              //                                          else
+                              //                                          {
+                              //                                              throw std::runtime_error("Invalid bitcount for floating point type");
+                              //                                          }
+                              //                                      }
+                              //                                      else
+                              //                                      {
+                              //                                          switch (primitive->getBitCount())
+                              //                                          {
+                              //                                          case 8:
+                              //                                              if (primitive->isSigned())
+                              //                                              {
+                              //                                                  return castVariant<std::int8_t>(old);
+                              //                                              }
+                              //                                              else
+                              //                                              {
+                              //                                                  return castVariant<std::uint8_t>(old);
+                              //                                              }
+                              //                                          case 16:
+                              //                                              if (primitive->isSigned())
+                              //                                              {
+                              //                                                  return castVariant<std::int16_t>(old);
+                              //                                              }
+                              //                                              else
+                              //                                              {
+                              //                                                  return castVariant<std::uint16_t>(old);
+                              //                                              }
+                              //                                          case 32:
+                              //                                              if (primitive->isSigned())
+                              //                                              {
+                              //                                                  return castVariant<std::int32_t>(old);
+                              //                                              }
+                              //                                              else
+                              //                                              {
+                              //                                                  return castVariant<std::uint32_t>(old);
+                              //                                              }
+                              //                                          case 64:
+                              //                                              if (primitive->isSigned())
+                              //                                              {
+                              //                                                  return castVariant<std::int64_t>(old);
+                              //                                              }
+                              //                                              else
+                              //                                              {
+                              //                                                  return castVariant<std::uint64_t>(old);
+                              //                                              }
+                              //                                          default:throw std::runtime_error("Invalid bitcount for integer type");
+                              //                                          }
+                              //                                      }
+                              //                                  }
+                              //                                  else
+                              {
+                                  throw std::runtime_error("Not implemented yet");
+                              }
+                          }
+                      }, node.getVariant());
 }
 
 #pragma GCC diagnostic push
@@ -586,11 +587,16 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
 {
-    if(node.getOptionalCastExpressions().empty())
+    if (node.getOptionalCastExpressions().empty())
     {
         return visit(node.getCastExpression());
     }
-    auto value = visit(node.getCastExpression());
+    auto& ref = visit(node.getCastExpression());
+    auto value = ref;
+    if(!*value)
+    {
+        return ref;
+    }
     for (auto&[op, exp] : node.getOptionalCastExpressions())
     {
         switch (op)
@@ -598,70 +604,79 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
         case Syntax::Term::BinaryDotOperator::BinaryMultiply:
         {
             value = makeReturn(std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
-                                          return std::visit([lhs](auto&& rhs) -> ConstRetType
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasMultiply<T1, T2>{})
+                                          {
+                                              using T1 = std::decay_t<decltype(lhs)>;
+                                              auto second = *visit(*exp);
+                                              if(!second)
+                                              {
+                                                  return second;
+                                              }
+                                              return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                                 {
-                                                                    return lhs * rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            },second.value());
-                                      }, value.value()));
+                                                                    using T2 = std::decay_t<decltype(rhs)>;
+                                                                    if constexpr(hasMultiply<T1, T2>{})
+                                                                    {
+                                                                        return ConstRetType::ValueType(lhs * rhs);
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        return FailureReason(
+                                                                            "Can't apply plus to operands in constant expression");
+                                                                    }
+                                                                }, *second);
+                                          }, **value));
         }
             break;
         case Syntax::Term::BinaryDotOperator::BinaryDivide:
         {
             value = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
-                                          return std::visit([lhs](auto&& rhs) -> ConstRetType
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasDivide<T1, T2>{})
-                                                                {
-                                                                    return lhs / rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, second.value());
-                                      }, value.value());
+                               {
+                                   using T1 = std::decay_t<decltype(lhs)>;
+                                   auto second = *visit(*exp);
+                                   if(!second)
+                                   {
+                                       return second;
+                                   }
+                                   return std::visit([lhs](auto&& rhs) -> ConstRetType
+                                                     {
+                                                         using T2 = std::decay_t<decltype(rhs)>;
+                                                         if constexpr(hasDivide<T1, T2>{})
+                                                         {
+                                                             return ConstRetType::ValueType(lhs / rhs);
+                                                         }
+                                                         else
+                                                         {
+                                                             return FailureReason(
+                                                                 "Can't apply plus to operands in constant expression");
+                                                         }
+                                                     }, *second);
+                               }, **value);
         }
             break;
         case Syntax::Term::BinaryDotOperator::BinaryRemainder:
         {
             value = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
-                                      {
-                                          using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
-                                          return std::visit([lhs](auto&& rhs) -> ConstRetType
-                                                            {
-                                                                using T2 = std::decay_t<decltype(rhs)>;
-                                                                if constexpr(hasModulo<T1, T2>{})
-                                                                {
-                                                                    return lhs % rhs;
-                                                                }
-                                                                else
-                                                                {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
-                                                                }
-                                                            }, second.value());
-                                      }, value.value());
+                               {
+                                   using T1 = std::decay_t<decltype(lhs)>;
+                                   auto second = visit(*exp);
+                                   if(!*second)
+                                   {
+                                       return *second;
+                                   }
+                                   return std::visit([lhs](auto&& rhs) -> ConstRetType
+                                                     {
+                                                         using T2 = std::decay_t<decltype(rhs)>;
+                                                         if constexpr(hasModulo<T1, T2>{})
+                                                         {
+                                                             return ConstRetType::ValueType(lhs % rhs);
+                                                         }
+                                                         else
+                                                         {
+                                                             return FailureReason(
+                                                                 "Can't apply plus to operands in constant expression");
+                                                         }
+                                                     }, **second);
+                               }, **value);
         }
             break;
         }
@@ -675,8 +690,12 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getTerm());
     }
-
-    auto currentValue = visit(node.getTerm());
+    auto& ref = visit(node.getTerm());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto&[op, exp] : node.getOptionalTerms())
     {
         switch (op)
@@ -687,21 +706,24 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
                                           auto second = visit(*exp);
+                                          if(!*second)
+                                          {
+                                              return *second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasPlus<T1, T2>{})
                                                                 {
-                                                                    return lhs + rhs;
+                                                                    return ConstRetType::ValueType(lhs + rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            }, second.value());
-                                      }, currentValue.value());
+                                                            }, **second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::AdditiveExpression::BinaryDashOperator::BinaryMinus:
@@ -710,6 +732,10 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
                                           auto second = visit(*exp);
+                                          if(!*second)
+                                          {
+                                              return *second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
@@ -718,23 +744,21 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                                                 {
                                                                     if constexpr(hasMinus<T1, T2>{})
                                                                     {
-                                                                        return lhs - rhs;
+                                                                        return ConstRetType::ValueType(lhs - rhs);
                                                                     }
                                                                     else
                                                                     {
-                                                                        throw std::runtime_error(
-                                                                            "Can't apply plus to operands in constant expression");
-                                                                        return {};
+                                                                        return FailureReason(
+                                                                            "Can't apply minux to operands in constant expression");
                                                                     }
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
+                                                                    return FailureReason(
+                                                                        "Can't apply minux to operands in constant expression");
                                                                 }
-                                                            },second.value());
-                                      }, currentValue.value());
+                                                            }, **second);
+                                      }, **currentValue);
         }
             break;
         }
@@ -748,7 +772,8 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getAdditiveExpression());
     }
-    auto currentValue = visit(node.getAdditiveExpression());
+    auto& ref = visit(node.getAdditiveExpression());
+    auto currentValue = ref;
     for (auto&[op, exp] : node.getOptionalAdditiveExpressions())
     {
         switch (op)
@@ -759,21 +784,24 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
                                           auto second = visit(*exp);
+                                          if(!*second)
+                                          {
+                                              return *second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasLShift<T1, T2>{})
                                                                 {
-                                                                    return lhs << rhs;
+                                                                    return ConstRetType::ValueType(lhs << rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            },second.value());
-                                      }, currentValue.value());
+                                                            }, **second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::ShiftExpression::ShiftOperator::Right:
@@ -782,21 +810,24 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
                                           auto second = visit(*exp);
+                                          if(!*second)
+                                          {
+                                              return *second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasRShift<T1, T2>{})
                                                                 {
-                                                                    return lhs >> rhs;
+                                                                    return ConstRetType::ValueType(lhs >> rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            }, second.value());
-                                      }, *currentValue);
+                                                            }, **second);
+                                      }, **currentValue);
         }
             break;
         }
@@ -810,28 +841,36 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getEqualityExpression());
     }
-    auto currentValue = visit(node.getEqualityExpression());
+    auto& ref = visit(node.getEqualityExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto& exp : node.getOptionalEqualityExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
                                       auto second = visit(exp);
+                                      if(!*second)
+                                      {
+                                          return *second;
+                                      }
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
                                                             if constexpr(hasBitAnd<T1, T2>{})
                                                             {
-                                                                return lhs & rhs;
+                                                                return ConstRetType::ValueType(lhs & rhs);
                                                             }
                                                             else
                                                             {
-                                                                throw std::runtime_error(
+                                                                return FailureReason(
                                                                     "Can't apply plus to operands in constant expression");
-                                                                return {};
                                                             }
-                                                        },*second);
-                                  }, *currentValue);
+                                                        }, **second);
+                                  }, **currentValue);
     }
     return makeReturn(*currentValue);
 }
@@ -842,7 +881,12 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getBitAndExpression());
     }
-    auto currentValue = visit(node.getBitAndExpression());
+    auto& ref = visit(node.getBitAndExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto& exp : node.getOptionalBitAndExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
@@ -854,16 +898,15 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
                                                             using T2 = std::decay_t<decltype(rhs)>;
                                                             if constexpr(hasBitXor<T1, T2>{})
                                                             {
-                                                                return lhs ^ rhs;
+                                                                return ConstRetType::ValueType(lhs ^ rhs);
                                                             }
                                                             else
                                                             {
-                                                                throw std::runtime_error(
+                                                                return FailureReason(
                                                                     "Can't apply plus to operands in constant expression");
-                                                                return {};
                                                             }
-                                                        }, *second);
-                                  }, *currentValue);
+                                                        }, **second);
+                                  }, **currentValue);
     }
     return makeReturn(*currentValue);
 }
@@ -880,54 +923,65 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = visit(exp);
+                                      auto second = *visit(exp);
+                                      if(!second)
+                                      {
+                                          return second;
+                                      }
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
                                                             if constexpr(hasBitOr<T1, T2>{})
                                                             {
-                                                                return lhs | rhs;
+                                                                return ConstRetType::ValueType(lhs | rhs);
                                                             }
                                                             else
                                                             {
-                                                                throw std::runtime_error(
+                                                                return FailureReason(
                                                                     "Can't apply plus to operands in constant expression");
-                                                                return {};
                                                             }
                                                         }, *second);
-                                  }, *currentValue);
+                                  }, **currentValue);
     }
     return makeReturn(*currentValue);
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
-    if(node.getOptionalBitOrExpressions().empty())
+    if (node.getOptionalBitOrExpressions().empty())
     {
         return visit(node.getBitOrExpression());
     }
-    auto currentValue = visit(node.getBitOrExpression());
+    auto& ref = visit(node.getBitOrExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto& exp : node.getOptionalBitOrExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = visit(exp);
+                                      auto second = *visit(exp);
+                                      if(!second)
+                                      {
+                                          return second;
+                                      }
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
                                                             if constexpr(hasLogicAnd<T1, T2>{})
                                                             {
-                                                                return lhs && rhs;
+                                                                return ConstRetType::ValueType(lhs && rhs);
                                                             }
                                                             else
                                                             {
-                                                                throw std::runtime_error(
+                                                                return FailureReason(
                                                                     "Can't apply plus to operands in constant expression");
-                                                                return {};
                                                             }
-                                                        },*second);
-                                  }, *currentValue);
+                                                        }, *second);
+                                  }, **currentValue);
     }
     return makeReturn(*currentValue);
 }
@@ -938,40 +992,48 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getAndExpression());
     }
-    auto currentValue = visit(node.getAndExpression());
+    auto& ref = visit(node.getAndExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto& exp : node.getOptionalAndExpressions())
     {
         currentValue = std::visit([&exp, this](auto&& lhs) -> ConstRetType
                                   {
                                       using T1 = std::decay_t<decltype(lhs)>;
-                                      auto second = visit(exp);
+                                      auto second = *visit(exp);
                                       return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                         {
                                                             using T2 = std::decay_t<decltype(rhs)>;
                                                             if constexpr(hasLogicOr<T1, T2>{})
                                                             {
-                                                                return lhs || rhs;
+                                                                return ConstRetType::ValueType(lhs || rhs);
                                                             }
                                                             else
                                                             {
-                                                                throw std::runtime_error(
+                                                                return FailureReason(
                                                                     "Can't apply plus to operands in constant expression");
-                                                                return {};
                                                             }
-                                                        },*second);
-                                  }, *currentValue);
+                                                        }, *second);
+                                  }, **currentValue);
     }
     return makeReturn(*currentValue);
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
-
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
-        auto value = visit(node.getLogicalOrExpression());
+        auto& ref = visit(node.getLogicalOrExpression());
+        auto value = ref;
+        if(!*value)
+        {
+            return ref;
+        }
         bool first = std::visit([](auto&& value) -> bool
-                                { return value; }, *value);
+                                { return value; }, **value);
         if (first)
         {
             return visit(*node.getOptionalExpression());
@@ -996,7 +1058,12 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getShiftExpression());
     }
-    auto currentValue = visit(node.getShiftExpression());
+    auto& ref = visit(node.getShiftExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto&[op, exp] : node.getOptionalShiftExpressions())
     {
         switch (op)
@@ -1006,22 +1073,24 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasGT<T1, T2>{})
                                                                 {
-                                                                    return lhs > rhs;
+                                                                    return ConstRetType::ValueType(lhs > rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
+                                                                    return FailureReason("Can't > to operands in constant expression");
                                                                 }
-                                                            },*second);
-                                      }, *currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
@@ -1029,22 +1098,25 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasGE<T1, T2>{})
                                                                 {
-                                                                    return lhs > rhs;
+                                                                    return ConstRetType::ValueType(lhs > rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
-                                                                        "Can't apply plus to operands in constant expression");
-                                                                    return {};
+                                                                    return FailureReason(
+                                                                        "Can't apply >= to operands in constant expression");
                                                                 }
-                                                            },*second);
-                                      }, *currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::LessThan:
@@ -1052,22 +1124,25 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasLT<T1, T2>{})
                                                                 {
-                                                                    return lhs < rhs;
+                                                                    return ConstRetType::ValueType(lhs < rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            },*second);
-                                      }, *currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
@@ -1075,22 +1150,25 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasLE<T1, T2>{})
                                                                 {
-                                                                    return lhs <= rhs;
+                                                                    return ConstRetType::ValueType(lhs <= rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            },*second);
-                                      },* currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         }
@@ -1104,7 +1182,12 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
     {
         return visit(node.getRelationalExpression());
     }
-    auto currentValue = visit(node.getRelationalExpression());
+    auto& ref = visit(node.getRelationalExpression());
+    auto currentValue = ref;
+    if(!*currentValue)
+    {
+        return ref;
+    }
     for (auto&[op, exp] : node.getOptionalRelationalExpressions())
     {
         switch (op)
@@ -1114,22 +1197,25 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasEQ<T1, T2>{})
                                                                 {
-                                                                    return lhs == rhs;
+                                                                    return ConstRetType::ValueType(lhs == rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            },*second);
-                                      }, *currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         case Syntax::EqualityExpression::EqualityOperator::NotEqual:
@@ -1137,22 +1223,25 @@ OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::C
             currentValue = std::visit([exp = &exp, this](auto&& lhs) -> ConstRetType
                                       {
                                           using T1 = std::decay_t<decltype(lhs)>;
-                                          auto second = visit(*exp);
+                                          auto second = *visit(*exp);
+                                          if(!second)
+                                          {
+                                              return second;
+                                          }
                                           return std::visit([lhs](auto&& rhs) -> ConstRetType
                                                             {
                                                                 using T2 = std::decay_t<decltype(rhs)>;
                                                                 if constexpr(hasNE<T1, T2>{})
                                                                 {
-                                                                    return lhs != rhs;
+                                                                    return ConstRetType::ValueType(lhs != rhs);
                                                                 }
                                                                 else
                                                                 {
-                                                                    throw std::runtime_error(
+                                                                    return FailureReason(
                                                                         "Can't apply plus to operands in constant expression");
-                                                                    return {};
                                                                 }
-                                                            },*second);
-                                      }, *currentValue);
+                                                            }, *second);
+                                      }, **currentValue);
         }
             break;
         }
@@ -1168,79 +1257,82 @@ OpenCL::Codegen::ConstantEvaluator::ConstantEvaluator(const std::map<std::string
     : m_structOrUnions(structOrUnions)
 {}
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript& )
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow& )
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot& )
+OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
-    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+    return std::visit([this](auto&& value) -> OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
-                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
+                          if constexpr(std::is_same_v<decltype(visit(value)),
+                                                      OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
                           {
                               return visit(value);
                           }
                           else
                           {
-                              throw std::runtime_error("Not allowed in constant expression");
+                              return makeReturn(FailureReason("Not allowed in constant expression"));
                           }
-                      },node.getVariant());
+                      }, node.getVariant());
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
-    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+    return std::visit([this](auto&& value) -> OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
-                          if constexpr(std::is_same_v<decltype(visit(value)),OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
+                          if constexpr(std::is_same_v<decltype(visit(value)),
+                                                      OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
                           {
                               return visit(value);
                           }
                           else
                           {
-                              throw std::runtime_error("Not allowed in constant expression");
+                              return makeReturn(FailureReason("Not allowed in constant expression"));
                           }
-                      },node.getVariant());
+                      }, node.getVariant());
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value)->OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+    return std::visit([this](auto&& value) -> OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
                           return visit(value);
-                      },node.getVariant());
+                      }, node.getVariant());
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
 {
-    if(node.getAssignmentExpressions().size() != 1)
+    if (node.getAssignmentExpressions().size() != 1)
     {
-        throw std::runtime_error(", operator not allowed in constant expression");
+        return makeReturn(FailureReason(", operator not allowed in constant expression"));
     }
     return visit(node.getAssignmentExpressions()[0]);
 }
 
 OpenCL::Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>& OpenCL::Codegen::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
-    return std::visit([this](auto&& value)->Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
+    return std::visit([this](auto&& value) -> Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&
                       {
-                          if constexpr(std::is_same_v<decltype(visit(value)),Syntax::StrongTypedef<OpenCL::Codegen::ConstRetType>&>)
+                          using T = std::decay_t<decltype(value)>;
+                          if constexpr(std::is_same_v<Syntax::ConditionalExpression,T>)
                           {
                               return visit(value);
                           }
                           else
                           {
-                              throw std::runtime_error("Not allowed in constant expression");
+                              return makeReturn(FailureReason("assignment not allowed in constant expression"));
                           }
-                      },node.getVariant());
+                      }, node.getVariant());
 }

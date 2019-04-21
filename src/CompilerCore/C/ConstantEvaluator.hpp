@@ -3,16 +3,18 @@
 
 #include <map>
 #include "Syntax.hpp"
+#include "Expected.hpp"
+#include "FailureReason.hpp"
 
 namespace OpenCL::Codegen
 {
-    using ConstRetType = std::variant<std::int32_t,
+    using ConstRetType = OpenCL::Expected<std::variant<std::int32_t,
                                       std::uint32_t,
                                       std::int64_t,
                                       std::uint64_t,
                                       float,
                                       double,
-                                      void*>;
+                                      void*>,OpenCL::FailureReason>;
 
     class ConstantEvaluator final : public OpenCL::Syntax::NodeVisitor<ConstRetType>
     {
