@@ -2,6 +2,8 @@
 #define OPENCLPARSER_CODEGEN_HPP
 
 #include "Syntax.hpp"
+#include "Expected.hpp"
+#include "FailureReason.hpp"
 #include <map>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DIBuilder.h>
@@ -65,7 +67,11 @@ namespace OpenCL::Codegen
 
     public:
 
-        ArrayType(bool isConst, bool isVolatile, bool isRestricted, const std::shared_ptr<Type>& type, std::size_t size);
+        ArrayType(bool isConst,
+                  bool isVolatile,
+                  bool isRestricted,
+                  std::shared_ptr<Type>  type,
+                  std::size_t size);
 
         const Type& getType() const;
 
@@ -76,21 +82,21 @@ namespace OpenCL::Codegen
     {
     public:
 
-        StructType(bool isConst, bool isVolatile, bool isRestricted,const std::string& name);
+        StructType(bool isConst, bool isVolatile, bool isRestricted, const std::string& name);
     };
 
     class UnionType final : public Type
     {
     public:
 
-        UnionType(bool isConst, bool isVolatile, bool isRestricted,const std::string& name);
+        UnionType(bool isConst, bool isVolatile, bool isRestricted, const std::string& name);
     };
 
     class EnumType final : public Type
     {
     public:
 
-        EnumType(bool isConst, bool isVolatile, bool isRestricted,const std::string& name);
+        EnumType(bool isConst, bool isVolatile, bool isRestricted, const std::string& name);
     };
 
     class PointerType final : public Type
@@ -99,23 +105,27 @@ namespace OpenCL::Codegen
 
     public:
 
-        PointerType(bool isConst, bool isVolatile, bool isRestricted, const std::shared_ptr<Type>& elementType);
+        PointerType(bool isConst, bool isVolatile, bool isRestricted, std::shared_ptr<Type>  elementType);
 
         const Type& getElementType() const;
     };
 
-    using NodeRetType = std::pair<llvm::Value*,Syntax::TypeName>;
+    OpenCL::Expected<std::shared_ptr<Type>, OpenCL::FailureReason> declaratorsToType(std::vector<Syntax::SpecifierQualifier> specifierQualifiers,
+                                                                                     std::variant<const Syntax::AbstractDeclarator*,
+                                                                                                  const Syntax::Declarator*> declarator);
+
+    using NodeRetType = std::pair<llvm::Value*, std::shared_ptr<Type>>;
 
     using TypeRetType = llvm::Type*;
 
-    class Context final : public OpenCL::Syntax::NodeVisitor<NodeRetType,TypeRetType>
+    class Context final : public OpenCL::Syntax::NodeVisitor<NodeRetType, TypeRetType>
     {
-        using tuple = std::pair<llvm::Value*, Syntax::TypeName>;
+        using tuple = std::pair<llvm::Value*, std::shared_ptr<Type>>;
 
         struct Function
         {
-            Syntax::TypeName retType;
-            std::vector<const Syntax::TypeName*> arguments;
+            std::shared_ptr<Type> retType;
+            std::vector<std::shared_ptr<Type>> arguments;
         };
 
         std::map<std::string, Function> m_functions;
@@ -123,8 +133,8 @@ namespace OpenCL::Codegen
         std::vector<std::map<std::string, tuple>> m_namedValues;
 
         void doForLoop(const OpenCL::Syntax::Expression* controlling,
-                                                const OpenCL::Syntax::Expression* post,
-                                                const OpenCL::Syntax::Statement& statement);
+                       const OpenCL::Syntax::Expression* post,
+                       const OpenCL::Syntax::Statement& statement);
 
     public:
 
