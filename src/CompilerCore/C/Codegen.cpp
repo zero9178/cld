@@ -63,9 +63,150 @@ OpenCL::Expected<std::shared_ptr<OpenCL::Codegen::Type>,
             }
         }
     }
-    if(std::count(specifierQualifiers.begin(),specifierQualifiers.end(),std::holds_alternative<Syntax::TypeSpecifier>) > 1)
+    std::vector<const Syntax::TypeSpecifier*> typeSpecifiers;
+    std::transform(specifierQualifiers.begin(),specifierQualifiers.end(),std::back_inserter(typeSpecifiers),[](const auto& value)
     {
-        return FailureReason("Only one type specifier allowed in type");
+        return std::get_if<Syntax::TypeSpecifier>(&value);
+    });
+    typeSpecifiers.erase(std::remove(typeSpecifiers.begin(),typeSpecifiers.end(), nullptr),typeSpecifiers.end());
+    std::shared_ptr<Type> baseType;
+    if(typeSpecifiers.empty())
+    {
+        baseType = std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,true,32);
+    }
+    else
+    {
+        if(std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(typeSpecifiers[0]->getVariant()))
+        {
+            if(!std::all_of(typeSpecifiers.begin(),typeSpecifiers.end(),[](const auto pointer)
+            {
+                return std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(pointer->getVariant());
+            }))
+            {
+                return FailureReason("Primitive type specifiers mixed with struct, union, enum and typedef names");
+            }
+            std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
+            std::transform(typeSpecifiers.begin(),typeSpecifiers.end(),std::back_inserter(primitiveTypeSpecifier),[](const auto pointer)
+            {
+                return std::get<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(pointer->getVariant());
+            });
+
+            auto convert = [isConst,isVolatile](auto&& self,auto begin,auto end,bool isSigned)
+                -> OpenCL::Expected<std::shared_ptr<OpenCL::Codegen::Type>,OpenCL::FailureReason>
+            {
+                switch(*begin)
+                {
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void:
+                {
+                    if(begin + 1 < end)
+                    {
+                        return FailureReason("Can't combine void with other primitive type specifier");
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,0));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char:
+                {
+                    if(begin + 1 < end)
+                    {
+                        return FailureReason("Can't combine char with other primitive type specifier");
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,8));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short:
+                {
+                    if(begin + 1  < end)
+                    {
+                        if(*(begin + 1) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int)
+                        {
+                            return FailureReason("Only int is allowed to follow short in primitive type specifiers");
+                        }
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,16));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
+                {
+                    if(begin + 1 < end)
+                    {
+                        return FailureReason("Can't combine int with other primitive type specifier");
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,32));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
+                {
+                    if(begin + 1 == end)
+                    {
+                        return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,32));
+                    }
+                    switch (*(begin + 1))
+                    {
+                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
+                    {
+                        if(begin + 2 < end)
+                        {
+                            return FailureReason("Can't combine long int with any other primitive type specifiers");
+                        }
+                        return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,32));
+                    }
+                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
+                    {
+                        if(begin + 3 < end || (begin + 2 < end && *(begin + 2) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long))
+                        {
+                            return FailureReason("Can't combine long long int with any other primitive type specifiers");
+                        }
+                        return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,false,isSigned,64));
+                    }
+                    default:
+                        return FailureReason("Can't combine long int with any other primitive type specifiers");
+                    }
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float:
+                {
+                    if(begin + 1 < end)
+                    {
+                        return FailureReason("Can't combine float with any other primitive type specifiers");
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,true,isSigned,32));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double:
+                {
+                    if(begin + 1 < end)
+                    {
+                        return FailureReason("Can't combine double with any other primitive type specifiers");
+                    }
+                    return std::shared_ptr<OpenCL::Codegen::Type>(std::make_shared<PrimitiveType>(isConst,isVolatile,false,true,isSigned,64));
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed:
+                {
+                    auto result = self(self,begin + 1,end,isConst);
+                    if(!result)
+                    {
+                        return result;
+                    }
+                    return self(self,begin + 1,end,true);
+                }
+                case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned:
+                {
+                    auto result = self(self,begin + 1,end,isConst);
+                    if(!result)
+                    {
+                        return result;
+                    }
+                    return self(self,begin + 1,end,false);
+                }
+                }
+                return FailureReason("Invalid primitive type specifiers");
+            };
+            auto result = convert(convert,primitiveTypeSpecifier.begin(),primitiveTypeSpecifier.end(),true);
+            if(!result)
+            {
+                return result;
+            }
+            baseType = *result;
+        }
+    }
+    if(isRestricted)
+    {
+        return FailureReason("Only pointers can be restricted");
     }
     std::visit(Y{overload{
         [&](auto&& self,const Syntax::AbstractDeclarator* abstractDeclarator)->std::shared_ptr<OpenCL::Codegen::Type>
@@ -3301,15 +3442,6 @@ OpenCL::Expected<std::shared_ptr<OpenCL::Codegen::Type>,
 //    m_return = builder.getInt32Ty();
 //}
 
-
-
-OpenCL::Codegen::PrimitiveType::Primitive OpenCL::Codegen::PrimitiveType::getPrimitive() const
-{
-    return m_primitive;
-}
-
-
-
 const OpenCL::Codegen::Type& OpenCL::Codegen::ArrayType::getType() const
 {
     return *m_type;
@@ -3356,16 +3488,6 @@ void OpenCL::Codegen::Type::setName(const std::string& name)
     m_name = name;
 }
 
-OpenCL::Codegen::PrimitiveType::PrimitiveType(bool isConst,
-                                              bool isVolatile,
-                                              bool isRestricted,
-                                              OpenCL::Codegen::PrimitiveType::Primitive primitive) : Type(isConst,
-                                                                                                          isVolatile,
-                                                                                                          isRestricted),
-                                                                                                     m_primitive(
-                                                                                                         primitive)
-{}
-
 OpenCL::Codegen::PointerType::PointerType(bool isConst,
                                           bool isVolatile,
                                           bool isRestricted,
@@ -3403,4 +3525,29 @@ OpenCL::Codegen::EnumType::EnumType(bool isConst, bool isVolatile, bool isRestri
            isRestricted)
 {
     setName(name);
+}
+
+OpenCL::Codegen::PrimitiveType::PrimitiveType(bool isConst,
+                                              bool isVolatile,
+                                              bool isRestricted,
+                                              bool isFloatingPoint,
+                                              bool isSigned,
+                                              uint8_t bitCount) : Type(isConst, isVolatile, isRestricted),
+                                                                  m_isFloatingPoint(isFloatingPoint),
+                                                                  m_isSigned(isSigned), m_bitCount(bitCount)
+{}
+
+bool OpenCL::Codegen::PrimitiveType::isFloatingPoint() const
+{
+    return m_isFloatingPoint;
+}
+
+bool OpenCL::Codegen::PrimitiveType::isSigned() const
+{
+    return m_isSigned;
+}
+
+uint8_t OpenCL::Codegen::PrimitiveType::getBitCount() const
+{
+    return m_bitCount;
 }

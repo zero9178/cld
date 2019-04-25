@@ -34,30 +34,24 @@ namespace OpenCL::Codegen
 
     class PrimitiveType final : public Type
     {
-    public:
-
-        enum class Primitive
-        {
-            Void,
-            Char,
-            Short,
-            Int,
-            Long,
-            Float,
-            Double,
-            Signed,
-            Unsigned,
-        };
-
-    private:
-
-        Primitive m_primitive;
+        bool m_isFloatingPoint;
+        bool m_isSigned;
+        std::uint8_t m_bitCount;
 
     public:
 
-        PrimitiveType(bool isConst, bool isVolatile, bool isRestricted, Primitive primitive);
+        PrimitiveType(bool isConst,
+                      bool isVolatile,
+                      bool isRestricted,
+                      bool isFloatingPoint,
+                      bool isSigned,
+                      std::uint8_t bitCount);
 
-        Primitive getPrimitive() const;
+        bool isFloatingPoint() const;
+
+        bool isSigned() const;
+
+        uint8_t getBitCount() const;
     };
 
     class ArrayType final : public Type
