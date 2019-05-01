@@ -10,11 +10,10 @@ namespace OpenCL
         std::string m_text;
 
     public:
-
         explicit FailureReason(std::string text);
 
         const std::string& getText() const;
     };
-}
+} // namespace OpenCL
 
-#endif //OPENCLPARSER_FAILUREREASON_HPP
+#endif // OPENCLPARSER_FAILUREREASON_HPP

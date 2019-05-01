@@ -2,8 +2,8 @@
 #define OPENCLPARSER_LEXER_HPP
 
 #include <string>
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace OpenCL::Lexer
 {
@@ -101,22 +101,24 @@ namespace OpenCL::Lexer
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
-        using variant = std::variant<std::monostate,std::int32_t,std::uint32_t,std::int64_t,std::uint64_t,float,double,std::string>;
+        using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float,
+                                     double, std::string>;
         TokenType m_tokenType;
         variant m_value;
 
         friend std::vector<Token> tokenize(std::string source);
 
     public:
-
         explicit Token(std::uint64_t line, std::uint64_t column, TokenType tokenType) noexcept
             : m_line(line), m_column(column), m_tokenType(tokenType)
-        {}
+        {
+        }
 
         template <class T>
         Token(std::uint64_t line, std::uint64_t column, TokenType tokenType, T&& value)
             : m_line(line), m_column(column), m_tokenType(tokenType), m_value(std::forward<T>(value))
-        {}
+        {
+        }
 
         TokenType getTokenType() const
         {
@@ -140,6 +142,6 @@ namespace OpenCL::Lexer
 
         std::string emitBack() const;
     };
-}
+} // namespace OpenCL::Lexer
 
-#endif //OPENCLPARSER_LEXER_HPP
+#endif // OPENCLPARSER_LEXER_HPP

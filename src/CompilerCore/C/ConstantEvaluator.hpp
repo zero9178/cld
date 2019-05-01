@@ -1,29 +1,25 @@
 #ifndef OPENCLPARSER_CONSTANTEVALUATOR_HPP
 #define OPENCLPARSER_CONSTANTEVALUATOR_HPP
 
-#include <map>
-#include "Syntax.hpp"
 #include "Expected.hpp"
 #include "FailureReason.hpp"
 #include "Representations.hpp"
+#include "Syntax.hpp"
+
+#include <map>
 
 namespace OpenCL::Constant
 {
-    using ConstRetType = OpenCL::Expected<std::variant<std::int32_t,
-                                                       std::uint32_t,
-                                                       std::int64_t,
-                                                       std::uint64_t,
-                                                       float,
-                                                       double,
-                                                       void*>, OpenCL::FailureReason>;
+    using ConstRetType =
+        OpenCL::Expected<std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>,
+                         OpenCL::FailureReason>;
 
     class ConstantEvaluator final
     {
-        const std::map<std::string,Representations::RecordType>& m_structOrUnions;
+        const std::map<std::string, Representations::RecordType>& m_structOrUnions;
 
     public:
-
-        explicit ConstantEvaluator(const std::map<std::string,Representations::RecordType>& structOrUnions = {});
+        explicit ConstantEvaluator(const std::map<std::string, Representations::RecordType>& structOrUnions = {});
 
         ConstRetType visit(const Syntax::Expression& node);
 
@@ -77,6 +73,6 @@ namespace OpenCL::Constant
 
         ConstRetType visit(const Syntax::ConditionalExpression& node);
     };
-}
+} // namespace OpenCL::Constant
 
-#endif //OPENCLPARSER_CONSTANTEVALUATOR_HPP
+#endif // OPENCLPARSER_CONSTANTEVALUATOR_HPP

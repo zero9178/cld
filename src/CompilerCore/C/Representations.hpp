@@ -1,12 +1,13 @@
 #ifndef OPENCLPARSER_REPRESENTATIONS_HPP
 #define OPENCLPARSER_REPRESENTATIONS_HPP
 
-#include <string>
-#include <memory>
-#include <vector>
-#include <map>
-#include "FailureReason.hpp"
 #include "Expected.hpp"
+#include "FailureReason.hpp"
+
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace OpenCL::Syntax
 {
@@ -17,7 +18,7 @@ namespace OpenCL::Syntax
     class AbstractDeclarator;
 
     class Declarator;
-}
+} // namespace OpenCL::Syntax
 
 namespace OpenCL::Representations
 {
@@ -29,12 +30,9 @@ namespace OpenCL::Representations
         bool m_isSigned;
         std::uint8_t m_bitCount;
 
-        PrimitiveType(bool isFloatingPoint,
-                      bool isSigned,
-                      std::uint8_t bitCount);
+        PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
 
     public:
-
         static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
 
         bool isFloatingPoint() const;
@@ -54,13 +52,10 @@ namespace OpenCL::Representations
         std::unique_ptr<Type> m_type;
         std::size_t m_size;
 
-        ArrayType(bool isRestricted,
-                  std::unique_ptr<Type>&& type,
-                  std::size_t size);
+        ArrayType(bool isRestricted, std::unique_ptr<Type>&& type, std::size_t size);
 
     public:
-
-        static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type,std::size_t size);
+        static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type, std::size_t size);
 
         ArrayType(const ArrayType& rhs);
 
@@ -89,7 +84,6 @@ namespace OpenCL::Representations
         AbstractArrayType(bool isRestricted, std::unique_ptr<Type>&& type);
 
     public:
-
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
         AbstractArrayType(const AbstractArrayType& rhs);
@@ -114,12 +108,10 @@ namespace OpenCL::Representations
         bool m_restricted;
         std::unique_ptr<Type> m_type;
 
-        ValArrayType(bool isRestricted,
-                     std::unique_ptr<OpenCL::Representations::Type>&& type);
+        ValArrayType(bool isRestricted, std::unique_ptr<OpenCL::Representations::Type>&& type);
 
     public:
-
-        static Type create(bool isConst,bool isVolatile,bool isRestricted,Type&& type);
+        static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
         ValArrayType(const ValArrayType& rhs);
 
@@ -144,12 +136,9 @@ namespace OpenCL::Representations
         std::vector<Type> m_arguments;
         bool m_lastIsVararg;
 
-        FunctionType(std::unique_ptr<Type>&& returnType,
-                     std::vector<Type> arguments,
-                     bool lastIsVararg);
+        FunctionType(std::unique_ptr<Type>&& returnType, std::vector<Type> arguments, bool lastIsVararg);
 
     public:
-
         static OpenCL::Representations::Type create(OpenCL::Representations::Type&& returnType,
                                                     std::vector<OpenCL::Representations::Type>&& arguments,
                                                     bool lastIsVararg);
@@ -179,13 +168,11 @@ namespace OpenCL::Representations
         bool m_isUnion;
         std::vector<std::tuple<Type, std::string, std::int64_t>> m_members;
 
-        RecordType(std::string name, bool isUnion, std::vector<std::tuple<Type,
-                                                                          std::string,
-                                                                          std::int64_t>>&& names);
+        RecordType(std::string name, bool isUnion, std::vector<std::tuple<Type, std::string, std::int64_t>>&& names);
 
     public:
-
-        static Type create(bool isConst,bool isVolatile,bool isUnion,const std::string& name,std::vector<std::tuple<Type,std::string,std::int64_t>>&& members = {});
+        static Type create(bool isConst, bool isVolatile, bool isUnion, const std::string& name,
+                           std::vector<std::tuple<Type, std::string, std::int64_t>>&& members = {});
 
         const std::string& getName() const;
 
@@ -205,12 +192,11 @@ namespace OpenCL::Representations
         bool m_anonymous;
         std::vector<std::pair<std::string, std::int32_t>> m_values;
 
-        EnumType(const std::string& name,
-                 std::vector<std::pair<std::string, std::int32_t>> values);
+        EnumType(const std::string& name, std::vector<std::pair<std::string, std::int32_t>> values);
 
     public:
-
-        static Type create(bool isConst,bool isVolatile,const std::string& name,std::vector<std::pair<std::string,std::int32_t>> values);
+        static Type create(bool isConst, bool isVolatile, const std::string& name,
+                           std::vector<std::pair<std::string, std::int32_t>> values);
 
         const std::vector<std::pair<std::string, int32_t>>& getValues() const;
 
@@ -231,8 +217,7 @@ namespace OpenCL::Representations
         PointerType(bool isRestricted, std::unique_ptr<Type>&& elementType);
 
     public:
-
-        static Type create(bool isConst,bool isVolatile,bool isRestricted,Type&& elementType);
+        static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& elementType);
 
         PointerType(const PointerType& rhs);
 
@@ -256,20 +241,13 @@ namespace OpenCL::Representations
         bool m_isConst;
         bool m_isVolatile;
         std::string m_name;
-        using variant = std::variant<PrimitiveType,
-                                     ArrayType,
-                                     AbstractArrayType,
-                                     ValArrayType,
-                                     FunctionType,
-                                     RecordType,
-                                     EnumType,
-                                     PointerType>;
+        using variant = std::variant<PrimitiveType, ArrayType, AbstractArrayType, ValArrayType, FunctionType,
+                                     RecordType, EnumType, PointerType>;
 
         variant m_type;
 
     public:
-
-        Type(bool isConst, bool isVolatile, std::string  name, variant&& type);
+        Type(bool isConst, bool isVolatile, std::string name, variant&& type);
 
         virtual ~Type() = default;
 
@@ -299,14 +277,15 @@ namespace OpenCL::Representations
     using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,
                                                std::reference_wrapper<const Syntax::TypeQualifier>>;
 
-    using PossiblyAbstractQualifierRef = std::variant<const Syntax::AbstractDeclarator*,
-                                                      std::reference_wrapper<const Syntax::Declarator>>;
+    using PossiblyAbstractQualifierRef =
+        std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
 
-    Expected <Type, FailureReason> declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
-                                                                      PossiblyAbstractQualifierRef declarator,
-                                                                      const std::map<std::string,std::reference_wrapper<const Type>>& typedefs);
+    Expected<Type, FailureReason>
+        declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
+                          PossiblyAbstractQualifierRef declarator,
+                          const std::map<std::string, std::reference_wrapper<const Type>>& typedefs);
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
-}
+} // namespace OpenCL::Representations
 
-#endif //OPENCLPARSER_REPRESENTATIONS_HPP
+#endif // OPENCLPARSER_REPRESENTATIONS_HPP

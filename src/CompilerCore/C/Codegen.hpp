@@ -1,23 +1,24 @@
 #ifndef OPENCLPARSER_CODEGEN_HPP
 #define OPENCLPARSER_CODEGEN_HPP
 
-#include "Syntax.hpp"
 #include "Expected.hpp"
 #include "FailureReason.hpp"
 #include "Representations.hpp"
-#include <map>
-#include <llvm/IR/IRBuilder.h>
+#include "Syntax.hpp"
+
 #include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/IRBuilder.h>
+#include <map>
 
 namespace OpenCL::Codegen
 {
-    using NodeRetType = Expected<std::pair<llvm::Value*,Representations::Type>, FailureReason>;
+    using NodeRetType = Expected<std::pair<llvm::Value*, Representations::Type>, FailureReason>;
 
     using TypeRetType = llvm::Type*;
 
     class Context final
     {
-        std::vector<std::map<std::string, std::pair<llvm::Value*,Representations::Type>>> m_namedValues{1};
+        std::vector<std::map<std::string, std::pair<llvm::Value*, Representations::Type>>> m_namedValues{1};
         std::vector<std::map<std::string, Representations::Type>> m_structsUnionsAndEnums{1};
         std::vector<std::map<std::string, Representations::Type>> m_typedefs{1};
 
@@ -32,19 +33,19 @@ namespace OpenCL::Codegen
 
         llvm::Constant* createZeroValue(llvm::Type* type);
 
-        std::map<std::string,std::reference_wrapper<const Representations::Type>> gatherTypedefs() const;
+        std::map<std::string, std::reference_wrapper<const Representations::Type>> gatherTypedefs() const;
 
         void popScope()
         {
             m_namedValues.pop_back();
         }
 
-        const std::pair<llvm::Value*,Representations::Type>* findValue(const std::string& name) const
+        const std::pair<llvm::Value*, Representations::Type>* findValue(const std::string& name) const
         {
-            for(auto iter = m_namedValues.rbegin(); iter != m_namedValues.rend(); iter++)
+            for (auto iter = m_namedValues.rbegin(); iter != m_namedValues.rend(); iter++)
             {
                 auto result = iter->find(name);
-                if(result != iter->end())
+                if (result != iter->end())
                 {
                     return &result->second;
                 }
@@ -69,7 +70,6 @@ namespace OpenCL::Codegen
         }
 
     public:
-
         std::unique_ptr<llvm::Module> module;
 
         NodeRetType visit(const Syntax::Expression& node);
@@ -237,6 +237,6 @@ namespace OpenCL::Codegen
 
         llvm::Type* visit(const Representations::PointerType& node);
     };
-}
+} // namespace OpenCL::Codegen
 
-#endif //OPENCLPARSER_CODEGEN_HPP
+#endif // OPENCLPARSER_CODEGEN_HPP

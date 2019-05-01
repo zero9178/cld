@@ -8,4 +8,4 @@ namespace OpenCL::PP
     std::string preprocess(std::string&& source);
 }
 
-#endif //OPENCLPARSER_PREPROCESSOR_HPP
+#endif // OPENCLPARSER_PREPROCESSOR_HPP

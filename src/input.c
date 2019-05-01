@@ -123,13 +123,13 @@ void updateHeight(TreeNode* h)
 
 void Rotate(TreeNode* h, TreeNode** parent, TreeNode** root)
 {
-    //Neue Höhe bekommen
+    // Neue Höhe bekommen
     updateHeight(h);
-    //balanz checken
+    // balanz checken
     int balance = getBalance(h);
     if (abs(balance) == 2)
     {
-        //korrigiern
+        // korrigiern
         if (balance > 0)
         {
             if (getBalance(h->left) < 0)
@@ -159,20 +159,20 @@ void Rotate(TreeNode* h, TreeNode** parent, TreeNode** root)
 
 int getBalance(TreeNode* h)
 {
-    //Balance = höhe des linkensubtree minus höhe des rechten subtree
-    //0 ist voll balanziert, 1 ist linkslehnend, -1 ist rechtslehnen, -2 und 2 sind unbalanziert
+    // Balance = höhe des linkensubtree minus höhe des rechten subtree
+    // 0 ist voll balanziert, 1 ist linkslehnend, -1 ist rechtslehnen, -2 und 2 sind unbalanziert
     return height(h->left) - height(h->right);
 }
 
 unsigned char height(TreeNode* h)
 {
-    //height = Maximale Anzahl der Kanten von der Note zur untersten Ebene (Kanten...Verbindung zwischen zwei Noten)
+    // height = Maximale Anzahl der Kanten von der Note zur untersten Ebene (Kanten...Verbindung zwischen zwei Noten)
     return (unsigned char)(h ? h->height + 1 : 0);
 }
 
 void recursiveAdd(TreeNode* h, TreeNode* p, TreeNode* parent, TreeNode** root)
 {
-    //suchen nach Platz für neue Note, durch rekursiver Aufruf wird kein Elternpointer gebraucht
+    // suchen nach Platz für neue Note, durch rekursiver Aufruf wird kein Elternpointer gebraucht
     if (strcmp(p->nachname, h->nachname) >= 0)
     {
         if (h->right)
@@ -195,7 +195,7 @@ void recursiveAdd(TreeNode* h, TreeNode* p, TreeNode* parent, TreeNode** root)
             h->left = p;
         }
     }
-    //Balancieren
+    // Balancieren
     Rotate(h, &parent, root);
 }
 
@@ -210,35 +210,30 @@ void addNode(TreeNode* root, TreeNode* p)
 eugfwazdbwaidbawiduawb
 #endif
 
-enum Name
-{
-    SomeConstant = 5,
-    LeadingValue
-};
+    enum Name {
+        SomeConstant = 5,
+        LeadingValue
+    };
 
 #undef NAMESIZE
 
 #ifndef NAMESIZE
 
-    #if __LINE__ < 219
+#if __LINE__ < 219
 
-    wgdiewzfgewfgewifewgtfzwetf
+wgdiewzfgewfgewifewgtfzwetf
 
-    #elif __LINE__ > 220
+#elif __LINE__ > 220
 
-    int GLOBAL = 5;
+int GLOBAL = 5;
 
-    #endif
+#endif
 
 #else
 
 dwaipudgawzdbwaodzwabdawzdbaw
 
 #endif
-
-/*
- #define __LINE__ 5
- */
 
 int main()
 {
@@ -248,7 +243,11 @@ int main()
     char c[] = STRINGIFY(NAMESIZE);
     char time[] = __TIME__;
     TreeNode root = {"Markus", "Boeck", "Herr", __LINE__, "Kammersdorf", 2033};
-    TreeNode newNode = {"Lukas", "Damianschitz",.anrede[2] = '5',};
+    TreeNode newNode = {
+        "Lukas",
+        "Damianschitz",
+        .anrede[2] = '5',
+    };
     TreeNode newNode2 = {"Philip", "Oberndorfer"};
     addNode(&root, &newNode);
     addNode(&root, &newNode2);

@@ -2,9 +2,10 @@
 #define OPENCLPARSER_SYNTAX_HPP
 
 #include "Lexer.hpp"
+
+#include <memory>
 #include <set>
 #include <vector>
-#include <memory>
 
 namespace OpenCL::Syntax
 {
@@ -164,9 +165,7 @@ namespace OpenCL::Syntax
         std::uint64_t m_column;
 
     public:
-
-        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column)
-        {}
+        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column) {}
 
         virtual ~Node() = default;
 
@@ -187,7 +186,6 @@ namespace OpenCL::Syntax
         {
             return m_column;
         }
-
     };
 
     /**
@@ -198,10 +196,7 @@ namespace OpenCL::Syntax
         std::vector<AssignmentExpression> m_assignmentExpressions;
 
     public:
-
-        Expression(std::uint64_t line,
-                   std::uint64_t column,
-                   std::vector<AssignmentExpression> assignmanetExpressions);
+        Expression(std::uint64_t line, std::uint64_t column, std::vector<AssignmentExpression> assignmanetExpressions);
 
         const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
     };
@@ -214,10 +209,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
-        PrimaryExpressionIdentifier(std::uint64_t line,
-                                    std::uint64_t column,
-                                    std::string identifier);
+        PrimaryExpressionIdentifier(std::uint64_t line, std::uint64_t column, std::string identifier);
 
         const std::string& getIdentifier() const;
     };
@@ -227,23 +219,14 @@ namespace OpenCL::Syntax
      */
     class PrimaryExpressionConstant final : public Node
     {
-
     public:
-
-        using variant = std::variant<std::int32_t,
-                                     std::uint32_t,
-                                     std::int64_t,
-                                     std::uint64_t,
-                                     float,
-                                     double,
-                                     std::string>;
+        using variant =
+            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
 
     private:
-
         variant m_value;
 
     public:
-
         PrimaryExpressionConstant(std::uint64_t line, std::uint64_t column, variant value);
 
         const variant& getValue() const;
@@ -257,28 +240,23 @@ namespace OpenCL::Syntax
         Expression m_expression;
 
     public:
-
-        PrimaryExpressionParenthese(std::uint64_t line,
-                                    std::uint64_t column,
-                                    Expression&& expression);
+        PrimaryExpressionParenthese(std::uint64_t line, std::uint64_t column, Expression&& expression);
 
         const Expression& getExpression() const;
     };
 
     /**
-    * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
-    *                       | <PrimaryExpressionConstant>
-    *                       | <PrimaryExpressionParenthese>
-    */
+     * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
+     *                       | <PrimaryExpressionConstant>
+     *                       | <PrimaryExpressionParenthese>
+     */
     class PrimaryExpression final : public Node
     {
-        using variant = std::variant<PrimaryExpressionIdentifier,
-                                     PrimaryExpressionConstant,
-                                     PrimaryExpressionParenthese>;
+        using variant =
+            std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParenthese>;
         variant m_variant;
 
     public:
-
         PrimaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -292,16 +270,15 @@ namespace OpenCL::Syntax
         PrimaryExpression m_primaryExpression;
 
     public:
-
-        PostFixExpressionPrimaryExpression(std::uint64_t line,
-                                           std::uint64_t column,
+        PostFixExpressionPrimaryExpression(std::uint64_t line, std::uint64_t column,
                                            PrimaryExpression&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
     };
 
     /**
-     * <PostFixExpressionSubscript> ::= <PostFixExpression> <TokenType::OpenSquareBracket> <Expression> <TokenType::CloseSquareBracket>
+     * <PostFixExpressionSubscript> ::= <PostFixExpression> <TokenType::OpenSquareBracket> <Expression>
+     * <TokenType::CloseSquareBracket>
      */
     class PostFixExpressionSubscript final : public Node
     {
@@ -309,11 +286,8 @@ namespace OpenCL::Syntax
         Expression m_expression;
 
     public:
-
-        PostFixExpressionSubscript(std::uint64_t line,
-                                   std::uint64_t column,
-                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                   Expression&& expression);
+        PostFixExpressionSubscript(std::uint64_t line, std::uint64_t column,
+                                   std::unique_ptr<PostFixExpression>&& postFixExpression, Expression&& expression);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -328,9 +302,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
     public:
-
-        PostFixExpressionIncrement(std::uint64_t line,
-                                   std::uint64_t column,
+        PostFixExpressionIncrement(std::uint64_t line, std::uint64_t column,
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -344,9 +316,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
     public:
-
-        PostFixExpressionDecrement(std::uint64_t line,
-                                   std::uint64_t column,
+        PostFixExpressionDecrement(std::uint64_t line, std::uint64_t column,
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -361,11 +331,8 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
-        PostFixExpressionDot(std::uint64_t line,
-                             std::uint64_t column,
-                             std::unique_ptr<PostFixExpression>&& postFixExpression,
-                             std::string identifier);
+        PostFixExpressionDot(std::uint64_t line, std::uint64_t column,
+                             std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -381,11 +348,8 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
-        PostFixExpressionArrow(std::uint64_t line,
-                               std::uint64_t column,
-                               std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               std::string identifier);
+        PostFixExpressionArrow(std::uint64_t line, std::uint64_t column,
+                               std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -403,11 +367,9 @@ namespace OpenCL::Syntax
         std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmanetExpressions;
 
     public:
-
-        PostFixExpressionFunctionCall(std::uint64_t line,
-                                      std::uint64_t column,
-                                      std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                      std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
+        PostFixExpressionFunctionCall(
+            std::uint64_t line, std::uint64_t column, std::unique_ptr<PostFixExpression>&& postFixExpression,
+            std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
 
@@ -416,7 +378,8 @@ namespace OpenCL::Syntax
 
     /**
      * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParenthese>
-     *                                        <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>] <TokenType::CloseBrace>
+     *                                        <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>]
+     * <TokenType::CloseBrace>
      */
     class PostFixExpressionTypeInitializer final : public Node
     {
@@ -424,10 +387,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<InitializerList> m_initializerList;
 
     public:
-
-        PostFixExpressionTypeInitializer(std::uint64_t line,
-                                         std::uint64_t column,
-                                         TypeName&& typeName,
+        PostFixExpressionTypeInitializer(std::uint64_t line, std::uint64_t column, TypeName&& typeName,
                                          InitializerList&& initializerList);
 
         const InitializerList& getInitializerList() const;
@@ -447,19 +407,14 @@ namespace OpenCL::Syntax
      */
     class PostFixExpression final : public Node
     {
-        using variant = std::variant<PostFixExpressionPrimaryExpression,
-                                     PostFixExpressionSubscript,
-                                     PostFixExpressionDot,
-                                     PostFixExpressionFunctionCall,
-                                     PostFixExpressionArrow,
-                                     PostFixExpressionIncrement,
-                                     PostFixExpressionDecrement,
-                                     PostFixExpressionTypeInitializer>;
+        using variant =
+            std::variant<PostFixExpressionPrimaryExpression, PostFixExpressionSubscript, PostFixExpressionDot,
+                         PostFixExpressionFunctionCall, PostFixExpressionArrow, PostFixExpressionIncrement,
+                         PostFixExpressionDecrement, PostFixExpressionTypeInitializer>;
 
         variant m_variant;
 
     public:
-
         PostFixExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -473,9 +428,7 @@ namespace OpenCL::Syntax
         PostFixExpression m_postFixExpression;
 
     public:
-
-        UnaryExpressionPostFixExpression(std::uint64_t line,
-                                         std::uint64_t column,
+        UnaryExpressionPostFixExpression(std::uint64_t line, std::uint64_t column,
                                          PostFixExpression&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -494,7 +447,6 @@ namespace OpenCL::Syntax
     class UnaryExpressionUnaryOperator final : public Node
     {
     public:
-
         enum class UnaryOperator
         {
             Increment,
@@ -508,15 +460,11 @@ namespace OpenCL::Syntax
         };
 
     private:
-
         UnaryOperator m_operator;
         std::unique_ptr<UnaryExpression> m_unaryExpression;
 
     public:
-
-        UnaryExpressionUnaryOperator(std::uint64_t line,
-                                     std::uint64_t column,
-                                     UnaryOperator anOperator,
+        UnaryExpressionUnaryOperator(std::uint64_t line, std::uint64_t column, UnaryOperator anOperator,
                                      std::unique_ptr<UnaryExpression>&& unaryExpression);
 
         UnaryOperator getAnOperator() const;
@@ -526,7 +474,8 @@ namespace OpenCL::Syntax
 
     /**
      * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
-     *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParenthese>
+     *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <TypeName>
+     * <TokenType::CloseParenthese>
      */
     class UnaryExpressionSizeOf final : public Node
     {
@@ -535,7 +484,6 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-
         UnaryExpressionSizeOf(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -548,13 +496,11 @@ namespace OpenCL::Syntax
      */
     class UnaryExpression final : public Node
     {
-        using variant = std::variant<UnaryExpressionPostFixExpression,
-                                     UnaryExpressionUnaryOperator,
-                                     UnaryExpressionSizeOf>;
+        using variant =
+            std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator, UnaryExpressionSizeOf>;
         variant m_variant;
 
     public:
-
         UnaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -568,35 +514,30 @@ namespace OpenCL::Syntax
         UnaryExpression m_unaryFactor;
 
     public:
-
         /**
          * <AssignmentExpression::AssignOperator>
          */
         enum class AssignOperator
         {
-            NoOperator,///<<TokenType::Assignment>
-            PlusAssign,///<<TokenType::PlusAssign>
-            MinusAssign,///<<TokenType::MinusAssign>
-            DivideAssign,///<TokenType::DivideAssign>
-            MultiplyAssign,///<<TokenType::MultiplyAssign>
-            ModuloAssign,///<<TokenType::ModuloAssign>
-            LeftShiftAssign,///<<TokenType::LeftShiftAssign>
-            RightShiftAssign,///<<TokenType::RightShiftAssign>
-            BitAndAssign,///<<TokenType::BitAndAssign>
-            BitOrAssign,///<<TokenType::BitOrAssign>
-            BitXorAssign///<<TokenType::BitXorAssign>
+            NoOperator,       ///<<TokenType::Assignment>
+            PlusAssign,       ///<<TokenType::PlusAssign>
+            MinusAssign,      ///<<TokenType::MinusAssign>
+            DivideAssign,     ///< TokenType::DivideAssign>
+            MultiplyAssign,   ///<<TokenType::MultiplyAssign>
+            ModuloAssign,     ///<<TokenType::ModuloAssign>
+            LeftShiftAssign,  ///<<TokenType::LeftShiftAssign>
+            RightShiftAssign, ///<<TokenType::RightShiftAssign>
+            BitAndAssign,     ///<<TokenType::BitAndAssign>
+            BitOrAssign,      ///<<TokenType::BitOrAssign>
+            BitXorAssign      ///<<TokenType::BitXorAssign>
         };
 
     private:
-
         AssignOperator m_assignOperator;
         std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
     public:
-
-        AssignmentExpressionAssignment(std::uint64_t line,
-                                       std::uint64_t column,
-                                       UnaryExpression&& unaryFactor,
+        AssignmentExpressionAssignment(std::uint64_t line, std::uint64_t column, UnaryExpression&& unaryFactor,
                                        AssignOperator assignOperator,
                                        std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
@@ -608,8 +549,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-    * <TypeQualifier> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
-    */
+     * <TypeQualifier> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
+     */
     enum class TypeQualifier
     {
         Const,
@@ -631,10 +572,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
     public:
-
-        TypeName(std::uint64_t line,
-                 std::uint64_t column,
-                 std::vector<SpecifierQualifier>&& specifierQualifiers,
+        TypeName(std::uint64_t line, std::uint64_t column, std::vector<SpecifierQualifier>&& specifierQualifiers,
                  std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
         const std::vector<SpecifierQualifier>& getSpecifierQualifiers() const;
@@ -648,13 +586,11 @@ namespace OpenCL::Syntax
      */
     class CastExpression final : public Node
     {
-        using variant = std::variant<UnaryExpression,
-                                     std::pair<TypeName, std::unique_ptr<CastExpression>>>;
+        using variant = std::variant<UnaryExpression, std::pair<TypeName, std::unique_ptr<CastExpression>>>;
 
         variant m_variant;
 
     public:
-
         CastExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -668,26 +604,21 @@ namespace OpenCL::Syntax
         CastExpression m_castExpression;
 
     public:
-
         /**
          * <Term::BinaryDotOperator>
          */
         enum class BinaryDotOperator
         {
-            BinaryMultiply,///<<TokenType::Multiplication>
-            BinaryDivide,///<<TokenType::Division>
-            BinaryRemainder///<<TokenType::Modulo>
+            BinaryMultiply, ///<<TokenType::Multiplication>
+            BinaryDivide,   ///<<TokenType::Division>
+            BinaryRemainder ///<<TokenType::Modulo>
         };
 
     private:
-
         std::vector<std::pair<BinaryDotOperator, CastExpression>> m_optionalCastExpressions;
 
     public:
-
-        Term(std::uint64_t line,
-             std::uint64_t column,
-             CastExpression&& castExpressions,
+        Term(std::uint64_t line, std::uint64_t column, CastExpression&& castExpressions,
              std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
 
         const CastExpression& getCastExpression() const;
@@ -703,25 +634,20 @@ namespace OpenCL::Syntax
         Term m_term;
 
     public:
-
         /**
          * <AdditiveExpression::BinaryDashOperator>
          */
         enum class BinaryDashOperator
         {
-            BinaryPlus,///<<TokenType::Addition>
-            BinaryMinus///<<TokenType::Negation>
+            BinaryPlus, ///<<TokenType::Addition>
+            BinaryMinus ///<<TokenType::Negation>
         };
 
     private:
-
         std::vector<std::pair<BinaryDashOperator, Term>> m_optionalTerms;
 
     public:
-
-        AdditiveExpression(std::uint64_t line,
-                           std::uint64_t column,
-                           Term&& term,
+        AdditiveExpression(std::uint64_t line, std::uint64_t column, Term&& term,
                            std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
 
         const Term& getTerm() const;
@@ -737,27 +663,21 @@ namespace OpenCL::Syntax
         AdditiveExpression m_additiveExpression;
 
     public:
-
         /**
          * <ShiftExpression::ShiftOperator>
          */
         enum class ShiftOperator
         {
-            Right,///<<TokenType::ShiftRight>
-            Left///<<TokenType::ShiftLeft>
+            Right, ///<<TokenType::ShiftRight>
+            Left   ///<<TokenType::ShiftLeft>
         };
 
     private:
-
         std::vector<std::pair<ShiftOperator, AdditiveExpression>> m_optionalAdditiveExpressions;
 
     public:
-
-        ShiftExpression(std::uint64_t line,
-                        std::uint64_t column,
-                        AdditiveExpression&& additiveExpression,
-                        std::vector<std::pair<ShiftOperator,
-                                              AdditiveExpression>>&& optionalAdditiveExpressions);
+        ShiftExpression(std::uint64_t line, std::uint64_t column, AdditiveExpression&& additiveExpression,
+                        std::vector<std::pair<ShiftOperator, AdditiveExpression>>&& optionalAdditiveExpressions);
 
         const AdditiveExpression& getAdditiveExpression() const;
 
@@ -772,29 +692,24 @@ namespace OpenCL::Syntax
         ShiftExpression m_shiftExpression;
 
     public:
-
         /**
          * <RelationalExpression::RelationalOperator>
          */
         enum class RelationalOperator
         {
-            LessThan,///<<TokenType::LessThan>
-            LessThanOrEqual,///<TokenType::LessThanOrEqual>
-            GreaterThan,///<TokenType::GreaterThan>
-            GreaterThanOrEqual///<TokenType::GreaterThanOrEqual>
+            LessThan,          ///<<TokenType::LessThan>
+            LessThanOrEqual,   ///< TokenType::LessThanOrEqual>
+            GreaterThan,       ///< TokenType::GreaterThan>
+            GreaterThanOrEqual ///< TokenType::GreaterThanOrEqual>
         };
 
     private:
-
         std::vector<std::pair<RelationalOperator, ShiftExpression>> m_optionalRelationalExpressions;
 
     public:
-
-        RelationalExpression(std::uint64_t line,
-                             std::uint64_t column,
-                             ShiftExpression&& shiftExpression,
-                             std::vector<std::pair<RelationalOperator,
-                                                   ShiftExpression>>&& optionalRelationalExpressions);
+        RelationalExpression(
+            std::uint64_t line, std::uint64_t column, ShiftExpression&& shiftExpression,
+            std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions);
 
         const ShiftExpression& getShiftExpression() const;
 
@@ -809,27 +724,22 @@ namespace OpenCL::Syntax
         RelationalExpression m_relationalExpression;
 
     public:
-
         /**
          * <EqualityExpression::EqualityOperator>
          */
         enum class EqualityOperator
         {
-            Equal,///<<TokenType::Equal>
-            NotEqual///<TokenType::NotEqual>
+            Equal,   ///<<TokenType::Equal>
+            NotEqual ///< TokenType::NotEqual>
         };
 
     private:
-
         std::vector<std::pair<EqualityOperator, RelationalExpression>> m_optionalRelationalExpressions;
 
     public:
-
-        EqualityExpression(std::uint64_t line,
-                           std::uint64_t column,
-                           RelationalExpression&& relationalExpression,
-                           std::vector<std::pair<EqualityOperator,
-                                                 RelationalExpression>>&& optionalRelationalExpressions);
+        EqualityExpression(
+            std::uint64_t line, std::uint64_t column, RelationalExpression&& relationalExpression,
+            std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions);
 
         const RelationalExpression& getRelationalExpression() const;
 
@@ -845,10 +755,7 @@ namespace OpenCL::Syntax
         std::vector<EqualityExpression> m_optionalEqualityExpressions;
 
     public:
-
-        BitAndExpression(std::uint64_t line,
-                         std::uint64_t column,
-                         EqualityExpression&& equalityExpression,
+        BitAndExpression(std::uint64_t line, std::uint64_t column, EqualityExpression&& equalityExpression,
                          std::vector<EqualityExpression>&& optionalEqualityExpressions);
 
         const EqualityExpression& getEqualityExpression() const;
@@ -865,10 +772,7 @@ namespace OpenCL::Syntax
         std::vector<BitAndExpression> m_optionalBitAndExpressions;
 
     public:
-
-        BitXorExpression(std::uint64_t line,
-                         std::uint64_t column,
-                         BitAndExpression&& bitAndExpression,
+        BitXorExpression(std::uint64_t line, std::uint64_t column, BitAndExpression&& bitAndExpression,
                          std::vector<BitAndExpression>&& optionalBitAndExpressions);
 
         const BitAndExpression& getBitAndExpression() const;
@@ -885,10 +789,7 @@ namespace OpenCL::Syntax
         std::vector<BitXorExpression> m_optionalBitXorExpressions;
 
     public:
-
-        BitOrExpression(std::uint64_t line,
-                        std::uint64_t column,
-                        BitXorExpression&& bitXorExpression,
+        BitOrExpression(std::uint64_t line, std::uint64_t column, BitXorExpression&& bitXorExpression,
                         std::vector<BitXorExpression>&& optionalBitXorExpressions);
 
         const BitXorExpression& getBitXorExpression() const;
@@ -905,10 +806,7 @@ namespace OpenCL::Syntax
         std::vector<BitOrExpression> m_optionalBitOrExpressions;
 
     public:
-
-        LogicalAndExpression(std::uint64_t line,
-                             std::uint64_t column,
-                             BitOrExpression&& equalityExpression,
+        LogicalAndExpression(std::uint64_t line, std::uint64_t column, BitOrExpression&& equalityExpression,
                              std::vector<BitOrExpression>&& optionalEqualityExpressions);
 
         const BitOrExpression& getBitOrExpression() const;
@@ -925,10 +823,7 @@ namespace OpenCL::Syntax
         std::vector<LogicalAndExpression> m_optionalAndExpressions;
 
     public:
-
-        LogicalOrExpression(std::uint64_t line,
-                            std::uint64_t column,
-                            LogicalAndExpression&& andExpression,
+        LogicalOrExpression(std::uint64_t line, std::uint64_t column, LogicalAndExpression&& andExpression,
                             std::vector<LogicalAndExpression>&& optionalAndExpressions);
 
         const LogicalAndExpression& getAndExpression() const;
@@ -937,7 +832,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <ConditionalExpression> ::= <LogicalOrExpression> [ <TokenType::QuestionMark> <Expression> <TokenType::Colon> <ConditionalExpression> ]
+     * <ConditionalExpression> ::= <LogicalOrExpression> [ <TokenType::QuestionMark> <Expression> <TokenType::Colon>
+     * <ConditionalExpression> ]
      *
      * <ConstantExpression> ::= <ConditionalExpression>
      */
@@ -948,10 +844,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<ConditionalExpression> m_optionalConditionalExpression;
 
     public:
-
-        ConditionalExpression(std::uint64_t line,
-                              std::uint64_t column,
-                              LogicalOrExpression&& logicalOrExpression,
+        ConditionalExpression(std::uint64_t line, std::uint64_t column, LogicalOrExpression&& logicalOrExpression,
                               std::unique_ptr<Expression>&& optionalExpression = nullptr,
                               std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
 
@@ -967,13 +860,10 @@ namespace OpenCL::Syntax
      */
     class AssignmentExpression final : public Node
     {
-
         std::variant<AssignmentExpressionAssignment, ConditionalExpression> m_variant;
 
     public:
-
-        AssignmentExpression(std::uint64_t line,
-                             std::uint64_t column,
+        AssignmentExpression(std::uint64_t line, std::uint64_t column,
                              std::variant<AssignmentExpressionAssignment, ConditionalExpression>&& variant);
 
         const std::variant<AssignmentExpressionAssignment, ConditionalExpression>& getVariant() const;
@@ -987,7 +877,6 @@ namespace OpenCL::Syntax
         Expression m_expression;
 
     public:
-
         ReturnStatement(std::uint64_t line, std::uint64_t column, Expression&& expression);
 
         const Expression& getExpression() const;
@@ -1001,9 +890,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Expression> m_optionalExpression;
 
     public:
-
-        ExpressionStatement(std::uint64_t line,
-                            std::uint64_t column,
+        ExpressionStatement(std::uint64_t line, std::uint64_t column,
                             std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
         const Expression* getOptionalExpression() const;
@@ -1022,12 +909,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_elseBranch;
 
     public:
-
-        IfStatement(std::uint64_t line,
-                    std::uint64_t column,
-                    Expression&& expression,
-                    std::unique_ptr<Statement>&& branch,
-                    std::unique_ptr<Statement>&& elseBranch = nullptr);
+        IfStatement(std::uint64_t line, std::uint64_t column, Expression&& expression,
+                    std::unique_ptr<Statement>&& branch, std::unique_ptr<Statement>&& elseBranch = nullptr);
 
         const Expression& getExpression() const;
 
@@ -1037,8 +920,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
-     *                          <Statement>
+     * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParenthese> <Expression>
+     * <TokenType::CloseParenthese> <Statement>
      */
     class SwitchStatement final : public Node
     {
@@ -1046,10 +929,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-
-        SwitchStatement(std::uint64_t line,
-                        std::uint64_t column,
-                        Expression&& expression,
+        SwitchStatement(std::uint64_t line, std::uint64_t column, Expression&& expression,
                         std::unique_ptr<Statement>&& statement);
 
         const Expression& getExpression() const;
@@ -1065,10 +945,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-
-        DefaultStatement(std::uint64_t line,
-                         std::uint64_t column,
-                         std::unique_ptr<Statement>&& statement);
+        DefaultStatement(std::uint64_t line, std::uint64_t column, std::unique_ptr<Statement>&& statement);
 
         const Statement& getStatement() const;
     };
@@ -1078,22 +955,14 @@ namespace OpenCL::Syntax
      */
     class CaseStatement final : public Node
     {
-        using constantVariant = std::variant<std::int32_t,
-                                             std::uint32_t,
-                                             std::int64_t,
-                                             std::uint64_t,
-                                             float,
-                                             double,
-                                             void*>;
+        using constantVariant =
+            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
 
         constantVariant m_constant;
         std::unique_ptr<Statement> m_statement;
 
     public:
-
-        CaseStatement(std::uint64_t line,
-                      std::uint64_t column,
-                      const constantVariant& constant,
+        CaseStatement(std::uint64_t line, std::uint64_t column, const constantVariant& constant,
                       std::unique_ptr<Statement>&& statement);
 
         const constantVariant& getConstant() const;
@@ -1109,8 +978,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
-        LabelStatement(std::uint64_t line, std::uint64_t column, const std::string& identifier);
+        LabelStatement(std::uint64_t line, std::uint64_t column, std::string identifier);
     };
 
     /**
@@ -1121,10 +989,7 @@ namespace OpenCL::Syntax
         std::vector<CompoundItem> m_blockItems;
 
     public:
-
-        CompoundStatement(std::uint64_t line,
-                          std::uint64_t column,
-                          std::vector<CompoundItem>&& blockItems);
+        CompoundStatement(std::uint64_t line, std::uint64_t column, std::vector<CompoundItem>&& blockItems);
 
         const std::vector<CompoundItem>& getBlockItems() const;
     };
@@ -1141,13 +1006,9 @@ namespace OpenCL::Syntax
         std::unique_ptr<Expression> m_post;
 
     public:
-
-        ForStatement(std::uint64_t line,
-                     std::uint64_t column,
-                     std::unique_ptr<Statement>&& statement,
+        ForStatement(std::uint64_t line, std::uint64_t column, std::unique_ptr<Statement>&& statement,
                      std::unique_ptr<Expression>&& initial = nullptr,
-                     std::unique_ptr<Expression>&& controlling = nullptr,
-                     std::unique_ptr<Expression>&& post = nullptr);
+                     std::unique_ptr<Expression>&& controlling = nullptr, std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
 
@@ -1182,8 +1043,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-      * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpecifier>
-      */
+     * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpecifier>
+     */
     using DeclarationSpecifier = std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier>;
 
     /**
@@ -1199,22 +1060,20 @@ namespace OpenCL::Syntax
         std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> m_initDeclarators;
 
     public:
-
-        Declaration(std::uint64_t line,
-                    std::uint64_t column,
-                    std::vector<DeclarationSpecifier>&& declarationSpecifiers,
-                    std::vector<std::pair<std::unique_ptr<Declarator>,
-                                          std::unique_ptr<Initializer>>>&& initDeclarators);
+        Declaration(
+            std::uint64_t line, std::uint64_t column, std::vector<DeclarationSpecifier>&& declarationSpecifiers,
+            std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&& initDeclarators);
 
         const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
-        const std::vector<std::pair<std::unique_ptr<Declarator>,
-                                    std::unique_ptr<Initializer>>>& getInitDeclarators() const;
+        const std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&
+            getInitDeclarators() const;
     };
 
     /**
-     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration> <TokenType::SemiColon> [<Expression>]
-     *                           <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese> <Statement>
+     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration>
+     * <TokenType::SemiColon> [<Expression>] <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese>
+     * <Statement>
      */
     class ForDeclarationStatement final : public Node
     {
@@ -1224,12 +1083,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Expression> m_post;
 
     public:
-
-        ForDeclarationStatement(std::uint64_t line,
-                                std::uint64_t column,
-                                std::unique_ptr<Statement>&& statement,
-                                Declaration&& initial,
-                                std::unique_ptr<Expression>&& controlling = nullptr,
+        ForDeclarationStatement(std::uint64_t line, std::uint64_t column, std::unique_ptr<Statement>&& statement,
+                                Declaration&& initial, std::unique_ptr<Expression>&& controlling = nullptr,
                                 std::unique_ptr<Expression>&& post = nullptr);
 
         const Statement& getStatement() const;
@@ -1251,10 +1106,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-
-        HeadWhileStatement(std::uint64_t line,
-                           std::uint64_t column,
-                           Expression&& expression,
+        HeadWhileStatement(std::uint64_t line, std::uint64_t column, Expression&& expression,
                            std::unique_ptr<Statement>&& statement);
 
         const Expression& getExpression() const;
@@ -1263,7 +1115,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <FootWhileStatement> ::= <TokenType::DoKeyword> <Statement> <TokenType::WhileKeyword> <Expression> <TokenType::SemiColon>
+     * <FootWhileStatement> ::= <TokenType::DoKeyword> <Statement> <TokenType::WhileKeyword> <Expression>
+     * <TokenType::SemiColon>
      */
     class FootWhileStatement final : public Node
     {
@@ -1271,10 +1124,7 @@ namespace OpenCL::Syntax
         Expression m_expression;
 
     public:
-
-        FootWhileStatement(std::uint64_t line,
-                           std::uint64_t column,
-                           std::unique_ptr<Statement>&& statement,
+        FootWhileStatement(std::uint64_t line, std::uint64_t column, std::unique_ptr<Statement>&& statement,
                            Expression&& expression);
 
         const Statement& getStatement() const;
@@ -1288,7 +1138,6 @@ namespace OpenCL::Syntax
     class BreakStatement final : public Node
     {
     public:
-
         BreakStatement(std::uint64_t line, std::uint64_t column);
     };
 
@@ -1298,7 +1147,6 @@ namespace OpenCL::Syntax
     class ContinueStatement final : public Node
     {
     public:
-
         ContinueStatement(std::uint64_t line, std::uint64_t column);
     };
 
@@ -1310,8 +1158,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
-        GotoStatement(std::uint64_t line, std::uint64_t column, const std::string& identifier);
+        GotoStatement(std::uint64_t line, std::uint64_t column, std::string identifier);
 
         const std::string& getIdentifier() const;
     };
@@ -1334,24 +1181,14 @@ namespace OpenCL::Syntax
      */
     class Statement final : public Node
     {
-        using variant = std::variant<ReturnStatement,
-                                     ExpressionStatement,
-                                     IfStatement,
-                                     CompoundStatement,
-                                     ForStatement,
-                                     ForDeclarationStatement,
-                                     HeadWhileStatement,
-                                     FootWhileStatement,
-                                     BreakStatement,
-                                     ContinueStatement,
-                                     SwitchStatement,
-                                     DefaultStatement,
-                                     CaseStatement, GotoStatement, LabelStatement>;
+        using variant = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
+                                     ForDeclarationStatement, HeadWhileStatement, FootWhileStatement, BreakStatement,
+                                     ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement, GotoStatement,
+                                     LabelStatement>;
 
         variant m_variant;
 
     public:
-
         Statement(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1368,7 +1205,6 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-
         CompoundItem(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1377,7 +1213,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectAbstractDeclaratorAssignmentExpression> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> [<AssignmentExpression>] <TokenType::CloseSquareBracket>
+     * <DirectAbstractDeclaratorAssignmentExpression> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket>
+     * [<AssignmentExpression>] <TokenType::CloseSquareBracket>
      */
     class DirectAbstractDeclaratorAssignmentExpression final : public Node
     {
@@ -1385,11 +1222,10 @@ namespace OpenCL::Syntax
         std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
     public:
-
-        DirectAbstractDeclaratorAssignmentExpression(std::uint64_t line,
-                                                     std::uint64_t column,
-                                                     std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
-                                                     std::unique_ptr<AssignmentExpression>&& assignmentExpression);
+        DirectAbstractDeclaratorAssignmentExpression(
+            std::uint64_t line, std::uint64_t column,
+            std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+            std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
         const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
 
@@ -1397,7 +1233,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectAbstractDeclaratorParameterTypeList> ::= [<DirectAbstractDeclarator>] <TokenType::OpenParenthese> [ <ParameterTypeList>] <TokenType::CloseParenthese>
+     * <DirectAbstractDeclaratorParameterTypeList> ::= [<DirectAbstractDeclarator>] <TokenType::OpenParenthese> [
+     * <ParameterTypeList>] <TokenType::CloseParenthese>
      */
     class DirectAbstractDeclaratorParameterTypeList final : public Node
     {
@@ -1405,9 +1242,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<ParameterTypeList> m_parameterTypeList;
 
     public:
-
-        DirectAbstractDeclaratorParameterTypeList(std::uint64_t line,
-                                                  std::uint64_t column,
+        DirectAbstractDeclaratorParameterTypeList(std::uint64_t line, std::uint64_t column,
                                                   std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
                                                   std::unique_ptr<ParameterTypeList>&& parameterTypeList);
 
@@ -1419,20 +1254,18 @@ namespace OpenCL::Syntax
     /**
      * <DirectAbstractDeclarator> ::= <TokenType::OpenParenthese> <AbstractDeclarator> <TokenType::CloseParenthese>
      *                              | <DirectAbstractDeclaratorAssignmentExpression>
-     *                              | [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> <TokenType::Asterisk> <TokenType::CloseSquareBracket>
-     *                              | <DirectAbstractDeclaratorParameterTypeList>
+     *                              | [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> <TokenType::Asterisk>
+     * <TokenType::CloseSquareBracket> | <DirectAbstractDeclaratorParameterTypeList>
      */
     class DirectAbstractDeclarator final : public Node
     {
-        using variant = std::variant<std::unique_ptr<AbstractDeclarator>,
-                                     DirectAbstractDeclaratorAssignmentExpression,
-                                     std::unique_ptr<DirectAbstractDeclarator>,
-                                     DirectAbstractDeclaratorParameterTypeList>;
+        using variant =
+            std::variant<std::unique_ptr<AbstractDeclarator>, DirectAbstractDeclaratorAssignmentExpression,
+                         std::unique_ptr<DirectAbstractDeclarator>, DirectAbstractDeclaratorParameterTypeList>;
 
         variant m_variant;
 
     public:
-
         DirectAbstractDeclarator(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1447,10 +1280,7 @@ namespace OpenCL::Syntax
         DirectAbstractDeclarator m_directAbstractDeclarator;
 
     public:
-
-        AbstractDeclarator(std::uint64_t line,
-                           std::uint64_t column,
-                           std::vector<Pointer>&& pointers,
+        AbstractDeclarator(std::uint64_t line, std::uint64_t column, std::vector<Pointer>&& pointers,
                            DirectAbstractDeclarator&& directAbstractDeclarator);
 
         const std::vector<Pointer>& getPointers() const;
@@ -1459,12 +1289,12 @@ namespace OpenCL::Syntax
     };
 
     /**
-      * <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator>
-      *                          | <DeclarationSpecifier> { <DelcarationSpecifier> } [ <AbstractDeclarator> ]
-      */
-    using ParameterDeclaration = std::pair<std::vector<DeclarationSpecifier>,
-                                           std::variant<std::unique_ptr<Declarator>,
-                                                        std::unique_ptr<AbstractDeclarator>>>;
+     * <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator>
+     *                          | <DeclarationSpecifier> { <DelcarationSpecifier> } [ <AbstractDeclarator> ]
+     */
+    using ParameterDeclaration =
+        std::pair<std::vector<DeclarationSpecifier>,
+                  std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
 
     /**
      * <ParameterList> ::= <ParameterDeclaration> { <TokenType::Comma> <ParameterDeclaration> }
@@ -1472,11 +1302,9 @@ namespace OpenCL::Syntax
     class ParameterList final : public Node
     {
     private:
-
         std::vector<ParameterDeclaration> m_parameterList;
 
     public:
-
         ParameterList(std::uint64_t line, std::uint64_t column, std::vector<ParameterDeclaration>&& parameterList);
 
         const std::vector<ParameterDeclaration>& getParameterDeclarations() const;
@@ -1491,7 +1319,6 @@ namespace OpenCL::Syntax
         bool m_hasEllipse;
 
     public:
-
         ParameterTypeList(std::uint64_t line, std::uint64_t column, ParameterList&& parameterList, bool hasEllipse);
 
         const ParameterList& getParameterList() const;
@@ -1500,7 +1327,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectDeclaratorParentheseParameters> ::= <DirectDeclarator> <TokenType::OpenParenthese> <ParameterTypeList> <TokenType::CloseParenthese>
+     * <DirectDeclaratorParentheseParameters> ::= <DirectDeclarator> <TokenType::OpenParenthese> <ParameterTypeList>
+     * <TokenType::CloseParenthese>
      */
     class DirectDeclaratorParentheseParameters final : public Node
     {
@@ -1508,9 +1336,7 @@ namespace OpenCL::Syntax
         ParameterTypeList m_parameterTypeList;
 
     public:
-
-        DirectDeclaratorParentheseParameters(std::uint64_t line,
-                                             std::uint64_t column,
+        DirectDeclaratorParentheseParameters(std::uint64_t line, std::uint64_t column,
                                              DirectDeclarator&& directDeclarator,
                                              ParameterTypeList&& parameterTypeList);
 
@@ -1520,7 +1346,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectDeclaratorParentheseIdentifiers> ::= <DirectDeclarator> <TokenType::OpenParenthese> [ <TokenType::Identifier> {<TokenType::Comma> <TokenType::Identifier>}] <TokenType::CloseParenthese>
+     * <DirectDeclaratorParentheseIdentifiers> ::= <DirectDeclarator> <TokenType::OpenParenthese> [
+     * <TokenType::Identifier> {<TokenType::Comma> <TokenType::Identifier>}] <TokenType::CloseParenthese>
      */
     class DirectDeclaratorParentheseIdentifiers final : public Node
     {
@@ -1528,9 +1355,7 @@ namespace OpenCL::Syntax
         std::vector<std::string> m_identifiers;
 
     public:
-
-        DirectDeclaratorParentheseIdentifiers(std::uint64_t line,
-                                              std::uint64_t column,
+        DirectDeclaratorParentheseIdentifiers(std::uint64_t line, std::uint64_t column,
                                               DirectDeclarator&& directDeclarator,
                                               std::vector<std::string>&& identifiers);
 
@@ -1540,7 +1365,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectDeclaratorAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier> } <TokenType::Asterisk> <TokenType::CloseSquareBracket>
+     * <DirectDeclaratorAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier> }
+     * <TokenType::Asterisk> <TokenType::CloseSquareBracket>
      */
     class DirectDeclaratorAsterisk final : public Node
     {
@@ -1548,10 +1374,7 @@ namespace OpenCL::Syntax
         std::vector<TypeQualifier> m_typeQualifiers;
 
     public:
-
-        DirectDeclaratorAsterisk(std::uint64_t line,
-                                 std::uint64_t column,
-                                 DirectDeclarator&& directDeclarator,
+        DirectDeclaratorAsterisk(std::uint64_t line, std::uint64_t column, DirectDeclarator&& directDeclarator,
                                  std::vector<TypeQualifier>&& typeQualifiers);
 
         const DirectDeclarator& getDirectDeclarator() const;
@@ -1560,7 +1383,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectDeclaratorNoStaticOrAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier>} [<AssignmentExpression>] <TokenType::CloseSquareBracket>
+     * <DirectDeclaratorNoStaticOrAsterisk> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> {<TypeQualifier>}
+     * [<AssignmentExpression>] <TokenType::CloseSquareBracket>
      */
     class DirectDeclaratorNoStaticOrAsterisk final : public Node
     {
@@ -1569,9 +1393,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
     public:
-
-        DirectDeclaratorNoStaticOrAsterisk(std::uint64_t line,
-                                           std::uint64_t column,
+        DirectDeclaratorNoStaticOrAsterisk(std::uint64_t line, std::uint64_t column,
                                            std::unique_ptr<DirectDeclarator>&& directDeclarator,
                                            std::vector<TypeQualifier>&& typeQualifiers,
                                            std::unique_ptr<AssignmentExpression>&& assignmentExpression);
@@ -1584,8 +1406,10 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectDeclaratorStatic> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> <TokenType::StaticKeyword> {<TypeQualifier>} <AssignmentExpression> <TokenType::CloseSquareBracket>
-     *                            | <DirectDeclarator> <TokenType::OpenSquareBracket> <TypeQualifier> {<TypeQualifier>} <TokenType::StaticKeyword> <AssignmentExpression> <TokenType::CloseSquareBracket>
+     * <DirectDeclaratorStatic> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> <TokenType::StaticKeyword>
+     * {<TypeQualifier>} <AssignmentExpression> <TokenType::CloseSquareBracket> | <DirectDeclarator>
+     * <TokenType::OpenSquareBracket> <TypeQualifier> {<TypeQualifier>} <TokenType::StaticKeyword>
+     * <AssignmentExpression> <TokenType::CloseSquareBracket>
      */
     class DirectDeclaratorStatic final : public Node
     {
@@ -1594,9 +1418,7 @@ namespace OpenCL::Syntax
         AssignmentExpression m_assignmentExpression;
 
     public:
-
-        DirectDeclaratorStatic(std::uint64_t line,
-                               std::uint64_t column,
+        DirectDeclaratorStatic(std::uint64_t line, std::uint64_t column,
                                std::unique_ptr<DirectDeclarator>&& directDeclarator,
                                std::vector<TypeQualifier>&& typeQualifiers,
                                AssignmentExpression&& assignmentExpression);
@@ -1619,18 +1441,13 @@ namespace OpenCL::Syntax
      */
     class DirectDeclarator final : public Node
     {
-        using variant = std::variant<std::string,
-                                     std::unique_ptr<Declarator>,
-                                     DirectDeclaratorNoStaticOrAsterisk,
-                                     DirectDeclaratorStatic,
-                                     DirectDeclaratorAsterisk,
-                                     DirectDeclaratorParentheseParameters,
-                                     DirectDeclaratorParentheseIdentifiers>;
+        using variant = std::variant<std::string, std::unique_ptr<Declarator>, DirectDeclaratorNoStaticOrAsterisk,
+                                     DirectDeclaratorStatic, DirectDeclaratorAsterisk,
+                                     DirectDeclaratorParentheseParameters, DirectDeclaratorParentheseIdentifiers>;
 
         variant m_variant;
 
     public:
-
         DirectDeclarator(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1645,10 +1462,7 @@ namespace OpenCL::Syntax
         DirectDeclarator m_directDeclarator;
 
     public:
-
-        Declarator(std::uint64_t line,
-                   std::uint64_t column,
-                   std::vector<Pointer>&& pointers,
+        Declarator(std::uint64_t line, std::uint64_t column, std::vector<Pointer>&& pointers,
                    DirectDeclarator&& directDeclarator);
 
         const std::vector<Pointer>& getPointers() const;
@@ -1660,8 +1474,8 @@ namespace OpenCL::Syntax
      * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
      *
      * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
-     *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> } <TokenType::CloseBrace>
-     *                            | <StructOrUnion> <TokenType::Identifier>
+     *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> }
+     * <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
      */
     class StructOrUnionSpecifier final : public Node
     {
@@ -1669,7 +1483,6 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-
         /**
          *
          * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
@@ -1684,15 +1497,10 @@ namespace OpenCL::Syntax
         };
 
     private:
-
         std::vector<StructDeclaration> m_structDeclarations;
 
     public:
-
-        StructOrUnionSpecifier(std::uint64_t line,
-                               std::uint64_t column,
-                               bool isUnion,
-                               const std::string& identifier,
+        StructOrUnionSpecifier(std::uint64_t line, std::uint64_t column, bool isUnion, std::string identifier,
                                std::vector<StructDeclaration>&& structDeclarations);
 
         bool isUnion() const;
@@ -1703,25 +1511,19 @@ namespace OpenCL::Syntax
     };
 
     /**
-    * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
-    *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
-    *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma> }
-    *                       [ <TokenType::Comma> ] <TokenType::CloseBrace>
-    */
+     * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
+     *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
+     *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma>
+     * } [ <TokenType::Comma> ] <TokenType::CloseBrace>
+     */
     class EnumDeclaration final : public Node
     {
         std::string m_name;
         std::vector<std::pair<std::string, std::int32_t>> m_values;
 
     public:
-
-        EnumDeclaration(std::uint64_t
-                        line,
-                        std::uint64_t column,
-                        std::string
-                        name,
-                        std::vector<std::pair<std::string, std::int32_t>> values
-        );
+        EnumDeclaration(std::uint64_t line, std::uint64_t column, std::string name,
+                        std::vector<std::pair<std::string, std::int32_t>> values);
 
         const std::string& getName() const;
 
@@ -1729,8 +1531,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-    * <EnumSpecifier> ::= <EnumDeclaration> | <TokenType::EnumKeyword> <TokenType::Identifier>
-    */
+     * <EnumSpecifier> ::= <EnumDeclaration> | <TokenType::EnumKeyword> <TokenType::Identifier>
+     */
     class EnumSpecifier final : public Node
     {
         using variant = std::variant<EnumDeclaration, std::string>;
@@ -1738,30 +1540,28 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-
         EnumSpecifier(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
     };
 
     /**
-      * <TypeSpecifier> ::= <TokenType::VoidKeyword>
-      *                   | <TokenType::CharKeyword>
-      *                   | <TokenType::ShortKeyword>
-      *                   | <TokenType::IntKeyword>
-      *                   | <TokenType::LongKeyword>
-      *                   | <TokenType::FloatKeyword>
-      *                   | <TokenType::DoubleKeyword>
-      *                   | <TokenType::SignedKeyword>
-      *                   | <TokenType::UnsignedKeyword>
-      *                   | <StructOrUnionSpecifier>
-      *                   | <EnumSpecifier>
-      *                   | <TokenType::Identifier>
-      */
+     * <TypeSpecifier> ::= <TokenType::VoidKeyword>
+     *                   | <TokenType::CharKeyword>
+     *                   | <TokenType::ShortKeyword>
+     *                   | <TokenType::IntKeyword>
+     *                   | <TokenType::LongKeyword>
+     *                   | <TokenType::FloatKeyword>
+     *                   | <TokenType::DoubleKeyword>
+     *                   | <TokenType::SignedKeyword>
+     *                   | <TokenType::UnsignedKeyword>
+     *                   | <StructOrUnionSpecifier>
+     *                   | <EnumSpecifier>
+     *                   | <TokenType::Identifier>
+     */
     class TypeSpecifier final : public Node
     {
     public:
-
         enum class PrimitiveTypeSpecifier
         {
             Void,
@@ -1776,16 +1576,12 @@ namespace OpenCL::Syntax
         };
 
     private:
-
-        using variant = std::variant<PrimitiveTypeSpecifier,
-                                     std::unique_ptr<StructOrUnionSpecifier>,
-                                     std::unique_ptr<EnumSpecifier>,
-                                     std::string>;
+        using variant = std::variant<PrimitiveTypeSpecifier, std::unique_ptr<StructOrUnionSpecifier>,
+                                     std::unique_ptr<EnumSpecifier>, std::string>;
 
         variant m_variant;
 
     public:
-
         TypeSpecifier(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1799,7 +1595,6 @@ namespace OpenCL::Syntax
         std::vector<TypeQualifier> m_typeQualifiers;
 
     public:
-
         Pointer(std::uint64_t line, std::uint64_t column, std::vector<TypeQualifier>&& typeQualifiers);
 
         const std::vector<TypeQualifier>& getTypeQualifiers() const;
@@ -1813,7 +1608,6 @@ namespace OpenCL::Syntax
     class InitializerList final : public Node
     {
     public:
-
         /**
          * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
          *                | <TokenType::Dot> <TokenType::Identifier>
@@ -1828,20 +1622,17 @@ namespace OpenCL::Syntax
         using vector = std::vector<std::pair<Initializer, DesignatorList>>;
 
     private:
-
         vector m_nonCommaExpressionsAndBlocks;
 
     public:
-
-        InitializerList(std::uint64_t line,
-                        std::uint64_t column,
-                        vector&& nonCommaExpressionsAndBlocks);
+        InitializerList(std::uint64_t line, std::uint64_t column, vector&& nonCommaExpressionsAndBlocks);
 
         const vector& getNonCommaExpressionsAndBlocks() const;
     };
 
     /**
-     * <Initializer> ::= <AssignmentExpression> | <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>] <TokenType::CloseBrace>
+     * <Initializer> ::= <AssignmentExpression> | <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>]
+     * <TokenType::CloseBrace>
      */
     class Initializer final : public Node
     {
@@ -1849,14 +1640,14 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-
         Initializer(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
     };
 
     /**
-     * <FunctionDefinition> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} <Declarator> { <Declaration> } <CompoundStatement>
+     * <FunctionDefinition> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} <Declarator> { <Declaration> }
+     * <CompoundStatement>
      */
     class FunctionDefinition final : public Node
     {
@@ -1866,13 +1657,9 @@ namespace OpenCL::Syntax
         CompoundStatement m_compoundStatement;
 
     public:
-
-        FunctionDefinition(std::uint64_t line,
-                           std::uint64_t column,
-                           std::vector<DeclarationSpecifier>&& declarationSpecifiers,
-                           Declarator&& declarator,
-                           std::vector<Declaration>&& declarations,
-                           CompoundStatement&& compoundStatement);
+        FunctionDefinition(std::uint64_t line, std::uint64_t column,
+                           std::vector<DeclarationSpecifier>&& declarationSpecifiers, Declarator&& declarator,
+                           std::vector<Declaration>&& declarations, CompoundStatement&& compoundStatement);
 
         const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
@@ -1884,15 +1671,14 @@ namespace OpenCL::Syntax
     };
 
     /**
-    * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
-    */
+     * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
+     */
     class ExternalDeclaration final : public Node
     {
         using variant = std::variant<Declaration, FunctionDefinition>;
         variant m_variant;
 
     public:
-
         ExternalDeclaration(std::uint64_t line, std::uint64_t column, variant&& variant);
 
         const variant& getVariant() const;
@@ -1906,11 +1692,10 @@ namespace OpenCL::Syntax
         std::vector<ExternalDeclaration> m_globals;
 
     public:
-
         explicit TranslationUnit(std::vector<ExternalDeclaration>&& globals) noexcept;
 
         const std::vector<ExternalDeclaration>& getGlobals() const;
     };
-}
+} // namespace OpenCL::Syntax
 
-#endif //OPENCLPARSER_SYNTAX_HPP
+#endif // OPENCLPARSER_SYNTAX_HPP

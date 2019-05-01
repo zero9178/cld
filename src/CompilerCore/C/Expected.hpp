@@ -6,8 +6,8 @@
 namespace OpenCL
 {
     /**
-     * Type which can either contain T or E. T is the expected and normal value type. If this does not contain T it instead
-     * contains E which explains why T is not contained
+     * Type which can either contain T or E. T is the expected and normal value type. If this does not contain T it
+     * instead contains E which explains why T is not contained
      * @tparam T Value Type
      * @tparam E Error Type
      */
@@ -17,12 +17,12 @@ namespace OpenCL
         std::variant<T, E> m_value;
 
     public:
-
         using ValueType = T;
         using ErrorType = E;
 
-        static_assert(std::is_move_constructible_v<ValueType> && std::is_move_assignable_v<ValueType>
-                          && std::is_move_constructible_v<ErrorType> && std::is_move_assignable_v<ErrorType>);
+        static_assert(
+            std::is_move_constructible_v<
+                ValueType> && std::is_move_assignable_v<ValueType> && std::is_move_constructible_v<ErrorType> && std::is_move_assignable_v<ErrorType>);
 
         /**
          * Implicit move constructor with value
@@ -95,7 +95,7 @@ namespace OpenCL
         /**
          * @copydoc operator*() const &
          */
-        constexpr ValueType& operator*()&;
+        constexpr ValueType& operator*() &;
 
         /**
          * @copydoc operator*() const &
@@ -105,7 +105,7 @@ namespace OpenCL
         /**
          * @copydoc operator*() const &
          */
-        constexpr ValueType&& operator*()&&;
+        constexpr ValueType&& operator*() &&;
 
         /**
          * @return True if this contains ValueType
@@ -126,7 +126,7 @@ namespace OpenCL
          * @throws std::bad_variant_access if this does not contain ErrorType
          * @return Contained ErrorType
          */
-        constexpr ErrorType& error()&;
+        constexpr ErrorType& error() &;
 
         /**
          * @copydoc error() &
@@ -136,7 +136,7 @@ namespace OpenCL
         /**
          * @copydoc error() &
          */
-        constexpr ErrorType&& error()&&;
+        constexpr ErrorType&& error() &&;
 
         /**
          * @copydoc error() &
@@ -147,22 +147,25 @@ namespace OpenCL
     template <class T, class E>
     constexpr Expected<T, E>::Expected(ValueType&& value) noexcept(std::is_nothrow_move_constructible_v<ValueType>)
         : m_value(std::move(value))
-    {}
+    {
+    }
 
     template <class T, class E>
     template <class U>
     constexpr Expected<T, E>::Expected(const U& value) noexcept(std::is_nothrow_copy_constructible_v<U>)
         : m_value(value)
-    {}
+    {
+    }
 
     template <class T, class E>
     constexpr Expected<T, E>::Expected(ErrorType&& error) noexcept(std::is_nothrow_move_constructible_v<ErrorType>)
         : m_value(std::move(error))
-    {}
+    {
+    }
 
     template <class T, class E>
-    constexpr Expected<T, E>& Expected<T, E>::operator=(ValueType&& value) noexcept(std::is_nothrow_move_assignable_v<
-        ValueType>)
+    constexpr Expected<T, E>& Expected<T, E>::
+        operator=(ValueType&& value) noexcept(std::is_nothrow_move_assignable_v<ValueType>)
     {
         m_value = std::move(value);
         return *this;
@@ -177,8 +180,8 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr Expected<T, E>& Expected<T, E>::operator=(ErrorType&& error) noexcept(std::is_nothrow_move_assignable_v<
-        ErrorType>)
+    constexpr Expected<T, E>& Expected<T, E>::
+        operator=(ErrorType&& error) noexcept(std::is_nothrow_move_assignable_v<ErrorType>)
     {
         m_value = std::move(error);
         return *this;
@@ -203,7 +206,7 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr typename Expected<T, E>::ValueType& Expected<T, E>::operator*()&
+    constexpr typename Expected<T, E>::ValueType& Expected<T, E>::operator*() &
     {
         return std::get<0>(m_value);
     }
@@ -215,7 +218,7 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr typename Expected<T, E>::ValueType&& Expected<T, E>::operator*()&&
+    constexpr typename Expected<T, E>::ValueType&& Expected<T, E>::operator*() &&
     {
         return std::move(std::get<0>(m_value));
     }
@@ -239,7 +242,7 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr typename Expected<T, E>::ErrorType& Expected<T, E>::error()&
+    constexpr typename Expected<T, E>::ErrorType& Expected<T, E>::error() &
     {
         return std::get<1>(m_value);
     }
@@ -251,7 +254,7 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr typename Expected<T, E>::ErrorType&& Expected<T, E>::error()&&
+    constexpr typename Expected<T, E>::ErrorType&& Expected<T, E>::error() &&
     {
         return std::move(std::get<1>(m_value));
     }
@@ -264,10 +267,9 @@ namespace OpenCL
 
     template <class T, class E>
     template <class U>
-    constexpr Expected<T, E>::Expected(const Expected<U,E>& expected) : m_value(expected.error())
+    constexpr Expected<T, E>::Expected(const Expected<U, E>& expected) : m_value(expected.error())
     {
-
     }
-}
+} // namespace OpenCL
 
-#endif //OPENCLPARSER_EXPECTED_HPP
+#endif // OPENCLPARSER_EXPECTED_HPP
