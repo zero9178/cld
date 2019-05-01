@@ -11,7 +11,9 @@ namespace OpenCL
 
     public:
 
-        explicit FailureReason(std::string  text);
+        explicit FailureReason(std::string text);
+
+        const std::string& getText() const;
     };
 }
 

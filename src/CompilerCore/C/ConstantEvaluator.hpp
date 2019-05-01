@@ -5,78 +5,77 @@
 #include "Syntax.hpp"
 #include "Expected.hpp"
 #include "FailureReason.hpp"
+#include "Representations.hpp"
 
-namespace OpenCL::Codegen
+namespace OpenCL::Constant
 {
     using ConstRetType = OpenCL::Expected<std::variant<std::int32_t,
-                                      std::uint32_t,
-                                      std::int64_t,
-                                      std::uint64_t,
-                                      float,
-                                      double,
-                                      void*>,OpenCL::FailureReason>;
+                                                       std::uint32_t,
+                                                       std::int64_t,
+                                                       std::uint64_t,
+                                                       float,
+                                                       double,
+                                                       void*>, OpenCL::FailureReason>;
 
-    class ConstantEvaluator final : public OpenCL::Syntax::NodeVisitor<ConstRetType>
+    class ConstantEvaluator final
     {
-        const std::map<std::string,const OpenCL::Syntax::StructOrUnionSpecifier*>& m_structOrUnions;
+        const std::map<std::string,Representations::RecordType>& m_structOrUnions;
 
     public:
 
-        using OpenCL::Syntax::NodeVisitor<ConstRetType>::visit;
+        explicit ConstantEvaluator(const std::map<std::string,Representations::RecordType>& structOrUnions = {});
 
-        explicit ConstantEvaluator(const std::map<std::string, const Syntax::StructOrUnionSpecifier*>& structOrUnions = {});
+        ConstRetType visit(const Syntax::Expression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::Expression& node) override;
+        ConstRetType visit(const Syntax::AssignmentExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::AssignmentExpression& node) override;
+        ConstRetType visit(const Syntax::PrimaryExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PrimaryExpression& node) override;
+        ConstRetType visit(const Syntax::PrimaryExpressionConstant& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PrimaryExpressionConstant& node) override;
+        ConstRetType visit(const Syntax::PrimaryExpressionParenthese& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PrimaryExpressionParenthese& node) override;
+        ConstRetType visit(const Syntax::PostFixExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PostFixExpression& node) override;
+        ConstRetType visit(const Syntax::PostFixExpressionPrimaryExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PostFixExpressionPrimaryExpression& node) override;
+        ConstRetType visit(const Syntax::PostFixExpressionSubscript& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PostFixExpressionSubscript& node) override;
+        ConstRetType visit(const Syntax::PostFixExpressionDot& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PostFixExpressionDot& node) override;
+        ConstRetType visit(const Syntax::PostFixExpressionArrow& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::PostFixExpressionArrow& node) override;
+        ConstRetType visit(const Syntax::UnaryExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::UnaryExpression& node) override;
+        ConstRetType visit(const Syntax::UnaryExpressionPostFixExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::UnaryExpressionPostFixExpression& node) override;
+        ConstRetType visit(const Syntax::UnaryExpressionUnaryOperator& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::UnaryExpressionUnaryOperator& node) override;
+        ConstRetType visit(const Syntax::UnaryExpressionSizeOf& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::UnaryExpressionSizeOf& node) override;
+        ConstRetType visit(const Syntax::CastExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::CastExpression& node) override;
+        ConstRetType visit(const Syntax::Term& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::Term& node) override;
+        ConstRetType visit(const Syntax::AdditiveExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::AdditiveExpression& node) override;
+        ConstRetType visit(const Syntax::ShiftExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::ShiftExpression& node) override;
+        ConstRetType visit(const Syntax::RelationalExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::RelationalExpression& node) override;
+        ConstRetType visit(const Syntax::EqualityExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::EqualityExpression& node) override;
+        ConstRetType visit(const Syntax::BitAndExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::BitAndExpression& node) override;
+        ConstRetType visit(const Syntax::BitXorExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::BitXorExpression& node) override;
+        ConstRetType visit(const Syntax::BitOrExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::BitOrExpression& node) override;
+        ConstRetType visit(const Syntax::LogicalAndExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::LogicalAndExpression& node) override;
+        ConstRetType visit(const Syntax::LogicalOrExpression& node);
 
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::LogicalOrExpression& node) override;
-
-        Syntax::StrongTypedef<ConstRetType>& visit(const Syntax::ConditionalExpression& node) override;
+        ConstRetType visit(const Syntax::ConditionalExpression& node);
     };
 }
 

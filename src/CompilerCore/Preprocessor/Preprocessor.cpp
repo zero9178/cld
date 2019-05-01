@@ -354,8 +354,8 @@ namespace
                                 {
                                     throw std::runtime_error("Invalid expression");
                                 }
-                                OpenCL::Codegen::ConstantEvaluator evaluator;
-                                auto value = *evaluator.visit(*expression);
+                                OpenCL::Constant::ConstantEvaluator evaluator;
+                                auto value = evaluator.visit(*expression);
                                 if(!value)
                                 {
                                     throw std::runtime_error("Failed at evaluating constant expression");

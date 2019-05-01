@@ -4,6 +4,7 @@
 
 #include <stack>
 #include <algorithm>
+#include <numeric>
 
 using namespace OpenCL;
 using namespace OpenCL::Lexer;
@@ -106,7 +107,7 @@ namespace
         case TokenType::InlineKeyword:return true;
         case TokenType::Identifier:
             return !context.isInScope(std::get<std::string>(token.getValue()))
-                && context.typedefs.count(std::get<std::string>(token.getValue()));
+                && context.isTypedef(std::get<std::string>(token.getValue()));
         default:return false;
         }
     }
@@ -239,7 +240,7 @@ Expected<Declaration, FailureReason> OpenCL::Parser::parseDeclaration(Tokens::co
                                       }, value.getDirectDeclarator().getVariant());
                 }
             };
-            context.typedefs.insert(std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant()));
+            context.typedefs.back().insert(std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant()));
         }
     }
     else
@@ -378,10 +379,20 @@ OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason> Op
         auto expected = parseStructOrUnionSpecifier(curr,end,context);
         if (expected)
         {
-            auto result = std::make_unique<StructOrUnionSpecifier>(std::move(*expected));
-            context.structOrUnions.emplace(result->getIdentifier(), result.get());
+            auto name = expected->getIdentifier();
+            auto isDefinition = !expected->getStructDeclarations().empty();
+            auto result = TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
+            if (isDefinition)
+            {
+                auto type = Representations::declaratorsToType({std::cref(result)},nullptr,{});
+                if(!type)
+                {
+                    return type;
+                }
+                context.structOrUnions.emplace(name,std::get<Representations::RecordType>(type->getType()));
+            }
             begin = curr;
-            return DeclarationSpecifier{TypeSpecifier(line, column, std::move(result))};
+            return DeclarationSpecifier{std::move(result)};
         }
         else
         {
@@ -406,12 +417,12 @@ OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason> Op
     case TokenType::Identifier:
     {
         auto name = std::get<std::string>(currToken.getValue());
-        if (!context.isInScope(name) && context.typedefs.count(name))
+        if (!context.isInScope(name) && context.isTypedef(name))
         {
             begin = curr;
             return Syntax::DeclarationSpecifier{TypeSpecifier(line, column, name)};
         }
-        else if (context.typedefs.count(name))
+        else if (context.isTypedef(name))
         {
             return FailureReason(
                 "\"" + name + "\" is a typedef but cannot be used as such because another symbol overshadows it");
@@ -497,8 +508,8 @@ OpenCL::Expected<OpenCL::Syntax::StructOrUnionSpecifier,
                 {
                     return constant;
                 }
-                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
-                auto value = *evaluator.visit(*constant);
+                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                auto value = evaluator.visit(*constant);
                 if(!value)
                 {
                     return value;
@@ -530,8 +541,8 @@ OpenCL::Expected<OpenCL::Syntax::StructOrUnionSpecifier,
                 {
                     return constant;
                 }
-                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
-                auto value = *evaluator.visit(*constant);
+                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                auto value = evaluator.visit(*constant);
                 if(!value)
                 {
                     return value;
@@ -633,10 +644,20 @@ OpenCL::Expected<OpenCL::Syntax::SpecifierQualifier, OpenCL::FailureReason> Open
         auto expected = parseStructOrUnionSpecifier(curr,end,context);
         if (expected)
         {
-            auto result = std::make_unique<StructOrUnionSpecifier>(std::move(*expected));
-            context.structOrUnions.emplace(result->getIdentifier(), result.get());
+            auto name = expected->getIdentifier();
+            bool isDefinition = !expected->getStructDeclarations().empty();
+            auto result = TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
+            if (isDefinition)
+            {
+                auto type = Representations::declaratorsToType({std::cref(result)},nullptr,{});
+                if(!type)
+                {
+                    return type;
+                }
+                context.structOrUnions.emplace(name,std::get<Representations::RecordType>(type->getType()));
+            }
             begin = curr;
-            return SpecifierQualifier{TypeSpecifier(line, column, std::move(result))};
+            return SpecifierQualifier{std::move(result)};
         }
         else
         {
@@ -661,12 +682,12 @@ OpenCL::Expected<OpenCL::Syntax::SpecifierQualifier, OpenCL::FailureReason> Open
     case TokenType::Identifier:
     {
         auto name = std::get<std::string>(currToken.getValue());
-        if (!context.isInScope(name) && context.typedefs.count(name))
+        if (!context.isInScope(name) && context.isTypedef(name))
         {
             begin = curr;
             return Syntax::SpecifierQualifier{TypeSpecifier(line, column, name)};
         }
-        else if (context.typedefs.count(name))
+        else if (context.isTypedef(name))
         {
             return FailureReason(
                 "\"" + name + "\" is a typedef but cannot be used as such because another symbol overshadows it");
@@ -802,7 +823,6 @@ namespace
             {
                 return FailureReason("static appearing twice in direct declarator");
             }
-            wasStatic = true;
             curr++;
         }
         auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(curr, end, context);
@@ -1445,8 +1465,8 @@ Expected<EnumDeclaration, FailureReason> OpenCL::Parser::parseEnumDeclaration(To
             {
                 return constant;
             }
-            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
-            auto constValue = *evaluator.visit(*constant);
+            Constant::ConstantEvaluator evaluator(context.structOrUnions);
+            auto constValue = evaluator.visit(*constant);
             if(!constValue)
             {
                 return constValue;
@@ -1517,8 +1537,7 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason> Open
         * paramters = std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()
                                                                                    .getVariant()))
     {
-        for (auto&[specifier, paramDeclarator] : paramters->getParameterTypeList().getParameterList()
-                                                          .getParameterList())
+        for (auto&[specifier, paramDeclarator] : paramters->getParameterTypeList().getParameterList().getParameterDeclarations())
         {
             (void)specifier;
             if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
@@ -1778,8 +1797,8 @@ Expected<InitializerList, FailureReason> OpenCL::Parser::parseInitializerList(To
                     }
                 }
                 curr++;
-                Codegen::ConstantEvaluator evaluator(context.structOrUnions);
-                auto constValue = *evaluator.visit(*constant);
+                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                auto constValue = evaluator.visit(*constant);
                 if(!constValue)
                 {
                     return constValue;
@@ -2165,13 +2184,13 @@ Expected<Statement, FailureReason> OpenCL::Parser::parseStatement(Tokens::const_
                 return FailureReason("Expected : after constant expression of case");
             }
             curr++;
-            Codegen::ConstantEvaluator evaluator(context.structOrUnions);
+            Constant::ConstantEvaluator evaluator(context.structOrUnions);
             auto statement = parseStatement(curr, end, context);
             if (!statement)
             {
                 return statement;
             }
-            auto constValue = *evaluator.visit(*expression);
+            auto constValue = evaluator.visit(*expression);
             if(!constValue)
             {
                 return constValue;
@@ -3295,4 +3314,16 @@ Expected<PrimaryExpression, FailureReason> OpenCL::Parser::parsePrimaryExpressio
     {
         return FailureReason("Invalid token for primary expression");
     }
+}
+
+bool Parser::ParsingContext::isTypedef(const std::string& name)
+{
+    for(auto& iter : typedefs)
+    {
+        if(iter.count(name))
+        {
+            return true;
+        }
+    }
+    return false;
 }

@@ -36,7 +36,7 @@ namespace OpenCL
          * @param value copyable value
          */
         template <class U = ValueType>
-        constexpr explicit Expected(const U& value) noexcept(std::is_nothrow_copy_constructible_v<U>);
+        constexpr Expected(const U& value) noexcept(std::is_nothrow_copy_constructible_v<U>);
 
         /**
          * Implicit move constructs with error

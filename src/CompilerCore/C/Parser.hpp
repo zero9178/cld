@@ -2,8 +2,7 @@
 #define OPENCLPARSER_PARSER_HPP
 
 #include "Syntax.hpp"
-#include "Expected.hpp"
-#include "FailureReason.hpp"
+#include "Representations.hpp"
 #include <map>
 
 namespace OpenCL::Parser
@@ -17,13 +16,16 @@ namespace OpenCL::Parser
 
     public:
 
-        std::set<std::string> typedefs;
+        std::vector<std::set<std::string>> typedefs;
         std::set<std::string> functions;
-        std::map<std::string, const OpenCL::Syntax::StructOrUnionSpecifier*> structOrUnions;
+        std::map<std::string, Representations::RecordType> structOrUnions;
+
+        bool isTypedef(const std::string& name);
 
         ParsingContext()
         {
             m_currentScope.emplace_back();
+            typedefs.emplace_back();
         }
 
         ~ParsingContext() = default;
@@ -59,11 +61,13 @@ namespace OpenCL::Parser
         void pushScope()
         {
             m_currentScope.emplace_back();
+            typedefs.emplace_back();
         }
 
         void popScope()
         {
             m_currentScope.pop_back();
+            typedefs.emplace_back();
         }
 
         void addEnumConstant(const std::string& name, std::int32_t value)

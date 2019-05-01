@@ -36,9 +36,13 @@ int main()
 
     OpenCL::Codegen::Context context;
     auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
-    auto node = OpenCL::Parser::buildTree(std::move(result));
-    return 0;
-    context.visit(node);
+    auto node = OpenCL::Parser::buildTree(result);
+    if(!node)
+    {
+        std::cerr<<node.error().getText();
+        return -1;
+    }
+    context.visit(*node);
 
     context.module->print(llvm::outs(), nullptr);
 
