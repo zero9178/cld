@@ -106,6 +106,11 @@ bool OpenCL::Representations::Type::operator!=(const OpenCL::Representations::Ty
     return !(rhs == *this);
 }
 
+bool OpenCL::Representations::Type::isCompatibleWith(const OpenCL::Representations::Type& rhs) const
+{
+    return m_type == rhs.m_type;
+}
+
 OpenCL::Representations::PointerType::PointerType(bool isRestricted,
                                                   std::unique_ptr<OpenCL::Representations::Type>&& elementType)
     : m_restricted(isRestricted), m_elementType(std::move(elementType))

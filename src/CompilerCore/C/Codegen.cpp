@@ -35,6 +35,171 @@ namespace
     overload(Ts...)->overload<Ts...>;
 } // namespace
 
+llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Type& sourceType, llvm::Value* source,
+                                              const OpenCL::Representations::Type& destinationType,
+                                              bool explicitConversion)
+{
+    if (sourceType.isCompatibleWith(destinationType))
+    {
+        return source;
+    }
+    return std::visit(
+        overload{
+            [&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+                return std::visit(
+                    overload{[&](const Representations::PrimitiveType& otherPrimitive) -> llvm::Value* {
+                                 if (!primitiveType.isFloatingPoint() && !otherPrimitive.isFloatingPoint())
+                                 {
+                                     if (primitiveType.isSigned())
+                                     {
+                                         return builder.CreateSExtOrTrunc(source, visit(destinationType));
+                                     }
+                                     else
+                                     {
+                                         return builder.CreateZExtOrTrunc(source, visit(destinationType));
+                                     }
+                                 }
+                                 else if (primitiveType.isFloatingPoint() && !otherPrimitive.isFloatingPoint())
+                                 {
+                                     if (otherPrimitive.isSigned())
+                                     {
+                                         return builder.CreateFPToSI(source, visit(destinationType));
+                                     }
+                                     else
+                                     {
+                                         return builder.CreateFPToUI(source, visit(destinationType));
+                                     }
+                                 }
+                                 else if (!primitiveType.isFloatingPoint() && otherPrimitive.isFloatingPoint())
+                                 {
+                                     if (primitiveType.isSigned())
+                                     {
+                                         return builder.CreateSIToFP(source, visit(destinationType));
+                                     }
+                                     else
+                                     {
+                                         return builder.CreateUIToFP(source, visit(destinationType));
+                                     }
+                                 }
+                                 else
+                                 {
+                                     return builder.CreateFPCast(source, visit(destinationType));
+                                 }
+                             },
+                             [&](const Representations::PointerType&) -> llvm::Value* {
+                                 if (primitiveType.isFloatingPoint())
+                                 {
+                                     return nullptr;
+                                 }
+                                 return builder.CreateIntToPtr(source, visit(destinationType));
+                             },
+                             [&](const Representations::EnumType&) -> llvm::Value* {
+                                 if (primitiveType.isFloatingPoint())
+                                 {
+                                     return builder.CreateFPToSI(source, builder.getInt32Ty());
+                                 }
+                                 else if (primitiveType.isSigned())
+                                 {
+                                     return builder.CreateSExtOrTrunc(source, builder.getInt32Ty());
+                                 }
+                                 else
+                                 {
+                                     return builder.CreateZExtOrTrunc(source, builder.getInt32Ty());
+                                 }
+                             },
+                             [](auto &&) -> llvm::Value* { return nullptr; }},
+                    destinationType.getType());
+            },
+            [&](const Representations::PointerType&) -> llvm::Value* {
+                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+                                               if (primitiveType.isFloatingPoint())
+                                               {
+                                                   return nullptr;
+                                               }
+                                               return builder.CreatePtrToInt(source, visit(destinationType));
+                                           },
+                                           [&](const Representations::PointerType&) -> llvm::Value* {
+                                               return builder.CreateBitCast(source, visit(destinationType));
+                                           },
+                                           [&](const Representations::EnumType&) -> llvm::Value* {
+                                               return builder.CreatePtrToInt(source, builder.getInt32Ty());
+                                           },
+                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                  destinationType.getType());
+            },
+            [&](const Representations::FunctionType& functionType) -> llvm::Value* {
+                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+                                               if (primitiveType.isFloatingPoint())
+                                               {
+                                                   return nullptr;
+                                               }
+                                               return builder.CreatePtrToInt(source, visit(destinationType));
+                                           },
+                                           [&](const Representations::PointerType& pointerType) -> llvm::Value* {
+                                               if (auto* function = std::get_if<Representations::FunctionType>(
+                                                       &pointerType.getElementType().getType());
+                                                   function && *function == functionType)
+                                               {
+                                                   return source;
+                                               }
+                                               return builder.CreatePtrToInt(source, visit(destinationType));
+                                           },
+                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                  destinationType.getType());
+            },
+            [&](const Representations::EnumType&) -> llvm::Value* {
+                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+                                               if (primitiveType.isFloatingPoint())
+                                               {
+                                                   return builder.CreateSIToFP(source, visit(destinationType));
+                                               }
+                                               else
+                                               {
+                                                   return builder.CreateSExtOrTrunc(source, visit(destinationType));
+                                               }
+                                           },
+                                           [&](const Representations::PointerType&) -> llvm::Value* {
+                                               return builder.CreateIntToPtr(source, visit(destinationType));
+                                           },
+                                           [&](const Representations::EnumType&) -> llvm::Value* { return source; },
+                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                  destinationType.getType());
+            },
+            [&](const Representations::ArrayType& arrayType) -> llvm::Value* {
+                auto* zero = builder.getInt32(0);
+                auto* ptrRep = builder.CreateInBoundsGEP(source, {zero, zero});
+                return castTo(Representations::PointerType::create(false, false, false,
+                                                                   Representations::Type(arrayType.getType())),
+                              ptrRep, destinationType, explicitConversion);
+            },
+            [](auto&& ) -> llvm::Value* {
+                return nullptr;
+            }},
+        sourceType.getType());
+}
+
+llvm::Value* OpenCL::Codegen::Context::toBool(llvm::Value* source)
+{
+    if (source->getType()->isIntegerTy())
+    {
+        return builder.CreateICmpNE(source, builder.getIntN(source->getType()->getIntegerBitWidth(), 0));
+    }
+    else if (source->getType()->isFloatingPointTy())
+    {
+        return builder.CreateFCmpUNE(source, llvm::ConstantFP::get(source->getType(), 0));
+    }
+    else if (source->getType()->isPointerTy())
+    {
+        return builder.CreateICmpNE(source,
+                                    llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(source->getType())));
+    }
+    else if (source->getType()->isArrayTy())
+    {
+        return builder.getInt1(true);
+    }
+    return nullptr;
+}
+
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Expression& node)
 {
     for (std::size_t i = 0; i < node.getAssignmentExpressions().size(); i++)
@@ -202,12 +367,51 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 {
     if (node.getOptionalConditionalExpression() && node.getOptionalExpression())
     {
-        auto boolean = visit(node.getLogicalOrExpression());
-        if (!boolean)
+        auto booleanE = visit(node.getLogicalOrExpression());
+        if (!booleanE)
         {
-            return boolean;
+            return booleanE;
         }
-        // TODO: ? : constructs
+        auto* boolean = toBool(booleanE->first);
+        auto* function = builder.GetInsertBlock()->getParent();
+
+        auto* thenBB = llvm::BasicBlock::Create(context,"",function);
+        auto* elseBB = llvm::BasicBlock::Create(context);
+        auto* mergeBB = llvm::BasicBlock::Create(context);
+
+        builder.CreateCondBr(boolean,thenBB,elseBB);
+
+        builder.SetInsertPoint(thenBB);
+        auto thenE = visit(*node.getOptionalExpression());
+        if(!thenE)
+        {
+            return thenE;
+        }
+        auto [thenV,thenT] = *thenE;
+
+        builder.CreateBr(mergeBB);
+        thenBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(elseBB);
+        builder.SetInsertPoint(elseBB);
+
+        auto elseE = visit(*node.getOptionalConditionalExpression());
+        if(!elseE)
+        {
+            return elseE;
+        }
+        auto [elseV,elseT] = *elseE;
+
+        builder.CreateBr(mergeBB);
+        elseBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(mergeBB);
+        builder.SetInsertPoint(mergeBB);
+        //TODO: arithmeticCast
+        auto* pn = builder.CreatePHI(thenV->getType(),2);
+        pn->addIncoming(thenV,thenBB);
+        pn->addIncoming(elseV,elseBB);
+        return std::pair{pn,thenT};
     }
     else
     {
@@ -561,7 +765,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                     {
                         return result.error();
                     }
-                    builder.CreateStore(result->first, alloca, type->isVolatile());
+                    builder.CreateStore(castTo(result->second, result->first, *type), alloca, type->isVolatile());
                 }
                 else
                 {

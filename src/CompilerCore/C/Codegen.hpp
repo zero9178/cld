@@ -69,6 +69,10 @@ namespace OpenCL::Codegen
             return m_namedValues.size() == 1;
         }
 
+        llvm::Value* castTo(const Representations::Type& sourceType,llvm::Value* source,const Representations::Type& destinationType,bool explicitConversion = false);
+
+        llvm::Value* toBool(llvm::Value* source);
+
     public:
         std::unique_ptr<llvm::Module> module;
 

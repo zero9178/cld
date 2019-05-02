@@ -272,6 +272,8 @@ namespace OpenCL::Representations
         bool operator==(const Type& rhs) const;
 
         bool operator!=(const Type& rhs) const;
+
+        bool isCompatibleWith(const Type& rhs) const;
     };
 
     using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,
