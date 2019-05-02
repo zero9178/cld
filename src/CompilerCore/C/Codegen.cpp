@@ -172,9 +172,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                                    Representations::Type(arrayType.getType())),
                               ptrRep, destinationType, explicitConversion);
             },
-            [](auto&& ) -> llvm::Value* {
-                return nullptr;
-            }},
+            [](auto &&) -> llvm::Value* { return nullptr; }},
         sourceType.getType());
 }
 
@@ -353,15 +351,216 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EqualityExpression& node) {}
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node)
+{
+    auto result = visit(node.getEqualityExpression());
+    if (!result)
+    {
+        return result;
+    }
+    auto [left, leftType] = *result;
+    for (auto& equality : node.getOptionalEqualityExpressions())
+    {
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for & operator");
+        }
+        auto rightResult = visit(equality);
+        if (!rightResult)
+        {
+            return rightResult;
+        }
+        auto [right, rightType] = *rightResult;
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for & operator");
+        }
+        arithmeticCast(leftType, left, rightType);
+        arithmeticCast(rightType, right, leftType);
+        left = builder.CreateAnd(left, right);
+        if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
+            && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+        {
+            leftType = Representations::PrimitiveType::create(
+                false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        }
+    }
+    return std::pair{left, leftType};
+}
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node)
+{
+    auto result = visit(node.getBitAndExpression());
+    if (!result)
+    {
+        return result;
+    }
+    auto [left, leftType] = *result;
+    for (auto& bitAnd : node.getOptionalBitAndExpressions())
+    {
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for ^ operator");
+        }
+        auto rightResult = visit(bitAnd);
+        if (!rightResult)
+        {
+            return rightResult;
+        }
+        auto [right, rightType] = *rightResult;
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for ^ operator");
+        }
+        arithmeticCast(leftType, left, rightType);
+        arithmeticCast(rightType, right, leftType);
+        left = builder.CreateXor(left, right);
+        if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
+            && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+        {
+            leftType = Representations::PrimitiveType::create(
+                false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        }
+    }
+    return std::pair{left, leftType};
+}
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node)
+{
+    auto result = visit(node.getBitXorExpression());
+    if (!result)
+    {
+        return result;
+    }
+    auto [left, leftType] = *result;
+    for (auto& bitXor : node.getOptionalBitXorExpressions())
+    {
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for | operator");
+        }
+        auto rightResult = visit(bitXor);
+        if (!rightResult)
+        {
+            return rightResult;
+        }
+        auto [right, rightType] = *rightResult;
+        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+            !primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Type must be of integer type for | operator");
+        }
+        arithmeticCast(leftType, left, rightType);
+        arithmeticCast(rightType, right, leftType);
+        left = builder.CreateOr(left, right);
+        if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
+            && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+        {
+            leftType = Representations::PrimitiveType::create(
+                false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        }
+    }
+    return std::pair{left, leftType};
+}
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+{
+    auto result = visit(node.getBitOrExpression());
+    if (!result)
+    {
+        return result;
+    }
+    auto [value, type] = *result;
+    for (auto& andExpression : node.getOptionalBitOrExpressions())
+    {
+        auto* function = builder.GetInsertBlock()->getParent();
+        value = toBool(value);
+        auto* thenBB = llvm::BasicBlock::Create(context, "", function);
+        auto* elseBB = llvm::BasicBlock::Create(context);
+        auto* mergeBB = llvm::BasicBlock::Create(context);
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node) {}
+        builder.CreateCondBr(value, elseBB, thenBB);
+
+        builder.SetInsertPoint(thenBB);
+        auto rightResult = visit(andExpression);
+        if (!rightResult)
+        {
+            return rightResult;
+        }
+        auto [right, rightType] = *rightResult;
+        right = toBool(right);
+        right = builder.CreateZExt(right, builder.getInt32Ty());
+        builder.CreateBr(mergeBB);
+        thenBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(elseBB);
+        builder.SetInsertPoint(elseBB);
+
+        builder.CreateBr(mergeBB);
+        elseBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(mergeBB);
+        builder.SetInsertPoint(mergeBB);
+        auto* pn = builder.CreatePHI(builder.getInt32Ty(), 2);
+        pn->addIncoming(right, thenBB);
+        pn->addIncoming(builder.getInt32(0), elseBB);
+        value = pn;
+        type = Representations::PrimitiveType::create(false, false, false, true, 32);
+    }
+    return std::pair{value, type};
+}
+
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+{
+    auto result = visit(node.getAndExpression());
+    if (!result)
+    {
+        return result;
+    }
+    auto [value, type] = *result;
+    for (auto& andExpression : node.getOptionalAndExpressions())
+    {
+        auto* function = builder.GetInsertBlock()->getParent();
+        value = toBool(value);
+        auto* thenBB = llvm::BasicBlock::Create(context, "", function);
+        auto* elseBB = llvm::BasicBlock::Create(context);
+        auto* mergeBB = llvm::BasicBlock::Create(context);
+
+        builder.CreateCondBr(value, elseBB, thenBB);
+
+        builder.SetInsertPoint(thenBB);
+        auto rightResult = visit(andExpression);
+        if (!rightResult)
+        {
+            return rightResult;
+        }
+        auto [right, rightType] = *rightResult;
+        right = toBool(right);
+        right = builder.CreateZExt(right, builder.getInt32Ty());
+        builder.CreateBr(mergeBB);
+        thenBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(elseBB);
+        builder.SetInsertPoint(elseBB);
+
+        builder.CreateBr(mergeBB);
+        elseBB = builder.GetInsertBlock();
+
+        function->getBasicBlockList().push_back(mergeBB);
+        builder.SetInsertPoint(mergeBB);
+        auto* pn = builder.CreatePHI(builder.getInt32Ty(), 2);
+        pn->addIncoming(right, thenBB);
+        pn->addIncoming(builder.getInt32(1), elseBB);
+        value = pn;
+        type = Representations::PrimitiveType::create(false, false, false, true, 32);
+    }
+    return std::pair{value, type};
+}
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
@@ -375,19 +574,19 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         auto* boolean = toBool(booleanE->first);
         auto* function = builder.GetInsertBlock()->getParent();
 
-        auto* thenBB = llvm::BasicBlock::Create(context,"",function);
+        auto* thenBB = llvm::BasicBlock::Create(context, "", function);
         auto* elseBB = llvm::BasicBlock::Create(context);
         auto* mergeBB = llvm::BasicBlock::Create(context);
 
-        builder.CreateCondBr(boolean,thenBB,elseBB);
+        builder.CreateCondBr(boolean, thenBB, elseBB);
 
         builder.SetInsertPoint(thenBB);
         auto thenE = visit(*node.getOptionalExpression());
-        if(!thenE)
+        if (!thenE)
         {
             return thenE;
         }
-        auto [thenV,thenT] = *thenE;
+        auto [thenV, thenT] = *thenE;
 
         builder.CreateBr(mergeBB);
         thenBB = builder.GetInsertBlock();
@@ -396,22 +595,22 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         builder.SetInsertPoint(elseBB);
 
         auto elseE = visit(*node.getOptionalConditionalExpression());
-        if(!elseE)
+        if (!elseE)
         {
             return elseE;
         }
-        auto [elseV,elseT] = *elseE;
+        auto [elseV, elseT] = *elseE;
 
         builder.CreateBr(mergeBB);
         elseBB = builder.GetInsertBlock();
 
         function->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
-        //TODO: arithmeticCast
-        auto* pn = builder.CreatePHI(thenV->getType(),2);
-        pn->addIncoming(thenV,thenBB);
-        pn->addIncoming(elseV,elseBB);
-        return std::pair{pn,thenT};
+        // TODO: arithmeticCast
+        auto* pn = builder.CreatePHI(thenV->getType(), 2);
+        pn->addIncoming(thenV, thenBB);
+        pn->addIncoming(elseV, elseBB);
+        return std::pair{pn, thenT};
     }
     else
     {
@@ -1269,4 +1468,51 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Point
     {
         return llvm::PointerType::getUnqual(elemType);
     }
+}
+
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type,
+                                                                              llvm::Value*& value,
+                                                                              const Representations::Type& otherType)
+{
+    if (type.isCompatibleWith(otherType))
+    {
+        return {};
+    }
+    if (auto [primitiveType, otherPrimitive] =
+            std::pair(std::get_if<Representations::PrimitiveType>(&type.getType()),
+                      std::get_if<Representations::PrimitiveType>(&otherType.getType()));
+        primitiveType && otherPrimitive)
+    {
+        if (otherPrimitive->isFloatingPoint()
+            && (!primitiveType->isFloatingPoint() || primitiveType->getBitCount() < otherPrimitive->getBitCount()))
+        {
+            if (primitiveType->isFloatingPoint())
+            {
+                value = builder.CreateFPCast(value, visit(otherType));
+                type = otherType;
+            }
+            else if (primitiveType->isSigned())
+            {
+                value = builder.CreateSIToFP(value, visit(otherType));
+                type = otherType;
+            }
+            else
+            {
+                value = builder.CreateUIToFP(value, visit(otherType));
+                type = otherType;
+            }
+        }
+        else if (!primitiveType->isFloatingPoint() && !otherPrimitive->isFloatingPoint()
+                 && (primitiveType->getBitCount() < 32u
+                     || primitiveType->getBitCount() < otherPrimitive->getBitCount()))
+        {
+            value = builder.CreateIntCast(value,
+                                          builder.getIntNTy(std::max<std::uint8_t>(32u, otherPrimitive->getBitCount())),
+                                          primitiveType->isSigned());
+            type = Representations::PrimitiveType::create(type.isConst(), type.isVolatile(), false,
+                                                          primitiveType->isSigned(),
+                                                          std::max<std::uint8_t>(32u, otherPrimitive->getBitCount()));
+        }
+    }
+    return {};
 }

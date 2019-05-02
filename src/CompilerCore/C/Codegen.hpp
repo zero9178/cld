@@ -73,6 +73,9 @@ namespace OpenCL::Codegen
 
         llvm::Value* toBool(llvm::Value* source);
 
+        std::optional<OpenCL::FailureReason> arithmeticCast(Representations::Type& type, llvm::Value*& value,
+                                                            const Representations::Type& otherType);
+
     public:
         std::unique_ptr<llvm::Module> module;
 
