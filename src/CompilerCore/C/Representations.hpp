@@ -49,21 +49,13 @@ namespace OpenCL::Representations
     class ArrayType final
     {
         bool m_restricted;
-        std::unique_ptr<Type> m_type;
+        std::shared_ptr<Type> m_type;
         std::size_t m_size;
 
-        ArrayType(bool isRestricted, std::unique_ptr<Type>&& type, std::size_t size);
+        ArrayType(bool isRestricted, std::shared_ptr<Type>&& type, std::size_t size);
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type, std::size_t size);
-
-        ArrayType(const ArrayType& rhs);
-
-        ArrayType(ArrayType&& rhs) noexcept = default;
-
-        ArrayType& operator=(const ArrayType& rhs);
-
-        ArrayType& operator=(ArrayType&& rhs) noexcept = default;
 
         const Type& getType() const;
 
@@ -79,20 +71,12 @@ namespace OpenCL::Representations
     class AbstractArrayType final
     {
         bool m_restricted;
-        std::unique_ptr<Type> m_type;
+        std::shared_ptr<Type> m_type;
 
-        AbstractArrayType(bool isRestricted, std::unique_ptr<Type>&& type);
+        AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
-
-        AbstractArrayType(const AbstractArrayType& rhs);
-
-        AbstractArrayType(AbstractArrayType&& rhs) noexcept = default;
-
-        AbstractArrayType& operator=(const AbstractArrayType& rhs);
-
-        AbstractArrayType& operator=(AbstractArrayType&& rhss) noexcept = default;
 
         const Type& getType() const;
 
@@ -106,20 +90,12 @@ namespace OpenCL::Representations
     class ValArrayType final
     {
         bool m_restricted;
-        std::unique_ptr<Type> m_type;
+        std::shared_ptr<Type> m_type;
 
-        ValArrayType(bool isRestricted, std::unique_ptr<OpenCL::Representations::Type>&& type);
+        ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Representations::Type>&& type);
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
-
-        ValArrayType(const ValArrayType& rhs);
-
-        ValArrayType(ValArrayType&& rhs) noexcept = default;
-
-        ValArrayType& operator=(const ValArrayType& rhs);
-
-        ValArrayType& operator=(ValArrayType&& rhs) noexcept = default;
 
         const Type& getType() const;
 
@@ -132,24 +108,16 @@ namespace OpenCL::Representations
 
     class FunctionType final
     {
-        std::unique_ptr<Type> m_returnType;
+        std::shared_ptr<Type> m_returnType;
         std::vector<Type> m_arguments;
         bool m_lastIsVararg;
 
-        FunctionType(std::unique_ptr<Type>&& returnType, std::vector<Type> arguments, bool lastIsVararg);
+        FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments, bool lastIsVararg);
 
     public:
         static OpenCL::Representations::Type create(OpenCL::Representations::Type&& returnType,
                                                     std::vector<OpenCL::Representations::Type>&& arguments,
                                                     bool lastIsVararg);
-
-        FunctionType(const FunctionType& rhs);
-
-        FunctionType(FunctionType&& rhs) noexcept = default;
-
-        FunctionType& operator=(const FunctionType& rhs);
-
-        FunctionType& operator=(FunctionType&& rhs) noexcept = default;
 
         const Type& getReturnType() const;
 
@@ -212,20 +180,12 @@ namespace OpenCL::Representations
     class PointerType final
     {
         bool m_restricted;
-        std::unique_ptr<Type> m_elementType;
+        std::shared_ptr<Type> m_elementType;
 
-        PointerType(bool isRestricted, std::unique_ptr<Type>&& elementType);
+        PointerType(bool isRestricted, std::shared_ptr<Type>&& elementType);
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& elementType);
-
-        PointerType(const PointerType& rhs);
-
-        PointerType(PointerType&& rhs) noexcept = default;
-
-        PointerType& operator=(const PointerType& rhs);
-
-        PointerType& operator=(PointerType&& rhs) noexcept = default;
 
         const Type& getElementType() const;
 
@@ -248,16 +208,6 @@ namespace OpenCL::Representations
 
     public:
         Type(bool isConst, bool isVolatile, std::string name, variant&& type);
-
-        virtual ~Type() = default;
-
-        Type(const Type&) = default;
-
-        Type(Type&&) noexcept = default;
-
-        Type& operator=(const Type&) = default;
-
-        Type& operator=(Type&&) noexcept = default;
 
         const variant& getType() const;
 

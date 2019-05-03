@@ -18,7 +18,7 @@ std::size_t OpenCL::Representations::ArrayType::getSize() const
     return m_size;
 }
 
-OpenCL::Representations::ArrayType::ArrayType(bool isRestricted, std::unique_ptr<OpenCL::Representations::Type>&& type,
+OpenCL::Representations::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<OpenCL::Representations::Type>&& type,
                                               std::size_t size)
     : m_restricted(isRestricted), m_type(std::move(type)), m_size(size)
 {
@@ -38,7 +38,7 @@ OpenCL::Representations::Type OpenCL::Representations::ArrayType::create(bool is
     ss << size;
     auto name = type.getName() + "[" + ss.str() + "]";
     return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         ArrayType(isRestricted, std::make_unique<Type>(std::move(type)), size));
+                                         ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }
 
 bool OpenCL::Representations::ArrayType::operator==(const OpenCL::Representations::ArrayType& rhs) const
@@ -49,20 +49,6 @@ bool OpenCL::Representations::ArrayType::operator==(const OpenCL::Representation
 bool OpenCL::Representations::ArrayType::operator!=(const OpenCL::Representations::ArrayType& rhs) const
 {
     return !(rhs == *this);
-}
-
-OpenCL::Representations::ArrayType::ArrayType(const OpenCL::Representations::ArrayType& rhs)
-    : ArrayType(rhs.isRestricted(), std::make_unique<Type>(rhs.getType()), rhs.getSize())
-{
-}
-
-OpenCL::Representations::ArrayType& OpenCL::Representations::ArrayType::
-    operator=(const OpenCL::Representations::ArrayType& rhs)
-{
-    m_restricted = rhs.m_restricted;
-    m_type = std::make_unique<Type>(*rhs.m_type);
-    m_size = rhs.m_size;
-    return *this;
 }
 
 bool OpenCL::Representations::Type::isConst() const
@@ -112,7 +98,7 @@ bool OpenCL::Representations::Type::isCompatibleWith(const OpenCL::Representatio
 }
 
 OpenCL::Representations::PointerType::PointerType(bool isRestricted,
-                                                  std::unique_ptr<OpenCL::Representations::Type>&& elementType)
+                                                  std::shared_ptr<OpenCL::Representations::Type>&& elementType)
     : m_restricted(isRestricted), m_elementType(std::move(elementType))
 {
 }
@@ -149,20 +135,7 @@ OpenCL::Representations::Type OpenCL::Representations::PointerType::create(bool 
         name = elementType.getName() + "*";
     }
     return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         PointerType(isRestricted, std::make_unique<Type>(std::move(elementType))));
-}
-
-OpenCL::Representations::PointerType::PointerType(const OpenCL::Representations::PointerType& rhs)
-    : PointerType(rhs.isRestricted(), std::make_unique<Type>(rhs.getElementType()))
-{
-}
-
-OpenCL::Representations::PointerType& OpenCL::Representations::PointerType::
-    operator=(const OpenCL::Representations::PointerType& rhs)
-{
-    m_restricted = rhs.m_restricted;
-    m_elementType = std::make_unique<Type>(rhs.getElementType());
-    return *this;
+                                         PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
 }
 
 bool OpenCL::Representations::PointerType::operator==(const OpenCL::Representations::PointerType& rhs) const
@@ -313,7 +286,7 @@ bool OpenCL::Representations::PrimitiveType::operator!=(const OpenCL::Representa
 }
 
 OpenCL::Representations::ValArrayType::ValArrayType(bool isRestricted,
-                                                    std::unique_ptr<OpenCL::Representations::Type>&& type)
+                                                    std::shared_ptr<OpenCL::Representations::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
@@ -334,12 +307,7 @@ OpenCL::Representations::Type OpenCL::Representations::ValArrayType::create(bool
 {
     auto name = type.getName() + "[*]";
     return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         ValArrayType(isRestricted, std::make_unique<Type>(std::move(type))));
-}
-
-OpenCL::Representations::ValArrayType::ValArrayType(const OpenCL::Representations::ValArrayType& rhs)
-    : ValArrayType(rhs.isRestricted(), std::make_unique<Type>(rhs.getType()))
-{
+                                         ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
 bool OpenCL::Representations::ValArrayType::operator==(const OpenCL::Representations::ValArrayType& rhs) const
@@ -352,15 +320,7 @@ bool OpenCL::Representations::ValArrayType::operator!=(const OpenCL::Representat
     return !(rhs == *this);
 }
 
-OpenCL::Representations::ValArrayType& OpenCL::Representations::ValArrayType::
-    operator=(const OpenCL::Representations::ValArrayType& rhs)
-{
-    m_restricted = rhs.m_restricted;
-    m_type = std::make_unique<Type>(*rhs.m_type);
-    return *this;
-}
-
-OpenCL::Representations::FunctionType::FunctionType(std::unique_ptr<Type>&& returnType, std::vector<Type> arguments,
+OpenCL::Representations::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments,
                                                     bool lastIsVararg)
     : m_returnType(std::move(returnType)), m_arguments(std::move(arguments)), m_lastIsVararg(lastIsVararg)
 {
@@ -398,7 +358,7 @@ OpenCL::Representations::Type
     argumentsNames = returnType.getName() + "(" + argumentsNames + ")";
     return OpenCL::Representations::Type(
         false, false, argumentsNames,
-        FunctionType(std::make_unique<Type>(std::move(returnType)), std::move(arguments), lastIsVararg));
+        FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg));
 }
 
 bool OpenCL::Representations::FunctionType::operator==(const OpenCL::Representations::FunctionType& rhs) const
@@ -412,22 +372,8 @@ bool OpenCL::Representations::FunctionType::operator!=(const OpenCL::Representat
     return !(rhs == *this);
 }
 
-OpenCL::Representations::FunctionType::FunctionType(const OpenCL::Representations::FunctionType& rhs)
-    : FunctionType(std::make_unique<Type>(rhs.getReturnType()), rhs.getArguments(), rhs.isLastVararg())
-{
-}
-
-OpenCL::Representations::FunctionType& OpenCL::Representations::FunctionType::
-    operator=(const OpenCL::Representations::FunctionType& rhs)
-{
-    m_returnType = std::make_unique<Type>(rhs.getReturnType());
-    m_arguments = rhs.getArguments();
-    m_lastIsVararg = rhs.m_lastIsVararg;
-    return *this;
-}
-
 OpenCL::Representations::AbstractArrayType::AbstractArrayType(bool isRestricted,
-                                                              std::unique_ptr<OpenCL::Representations::Type>&& type)
+                                                              std::shared_ptr<OpenCL::Representations::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
@@ -448,7 +394,7 @@ OpenCL::Representations::Type OpenCL::Representations::AbstractArrayType::create
 {
     auto name = type.getName() + "[]";
     return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         AbstractArrayType(isRestricted, std::make_unique<Type>(std::move(type))));
+                                         AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
 bool OpenCL::Representations::AbstractArrayType::operator==(const OpenCL::Representations::AbstractArrayType& rhs) const
@@ -459,19 +405,6 @@ bool OpenCL::Representations::AbstractArrayType::operator==(const OpenCL::Repres
 bool OpenCL::Representations::AbstractArrayType::operator!=(const OpenCL::Representations::AbstractArrayType& rhs) const
 {
     return !(rhs == *this);
-}
-
-OpenCL::Representations::AbstractArrayType::AbstractArrayType(const OpenCL::Representations::AbstractArrayType& rhs)
-    : AbstractArrayType(rhs.isRestricted(), std::make_unique<Type>(rhs.getType()))
-{
-}
-
-OpenCL::Representations::AbstractArrayType& OpenCL::Representations::AbstractArrayType::
-    operator=(const OpenCL::Representations::AbstractArrayType& rhs)
-{
-    m_restricted = rhs.isRestricted();
-    m_type = std::make_unique<Type>(rhs.getType());
-    return *this;
 }
 
 namespace

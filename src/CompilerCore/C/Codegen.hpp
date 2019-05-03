@@ -69,12 +69,45 @@ namespace OpenCL::Codegen
             return m_namedValues.size() == 1;
         }
 
-        llvm::Value* castTo(const Representations::Type& sourceType,llvm::Value* source,const Representations::Type& destinationType,bool explicitConversion = false);
+        NodeRetType makeDivide(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                                 llvm::Value* right);
+
+        NodeRetType makeRemainder(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                                 llvm::Value* right);
+
+        NodeRetType makeMultiply(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                                 llvm::Value* right);
+
+        NodeRetType makePlus(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                             llvm::Value* right);
+
+        NodeRetType makeMinus(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                              llvm::Value* right);
+
+        NodeRetType makeLeftShift(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                                  llvm::Value* right);
+
+        NodeRetType makeRightShift(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                                   llvm::Value* right);
+
+        NodeRetType makeBitAnd(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                               llvm::Value* right);
+
+        NodeRetType makeBitXor(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                               llvm::Value* right);
+
+        NodeRetType makeBitOr(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+                              llvm::Value* right);
+
+        llvm::Value* castTo(const Representations::Type& sourceType, llvm::Value* source,
+                            const Representations::Type& destinationType, bool explicitConversion = false);
 
         llvm::Value* toBool(llvm::Value* source);
 
-        std::optional<OpenCL::FailureReason> arithmeticCast(Representations::Type& type, llvm::Value*& value,
-                                                            const Representations::Type& otherType);
+        void arithmeticCast(Representations::Type& type, llvm::Value*& value, const Representations::Type& otherType);
+
+        Representations::Type integerPromotion(const OpenCL::Representations::Type& type,
+                                               llvm::Value** optionalValue = nullptr);
 
     public:
         std::unique_ptr<llvm::Module> module;
@@ -135,40 +168,36 @@ namespace OpenCL::Codegen
 
         NodeRetType visit(const Syntax::ConditionalExpression& node);
 
-        NodeRetType visit(const Syntax::ReturnStatement& node);
+        std::optional<FailureReason> visit(const Syntax::ReturnStatement& node);
 
-        NodeRetType visit(const Syntax::ExpressionStatement& node);
+        std::optional<FailureReason> visit(const Syntax::ExpressionStatement& node);
 
-        NodeRetType visit(const Syntax::IfStatement& node);
+        std::optional<FailureReason> visit(const Syntax::IfStatement& node);
 
-        NodeRetType visit(const Syntax::SwitchStatement& node);
+        std::optional<FailureReason> visit(const Syntax::SwitchStatement& node);
 
-        NodeRetType visit(const Syntax::DefaultStatement& node);
+        std::optional<FailureReason> visit(const Syntax::DefaultStatement& node);
 
-        NodeRetType visit(const Syntax::CaseStatement& node);
+        std::optional<FailureReason> visit(const Syntax::CaseStatement& node);
 
         std::optional<OpenCL::FailureReason> visit(const OpenCL::Syntax::CompoundStatement& node,
                                                    bool pushScope = true);
 
-        NodeRetType visit(const Syntax::ForStatement& node);
+        std::optional<FailureReason> visit(const Syntax::ForStatement& node);
 
         NodeRetType visit(const Syntax::InitializerList& node);
 
         std::optional<FailureReason> visit(const Syntax::Declaration& node);
 
-        NodeRetType visit(const Syntax::ForDeclarationStatement& node);
+        std::optional<FailureReason> visit(const Syntax::ForDeclarationStatement& node);
 
-        NodeRetType visit(const Syntax::HeadWhileStatement& node);
+        std::optional<FailureReason> visit(const Syntax::HeadWhileStatement& node);
 
-        NodeRetType visit(const Syntax::FootWhileStatement& node);
+        std::optional<FailureReason> visit(const Syntax::FootWhileStatement& node);
 
-        NodeRetType visit(const Syntax::BreakStatement& node);
+        std::optional<FailureReason> visit(const Syntax::BreakStatement& node);
 
-        NodeRetType visit(const Syntax::ContinueStatement& node);
-
-        NodeRetType visit(const Syntax::StructOrUnionSpecifier& node);
-
-        NodeRetType visit(const Syntax::EnumSpecifier& node);
+        std::optional<FailureReason> visit(const Syntax::ContinueStatement& node);
 
         std::optional<FailureReason> visit(const Syntax::FunctionDefinition& node);
 
@@ -222,9 +251,9 @@ namespace OpenCL::Codegen
 
         NodeRetType visit(const Syntax::ParameterList& node);
 
-        NodeRetType visit(const Syntax::LabelStatement& node);
+        std::optional<FailureReason> visit(const Syntax::LabelStatement& node);
 
-        NodeRetType visit(const Syntax::GotoStatement& node);
+        std::optional<FailureReason> visit(const Syntax::GotoStatement& node);
 
         llvm::Type* visit(const Representations::Type& node);
 
