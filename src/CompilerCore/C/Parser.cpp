@@ -375,7 +375,7 @@ OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason>
                     TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
                 if (isDefinition)
                 {
-                    auto type = Representations::declaratorsToType({std::cref(result)}, nullptr, {});
+                    auto type = Representations::declaratorsToType({std::cref(result)});
                     if (!type)
                     {
                         return type;
@@ -640,7 +640,7 @@ OpenCL::Expected<OpenCL::Syntax::SpecifierQualifier, OpenCL::FailureReason>
                     TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
                 if (isDefinition)
                 {
-                    auto type = Representations::declaratorsToType({std::cref(result)}, nullptr, {});
+                    auto type = Representations::declaratorsToType({std::cref(result)});
                     if (!type)
                     {
                         return type;

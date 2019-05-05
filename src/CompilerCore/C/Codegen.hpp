@@ -30,10 +30,13 @@ namespace OpenCL::Codegen
         std::vector<llvm::BasicBlock*> breakBlocks;
         std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
         std::vector<llvm::DIScope*> debugScope;
+        const Representations::FunctionType* currentFunction;
 
         llvm::Constant* createZeroValue(llvm::Type* type);
 
         std::map<std::string, std::reference_wrapper<const Representations::Type>> gatherTypedefs() const;
+
+        std::map<std::string, Representations::RecordType> gatherStructsAndUnions() const;
 
         void popScope()
         {
@@ -43,6 +46,19 @@ namespace OpenCL::Codegen
         const std::pair<llvm::Value*, Representations::Type>* findValue(const std::string& name) const
         {
             for (auto iter = m_namedValues.rbegin(); iter != m_namedValues.rend(); iter++)
+            {
+                auto result = iter->find(name);
+                if (result != iter->end())
+                {
+                    return &result->second;
+                }
+            }
+            return nullptr;
+        }
+
+        const Representations::Type* findStructUnionOrEnum(const std::string& name) const
+        {
+            for (auto iter = m_structsUnionsAndEnums.rbegin(); iter != m_structsUnionsAndEnums.rend(); iter++)
             {
                 auto result = iter->find(name);
                 if (result != iter->end())

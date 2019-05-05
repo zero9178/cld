@@ -16,10 +16,13 @@ namespace OpenCL::Constant
 
     class ConstantEvaluator final
     {
-        const std::map<std::string, Representations::RecordType>& m_structOrUnions;
+        std::map<std::string, Representations::RecordType> m_structOrUnions;
+        std::map<std::string, std::reference_wrapper<const Representations::Type>> m_typedefs;
 
     public:
-        explicit ConstantEvaluator(const std::map<std::string, Representations::RecordType>& structOrUnions = {});
+        explicit ConstantEvaluator(
+            const std::map<std::string, Representations::RecordType>& structOrUnions = {},
+            const std::map<std::string, std::reference_wrapper<const Representations::Type>>& typedefs = {});
 
         ConstRetType visit(const Syntax::Expression& node);
 

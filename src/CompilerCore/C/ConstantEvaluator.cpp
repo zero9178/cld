@@ -377,115 +377,59 @@ OpenCL::Constant::ConstRetType
 //    }
 //}
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf&)
+namespace
 {
-    //    auto sizeOf = [this](const std::shared_ptr<Syntax::IType>& ptr, auto&& self) -> OpenCL::Constant::ConstRetType
-    //    {
-    //        if (auto primitives = std::dynamic_pointer_cast<Syntax::PrimitiveType>(ptr))
-    //        {
-    //            return primitives->getBitCount() / 8;
-    //        }
-    //        else if (std::dynamic_pointer_cast<Syntax::PointerType>(ptr))
-    //        {
-    //            return 8;
-    //        }
-    //        else if (std::dynamic_pointer_cast<Syntax::EnumType>(ptr))
-    //        {
-    //            return 4;
-    //        }
-    //        else if (auto array = std::dynamic_pointer_cast<Syntax::ArrayType>(ptr))
-    //        {
-    //            return std::visit([&array](auto&& value) -> ConstRetType
-    //                              {
-    //                                  using T = std::decay_t<decltype(value)>;
-    //                                  if constexpr(hasMultiply<std::size_t, T>{})
-    //                                  {
-    //                                      return array->getSize() * value;
-    //                                  }
-    //                                  else
-    //                                  {
-    //                                      throw std::runtime_error("Invalid operands for multiply in constant
-    //                                      expression");
-    //                                  }
-    //                                  return {};
-    //                              }, self(array->getType()->clone(), self));
-    //        }
-    //        else if (auto structType = std::dynamic_pointer_cast<Syntax::StructType>(ptr))
-    //        {
-    //            auto result = m_structOrUnions.find(structType->getName());
-    //            if (result == m_structOrUnions.end() || result->second->isUnion())
-    //            {
-    //                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-    //            }
-    //            std::size_t currentSize = 0;
-    //            for (auto& iter : result->second->getTypes())
-    //            {
-    //                auto alignment = getAlignment(iter.first, m_structOrUnions);
-    //                auto rest = currentSize % alignment;
-    //                if (rest != 0)
-    //                {
-    //                    currentSize += alignment - rest;
-    //                }
-    //                currentSize += std::visit([](auto&& value) -> std::size_t
-    //                                          {
-    //                                              using T = std::decay_t<decltype(value)>;
-    //                                              if constexpr(std::is_convertible_v<T, std::size_t>)
-    //                                              {
-    //                                                  return value;
-    //                                              }
-    //                                              else
-    //                                              {
-    //                                                  throw std::runtime_error("Size returned as void*");
-    //                                              }
-    //                                              return {};
-    //                                          }, self(iter.first, self));
-    //            }
-    //            return currentSize;
-    //        }
-    //        else
-    //        {
-    //            auto unionType = std::dynamic_pointer_cast<Syntax::UnionType>(ptr);
-    //            auto result = m_structOrUnions.find(unionType->getName());
-    //            if (result == m_structOrUnions.end() || !result->second->isUnion())
-    //            {
-    //                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-    //            }
-    //            std::vector<std::size_t> sizes;
-    //            std::transform(result->second->getTypes().begin(),
-    //                           result->second->getTypes().end(),
-    //                           std::back_inserter(sizes),
-    //                           [&self](const std::pair<std::shared_ptr<Syntax::IType>, std::string>& pair)
-    //                           {
-    //                               return std::visit([](auto&& value) -> std::size_t
-    //                                                 {
-    //                                                     using T = std::decay_t<decltype(value)>;
-    //                                                     if constexpr(std::is_convertible_v<T, std::size_t>)
-    //                                                     {
-    //                                                         return value;
-    //                                                     }
-    //                                                     else
-    //                                                     {
-    //                                                         throw std::runtime_error("Size returned as void*");
-    //                                                     }
-    //                                                     return {};
-    //                                                 }, self(pair.first, self));
-    //                           });
-    //            return *std::max_element(sizes.begin(), sizes.end());
-    //        }
-    //    };
-    //    m_return = std::visit([&sizeOf](auto&& value) -> OpenCL::Constant::ConstRetType
-    //                          {
-    //                              using T = std::decay_t<decltype(value)>;
-    //                              if constexpr(std::is_same_v<T, std::shared_ptr<Syntax::IType>>)
-    //                              {
-    //                                  return sizeOf(value, sizeOf);
-    //                              }
-    //                              else
-    //                              {
-    //                                  throw std::runtime_error("Not implemented yet");
-    //                              }
-    //                          }, node.getUnaryOrType());
-    throw std::runtime_error("Not implemented yet");
+    template <typename G>
+    struct Y
+    {
+        template <typename... X>
+        decltype(auto) operator()(X&&... x) const&
+        {
+            return g(*this, std::forward<X>(x)...);
+        }
+
+        G g;
+    };
+
+    template <typename G>
+    Y(G)->Y<G>;
+
+    template <class... Ts>
+    struct overload : Ts...
+    {
+        using Ts::operator()...;
+    };
+    template <class... Ts>
+    overload(Ts...)->overload<Ts...>;
+} // namespace
+
+OpenCL::Constant::ConstRetType
+    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+{
+    return std::visit(
+        overload{[this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Constant::ConstRetType {
+                     std::vector<Representations::SpecifierQualifierRef> refs;
+                     for(auto& iter : typeName->getSpecifierQualifiers())
+                     {
+                         std::visit([&refs](auto&& value)
+                                    {
+                             refs.emplace_back(std::cref(value));
+                                    },iter);
+                     }
+                     auto type = Representations::declaratorsToType(refs,typeName->getAbstractDeclarator(),m_typedefs,{},m_structOrUnions);
+                     if(!type)
+                     {
+                         return type;
+                     }
+                     auto result =  Representations::sizeOf(*type);
+                     if(!result)
+                     {
+                         return result;
+                     }
+                     return *result;
+                 },
+                 [](auto &&) -> OpenCL::Constant::ConstRetType { throw std::runtime_error("Not implemented yet"); }},
+        node.getVariant());
 }
 
 namespace
@@ -1292,12 +1236,6 @@ OpenCL::Constant::ConstRetType
 #pragma GCC diagnostic pop
 #pragma GCC diagnostic pop
 
-OpenCL::Constant::ConstantEvaluator::ConstantEvaluator(
-    const std::map<std::string, Representations::RecordType>& structOrUnions)
-    : m_structOrUnions(structOrUnions)
-{
-}
-
 OpenCL::Constant::ConstRetType
     OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
 {
@@ -1313,17 +1251,6 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
 {
     throw std::runtime_error("Not implemented yet");
 }
-
-namespace
-{
-    template <class... Ts>
-    struct overload : Ts...
-    {
-        using Ts::operator()...;
-    };
-    template <class... Ts>
-    overload(Ts...)->overload<Ts...>;
-} // namespace
 
 OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
@@ -1383,4 +1310,10 @@ OpenCL::Constant::ConstRetType
             }
         },
         node.getVariant());
+}
+OpenCL::Constant::ConstantEvaluator::ConstantEvaluator(
+    const std::map<std::string, OpenCL::Representations::RecordType>& structOrUnions,
+    const std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>>& typedefs)
+    : m_structOrUnions(structOrUnions), m_typedefs(typedefs)
+{
 }
