@@ -13,12 +13,13 @@ namespace OpenCL::Parser
     class ParsingContext final
     {
         std::vector<std::set<std::string>> m_currentScope;
-        std::map<std::string, std::int32_t> m_enumConstants;
+        std::vector<std::map<std::string, std::int32_t>> m_enumConstants;
 
     public:
         std::vector<std::set<std::string>> typedefs;
         std::set<std::string> functions;
         std::map<std::string, Representations::RecordType> structOrUnions;
+        std::vector<std::set<std::string>> enumDefinitions;
 
         bool isTypedef(const std::string& name);
 
@@ -26,6 +27,8 @@ namespace OpenCL::Parser
         {
             m_currentScope.emplace_back();
             typedefs.emplace_back();
+            m_enumConstants.emplace_back();
+            enumDefinitions.emplace_back();
         }
 
         ~ParsingContext() = default;
@@ -62,17 +65,21 @@ namespace OpenCL::Parser
         {
             m_currentScope.emplace_back();
             typedefs.emplace_back();
+            m_enumConstants.emplace_back();
+            enumDefinitions.emplace_back();
         }
 
         void popScope()
         {
             m_currentScope.pop_back();
             typedefs.emplace_back();
+            m_enumConstants.pop_back();
+            enumDefinitions.pop_back();
         }
 
         void addEnumConstant(const std::string& name, std::int32_t value)
         {
-            if (!m_enumConstants.insert({name, value}).second)
+            if (!m_enumConstants.back().insert({name, value}).second)
             {
                 throw std::runtime_error("Enum constant called " + name + " alreaedy exists");
             }
@@ -80,8 +87,15 @@ namespace OpenCL::Parser
 
         std::int32_t* getEnumConstant(const std::string& name)
         {
-            auto result = m_enumConstants.find(name);
-            return result == m_enumConstants.end() ? nullptr : &result->second;
+            for (auto iter = m_enumConstants.rbegin(); iter != m_enumConstants.rend(); iter++)
+            {
+                auto result = iter->find(name);
+                if (result != iter->end())
+                {
+                    return &result->second;
+                }
+            }
+            return nullptr;
         }
     };
 

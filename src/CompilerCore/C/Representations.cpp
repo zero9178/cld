@@ -150,7 +150,7 @@ bool OpenCL::Representations::PointerType::operator!=(const OpenCL::Representati
 
 OpenCL::Representations::EnumType::EnumType(const std::string& name,
                                             std::vector<std::pair<std::string, std::int32_t>> values)
-    : m_anonymous(name.empty()), m_values(std::move(values))
+    : m_name(name), m_values(std::move(values))
 {
 }
 
@@ -159,14 +159,14 @@ const std::vector<std::pair<std::string, int32_t>>& OpenCL::Representations::Enu
     return m_values;
 }
 
-bool OpenCL::Representations::EnumType::isDeclaration() const
+bool OpenCL::Representations::EnumType::isDefinition() const
 {
-    return m_values.empty();
+    return !m_values.empty();
 }
 
 bool OpenCL::Representations::EnumType::isAnonymous() const
 {
-    return m_anonymous;
+    return m_name.empty();
 }
 
 OpenCL::Representations::Type
@@ -178,12 +178,17 @@ OpenCL::Representations::Type
 
 bool OpenCL::Representations::EnumType::operator==(const OpenCL::Representations::EnumType& rhs) const
 {
-    return std::tie(m_anonymous, m_values) == std::tie(rhs.m_anonymous, rhs.m_values);
+    return m_name == rhs.m_name;
 }
 
 bool OpenCL::Representations::EnumType::operator!=(const OpenCL::Representations::EnumType& rhs) const
 {
     return !(rhs == *this);
+}
+
+const std::string& OpenCL::Representations::EnumType::getName() const
+{
+    return m_name;
 }
 
 OpenCL::Representations::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
@@ -1433,9 +1438,9 @@ const std::vector<std::tuple<OpenCL::Representations::Type, std::string, std::in
     return m_members;
 }
 
-bool OpenCL::Representations::RecordType::isDeclaration() const
+bool OpenCL::Representations::RecordType::isDefinition() const
 {
-    return m_members.empty();
+    return !m_members.empty();
 }
 
 OpenCL::Representations::Type OpenCL::Representations::RecordType::create(

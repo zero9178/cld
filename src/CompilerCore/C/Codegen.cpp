@@ -15,7 +15,7 @@ namespace
     struct Y
     {
         template <typename... X>
-        decltype(auto) operator()(X&&... x) const&
+        decltype(auto) operator()(X&& ... x) const&
         {
             return g(*this, std::forward<X>(x)...);
         }
@@ -27,7 +27,7 @@ namespace
     Y(G)->Y<G>;
 
     template <class... Ts>
-    struct overload : Ts...
+    struct overload : Ts ...
     {
         using Ts::operator()...;
     };
@@ -97,9 +97,11 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
     }
     return std::visit(
         overload{
-            [&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+            [&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+            {
                 return std::visit(
-                    overload{[&](const Representations::PrimitiveType& otherPrimitive) -> llvm::Value* {
+                    overload{[&](const Representations::PrimitiveType& otherPrimitive) -> llvm::Value*
+                             {
                                  if (!primitiveType.isFloatingPoint() && !otherPrimitive.isFloatingPoint())
                                  {
                                      if (primitiveType.isSigned())
@@ -138,7 +140,8 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                      return builder.CreateFPCast(source, visit(destinationType));
                                  }
                              },
-                             [&](const Representations::PointerType& pointerType) -> llvm::Value* {
+                             [&](const Representations::PointerType& pointerType) -> llvm::Value*
+                             {
                                  if (primitiveType.isFloatingPoint())
                                  {
                                      return nullptr;
@@ -146,7 +149,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                  if (explicitConversion)
                                  {
                                      if (!std::holds_alternative<Representations::FunctionType>(
-                                             pointerType.getElementType().getType()))
+                                         pointerType.getElementType().getType()))
                                      {
                                          return builder.CreateIntToPtr(source, visit(destinationType));
                                      }
@@ -165,7 +168,8 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                      return builder.CreateIntToPtr(source, visit(destinationType));
                                  }
                              },
-                             [&](const Representations::EnumType&) -> llvm::Value* {
+                             [&](const Representations::EnumType&) -> llvm::Value*
+                             {
                                  if (primitiveType.isFloatingPoint())
                                  {
                                      return builder.CreateFPToSI(source, builder.getInt32Ty());
@@ -179,18 +183,22 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                      return builder.CreateZExtOrTrunc(source, builder.getInt32Ty());
                                  }
                              },
-                             [](auto &&) -> llvm::Value* { return nullptr; }},
+                             [](auto&&) -> llvm::Value*
+                             { return nullptr; }},
                     destinationType.getType());
             },
-            [&](const Representations::PointerType& pointerType) -> llvm::Value* {
-                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+            [&](const Representations::PointerType& pointerType) -> llvm::Value*
+            {
+                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+                                           {
                                                if (primitiveType.isFloatingPoint() || !explicitConversion)
                                                {
                                                    return nullptr;
                                                }
                                                return builder.CreatePtrToInt(source, visit(destinationType));
                                            },
-                                           [&](const Representations::PointerType& otherPointer) -> llvm::Value* {
+                                           [&](const Representations::PointerType& otherPointer) -> llvm::Value*
+                                           {
                                                if (!explicitConversion)
                                                {
                                                    auto* primitive = std::get_if<Representations::PrimitiveType>(
@@ -205,14 +213,18 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                }
                                                return builder.CreateBitCast(source, visit(destinationType));
                                            },
-                                           [&](const Representations::EnumType&) -> llvm::Value* {
+                                           [&](const Representations::EnumType&) -> llvm::Value*
+                                           {
                                                return builder.CreatePtrToInt(source, builder.getInt32Ty());
                                            },
-                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                           [](auto&&) -> llvm::Value*
+                                           { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::FunctionType& functionType) -> llvm::Value* {
-                return std::visit(overload{[&](const Representations::PointerType& pointerType) -> llvm::Value* {
+            [&](const Representations::FunctionType& functionType) -> llvm::Value*
+            {
+                return std::visit(overload{[&](const Representations::PointerType& pointerType) -> llvm::Value*
+                                           {
                                                if (auto* function = std::get_if<Representations::FunctionType>(
                                                        &pointerType.getElementType().getType());
                                                    function && *function == functionType)
@@ -221,11 +233,14 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                }
                                                return nullptr;
                                            },
-                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                           [](auto&&) -> llvm::Value*
+                                           { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::EnumType&) -> llvm::Value* {
-                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value* {
+            [&](const Representations::EnumType&) -> llvm::Value*
+            {
+                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+                                           {
                                                if (primitiveType.isFloatingPoint())
                                                {
                                                    return builder.CreateSIToFP(source, visit(destinationType));
@@ -235,14 +250,18 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                    return builder.CreateSExtOrTrunc(source, visit(destinationType));
                                                }
                                            },
-                                           [&](const Representations::PointerType&) -> llvm::Value* {
+                                           [&](const Representations::PointerType&) -> llvm::Value*
+                                           {
                                                return builder.CreateIntToPtr(source, visit(destinationType));
                                            },
-                                           [&](const Representations::EnumType&) -> llvm::Value* { return source; },
-                                           [](auto &&) -> llvm::Value* { return nullptr; }},
+                                           [&](const Representations::EnumType&) -> llvm::Value*
+                                           { return source; },
+                                           [](auto&&) -> llvm::Value*
+                                           { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::ArrayType& arrayType) -> llvm::Value* {
+            [&](const Representations::ArrayType& arrayType) -> llvm::Value*
+            {
                 auto* zero = builder.getInt32(0);
                 auto* arrayLoad = llvm::dyn_cast<llvm::LoadInst>(source);
                 if (!source)
@@ -254,7 +273,8 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                                    Representations::Type(arrayType.getType())),
                               ptrRep, destinationType, explicitConversion);
             },
-            [](auto &&) -> llvm::Value* { return nullptr; }},
+            [](auto&&) -> llvm::Value*
+            { return nullptr; }},
         sourceType.getType());
 }
 
@@ -316,31 +336,38 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     return std::visit(
-        overload{[this](std::int32_t int32) -> NodeRetType {
+        overload{[this](std::int32_t int32) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantInt::getSigned(builder.getInt32Ty(), int32),
                                       Representations::PrimitiveType::create(false, false, false, true, 32)};
                  },
-                 [this](std::uint32_t uint32) -> NodeRetType {
+                 [this](std::uint32_t uint32) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantInt::get(builder.getInt32Ty(), uint32),
                                       Representations::PrimitiveType::create(false, false, false, false, 32)};
                  },
-                 [this](std::int64_t int64) -> NodeRetType {
+                 [this](std::int64_t int64) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantInt::getSigned(builder.getInt64Ty(), int64),
                                       Representations::PrimitiveType::create(false, false, false, true, 64)};
                  },
-                 [this](std::uint64_t uint64) -> NodeRetType {
+                 [this](std::uint64_t uint64) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantInt::get(builder.getInt64Ty(), uint64),
                                       Representations::PrimitiveType::create(false, false, false, false, 64)};
                  },
-                 [this](float f) -> NodeRetType {
+                 [this](float f) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantFP::get(builder.getFloatTy(), f),
                                       Representations::PrimitiveType::create(false, false, true, true, 32)};
                  },
-                 [this](double d) -> NodeRetType {
+                 [this](double d) -> NodeRetType
+                 {
                      return std::pair{llvm::ConstantFP::get(builder.getDoubleTy(), d),
                                       Representations::PrimitiveType::create(false, false, true, true, 64)};
                  },
-                 [this](const std::string& s) -> NodeRetType {
+                 [this](const std::string& s) -> NodeRetType
+                 {
                      return std::pair{builder.CreateGlobalString(s),
                                       Representations::ArrayType::create(
                                           false, false, false,
@@ -356,7 +383,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 }
 
 OpenCL::Codegen::NodeRetType
-    OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
@@ -400,7 +427,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return FailureReason("Postfix ++ can only be applied to lvalue");
     }
     auto optional = std::visit(
-        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason> {
+        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason>
+                 {
                      if (primitiveType.isFloatingPoint())
                      {
                          builder.CreateStore(
@@ -415,13 +443,15 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      }
                      return {};
                  },
-                 [&](const Representations::PointerType&) -> std::optional<FailureReason> {
+                 [&](const Representations::PointerType&) -> std::optional<FailureReason>
+                 {
                      auto* one = llvm::ConstantInt::get(builder.getInt32Ty(), 1);
                      builder.CreateStore(builder.CreateInBoundsGEP(oldValue.first, {one}), load->getPointerOperand(),
                                          oldValue.second.isVolatile());
                      return {};
                  },
-                 [](auto &&) -> std::optional<FailureReason> {
+                 [](auto&&) -> std::optional<FailureReason>
+                 {
                      return FailureReason("Postfix ++ can only be applied to pointer and arithmetic types");
                  }},
         oldValue.second.getType());
@@ -447,7 +477,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return FailureReason("Postfix ++ can only be applied to lvalue");
     }
     auto optional = std::visit(
-        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason> {
+        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason>
+                 {
                      if (primitiveType.isFloatingPoint())
                      {
                          builder.CreateStore(
@@ -457,18 +488,20 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      else
                      {
                          builder.CreateStore(builder.CreateAdd(oldValue.first, llvm::ConstantInt::getSigned(
-                                                                                   oldValue.first->getType(), -1)),
+                             oldValue.first->getType(), -1)),
                                              load->getPointerOperand(), oldValue.second.isVolatile());
                      }
                      return {};
                  },
-                 [&](const Representations::PointerType&) -> std::optional<FailureReason> {
+                 [&](const Representations::PointerType&) -> std::optional<FailureReason>
+                 {
                      auto* one = llvm::ConstantInt::get(builder.getInt32Ty(), -1);
                      builder.CreateStore(builder.CreateInBoundsGEP(oldValue.first, {one}), load->getPointerOperand(),
                                          oldValue.second.isVolatile());
                      return {};
                  },
-                 [](auto &&) -> std::optional<FailureReason> {
+                 [](auto&&) -> std::optional<FailureReason>
+                 {
                      return FailureReason("Postfix ++ can only be applied to pointer and arithmetic types");
                  }},
         oldValue.second.getType());
@@ -495,7 +528,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     auto* structLoad = llvm::cast<llvm::LoadInst>(result->first);
     auto* zero = builder.getInt32(0);
     auto member = std::find_if(structType->getMembers().begin(), structType->getMembers().end(),
-                               [&node](const auto& tuple) { return std::get<1>(tuple) == node.getIdentifier(); });
+                               [&node](const auto& tuple)
+                               { return std::get<1>(tuple) == node.getIdentifier(); });
     if (member == structType->getMembers().end())
     {
         return FailureReason("Could not find member " + node.getIdentifier() + " in " + structType->getName());
@@ -535,7 +569,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     }
     auto* zero = builder.getInt32(0);
     auto member = std::find_if(structType->getMembers().begin(), structType->getMembers().end(),
-                               [&node](const auto& tuple) { return std::get<1>(tuple) == node.getIdentifier(); });
+                               [&node](const auto& tuple)
+                               { return std::get<1>(tuple) == node.getIdentifier(); });
     if (member == structType->getMembers().end())
     {
         return FailureReason("Could not find member " + node.getIdentifier() + " in " + structType->getName());
@@ -561,7 +596,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [value, type] = *result;
+    auto[value, type] = *result;
     auto* function = std::get_if<Representations::FunctionType>(&type.getType());
     if (!function)
     {
@@ -576,7 +611,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return argE;
         }
-        auto [arg, argType] = *argE;
+        auto[arg, argType] = *argE;
         if (!std::holds_alternative<Representations::RecordType>(function->getArguments()[i].getType()))
         {
             arguments.emplace_back(castTo(argType, arg, function->getArguments()[i]));
@@ -621,7 +656,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 }
 
 OpenCL::Codegen::NodeRetType
-    OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
+OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
 {
 }
 
@@ -644,54 +679,54 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     auto* ptr = llvm::cast<llvm::LoadInst>(destination->first)->getPointerOperand();
     switch (node.getAssignOperator())
     {
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator:
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator:
+    {
+        builder.CreateStore(value->first, ptr, destination->second.isVolatile());
+        return std::pair{value->first, destination->second};
+    }
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign: break;
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign:
+    {
+        auto bitAndResult = makeBitAnd(destination->second, destination->first, value->second, value->first);
+        if (!bitAndResult)
         {
-            builder.CreateStore(value->first, ptr, destination->second.isVolatile());
-            return std::pair{value->first, destination->second};
+            return bitAndResult;
         }
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign: break;
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign:
+        builder.CreateStore(bitAndResult->first, ptr, destination->second.isVolatile());
+        return std::pair{bitAndResult->first, bitAndResult->second};
+    }
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign:
+    {
+        auto bitOrResult = makeBitOr(destination->second, destination->first, value->second, value->first);
+        if (!bitOrResult)
         {
-            auto bitAndResult = makeBitAnd(destination->second, destination->first, value->second, value->first);
-            if (!bitAndResult)
-            {
-                return bitAndResult;
-            }
-            builder.CreateStore(bitAndResult->first, ptr, destination->second.isVolatile());
-            return std::pair{bitAndResult->first, bitAndResult->second};
+            return bitOrResult;
         }
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign:
+        builder.CreateStore(bitOrResult->first, ptr, destination->second.isVolatile());
+        return std::pair{bitOrResult->first, bitOrResult->second};
+    }
+    case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign:
+    {
+        auto bitXorResult = makeBitOr(destination->second, destination->first, value->second, value->first);
+        if (!bitXorResult)
         {
-            auto bitOrResult = makeBitOr(destination->second, destination->first, value->second, value->first);
-            if (!bitOrResult)
-            {
-                return bitOrResult;
-            }
-            builder.CreateStore(bitOrResult->first, ptr, destination->second.isVolatile());
-            return std::pair{bitOrResult->first, bitOrResult->second};
+            return bitXorResult;
         }
-        case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign:
-        {
-            auto bitXorResult = makeBitOr(destination->second, destination->first, value->second, value->first);
-            if (!bitXorResult)
-            {
-                return bitXorResult;
-            }
-            builder.CreateStore(bitXorResult->first, ptr, destination->second.isVolatile());
-            return std::pair{bitXorResult->first, bitXorResult->second};
-        }
+        builder.CreateStore(bitXorResult->first, ptr, destination->second.isVolatile());
+        return std::pair{bitXorResult->first, bitXorResult->second};
+    }
     }
     return value;
 }
 
 OpenCL::Codegen::NodeRetType
-    OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
@@ -705,98 +740,101 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     }
     switch (node.getAnOperator())
     {
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment: break;
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement: break;
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment: break;
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement: break;
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
+    {
+        auto* load = llvm::dyn_cast<llvm::LoadInst>(result->first);
+        if (!load)
         {
-            auto* load = llvm::dyn_cast<llvm::LoadInst>(result->first);
-            if (!load)
-            {
-                return FailureReason("& requires an lvalue as operand");
-            }
-            return std::pair{load->getPointerOperand(),
-                             Representations::PointerType::create(false, false, false, std::move(result->second))};
+            return FailureReason("& requires an lvalue as operand");
         }
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
+        return std::pair{load->getPointerOperand(),
+                         Representations::PointerType::create(false, false, false, std::move(result->second))};
+    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
+    {
+        auto* pointer = std::get_if<Representations::PointerType>(&result->second.getType());
+        if (!pointer)
         {
-            auto* pointer = std::get_if<Representations::PointerType>(&result->second.getType());
-            if (!pointer)
-            {
-                return FailureReason("Can only dereference pointer type");
-            }
-            if (std::holds_alternative<Representations::FunctionType>(pointer->getElementType().getType()))
-            {
-                return std::pair{result->first, pointer->getElementType()};
-            }
-            else
-            {
-                return std::pair{builder.CreateLoad(result->first, pointer->getElementType().isVolatile()),
-                                 pointer->getElementType()};
-            }
+            return FailureReason("Can only dereference pointer type");
         }
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
+        if (std::holds_alternative<Representations::FunctionType>(pointer->getElementType().getType()))
         {
-            auto ret = integerPromotion(result->second, &result->first);
-            auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
-            if (!primitive)
-            {
-                return FailureReason("Unary + can only be applied to arithmetic type");
-            }
-            return std::pair{result->first, std::move(ret)};
+            return std::pair{result->first, pointer->getElementType()};
         }
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
+        else
         {
-            auto ret = integerPromotion(result->second, &result->first);
-            auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
-            if (!primitive)
-            {
-                return FailureReason("Unary - can only be applied to arithmetic type");
-            }
-            if (!primitive->isFloatingPoint())
-            {
-                return std::pair{builder.CreateNeg(result->first), std::move(ret)};
-            }
-            else
-            {
-                return std::pair{builder.CreateFNeg(result->first), std::move(ret)};
-            }
+            return std::pair{builder.CreateLoad(result->first, pointer->getElementType().isVolatile()),
+                             pointer->getElementType()};
         }
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
+    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
+    {
+        auto ret = integerPromotion(result->second, &result->first);
+        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        if (!primitive)
         {
-            auto ret = integerPromotion(result->second, &result->first);
-            auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
-            if (!primitive || primitive->isFloatingPoint())
-            {
-                return FailureReason("Unary ~ can only be applied to integer type");
-            }
-            return std::pair{builder.CreateNot(result->first), std::move(ret)};
+            return FailureReason("Unary + can only be applied to arithmetic type");
         }
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
+        return std::pair{result->first, std::move(ret)};
+    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
+    {
+        auto ret = integerPromotion(result->second, &result->first);
+        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        if (!primitive)
         {
-            integerPromotion(result->second, &result->first);
-            result->first = toBool(result->first);
-            if (!result->first)
-            {
-                return FailureReason("Could not convert value of type " + result->second.getName() + " to bool");
-            }
-            auto* inv = builder.CreateNot(result->first);
-            return std::pair{builder.CreateZExt(inv, builder.getInt32Ty()),
-                             Representations::PrimitiveType::create(false, false, false, true, 32)};
+            return FailureReason("Unary - can only be applied to arithmetic type");
         }
+        if (!primitive->isFloatingPoint())
+        {
+            return std::pair{builder.CreateNeg(result->first), std::move(ret)};
+        }
+        else
+        {
+            return std::pair{builder.CreateFNeg(result->first), std::move(ret)};
+        }
+    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
+    {
+        auto ret = integerPromotion(result->second, &result->first);
+        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        if (!primitive || primitive->isFloatingPoint())
+        {
+            return FailureReason("Unary ~ can only be applied to integer type");
+        }
+        return std::pair{builder.CreateNot(result->first), std::move(ret)};
+    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
+    {
+        integerPromotion(result->second, &result->first);
+        result->first = toBool(result->first);
+        if (!result->first)
+        {
+            return FailureReason("Could not convert value of type " + result->second.getName() + " to bool");
+        }
+        auto* inv = builder.CreateNot(result->first);
+        return std::pair{builder.CreateZExt(inv, builder.getInt32Ty()),
+                         Representations::PrimitiveType::create(false, false, false, true, 32)};
+    }
     }
     return result;
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+{}
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
 {
     return std::visit(
-        overload{[this](const Syntax::UnaryExpression& unaryExpression) -> OpenCL::Codegen::NodeRetType {
+        overload{[this](const Syntax::UnaryExpression& unaryExpression) -> OpenCL::Codegen::NodeRetType
+                 {
                      return visit(unaryExpression);
                  },
                  [this](const std::pair<Syntax::TypeName, std::unique_ptr<Syntax::CastExpression>>& cast)
-                     -> OpenCL::Codegen::NodeRetType {
+                     -> OpenCL::Codegen::NodeRetType
+                 {
                      auto result = visit(*cast.second);
                      if (!result)
                      {
@@ -806,9 +844,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      refs.reserve(cast.first.getSpecifierQualifiers().size());
                      std::transform(
                          cast.first.getSpecifierQualifiers().begin(), cast.first.getSpecifierQualifiers().end(),
-                         std::back_inserter(refs), [](const Syntax::SpecifierQualifier& specifierQualifier) {
+                         std::back_inserter(refs), [](const Syntax::SpecifierQualifier& specifierQualifier)
+                         {
                              return std::visit(
-                                 [](const auto& value) -> Representations::SpecifierQualifierRef { return value; },
+                                 [](const auto& value) -> Representations::SpecifierQualifierRef
+                                 { return value; },
                                  specifierQualifier);
                          });
                      auto type = Representations::declaratorsToType(refs, cast.first.getAbstractDeclarator(),
@@ -894,24 +934,27 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
-    for (auto& [op, cast] : node.getOptionalCastExpressions())
+    auto[left, leftType] = *result;
+    for (auto&[op, cast] : node.getOptionalCastExpressions())
     {
         auto rightResult = visit(cast);
         if (!rightResult)
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto termResult = [this, &leftType = leftType, &left = left, &rightType = rightType, &right = right,
-                           &op = op]() -> NodeRetType {
+            &op = op]() -> NodeRetType
+        {
             switch (op)
             {
-                case Syntax::Term::BinaryDotOperator::BinaryMultiply:
-                    return makeMultiply(leftType, left, rightType, right);
-                case Syntax::Term::BinaryDotOperator::BinaryDivide: return makeDivide(leftType, left, rightType, right);
-                case Syntax::Term::BinaryDotOperator::BinaryRemainder:
-                    return makeRemainder(leftType, left, rightType, right);
+            case Syntax::Term::BinaryDotOperator::BinaryMultiply:return makeMultiply(leftType, left, rightType, right);
+            case Syntax::Term::BinaryDotOperator::BinaryDivide: return makeDivide(leftType, left, rightType, right);
+            case Syntax::Term::BinaryDotOperator::BinaryRemainder:
+                return makeRemainder(leftType,
+                                     left,
+                                     rightType,
+                                     right);
             }
             return FailureReason("Internal Compiler error: OP enum in term is not defined");
         }();
@@ -997,18 +1040,18 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
-    for (auto& [op, additive] : node.getOptionalTerms())
+    auto[left, leftType] = *result;
+    for (auto&[op, additive] : node.getOptionalTerms())
     {
         auto rightResult = visit(additive);
         if (!rightResult)
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto addResult = op == Syntax::AdditiveExpression::BinaryDashOperator::BinaryPlus ?
-                             makePlus(leftType, left, rightType, right) :
-                               makeMinus(leftType, left, rightType, right);
+                         makePlus(leftType, left, rightType, right) :
+                         makeMinus(leftType, left, rightType, right);
         if (!addResult)
         {
             return addResult;
@@ -1080,18 +1123,18 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
-    for (auto& [op, additive] : node.getOptionalAdditiveExpressions())
+    auto[left, leftType] = *result;
+    for (auto&[op, additive] : node.getOptionalAdditiveExpressions())
     {
         auto rightResult = visit(additive);
         if (!rightResult)
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto shiftResult = op == Syntax::ShiftExpression::ShiftOperator::Left ?
-                               makeLeftShift(leftType, left, rightType, right) :
-                               makeRightShift(leftType, left, rightType, right);
+                           makeLeftShift(leftType, left, rightType, right) :
+                           makeRightShift(leftType, left, rightType, right);
         if (!shiftResult)
         {
             return shiftResult;
@@ -1109,15 +1152,15 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
-    for (auto& [op, relational] : node.getOptionalShiftExpressions())
+    auto[left, leftType] = *result;
+    for (auto&[op, relational] : node.getOptionalShiftExpressions())
     {
         auto rightResult = visit(relational);
         if (!rightResult)
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         if (!std::holds_alternative<Representations::PrimitiveType>(leftType.getType())
             || !std::holds_alternative<Representations::PrimitiveType>(rightType.getType()))
         {
@@ -1139,64 +1182,63 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             switch (op)
             {
-                case Syntax::RelationalExpression::RelationalOperator::LessThan:
-                    left = builder.CreateFCmpULT(left, right);
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
-                    left = builder.CreateFCmpULE(left, right);
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
-                    left = builder.CreateFCmpUGT(left, right);
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
-                    left = builder.CreateFCmpUGE(left, right);
-                    break;
+            case Syntax::RelationalExpression::RelationalOperator::LessThan:left = builder.CreateFCmpULT(left, right);
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
+                left = builder.CreateFCmpULE(left, right);
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
+                left = builder.CreateFCmpUGT(left, right);
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
+                left = builder.CreateFCmpUGE(left, right);
+                break;
             }
         }
         else
         {
             switch (op)
             {
-                case Syntax::RelationalExpression::RelationalOperator::LessThan:
-                    if (primitive && primitive->isSigned())
-                    {
-                        left = builder.CreateICmpSLT(left, right);
-                    }
-                    else
-                    {
-                        left = builder.CreateICmpULT(left, right);
-                    }
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
-                    if (primitive && primitive->isSigned())
-                    {
-                        left = builder.CreateICmpSLE(left, right);
-                    }
-                    else
-                    {
-                        left = builder.CreateICmpULE(left, right);
-                    }
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
-                    if (primitive && primitive->isSigned())
-                    {
-                        left = builder.CreateICmpSGT(left, right);
-                    }
-                    else
-                    {
-                        left = builder.CreateICmpUGT(left, right);
-                    }
-                    break;
-                case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
-                    if (primitive && primitive->isSigned())
-                    {
-                        left = builder.CreateICmpSGE(left, right);
-                    }
-                    else
-                    {
-                        left = builder.CreateICmpUGE(left, right);
-                    }
-                    break;
+            case Syntax::RelationalExpression::RelationalOperator::LessThan:
+                if (primitive && primitive->isSigned())
+                {
+                    left = builder.CreateICmpSLT(left, right);
+                }
+                else
+                {
+                    left = builder.CreateICmpULT(left, right);
+                }
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
+                if (primitive && primitive->isSigned())
+                {
+                    left = builder.CreateICmpSLE(left, right);
+                }
+                else
+                {
+                    left = builder.CreateICmpULE(left, right);
+                }
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
+                if (primitive && primitive->isSigned())
+                {
+                    left = builder.CreateICmpSGT(left, right);
+                }
+                else
+                {
+                    left = builder.CreateICmpUGT(left, right);
+                }
+                break;
+            case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
+                if (primitive && primitive->isSigned())
+                {
+                    left = builder.CreateICmpSGE(left, right);
+                }
+                else
+                {
+                    left = builder.CreateICmpUGE(left, right);
+                }
+                break;
             }
         }
         left = builder.CreateZExt(left, builder.getInt32Ty());
@@ -1212,15 +1254,15 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
-    for (auto& [op, relational] : node.getOptionalRelationalExpressions())
+    auto[left, leftType] = *result;
+    for (auto&[op, relational] : node.getOptionalRelationalExpressions())
     {
         auto rightResult = visit(relational);
         if (!rightResult)
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         if (!std::holds_alternative<Representations::PrimitiveType>(leftType.getType())
             || !std::holds_alternative<Representations::PrimitiveType>(rightType.getType()))
         {
@@ -1298,7 +1340,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
+    auto[left, leftType] = *result;
     for (auto& equality : node.getOptionalEqualityExpressions())
     {
         auto rightResult = visit(equality);
@@ -1306,7 +1348,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto bitAndResult = makeBitAnd(leftType, left, rightType, right);
         if (!bitAndResult)
         {
@@ -1350,7 +1392,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
+    auto[left, leftType] = *result;
     for (auto& bitAnd : node.getOptionalBitAndExpressions())
     {
         auto rightResult = visit(bitAnd);
@@ -1358,7 +1400,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto bitXorResult = makeBitXor(leftType, left, rightType, right);
         if (!bitXorResult)
         {
@@ -1404,7 +1446,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [left, leftType] = *result;
+    auto[left, leftType] = *result;
     for (auto& bitXor : node.getOptionalBitXorExpressions())
     {
         auto rightResult = visit(bitXor);
@@ -1412,7 +1454,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         auto bitOrResult = makeBitOr(leftType, left, rightType, right);
         if (!bitOrResult)
         {
@@ -1431,7 +1473,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [value, type] = *result;
+    auto[value, type] = *result;
     for (auto& andExpression : node.getOptionalBitOrExpressions())
     {
         auto* function = builder.GetInsertBlock()->getParent();
@@ -1448,7 +1490,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         right = toBool(right);
         right = builder.CreateZExt(right, builder.getInt32Ty());
         builder.CreateBr(mergeBB);
@@ -1478,7 +1520,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    auto [value, type] = *result;
+    auto[value, type] = *result;
     for (auto& andExpression : node.getOptionalAndExpressions())
     {
         auto* function = builder.GetInsertBlock()->getParent();
@@ -1495,7 +1537,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return rightResult;
         }
-        auto [right, rightType] = *rightResult;
+        auto[right, rightType] = *rightResult;
         right = toBool(right);
         right = builder.CreateZExt(right, builder.getInt32Ty());
         builder.CreateBr(mergeBB);
@@ -1546,7 +1588,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return thenE;
         }
-        auto [thenV, thenT] = *thenE;
+        auto[thenV, thenT] = *thenE;
 
         builder.CreateBr(mergeBB);
         thenBB = builder.GetInsertBlock();
@@ -1559,7 +1601,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         {
             return elseE;
         }
-        auto [elseV, elseT] = *elseE;
+        auto[elseV, elseT] = *elseE;
 
         builder.CreateBr(mergeBB);
         elseBB = builder.GetInsertBlock();
@@ -1594,7 +1636,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         if (!result->second.isCompatibleWith(currentFunction->getReturnType()))
         {
             return FailureReason(result->second.getName() + " is not compatible with "
-                                 + currentFunction->getReturnType().getName());
+                                     + currentFunction->getReturnType().getName());
         }
         builder.CreateStore(result->first, builder.GetInsertBlock()->getParent()->args().begin());
         builder.CreateRetVoid();
@@ -1622,7 +1664,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     {
         return booleanE.error();
     }
-    auto [value, type] = *booleanE;
+    auto[value, type] = *booleanE;
     value = toBool(value);
     if (!value)
     {
@@ -1668,11 +1710,14 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     return {};
 }
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node)
+{}
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::DefaultStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::DefaultStatement& node)
+{}
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
+{}
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundStatement& node,
                                                                      bool pushScope)
@@ -1696,16 +1741,19 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     return {};
 }
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node)
+{}
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
+{}
 
 namespace
 {
     template <class T, class InputIterator>
     bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T& value)
     {
-        return std::any_of(begin, end, [&value](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+        return std::any_of(begin, end, [&value](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier)
+        {
             auto* t = std::get_if<T>(&declarationSpecifier);
             if (!t)
             {
@@ -1718,7 +1766,8 @@ namespace
     template <class T, class InputIterator, class Predicate>
     bool declarationSpecifierHasIf(InputIterator&& begin, InputIterator&& end, Predicate&& predicate)
     {
-        return std::any_of(begin, end, [&predicate](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+        return std::any_of(begin, end, [&predicate](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier)
+        {
             auto* t = std::get_if<T>(&declarationSpecifier);
             if (!t)
             {
@@ -1768,34 +1817,93 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     std::vector<Representations::SpecifierQualifierRef> specifierQualifiers;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
-        std::visit(overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier) {
+        std::visit(overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier)
+                            {
                                 specifierQualifiers.emplace_back(typeSpecifier);
                             },
-                            [&specifierQualifiers](const Syntax::TypeQualifier& typeQualifier) {
+                            [&specifierQualifiers](const Syntax::TypeQualifier& typeQualifier)
+                            {
                                 specifierQualifiers.emplace_back(typeQualifier);
                             },
-                            [&storageClassSpecifier](const Syntax::StorageClassSpecifier& otherStorageClassSpecifier) {
+                            [&storageClassSpecifier](const Syntax::StorageClassSpecifier& otherStorageClassSpecifier)
+                            {
                                 storageClassSpecifier = &otherStorageClassSpecifier;
                             },
-                            [](auto&&) {}},
+                            [](auto&&)
+                            {}},
                    iter);
     }
 
     if (std::count_if(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                      [](const Syntax::DeclarationSpecifier& specifier) {
+                      [](const Syntax::DeclarationSpecifier& specifier)
+                      {
                           return std::holds_alternative<Syntax::StorageClassSpecifier>(specifier);
                       })
         > 1)
     {
         return FailureReason("A maximum of one storage class specifier allowed in declaration");
     }
-    for (auto& [declarator, initializer] : node.getInitDeclarators())
+
+    if (std::any_of(specifierQualifiers.begin(),
+                    specifierQualifiers.end(),
+                    [](Representations::SpecifierQualifierRef value)
+                    {
+                        auto* specifier = std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
+                        if (!specifier)
+                        {
+                            return false;
+                        }
+                        return std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(specifier->get()
+                                                                                                                .getVariant());
+                    }))
+    {
+        auto recordE = Representations::declaratorsToType(
+            {*std::find_if(specifierQualifiers.begin(), specifierQualifiers.end(),
+                           [](Representations::SpecifierQualifierRef value)
+                           {
+                               auto* specifier =
+                                   std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
+                               if (!specifier)
+                               {
+                                   return false;
+                               }
+                               return std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                                   specifier->get().getVariant());
+                           })},
+            nullptr, gatherTypedefs(), {}, gatherStructsAndUnions());
+        if (!recordE)
+        {
+            return recordE.error();
+        }
+        auto record = *recordE;
+        auto[result, inserted] = m_structsUnions.back().insert(
+            {std::get<Representations::RecordType>(record.getType()).getName(), record});
+        if (!inserted)
+        {
+            if (auto structDecl = std::get_if<Representations::RecordType>(&result->second.getType());
+                structDecl && structDecl->isDefinition())
+            {
+                return FailureReason("Redefinition of record type " + result->first + " in the same scope");
+            }
+            else if (!structDecl)
+            {
+                return FailureReason("Internal Compiler error: Non record type with name " + result->first
+                                         + " exists");
+            }
+            else
+            {
+                result->second = record;
+            }
+        }
+    }
+    for (auto&[declarator, initializer] : node.getInitDeclarators())
     {
         {
             auto result = std::visit(
                 Y{overload{
                     [](auto&& self, const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers)
-                        -> std::optional<FailureReason> {
+                        -> std::optional<FailureReason>
+                    {
                         if (!identifiers.getIdentifiers().empty())
                         {
                             return FailureReason(
@@ -1804,18 +1912,24 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                         else
                         {
                             return std::visit(
-                                [&self](auto&& value) -> std::optional<FailureReason> { return self(value); },
+                                [&self](auto&& value) -> std::optional<FailureReason>
+                                { return self(value); },
                                 identifiers.getDirectDeclarator().getVariant());
                         }
                     },
-                    [](auto&&, const std::string&) -> std::optional<FailureReason> { return {}; },
+                    [](auto&&, const std::string&) -> std::optional<FailureReason>
+                    { return {}; },
                     [](auto&& self,
-                       const std::unique_ptr<Syntax::Declarator>& declarator) -> std::optional<FailureReason> {
-                        return std::visit([&self](auto&& value) -> std::optional<FailureReason> { return self(value); },
+                       const std::unique_ptr<Syntax::Declarator>& declarator) -> std::optional<FailureReason>
+                    {
+                        return std::visit([&self](auto&& value) -> std::optional<FailureReason>
+                                          { return self(value); },
                                           declarator->getDirectDeclarator().getVariant());
                     },
-                    [](auto&& self, auto&& value) -> std::optional<FailureReason> {
-                        return std::visit([&self](auto&& value) -> std::optional<FailureReason> { return self(value); },
+                    [](auto&& self, auto&& value) -> std::optional<FailureReason>
+                    {
+                        return std::visit([&self](auto&& value) -> std::optional<FailureReason>
+                                          { return self(value); },
                                           value.getDirectDeclarator().getVariant());
                     }}},
                 declarator->getDirectDeclarator().getVariant());
@@ -1826,7 +1940,8 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         auto type = Representations::declaratorsToType(
             specifierQualifiers,
-            [& declarator = declarator]() -> Representations::PossiblyAbstractQualifierRef {
+            [& declarator = declarator]() -> Representations::PossiblyAbstractQualifierRef
+            {
                 if (declarator)
                 {
                     return *declarator;
@@ -1841,42 +1956,6 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return type.error();
         }
-        if (std::holds_alternative<Representations::RecordType>(type->getType()))
-        {
-            auto record = *Representations::declaratorsToType(
-                {*std::find_if(specifierQualifiers.begin(), specifierQualifiers.end(),
-                               [](const Representations::SpecifierQualifierRef& value) {
-                                   auto* specifier =
-                                       std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
-                                   if (!specifier)
-                                   {
-                                       return false;
-                                   }
-                                   return std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
-                                       specifier->get().getVariant());
-                               })},
-                nullptr, gatherTypedefs(), {}, gatherStructsAndUnions());
-            auto [result, inserted] = m_structsUnionsAndEnums.back().insert(
-                {std::get<Representations::RecordType>(record.getType()).getName(), record});
-            if (!inserted)
-            {
-                if (auto structDecl = std::get_if<Representations::RecordType>(&result->second.getType());
-                    structDecl && !structDecl->isDeclaration())
-                {
-                    return FailureReason("Redefinition of record type " + result->first + " in the same scope");
-                }
-                else if (!structDecl)
-                {
-                    return FailureReason("Internal Compiler error: Non record type with name " + result->first
-                                         + " exists");
-                }
-                else
-                {
-                    result->second = record;
-                }
-            }
-        }
-
         auto name = declarator ? Representations::declaratorToName(*declarator) : "";
         if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Typedef)
         {
@@ -1925,12 +2004,14 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                         {
                             initial = llvm::ConstantInt::getSigned(
                                 llvmType,
-                                std::visit([](auto&& value) -> std::int64_t { return (std::int64_t)value; }, *result));
+                                std::visit([](auto&& value) -> std::int64_t
+                                           { return (std::int64_t)value; }, *result));
                         }
                         else
                         {
                             initial = llvm::ConstantInt::get(
-                                llvmType, std::visit([](auto&& value) -> std::uint64_t { return (std::uint64_t)value; },
+                                llvmType, std::visit([](auto&& value) -> std::uint64_t
+                                                     { return (std::uint64_t)value; },
                                                      *result));
                         }
                     }
@@ -1938,18 +2019,19 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                     {
                         initial =
                             llvm::ConstantFP::get(llvmType, std::visit(
-                                                                [](auto&& value) -> double {
-                                                                    using T = std::decay_t<decltype(value)>;
-                                                                    if constexpr (std::is_convertible_v<T, double>)
-                                                                    {
-                                                                        return value;
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        return std::numeric_limits<double>::quiet_NaN();
-                                                                    }
-                                                                },
-                                                                *result));
+                                [](auto&& value) -> double
+                                {
+                                    using T = std::decay_t<decltype(value)>;
+                                    if constexpr (std::is_convertible_v<T, double>)
+                                    {
+                                        return value;
+                                    }
+                                    else
+                                    {
+                                        return std::numeric_limits<double>::quiet_NaN();
+                                    }
+                                },
+                                *result));
                     }
                 }
                 else
@@ -1958,7 +2040,8 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 }
             }
             auto* newGlobal = new llvm::GlobalVariable(*module, llvmType, type->isConst(),
-                                                       [internalLinkage, externalLinkage] {
+                                                       [internalLinkage, externalLinkage]
+                                                       {
                                                            if (internalLinkage)
                                                            {
                                                                return llvm::GlobalValue::InternalLinkage;
@@ -1970,7 +2053,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                                                            return llvm::GlobalValue::CommonLinkage;
                                                        }(),
                                                        initial);
-            if (auto [prev, success] = m_namedValues.back().insert({name, {newGlobal, *type}}); !success)
+            if (auto[prev, success] = m_namedValues.back().insert({name, {newGlobal, *type}}); !success)
             {
                 return FailureReason("Redefinition of symbol " + prev->first);
             }
@@ -1995,7 +2078,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             }
             auto* func = llvm::Function::Create(llvm::cast<llvm::FunctionType>(ft),
                                                 internalLinkage ? llvm::Function::InternalLinkage :
-                                                                  llvm::Function::ExternalLinkage,
+                                                llvm::Function::ExternalLinkage,
                                                 name, module.get());
             bool retIsStruct =
                 std::holds_alternative<Representations::RecordType>(functionRP.getReturnType().getType());
@@ -2019,7 +2102,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 }
                 i++;
             }
-            if (auto [prev, success] = m_namedValues.back().insert({name, {func, std::move(*type)}}); !success)
+            if (auto[prev, success] = m_namedValues.back().insert({name, {func, std::move(*type)}}); !success)
             {
                 return FailureReason("Redefinition of symbol " + prev->first);
             }
@@ -2030,7 +2113,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             auto* allocaType = visit(*type);
             auto* alloca = tmpB.CreateAlloca(allocaType);
             alloca->setAlignment(getAlignment(allocaType));
-            if (auto [prev, success] = m_namedValues.back().insert({name, {alloca, *type}}); !success)
+            if (auto[prev, success] = m_namedValues.back().insert({name, {alloca, *type}}); !success)
             {
                 return FailureReason("Redefinition of symbol " + prev->first);
             }
@@ -2056,7 +2139,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 }
 
 std::optional<OpenCL::FailureReason>
-    OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
+OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
 {
 }
 
@@ -2078,7 +2161,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     {
         return boolenE.error();
     }
-    auto [value, type] = *boolenE;
+    auto[value, type] = *boolenE;
     value = toBool(value);
     if (!value)
     {
@@ -2102,11 +2185,14 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
     return {};
 }
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FootWhileStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FootWhileStatement& node)
+{}
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BreakStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BreakStatement& node)
+{}
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& node)
+{}
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FunctionDefinition& node)
 {
@@ -2120,17 +2206,21 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         for (auto& iter : node.getDeclarationSpecifiers())
         {
             std::visit(
-                overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier) {
+                overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier)
+                         {
                              specifierQualifiers.emplace_back(typeSpecifier);
                          },
-                         [&specifierQualifiers](const Syntax::TypeQualifier& typeQualifier) {
+                         [&specifierQualifiers](const Syntax::TypeQualifier& typeQualifier)
+                         {
                              specifierQualifiers.emplace_back(typeQualifier);
                          },
-                         [](auto&&) {}},
+                         [](auto&&)
+                         {}},
                 iter);
         }
         if (std::count_if(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                          [](const Syntax::DeclarationSpecifier& specifier) {
+                          [](const Syntax::DeclarationSpecifier& specifier)
+                          {
                               return std::holds_alternative<Syntax::StorageClassSpecifier>(specifier);
                           })
             > 1)
@@ -2184,7 +2274,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             }
             i++;
         }
-        if (auto [prev, success] = m_namedValues.back().insert({name, {thisFunction, std::move(*type)}}); !success)
+        if (auto[prev, success] = m_namedValues.back().insert({name, {thisFunction, std::move(*type)}}); !success)
         {
             return FailureReason("Redefinition of symbol " + prev->first);
         }
@@ -2205,10 +2295,12 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         for (auto& iter : node.getDeclarationSpecifiers())
         {
             std::visit(
-                overload{[&storageClassSpecifier](const Syntax::StorageClassSpecifier& otherStorageClassSpecifier) {
+                overload{[&storageClassSpecifier](const Syntax::StorageClassSpecifier& otherStorageClassSpecifier)
+                         {
                              storageClassSpecifier = &otherStorageClassSpecifier;
                          },
-                         [](auto&&) {}},
+                         [](auto&&)
+                         {}},
                 iter);
         }
         if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
@@ -2254,7 +2346,8 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         for (auto& specifiers : iter.getDeclarationSpecifiers())
         {
             auto result = std::visit(
-                overload{[](Syntax::StorageClassSpecifier storageClassSpecifier) -> std::optional<FailureReason> {
+                overload{[](Syntax::StorageClassSpecifier storageClassSpecifier) -> std::optional<FailureReason>
+                         {
                              if (storageClassSpecifier == Syntax::StorageClassSpecifier::Register)
                              {
                                  return {};
@@ -2265,15 +2358,18 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                                      "Storage class specifiers not allowed in declarations of function parameters");
                              }
                          },
-                         [&refs](const Syntax::TypeSpecifier& typeSpecifier) -> std::optional<FailureReason> {
+                         [&refs](const Syntax::TypeSpecifier& typeSpecifier) -> std::optional<FailureReason>
+                         {
                              refs.emplace_back(typeSpecifier);
                              return {};
                          },
-                         [&refs](const Syntax::TypeQualifier& typeQualifier) -> std::optional<FailureReason> {
+                         [&refs](const Syntax::TypeQualifier& typeQualifier) -> std::optional<FailureReason>
+                         {
                              refs.emplace_back(typeQualifier);
                              return {};
                          },
-                         [](Syntax::FunctionSpecifier) -> std::optional<FailureReason> {
+                         [](Syntax::FunctionSpecifier) -> std::optional<FailureReason>
+                         {
                              return FailureReason("inline keyword not allowed in this context");
                          }},
                 specifiers);
@@ -2448,48 +2544,58 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
-    return std::visit([this](auto&& value) { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value)
+                      { return visit(value); }, node.getVariant());
 }
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
-    return std::visit([this](auto&& value) { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value)
+                      { return visit(value); }, node.getVariant());
 }
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value) { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value)
+                      { return visit(value); }, node.getVariant());
 }
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
-    return std::visit([this](auto&& value) -> OpenCL::Codegen::NodeRetType { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value) -> OpenCL::Codegen::NodeRetType
+                      { return visit(value); }, node.getVariant());
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Initializer& node) {}
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Initializer& node)
+{}
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundItem& node)
 {
-    return std::visit([this](auto&& value) { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value)
+                      { return visit(value); }, node.getVariant());
 }
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Statement& node)
 {
-    return std::visit([this](auto&& value) -> std::optional<OpenCL::FailureReason> { return visit(value); },
+    return std::visit([this](auto&& value) -> std::optional<OpenCL::FailureReason>
+                      { return visit(value); },
                       node.getVariant());
 }
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExternalDeclaration& node)
 {
-    return std::visit([this](auto&& value) { return visit(value); }, node.getVariant());
+    return std::visit([this](auto&& value)
+                      { return visit(value); }, node.getVariant());
 }
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LabelStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LabelStatement& node)
+{}
 
-std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node) {}
+std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node)
+{}
 
 std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>>
-    OpenCL::Codegen::Context::gatherTypedefs() const
+OpenCL::Codegen::Context::gatherTypedefs() const
 {
     std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>> result;
     for (auto iter = m_typedefs.rbegin(); iter != m_typedefs.rend(); iter++)
@@ -2501,7 +2607,8 @@ std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type
 
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Type& node)
 {
-    return std::visit([this](auto&& value) -> llvm::Type* { return visit(value); }, node.getType());
+    return std::visit([this](auto&& value) -> llvm::Type*
+                      { return visit(value); }, node.getType());
 }
 
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::PrimitiveType& node)
@@ -2521,12 +2628,12 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Primi
     {
         switch (node.getBitCount())
         {
-            case 0: return builder.getVoidTy();
-            case 8: return builder.getInt8Ty();
-            case 16: return builder.getInt16Ty();
-            case 32: return builder.getInt32Ty();
-            case 64: return builder.getInt64Ty();
-            default: break;
+        case 0: return builder.getVoidTy();
+        case 8: return builder.getInt8Ty();
+        case 16: return builder.getInt16Ty();
+        case 32: return builder.getInt32Ty();
+        case 64: return builder.getInt64Ty();
+        default: break;
         }
     }
     return nullptr;
@@ -2581,8 +2688,9 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Recor
     auto* record = llvm::StructType::create(context, (node.isUnion() ? "union." : "struct.") + node.getName());
     std::vector<llvm::Type*> members;
     std::transform(node.getMembers().begin(), node.getMembers().end(), std::back_inserter(members),
-                   [this](const auto& tuple) {
-                       auto& [type, name, bitCount] = tuple;
+                   [this](const auto& tuple)
+                   {
+                       auto&[type, name, bitCount] = tuple;
                        if (bitCount >= 0)
                        {
                            throw std::runtime_error("Not implemented yet");
@@ -2596,7 +2704,8 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Recor
     }
     else
     {
-        auto* maxElement = *std::max_element(members.begin(), members.end(), [this](llvm::Type* lhs, llvm::Type* rhs) {
+        auto* maxElement = *std::max_element(members.begin(), members.end(), [this](llvm::Type* lhs, llvm::Type* rhs)
+        {
             auto lhsSize = module->getDataLayout().getTypeAllocSize(lhs);
             auto rhsSize = module->getDataLayout().getTypeAllocSize(rhs);
             return lhsSize < rhsSize;
@@ -2650,8 +2759,8 @@ void OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type, llvm:
     }
     auto copy = integerPromotion(otherType);
     type = integerPromotion(type, &value);
-    if (auto [primitiveType, otherPrimitive] = std::pair(std::get_if<Representations::PrimitiveType>(&type.getType()),
-                                                         std::get_if<Representations::PrimitiveType>(&copy.getType()));
+    if (auto[primitiveType, otherPrimitive] = std::pair(std::get_if<Representations::PrimitiveType>(&type.getType()),
+                                                        std::get_if<Representations::PrimitiveType>(&copy.getType()));
         primitiveType && otherPrimitive)
     {
         if (otherPrimitive->isFloatingPoint()
@@ -2691,12 +2800,13 @@ void OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type, llvm:
         }
     }
 }
+
 std::map<std::string, OpenCL::Representations::RecordType> OpenCL::Codegen::Context::gatherStructsAndUnions() const
 {
     std::map<std::string, OpenCL::Representations::RecordType> result;
-    for (auto iter = m_structsUnionsAndEnums.rbegin(); iter != m_structsUnionsAndEnums.rend(); iter++)
+    for (auto iter = m_structsUnions.rbegin(); iter != m_structsUnions.rend(); iter++)
     {
-        for (auto& [key, value] : *iter)
+        for (auto&[key, value] : *iter)
         {
             if (auto* record = std::get_if<Representations::RecordType>(&value.getType()))
             {

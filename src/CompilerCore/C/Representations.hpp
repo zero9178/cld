@@ -154,7 +154,7 @@ namespace OpenCL::Representations
 
         const std::vector<std::tuple<Type, std::string, std::int64_t>>& getMembers() const;
 
-        bool isDeclaration() const;
+        bool isDefinition() const;
 
         bool operator==(const RecordType& rhs) const;
 
@@ -163,7 +163,7 @@ namespace OpenCL::Representations
 
     class EnumType final
     {
-        bool m_anonymous;
+        std::string m_name;
         std::vector<std::pair<std::string, std::int32_t>> m_values;
 
         EnumType(const std::string& name, std::vector<std::pair<std::string, std::int32_t>> values);
@@ -174,9 +174,11 @@ namespace OpenCL::Representations
 
         const std::vector<std::pair<std::string, int32_t>>& getValues() const;
 
-        bool isDeclaration() const;
+        bool isDefinition() const;
 
         bool isAnonymous() const;
+
+        const std::string& getName() const;
 
         bool operator==(const EnumType& rhs) const;
 

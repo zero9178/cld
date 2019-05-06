@@ -19,7 +19,7 @@ namespace OpenCL::Codegen
     class Context final
     {
         std::vector<std::map<std::string, std::pair<llvm::Value*, Representations::Type>>> m_namedValues{1};
-        std::vector<std::map<std::string, Representations::Type>> m_structsUnionsAndEnums{1};
+        std::vector<std::map<std::string, Representations::Type>> m_structsUnions{1};
         std::vector<std::map<std::string, Representations::Type>> m_typedefs{1};
 
         llvm::LLVMContext context;
@@ -41,6 +41,8 @@ namespace OpenCL::Codegen
         void popScope()
         {
             m_namedValues.pop_back();
+            m_structsUnions.pop_back();
+            m_typedefs.pop_back();
         }
 
         const std::pair<llvm::Value*, Representations::Type>* findValue(const std::string& name) const
@@ -58,7 +60,7 @@ namespace OpenCL::Codegen
 
         const Representations::Type* findStructUnionOrEnum(const std::string& name) const
         {
-            for (auto iter = m_structsUnionsAndEnums.rbegin(); iter != m_structsUnionsAndEnums.rend(); iter++)
+            for (auto iter = m_structsUnions.rbegin(); iter != m_structsUnions.rend(); iter++)
             {
                 auto result = iter->find(name);
                 if (result != iter->end())
@@ -72,6 +74,8 @@ namespace OpenCL::Codegen
         void pushScope()
         {
             m_namedValues.emplace_back();
+            m_structsUnions.emplace_back();
+            m_typedefs.emplace_back();
         }
 
         void clearScope()

@@ -1347,6 +1347,13 @@ Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL
         {
             return declaration;
         }
+        if (!declaration->getName().empty())
+        {
+            if (!context.enumDefinitions.back().insert(declaration->getName()).second)
+            {
+                return FailureReason("Enum with name " + declaration->getName() + " already exists in this scope");
+            }
+        }
         return EnumSpecifier(line, colunn, std::move(*declaration));
     }
     begin++;
