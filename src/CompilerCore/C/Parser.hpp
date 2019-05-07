@@ -19,7 +19,7 @@ namespace OpenCL::Parser
         std::vector<std::set<std::string>> typedefs;
         std::set<std::string> functions;
         std::map<std::string, Representations::RecordType> structOrUnions;
-        std::vector<std::set<std::string>> enumDefinitions;
+        std::vector<std::map<std::string, std::pair<std::size_t, std::size_t>>> enumDefinitions;
 
         bool isTypedef(const std::string& name);
 

@@ -1333,6 +1333,14 @@ Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL
         {
             return declaration;
         }
+        if (!declaration->getName().empty())
+        {
+            if (auto[prev, inserted] = context.enumDefinitions.back().insert({declaration->getName(), {line, colunn}});
+                !inserted && prev->second != std::pair{line, colunn})
+            {
+                return FailureReason("Enum with name " + declaration->getName() + " already exists in this scope");
+            }
+        }
         return EnumSpecifier(line, colunn, std::move(*declaration));
     }
     else if (curr->getTokenType() != TokenType::Identifier)
@@ -1349,7 +1357,8 @@ Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL
         }
         if (!declaration->getName().empty())
         {
-            if (!context.enumDefinitions.back().insert(declaration->getName()).second)
+            if (auto[prev, inserted] = context.enumDefinitions.back().insert({declaration->getName(), {line, colunn}});
+                !inserted && prev->second != std::pair{line, colunn})
             {
                 return FailureReason("Enum with name " + declaration->getName() + " already exists in this scope");
             }

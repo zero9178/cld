@@ -239,38 +239,6 @@ namespace OpenCL::Codegen
 
         std::optional<FailureReason> visit(const Syntax::ExternalDeclaration& node);
 
-        NodeRetType visit(const Syntax::TypeName& node);
-
-        NodeRetType visit(const Syntax::Declarator& node);
-
-        NodeRetType visit(const Syntax::EnumDeclaration& node);
-
-        NodeRetType visit(const Syntax::TypeSpecifier& node);
-
-        NodeRetType visit(const Syntax::DirectDeclarator& node);
-
-        NodeRetType visit(const Syntax::DirectDeclaratorNoStaticOrAsterisk& node);
-
-        NodeRetType visit(const Syntax::DirectDeclaratorStatic& node);
-
-        NodeRetType visit(const Syntax::DirectDeclaratorAsterisk& node);
-
-        NodeRetType visit(const Syntax::DirectDeclaratorParentheseParameters& node);
-
-        NodeRetType visit(const Syntax::DirectDeclaratorParentheseIdentifiers& node);
-
-        NodeRetType visit(const Syntax::DirectAbstractDeclarator& node);
-
-        NodeRetType visit(const Syntax::DirectAbstractDeclaratorParameterTypeList& node);
-
-        NodeRetType visit(const Syntax::DirectAbstractDeclaratorAssignmentExpression& node);
-
-        NodeRetType visit(const Syntax::Pointer& node);
-
-        NodeRetType visit(const Syntax::ParameterTypeList& node);
-
-        NodeRetType visit(const Syntax::ParameterList& node);
-
         std::optional<FailureReason> visit(const Syntax::LabelStatement& node);
 
         std::optional<FailureReason> visit(const Syntax::GotoStatement& node);

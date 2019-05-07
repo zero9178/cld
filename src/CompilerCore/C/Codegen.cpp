@@ -1956,6 +1956,14 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return type.error();
         }
+        if (auto* abstractArray = std::get_if<Representations::AbstractArrayType>(&type->getType()))
+        {
+            if (!initializer)
+            {
+                return FailureReason("Can't deduce size of array in declaration without initializer");
+            }
+
+        }
         auto name = declarator ? Representations::declaratorToName(*declarator) : "";
         if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Typedef)
         {
@@ -2567,7 +2575,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 }
 
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Initializer& node)
-{}
+{
+    return std::visit([this](auto&& value)
+                      {
+                          return visit(value);
+                      }, node.getVariant());
+}
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundItem& node)
 {
