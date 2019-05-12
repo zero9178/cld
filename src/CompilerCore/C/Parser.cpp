@@ -181,6 +181,7 @@ Expected<Declaration, FailureReason>
         {
             break;
         }
+        context.addToScope(Semantics::declaratorToName(*declarator));
         if (curr->getTokenType() != TokenType::Assignment)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
@@ -227,48 +228,6 @@ Expected<Declaration, FailureReason>
                 }
             };
             context.typedefs.back().insert(std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant()));
-        }
-    }
-    else
-    {
-        for (auto& [declator, init] : initDeclarators)
-        {
-            (void)init;
-            bool isFunction = false;
-            auto visitor = [&isFunction](auto self, auto&& value) -> std::string {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<std::string, T>)
-                {
-                    (void)self;
-                    return value;
-                }
-                else if constexpr (std::is_same_v<T, std::unique_ptr<Declarator>>)
-                {
-                    return std::visit([&](auto&& value) -> std::string { return self(value); },
-                                      value->getDirectDeclarator().getVariant());
-                }
-                else
-                {
-                    if constexpr (
-                        std::is_same_v<
-                            T,
-                            DirectDeclaratorParentheseIdentifiers> || std::is_same_v<T, DirectDeclaratorParentheseParameters>)
-                    {
-                        isFunction = true;
-                    }
-                    return std::visit([&](auto&& value) -> std::string { return self(value); },
-                                      value.getDirectDeclarator().getVariant());
-                }
-            };
-            auto result = std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant());
-            if (!isFunction)
-            {
-                context.addToScope(result);
-            }
-            else
-            {
-                context.functions.insert(result);
-            }
         }
     }
     for (auto& iter : declarationSpecifiers)
@@ -375,12 +334,12 @@ OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason>
                     TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
                 if (isDefinition)
                 {
-                    auto type = Representations::declaratorsToType({std::cref(result)});
+                    auto type = Semantics::declaratorsToType({std::cref(result)});
                     if (!type)
                     {
                         return type;
                     }
-                    context.structOrUnions.emplace(name, std::get<Representations::RecordType>(type->getType()));
+                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->getType()));
                 }
                 begin = curr;
                 return DeclarationSpecifier{std::move(result)};
@@ -640,12 +599,12 @@ OpenCL::Expected<OpenCL::Syntax::SpecifierQualifier, OpenCL::FailureReason>
                     TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
                 if (isDefinition)
                 {
-                    auto type = Representations::declaratorsToType({std::cref(result)});
+                    auto type = Semantics::declaratorsToType({std::cref(result)});
                     if (!type)
                     {
                         return type;
                     }
-                    context.structOrUnions.emplace(name, std::get<Representations::RecordType>(type->getType()));
+                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->getType()));
                 }
                 begin = curr;
                 return SpecifierQualifier{std::move(result)};
@@ -1541,25 +1500,7 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
 
     begin = current;
     {
-        auto visitor = [](auto self, auto&& value) -> std::string {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<std::string, T>)
-            {
-                (void)self;
-                return value;
-            }
-            else if constexpr (std::is_same_v<T, std::unique_ptr<Declarator>>)
-            {
-                return std::visit([&](auto&& value) -> std::string { return self(value); },
-                                  value->getDirectDeclarator().getVariant());
-            }
-            else
-            {
-                return std::visit([&](auto&& value) -> std::string { return self(value); },
-                                  value.getDirectDeclarator().getVariant());
-            }
-        };
-        context.functions.insert(std::visit(Y{visitor}, declarator->getDirectDeclarator().getVariant()));
+        context.addToScope(Semantics::declaratorToName(*declarator));
     }
     return FunctionDefinition(line, column, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));
@@ -3136,7 +3077,7 @@ Expected<PrimaryExpression, FailureReason> OpenCL::Parser::parsePrimaryExpressio
     if (currToken.getTokenType() == TokenType::Identifier)
     {
         const auto& name = std::get<std::string>(currToken.getValue());
-        if (context.isInScope(name) || context.functions.count(name))
+        if (context.isInScope(name))
         {
             begin = curr;
             return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line, column, name));

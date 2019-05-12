@@ -3,7 +3,7 @@
 
 #include "Expected.hpp"
 #include "FailureReason.hpp"
-#include "Representations.hpp"
+#include "Semantics.hpp"
 #include "Syntax.hpp"
 
 #include <map>
@@ -16,13 +16,13 @@ namespace OpenCL::Constant
 
     class ConstantEvaluator final
     {
-        std::map<std::string, Representations::RecordType> m_structOrUnions;
-        std::map<std::string, std::reference_wrapper<const Representations::Type>> m_typedefs;
+        std::map<std::string, Semantics::RecordType> m_structOrUnions;
+        std::map<std::string, std::reference_wrapper<const Semantics::Type>> m_typedefs;
 
     public:
         explicit ConstantEvaluator(
-            const std::map<std::string, Representations::RecordType>& structOrUnions = {},
-            const std::map<std::string, std::reference_wrapper<const Representations::Type>>& typedefs = {});
+            const std::map<std::string, Semantics::RecordType>& structOrUnions = {},
+            const std::map<std::string, std::reference_wrapper<const Semantics::Type>>& typedefs = {});
 
         ConstRetType visit(const Syntax::Expression& node);
 

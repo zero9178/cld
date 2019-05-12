@@ -3,7 +3,7 @@
 
 #include "Expected.hpp"
 #include "FailureReason.hpp"
-#include "Representations.hpp"
+#include "Semantics.hpp"
 #include "Syntax.hpp"
 
 #include <llvm/IR/DIBuilder.h>
@@ -12,15 +12,15 @@
 
 namespace OpenCL::Codegen
 {
-    using NodeRetType = Expected<std::pair<llvm::Value*, Representations::Type>, FailureReason>;
+    using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
 
     using TypeRetType = llvm::Type*;
 
     class Context final
     {
-        std::vector<std::map<std::string, std::pair<llvm::Value*, Representations::Type>>> m_namedValues{1};
-        std::vector<std::map<std::string, Representations::Type>> m_structsUnions{1};
-        std::vector<std::map<std::string, Representations::Type>> m_typedefs{1};
+        std::vector<std::map<std::string, std::pair<llvm::Value*, Semantics::Type>>> m_namedValues{1};
+        std::vector<std::map<std::string, Semantics::Type>> m_structsUnions{1};
+        std::vector<std::map<std::string, Semantics::Type>> m_typedefs{1};
 
         llvm::LLVMContext context;
         llvm::IRBuilder<> builder{context};
@@ -30,13 +30,13 @@ namespace OpenCL::Codegen
         std::vector<llvm::BasicBlock*> breakBlocks;
         std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
         std::vector<llvm::DIScope*> debugScope;
-        const Representations::FunctionType* currentFunction;
+        const Semantics::FunctionType* currentFunction;
 
         llvm::Constant* createZeroValue(llvm::Type* type);
 
-        std::map<std::string, std::reference_wrapper<const Representations::Type>> gatherTypedefs() const;
+        std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
 
-        std::map<std::string, Representations::RecordType> gatherStructsAndUnions() const;
+        std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
 
         void popScope()
         {
@@ -45,7 +45,7 @@ namespace OpenCL::Codegen
             m_typedefs.pop_back();
         }
 
-        const std::pair<llvm::Value*, Representations::Type>* findValue(const std::string& name) const
+        const std::pair<llvm::Value*, Semantics::Type>* findValue(const std::string& name) const
         {
             for (auto iter = m_namedValues.rbegin(); iter != m_namedValues.rend(); iter++)
             {
@@ -58,7 +58,7 @@ namespace OpenCL::Codegen
             return nullptr;
         }
 
-        const Representations::Type* findStructUnionOrEnum(const std::string& name) const
+        const Semantics::Type* findStructUnionOrEnum(const std::string& name) const
         {
             for (auto iter = m_structsUnions.rbegin(); iter != m_structsUnions.rend(); iter++)
             {
@@ -89,44 +89,44 @@ namespace OpenCL::Codegen
             return m_namedValues.size() == 1;
         }
 
-        NodeRetType makeDivide(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                                 llvm::Value* right);
+        NodeRetType makeDivide(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                               llvm::Value* right);
 
-        NodeRetType makeRemainder(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                                 llvm::Value* right);
-
-        NodeRetType makeMultiply(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                                 llvm::Value* right);
-
-        NodeRetType makePlus(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                             llvm::Value* right);
-
-        NodeRetType makeMinus(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                              llvm::Value* right);
-
-        NodeRetType makeLeftShift(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+        NodeRetType makeRemainder(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
                                   llvm::Value* right);
 
-        NodeRetType makeRightShift(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                                   llvm::Value* right);
+        NodeRetType makeMultiply(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                                 llvm::Value* right);
 
-        NodeRetType makeBitAnd(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                               llvm::Value* right);
+        NodeRetType makePlus(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                             llvm::Value* right);
 
-        NodeRetType makeBitXor(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
-                               llvm::Value* right);
-
-        NodeRetType makeBitOr(Representations::Type leftType, llvm::Value* left, Representations::Type rightType,
+        NodeRetType makeMinus(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
                               llvm::Value* right);
 
-        llvm::Value* castTo(const Representations::Type& sourceType, llvm::Value* source,
-                            const Representations::Type& destinationType, bool explicitConversion = false);
+        NodeRetType makeLeftShift(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                                  llvm::Value* right);
+
+        NodeRetType makeRightShift(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                                   llvm::Value* right);
+
+        NodeRetType makeBitAnd(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                               llvm::Value* right);
+
+        NodeRetType makeBitXor(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                               llvm::Value* right);
+
+        NodeRetType makeBitOr(Semantics::Type leftType, llvm::Value* left, Semantics::Type rightType,
+                              llvm::Value* right);
+
+        llvm::Value* castTo(const Semantics::Type& sourceType, llvm::Value* source,
+                            const Semantics::Type& destinationType, bool explicitConversion = false);
 
         llvm::Value* toBool(llvm::Value* source);
 
-        void arithmeticCast(Representations::Type& type, llvm::Value*& value, const Representations::Type& otherType);
+        void arithmeticCast(Semantics::Type& type, llvm::Value*& value, const Semantics::Type& otherType);
 
-        Representations::Type integerPromotion(const OpenCL::Representations::Type& type,
+        Semantics::Type integerPromotion(const OpenCL::Semantics::Type& type,
                                                llvm::Value** optionalValue = nullptr);
 
     public:
@@ -243,23 +243,23 @@ namespace OpenCL::Codegen
 
         std::optional<FailureReason> visit(const Syntax::GotoStatement& node);
 
-        llvm::Type* visit(const Representations::Type& node);
+        llvm::Type* visit(const Semantics::Type& node);
 
-        llvm::Type* visit(const Representations::PrimitiveType& node);
+        llvm::Type* visit(const Semantics::PrimitiveType& node);
 
-        llvm::Type* visit(const Representations::ArrayType& node);
+        llvm::Type* visit(const Semantics::ArrayType& node);
 
-        llvm::Type* visit(const Representations::AbstractArrayType& node);
+        llvm::Type* visit(const Semantics::AbstractArrayType& node);
 
-        llvm::Type* visit(const Representations::ValArrayType& node);
+        llvm::Type* visit(const Semantics::ValArrayType& node);
 
-        llvm::Type* visit(const Representations::FunctionType& node);
+        llvm::Type* visit(const Semantics::FunctionType& node);
 
-        llvm::Type* visit(const Representations::RecordType& node);
+        llvm::Type* visit(const Semantics::RecordType& node);
 
-        llvm::Type* visit(const Representations::EnumType& node);
+        llvm::Type* visit(const Semantics::EnumType& node);
 
-        llvm::Type* visit(const Representations::PointerType& node);
+        llvm::Type* visit(const Semantics::PointerType& node);
     };
 } // namespace OpenCL::Codegen
 

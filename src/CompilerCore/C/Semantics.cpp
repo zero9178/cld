@@ -1,4 +1,4 @@
-#include "Representations.hpp"
+#include "Semantics.hpp"
 
 #include "ConstantEvaluator.hpp"
 #include "Syntax.hpp"
@@ -8,114 +8,114 @@
 #include <sstream>
 #include <utility>
 
-const OpenCL::Representations::Type& OpenCL::Representations::ArrayType::getType() const
+const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {
     return *m_type;
 }
 
-std::size_t OpenCL::Representations::ArrayType::getSize() const
+std::size_t OpenCL::Semantics::ArrayType::getSize() const
 {
     return m_size;
 }
 
-OpenCL::Representations::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<OpenCL::Representations::Type>&& type,
-                                              std::size_t size)
+OpenCL::Semantics::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type,
+                                        std::size_t size)
     : m_restricted(isRestricted), m_type(std::move(type)), m_size(size)
 {
 }
 
-bool OpenCL::Representations::ArrayType::isRestricted() const
+bool OpenCL::Semantics::ArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Representations::Type OpenCL::Representations::ArrayType::create(bool isConst, bool isVolatile,
-                                                                         bool isRestricted,
-                                                                         OpenCL::Representations::Type&& type,
-                                                                         std::size_t size)
+OpenCL::Semantics::Type OpenCL::Semantics::ArrayType::create(bool isConst, bool isVolatile,
+                                                             bool isRestricted,
+                                                             OpenCL::Semantics::Type&& type,
+                                                             std::size_t size)
 {
     std::ostringstream ss;
     ss << size;
     auto name = type.getName() + "[" + ss.str() + "]";
-    return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
+    return OpenCL::Semantics::Type(isConst, isVolatile, name,
+                                   ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }
 
-bool OpenCL::Representations::ArrayType::operator==(const OpenCL::Representations::ArrayType& rhs) const
+bool OpenCL::Semantics::ArrayType::operator==(const OpenCL::Semantics::ArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type, m_size) == std::tie(rhs.m_restricted, *rhs.m_type, rhs.m_size);
 }
 
-bool OpenCL::Representations::ArrayType::operator!=(const OpenCL::Representations::ArrayType& rhs) const
+bool OpenCL::Semantics::ArrayType::operator!=(const OpenCL::Semantics::ArrayType& rhs) const
 {
     return !(rhs == *this);
 }
 
-bool OpenCL::Representations::Type::isConst() const
+bool OpenCL::Semantics::Type::isConst() const
 {
     return m_isConst;
 }
 
-bool OpenCL::Representations::Type::isVolatile() const
+bool OpenCL::Semantics::Type::isVolatile() const
 {
     return m_isVolatile;
 }
 
-const std::string& OpenCL::Representations::Type::getName() const
+const std::string& OpenCL::Semantics::Type::getName() const
 {
     return m_name;
 }
 
-void OpenCL::Representations::Type::setName(const std::string& name)
+void OpenCL::Semantics::Type::setName(const std::string& name)
 {
     m_name = name;
 }
 
-const OpenCL::Representations::Type::variant& OpenCL::Representations::Type::getType() const
+const OpenCL::Semantics::Type::variant& OpenCL::Semantics::Type::getType() const
 {
     return m_type;
 }
 
-OpenCL::Representations::Type::Type(bool isConst, bool isVolatile, std::string name,
-                                    OpenCL::Representations::Type::variant&& type)
+OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name,
+                              OpenCL::Semantics::Type::variant&& type)
     : m_isConst(isConst), m_isVolatile(isVolatile), m_name(std::move(name)), m_type(std::move(type))
 {
 }
 
-bool OpenCL::Representations::Type::operator==(const OpenCL::Representations::Type& rhs) const
+bool OpenCL::Semantics::Type::operator==(const OpenCL::Semantics::Type& rhs) const
 {
     return std::tie(m_isConst, m_isVolatile, m_type) == std::tie(rhs.m_isConst, rhs.m_isVolatile, rhs.m_type);
 }
 
-bool OpenCL::Representations::Type::operator!=(const OpenCL::Representations::Type& rhs) const
+bool OpenCL::Semantics::Type::operator!=(const OpenCL::Semantics::Type& rhs) const
 {
     return !(rhs == *this);
 }
 
-bool OpenCL::Representations::Type::isCompatibleWith(const OpenCL::Representations::Type& rhs) const
+bool OpenCL::Semantics::Type::isCompatibleWith(const OpenCL::Semantics::Type& rhs) const
 {
     return m_type == rhs.m_type;
 }
 
-OpenCL::Representations::PointerType::PointerType(bool isRestricted,
-                                                  std::shared_ptr<OpenCL::Representations::Type>&& elementType)
+OpenCL::Semantics::PointerType::PointerType(bool isRestricted,
+                                            std::shared_ptr<OpenCL::Semantics::Type>&& elementType)
     : m_restricted(isRestricted), m_elementType(std::move(elementType))
 {
 }
 
-const OpenCL::Representations::Type& OpenCL::Representations::PointerType::getElementType() const
+const OpenCL::Semantics::Type& OpenCL::Semantics::PointerType::getElementType() const
 {
     return *m_elementType;
 }
 
-bool OpenCL::Representations::PointerType::isRestricted() const
+bool OpenCL::Semantics::PointerType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Representations::Type OpenCL::Representations::PointerType::create(bool isConst, bool isVolatile,
-                                                                           bool isRestricted,
-                                                                           OpenCL::Representations::Type&& elementType)
+OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, bool isVolatile,
+                                                               bool isRestricted,
+                                                               OpenCL::Semantics::Type&& elementType)
 {
     std::string name;
     if (std::holds_alternative<FunctionType>(elementType.getType()))
@@ -134,89 +134,89 @@ OpenCL::Representations::Type OpenCL::Representations::PointerType::create(bool 
     {
         name = elementType.getName() + "*";
     }
-    return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
+    return OpenCL::Semantics::Type(isConst, isVolatile, name,
+                                   PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
 }
 
-bool OpenCL::Representations::PointerType::operator==(const OpenCL::Representations::PointerType& rhs) const
+bool OpenCL::Semantics::PointerType::operator==(const OpenCL::Semantics::PointerType& rhs) const
 {
     return std::tie(m_restricted, *m_elementType) == std::tie(rhs.m_restricted, *rhs.m_elementType);
 }
 
-bool OpenCL::Representations::PointerType::operator!=(const OpenCL::Representations::PointerType& rhs) const
+bool OpenCL::Semantics::PointerType::operator!=(const OpenCL::Semantics::PointerType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Representations::EnumType::EnumType(const std::string& name,
-                                            std::vector<std::pair<std::string, std::int32_t>> values)
+OpenCL::Semantics::EnumType::EnumType(const std::string& name,
+                                      std::vector<std::pair<std::string, std::int32_t>> values)
     : m_name(name), m_values(std::move(values))
 {
 }
 
-const std::vector<std::pair<std::string, int32_t>>& OpenCL::Representations::EnumType::getValues() const
+const std::vector<std::pair<std::string, int32_t>>& OpenCL::Semantics::EnumType::getValues() const
 {
     return m_values;
 }
 
-bool OpenCL::Representations::EnumType::isDefinition() const
+bool OpenCL::Semantics::EnumType::isDefinition() const
 {
     return !m_values.empty();
 }
 
-bool OpenCL::Representations::EnumType::isAnonymous() const
+bool OpenCL::Semantics::EnumType::isAnonymous() const
 {
     return m_name.empty();
 }
 
-OpenCL::Representations::Type
-    OpenCL::Representations::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
+OpenCL::Semantics::Type
+OpenCL::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
                                               std::vector<std::pair<std::string, std::int32_t>> values)
 {
-    return OpenCL::Representations::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
+    return OpenCL::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
 }
 
-bool OpenCL::Representations::EnumType::operator==(const OpenCL::Representations::EnumType& rhs) const
+bool OpenCL::Semantics::EnumType::operator==(const OpenCL::Semantics::EnumType& rhs) const
 {
     return m_name == rhs.m_name;
 }
 
-bool OpenCL::Representations::EnumType::operator!=(const OpenCL::Representations::EnumType& rhs) const
+bool OpenCL::Semantics::EnumType::operator!=(const OpenCL::Semantics::EnumType& rhs) const
 {
     return !(rhs == *this);
 }
 
-const std::string& OpenCL::Representations::EnumType::getName() const
+const std::string& OpenCL::Semantics::EnumType::getName() const
 {
     return m_name;
 }
 
-OpenCL::Representations::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
+OpenCL::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
     : m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_bitCount(bitCount)
 {
 }
 
-bool OpenCL::Representations::PrimitiveType::isFloatingPoint() const
+bool OpenCL::Semantics::PrimitiveType::isFloatingPoint() const
 {
     return m_isFloatingPoint;
 }
 
-bool OpenCL::Representations::PrimitiveType::isSigned() const
+bool OpenCL::Semantics::PrimitiveType::isSigned() const
 {
     return m_isSigned;
 }
 
-std::uint8_t OpenCL::Representations::PrimitiveType::getBitCount() const
+std::uint8_t OpenCL::Semantics::PrimitiveType::getBitCount() const
 {
     return m_bitCount;
 }
 
-OpenCL::Representations::Type OpenCL::Representations::PrimitiveType::create(bool isConst, bool isVolatile,
-                                                                             bool isFloatingPoint, bool isSigned,
-                                                                             std::uint8_t bitCount)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, bool isVolatile,
+                                                                 bool isFloatingPoint, bool isSigned,
+                                                                 std::uint8_t bitCount)
 {
-    return OpenCL::Representations::Type(isConst, isVolatile,
-                                         [=]() -> const char* {
+    return OpenCL::Semantics::Type(isConst, isVolatile,
+                                   [=]() -> const char* {
                                              if (isFloatingPoint)
                                              {
                                                  if (bitCount == 32)
@@ -276,57 +276,57 @@ OpenCL::Representations::Type OpenCL::Representations::PrimitiveType::create(boo
                                              }
                                              return "";
                                          }(),
-                                         PrimitiveType(isFloatingPoint, isSigned, bitCount));
+                                   PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
 
-bool OpenCL::Representations::PrimitiveType::operator==(const OpenCL::Representations::PrimitiveType& rhs) const
+bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::PrimitiveType& rhs) const
 {
     return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount)
            == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
 }
 
-bool OpenCL::Representations::PrimitiveType::operator!=(const OpenCL::Representations::PrimitiveType& rhs) const
+bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::PrimitiveType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Representations::ValArrayType::ValArrayType(bool isRestricted,
-                                                    std::shared_ptr<OpenCL::Representations::Type>&& type)
+OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted,
+                                              std::shared_ptr<OpenCL::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
 
-const OpenCL::Representations::Type& OpenCL::Representations::ValArrayType::getType() const
+const OpenCL::Semantics::Type& OpenCL::Semantics::ValArrayType::getType() const
 {
     return *m_type;
 }
 
-bool OpenCL::Representations::ValArrayType::isRestricted() const
+bool OpenCL::Semantics::ValArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Representations::Type OpenCL::Representations::ValArrayType::create(bool isConst, bool isVolatile,
-                                                                            bool isRestricted,
-                                                                            OpenCL::Representations::Type&& type)
+OpenCL::Semantics::Type OpenCL::Semantics::ValArrayType::create(bool isConst, bool isVolatile,
+                                                                bool isRestricted,
+                                                                OpenCL::Semantics::Type&& type)
 {
     auto name = type.getName() + "[*]";
-    return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
+    return OpenCL::Semantics::Type(isConst, isVolatile, name,
+                                   ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
-bool OpenCL::Representations::ValArrayType::operator==(const OpenCL::Representations::ValArrayType& rhs) const
+bool OpenCL::Semantics::ValArrayType::operator==(const OpenCL::Semantics::ValArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
 }
 
-bool OpenCL::Representations::ValArrayType::operator!=(const OpenCL::Representations::ValArrayType& rhs) const
+bool OpenCL::Semantics::ValArrayType::operator!=(const OpenCL::Semantics::ValArrayType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Representations::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments,
-                                                    bool lastIsVararg, bool hasPrototype)
+OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments,
+                                              bool lastIsVararg, bool hasPrototype)
     : m_returnType(std::move(returnType)),
       m_arguments(std::move(arguments)),
       m_lastIsVararg(lastIsVararg),
@@ -334,24 +334,24 @@ OpenCL::Representations::FunctionType::FunctionType(std::shared_ptr<Type>&& retu
 {
 }
 
-const OpenCL::Representations::Type& OpenCL::Representations::FunctionType::getReturnType() const
+const OpenCL::Semantics::Type& OpenCL::Semantics::FunctionType::getReturnType() const
 {
     return *m_returnType;
 }
 
-const std::vector<OpenCL::Representations::Type>& OpenCL::Representations::FunctionType::getArguments() const
+const std::vector<OpenCL::Semantics::Type>& OpenCL::Semantics::FunctionType::getArguments() const
 {
     return m_arguments;
 }
 
-bool OpenCL::Representations::FunctionType::isLastVararg() const
+bool OpenCL::Semantics::FunctionType::isLastVararg() const
 {
     return m_lastIsVararg;
 }
 
-OpenCL::Representations::Type
-    OpenCL::Representations::FunctionType::create(OpenCL::Representations::Type&& returnType,
-                                                  std::vector<OpenCL::Representations::Type>&& arguments,
+OpenCL::Semantics::Type
+OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
+                                        std::vector<OpenCL::Semantics::Type>&& arguments,
                                                   bool lastIsVararg, bool hasPrototype)
 {
     std::string argumentsNames;
@@ -364,57 +364,58 @@ OpenCL::Representations::Type
         }
     }
     argumentsNames = returnType.getName() + "(" + argumentsNames + ")";
-    return OpenCL::Representations::Type(
+    return OpenCL::Semantics::Type(
         false, false, argumentsNames,
         FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, hasPrototype));
 }
 
-bool OpenCL::Representations::FunctionType::operator==(const OpenCL::Representations::FunctionType& rhs) const
+bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::FunctionType& rhs) const
 {
     return std::tie(*m_returnType, m_arguments, m_lastIsVararg)
            == std::tie(*rhs.m_returnType, rhs.m_arguments, rhs.m_lastIsVararg);
 }
 
-bool OpenCL::Representations::FunctionType::operator!=(const OpenCL::Representations::FunctionType& rhs) const
+bool OpenCL::Semantics::FunctionType::operator!=(const OpenCL::Semantics::FunctionType& rhs) const
 {
     return !(rhs == *this);
 }
-bool OpenCL::Representations::FunctionType::hasPrototype() const
+
+bool OpenCL::Semantics::FunctionType::hasPrototype() const
 {
     return m_hasPrototype;
 }
 
-OpenCL::Representations::AbstractArrayType::AbstractArrayType(bool isRestricted,
-                                                              std::shared_ptr<OpenCL::Representations::Type>&& type)
+OpenCL::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted,
+                                                        std::shared_ptr<OpenCL::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
 
-const OpenCL::Representations::Type& OpenCL::Representations::AbstractArrayType::getType() const
+const OpenCL::Semantics::Type& OpenCL::Semantics::AbstractArrayType::getType() const
 {
     return *m_type;
 }
 
-bool OpenCL::Representations::AbstractArrayType::isRestricted() const
+bool OpenCL::Semantics::AbstractArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Representations::Type OpenCL::Representations::AbstractArrayType::create(bool isConst, bool isVolatile,
-                                                                                 bool isRestricted,
-                                                                                 OpenCL::Representations::Type&& type)
+OpenCL::Semantics::Type OpenCL::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile,
+                                                                     bool isRestricted,
+                                                                     OpenCL::Semantics::Type&& type)
 {
     auto name = type.getName() + "[]";
-    return OpenCL::Representations::Type(isConst, isVolatile, name,
-                                         AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
+    return OpenCL::Semantics::Type(isConst, isVolatile, name,
+                                   AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
-bool OpenCL::Representations::AbstractArrayType::operator==(const OpenCL::Representations::AbstractArrayType& rhs) const
+bool OpenCL::Semantics::AbstractArrayType::operator==(const OpenCL::Semantics::AbstractArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
 }
 
-bool OpenCL::Representations::AbstractArrayType::operator!=(const OpenCL::Representations::AbstractArrayType& rhs) const
+bool OpenCL::Semantics::AbstractArrayType::operator!=(const OpenCL::Semantics::AbstractArrayType& rhs) const
 {
     return !(rhs == *this);
 }
@@ -445,11 +446,11 @@ namespace
     overload(Ts...)->overload<Ts...>;
 } // namespace
 
-OpenCL::Expected<OpenCL::Representations::Type, OpenCL::FailureReason> OpenCL::Representations::declaratorsToType(
+OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semantics::declaratorsToType(
     std::vector<SpecifierQualifierRef> specifierQualifiers, PossiblyAbstractQualifierRef declarator,
     const std::map<std::string, std::reference_wrapper<const Type>>& typedefs,
     const std::vector<Syntax::Declaration>& declarations,
-    const std::map<std::string, Representations::RecordType>& structOrUnions)
+    const std::map<std::string, Semantics::RecordType>& structOrUnions)
 {
     using ThisReturnType = OpenCL::Expected<Type, OpenCL::FailureReason>;
 
@@ -1268,10 +1269,14 @@ OpenCL::Expected<OpenCL::Representations::Type, OpenCL::FailureReason> OpenCL::R
                                                                                                                                         return FailureReason(
                                                                                                                                             "Declarations in function definitions are not allowed to have initializers");
                                                                                                                                     }
-                                                                                                                                    auto name = Representations::
+                                                                                                                                    auto
+                                                                                                                                        name
+                                                                                                                                        = Semantics::
                                                                                                                                         declaratorToName(
                                                                                                                                             *pair.first);
-                                                                                                                                    auto result = Representations::declaratorsToType(
+                                                                                                                                    auto
+                                                                                                                                        result
+                                                                                                                                        = Semantics::declaratorsToType(
                                                                                                                                         refs,
                                                                                                                                         *pair.first,
                                                                                                                                         typedefs,
@@ -1406,7 +1411,7 @@ OpenCL::Expected<OpenCL::Representations::Type, OpenCL::FailureReason> OpenCL::R
     return baseType;
 }
 
-std::string OpenCL::Representations::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
+std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
 {
     return std::visit(
         Y{overload{[](auto&&, const std::string& name) -> std::string { return name; },
@@ -1421,53 +1426,53 @@ std::string OpenCL::Representations::declaratorToName(const OpenCL::Syntax::Decl
         declarator.getDirectDeclarator().getVariant());
 }
 
-OpenCL::Representations::RecordType::RecordType(std::string name, bool isUnion,
-                                                std::vector<std::tuple<Type, std::string, std::int64_t>>&& names)
+OpenCL::Semantics::RecordType::RecordType(std::string name, bool isUnion,
+                                          std::vector<std::tuple<Type, std::string, std::int64_t>>&& names)
     : m_name(std::move(name)), m_isUnion(isUnion), m_members(std::move(names))
 {
 }
 
-bool OpenCL::Representations::RecordType::isUnion() const
+bool OpenCL::Semantics::RecordType::isUnion() const
 {
     return m_isUnion;
 }
 
-const std::vector<std::tuple<OpenCL::Representations::Type, std::string, std::int64_t>>&
-    OpenCL::Representations::RecordType::getMembers() const
+const std::vector<std::tuple<OpenCL::Semantics::Type, std::string, std::int64_t>>&
+OpenCL::Semantics::RecordType::getMembers() const
 {
     return m_members;
 }
 
-bool OpenCL::Representations::RecordType::isDefinition() const
+bool OpenCL::Semantics::RecordType::isDefinition() const
 {
     return !m_members.empty();
 }
 
-OpenCL::Representations::Type OpenCL::Representations::RecordType::create(
+OpenCL::Semantics::Type OpenCL::Semantics::RecordType::create(
     bool isConst, bool isVolatile, bool isUnion, const std::string& name,
-    std::vector<std::tuple<OpenCL::Representations::Type, std::string, int64_t>>&& members)
+    std::vector<std::tuple<OpenCL::Semantics::Type, std::string, int64_t>>&& members)
 {
-    return OpenCL::Representations::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
+    return OpenCL::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
                                          RecordType(name, isUnion, std::move(members)));
 }
 
-bool OpenCL::Representations::RecordType::operator==(const OpenCL::Representations::RecordType& rhs) const
+bool OpenCL::Semantics::RecordType::operator==(const OpenCL::Semantics::RecordType& rhs) const
 {
     return std::tie(m_isUnion, m_name) == std::tie(rhs.m_isUnion, rhs.m_name);
 }
 
-bool OpenCL::Representations::RecordType::operator!=(const OpenCL::Representations::RecordType& rhs) const
+bool OpenCL::Semantics::RecordType::operator!=(const OpenCL::Semantics::RecordType& rhs) const
 {
     return !(rhs == *this);
 }
 
-const std::string& OpenCL::Representations::RecordType::getName() const
+const std::string& OpenCL::Semantics::RecordType::getName() const
 {
     return m_name;
 }
 
 OpenCL::Expected<std::size_t, OpenCL::FailureReason>
-    OpenCL::Representations::alignmentOf(const OpenCL::Representations::Type& type)
+OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
 {
     return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason> {
                                    return primitiveType.getBitCount() / 8;
@@ -1536,7 +1541,7 @@ OpenCL::Expected<std::size_t, OpenCL::FailureReason>
 }
 
 OpenCL::Expected<std::size_t, OpenCL::FailureReason>
-    OpenCL::Representations::sizeOf(const OpenCL::Representations::Type& type)
+OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
 {
     return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason> {
                                    return primitiveType.getBitCount() / 8;

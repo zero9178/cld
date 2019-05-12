@@ -1,5 +1,5 @@
-#ifndef OPENCLPARSER_REPRESENTATIONS_HPP
-#define OPENCLPARSER_REPRESENTATIONS_HPP
+#ifndef OPENCLPARSER_SEMANTICS_HPP
+#define OPENCLPARSER_SEMANTICS_HPP
 
 #include "Expected.hpp"
 #include "FailureReason.hpp"
@@ -22,7 +22,7 @@ namespace OpenCL::Syntax
     class Declaration;
 } // namespace OpenCL::Syntax
 
-namespace OpenCL::Representations
+namespace OpenCL::Semantics
 {
     class Type;
 
@@ -94,7 +94,7 @@ namespace OpenCL::Representations
         bool m_restricted;
         std::shared_ptr<Type> m_type;
 
-        ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Representations::Type>&& type);
+        ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type);
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
@@ -119,8 +119,8 @@ namespace OpenCL::Representations
                      bool hasPrototype);
 
     public:
-        static Type create(OpenCL::Representations::Type&& returnType,
-                           std::vector<OpenCL::Representations::Type>&& arguments, bool lastIsVararg,
+        static Type create(OpenCL::Semantics::Type&& returnType,
+                           std::vector<OpenCL::Semantics::Type>&& arguments, bool lastIsVararg,
                            bool hasPrototype);
 
         const Type& getReturnType() const;
@@ -244,13 +244,14 @@ namespace OpenCL::Representations
         declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
                           PossiblyAbstractQualifierRef declarator = {},
                           const std::map<std::string, std::reference_wrapper<const Type>>& typedefs = {},
-                          const std::vector<Syntax::Declaration>& declarations = {},const std::map<std::string, Representations::RecordType>& structOrUnions = {});
+                          const std::vector<Syntax::Declaration>& declarations = {},
+                          const std::map<std::string, Semantics::RecordType>& structOrUnions = {});
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 
     Expected<std::size_t, FailureReason> sizeOf(const Type& type);
 
     Expected<std::size_t, FailureReason> alignmentOf(const Type& type);
-} // namespace OpenCL::Representations
+} // namespace OpenCL::Semantics
 
-#endif // OPENCLPARSER_REPRESENTATIONS_HPP
+#endif //OPENCLPARSER_SEMANTICS_HPP

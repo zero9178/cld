@@ -87,8 +87,8 @@ namespace
     }
 } // namespace
 
-llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Type& sourceType, llvm::Value* source,
-                                              const OpenCL::Representations::Type& destinationType,
+llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sourceType, llvm::Value* source,
+                                              const OpenCL::Semantics::Type& destinationType,
                                               bool explicitConversion)
 {
     if (sourceType.isCompatibleWith(destinationType))
@@ -97,10 +97,10 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
     }
     return std::visit(
         overload{
-            [&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+            [&](const Semantics::PrimitiveType& primitiveType) -> llvm::Value*
             {
                 return std::visit(
-                    overload{[&](const Representations::PrimitiveType& otherPrimitive) -> llvm::Value*
+                    overload{[&](const Semantics::PrimitiveType& otherPrimitive) -> llvm::Value*
                              {
                                  if (!primitiveType.isFloatingPoint() && !otherPrimitive.isFloatingPoint())
                                  {
@@ -140,7 +140,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                      return builder.CreateFPCast(source, visit(destinationType));
                                  }
                              },
-                             [&](const Representations::PointerType& pointerType) -> llvm::Value*
+                             [&](const Semantics::PointerType& pointerType) -> llvm::Value*
                              {
                                  if (primitiveType.isFloatingPoint())
                                  {
@@ -148,7 +148,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                  }
                                  if (explicitConversion)
                                  {
-                                     if (!std::holds_alternative<Representations::FunctionType>(
+                                     if (!std::holds_alternative<Semantics::FunctionType>(
                                          pointerType.getElementType().getType()))
                                      {
                                          return builder.CreateIntToPtr(source, visit(destinationType));
@@ -168,7 +168,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                      return builder.CreateIntToPtr(source, visit(destinationType));
                                  }
                              },
-                             [&](const Representations::EnumType&) -> llvm::Value*
+                             [&](const Semantics::EnumType&) -> llvm::Value*
                              {
                                  if (primitiveType.isFloatingPoint())
                                  {
@@ -187,9 +187,9 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                              { return nullptr; }},
                     destinationType.getType());
             },
-            [&](const Representations::PointerType& pointerType) -> llvm::Value*
+            [&](const Semantics::PointerType& pointerType) -> llvm::Value*
             {
-                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+                return std::visit(overload{[&](const Semantics::PrimitiveType& primitiveType) -> llvm::Value*
                                            {
                                                if (primitiveType.isFloatingPoint() || !explicitConversion)
                                                {
@@ -197,13 +197,13 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                }
                                                return builder.CreatePtrToInt(source, visit(destinationType));
                                            },
-                                           [&](const Representations::PointerType& otherPointer) -> llvm::Value*
+                                           [&](const Semantics::PointerType& otherPointer) -> llvm::Value*
                                            {
                                                if (!explicitConversion)
                                                {
-                                                   auto* primitive = std::get_if<Representations::PrimitiveType>(
+                                                   auto* primitive = std::get_if<Semantics::PrimitiveType>(
                                                        &pointerType.getElementType().getType());
-                                                   auto* otherPrimitive = std::get_if<Representations::PrimitiveType>(
+                                                   auto* otherPrimitive = std::get_if<Semantics::PrimitiveType>(
                                                        &otherPointer.getElementType().getType());
                                                    if ((!primitive || primitive->getBitCount() == 0)
                                                        && (!otherPrimitive || otherPrimitive->getBitCount() == 0))
@@ -213,7 +213,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                }
                                                return builder.CreateBitCast(source, visit(destinationType));
                                            },
-                                           [&](const Representations::EnumType&) -> llvm::Value*
+                                           [&](const Semantics::EnumType&) -> llvm::Value*
                                            {
                                                return builder.CreatePtrToInt(source, builder.getInt32Ty());
                                            },
@@ -221,11 +221,11 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                            { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::FunctionType& functionType) -> llvm::Value*
+            [&](const Semantics::FunctionType& functionType) -> llvm::Value*
             {
-                return std::visit(overload{[&](const Representations::PointerType& pointerType) -> llvm::Value*
+                return std::visit(overload{[&](const Semantics::PointerType& pointerType) -> llvm::Value*
                                            {
-                                               if (auto* function = std::get_if<Representations::FunctionType>(
+                                               if (auto* function = std::get_if<Semantics::FunctionType>(
                                                        &pointerType.getElementType().getType());
                                                    function && *function == functionType)
                                                {
@@ -237,9 +237,9 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                            { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::EnumType&) -> llvm::Value*
+            [&](const Semantics::EnumType&) -> llvm::Value*
             {
-                return std::visit(overload{[&](const Representations::PrimitiveType& primitiveType) -> llvm::Value*
+                return std::visit(overload{[&](const Semantics::PrimitiveType& primitiveType) -> llvm::Value*
                                            {
                                                if (primitiveType.isFloatingPoint())
                                                {
@@ -250,17 +250,17 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                                                    return builder.CreateSExtOrTrunc(source, visit(destinationType));
                                                }
                                            },
-                                           [&](const Representations::PointerType&) -> llvm::Value*
+                                           [&](const Semantics::PointerType&) -> llvm::Value*
                                            {
                                                return builder.CreateIntToPtr(source, visit(destinationType));
                                            },
-                                           [&](const Representations::EnumType&) -> llvm::Value*
+                                           [&](const Semantics::EnumType&) -> llvm::Value*
                                            { return source; },
                                            [](auto&&) -> llvm::Value*
                                            { return nullptr; }},
                                   destinationType.getType());
             },
-            [&](const Representations::ArrayType& arrayType) -> llvm::Value*
+            [&](const Semantics::ArrayType& arrayType) -> llvm::Value*
             {
                 auto* zero = builder.getInt32(0);
                 auto* arrayLoad = llvm::dyn_cast<llvm::LoadInst>(source);
@@ -269,8 +269,8 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Representations::Typ
                     return source;
                 }
                 auto* ptrRep = builder.CreateInBoundsGEP(arrayLoad->getPointerOperand(), {zero, zero});
-                return castTo(Representations::PointerType::create(false, false, false,
-                                                                   Representations::Type(arrayType.getType())),
+                return castTo(Semantics::PointerType::create(false, false, false,
+                                                             Semantics::Type(arrayType.getType())),
                               ptrRep, destinationType, explicitConversion);
             },
             [](auto&&) -> llvm::Value*
@@ -323,7 +323,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return FailureReason("Undefined reference to " + node.getIdentifier());
     }
-    if (std::holds_alternative<Representations::FunctionType>(result->second.getType()))
+    if (std::holds_alternative<Semantics::FunctionType>(result->second.getType()))
     {
         return std::pair{result->first, result->second};
     }
@@ -339,39 +339,39 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         overload{[this](std::int32_t int32) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantInt::getSigned(builder.getInt32Ty(), int32),
-                                      Representations::PrimitiveType::create(false, false, false, true, 32)};
+                                      Semantics::PrimitiveType::create(false, false, false, true, 32)};
                  },
                  [this](std::uint32_t uint32) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantInt::get(builder.getInt32Ty(), uint32),
-                                      Representations::PrimitiveType::create(false, false, false, false, 32)};
+                                      Semantics::PrimitiveType::create(false, false, false, false, 32)};
                  },
                  [this](std::int64_t int64) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantInt::getSigned(builder.getInt64Ty(), int64),
-                                      Representations::PrimitiveType::create(false, false, false, true, 64)};
+                                      Semantics::PrimitiveType::create(false, false, false, true, 64)};
                  },
                  [this](std::uint64_t uint64) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantInt::get(builder.getInt64Ty(), uint64),
-                                      Representations::PrimitiveType::create(false, false, false, false, 64)};
+                                      Semantics::PrimitiveType::create(false, false, false, false, 64)};
                  },
                  [this](float f) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantFP::get(builder.getFloatTy(), f),
-                                      Representations::PrimitiveType::create(false, false, true, true, 32)};
+                                      Semantics::PrimitiveType::create(false, false, true, true, 32)};
                  },
                  [this](double d) -> NodeRetType
                  {
                      return std::pair{llvm::ConstantFP::get(builder.getDoubleTy(), d),
-                                      Representations::PrimitiveType::create(false, false, true, true, 64)};
+                                      Semantics::PrimitiveType::create(false, false, true, true, 64)};
                  },
                  [this](const std::string& s) -> NodeRetType
                  {
                      return std::pair{builder.CreateGlobalString(s),
-                                      Representations::ArrayType::create(
+                                      Semantics::ArrayType::create(
                                           false, false, false,
-                                          Representations::PrimitiveType::create(false, false, false, true, 8),
+                                          Semantics::PrimitiveType::create(false, false, false, true, 8),
                                           s.size() + 1)};
                  }},
         node.getValue());
@@ -405,7 +405,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return plus;
     }
-    auto* ptr = std::get_if<Representations::PointerType>(&plus->second.getType());
+    auto* ptr = std::get_if<Semantics::PointerType>(&plus->second.getType());
     if (!ptr)
     {
         return FailureReason("[] operator can only be applied to pointers and arrays");
@@ -427,7 +427,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return FailureReason("Postfix ++ can only be applied to lvalue");
     }
     auto optional = std::visit(
-        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason>
+        overload{[&](const Semantics::PrimitiveType& primitiveType) -> std::optional<FailureReason>
                  {
                      if (primitiveType.isFloatingPoint())
                      {
@@ -443,7 +443,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      }
                      return {};
                  },
-                 [&](const Representations::PointerType&) -> std::optional<FailureReason>
+                 [&](const Semantics::PointerType&) -> std::optional<FailureReason>
                  {
                      auto* one = llvm::ConstantInt::get(builder.getInt32Ty(), 1);
                      builder.CreateStore(builder.CreateInBoundsGEP(oldValue.first, {one}), load->getPointerOperand(),
@@ -477,7 +477,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return FailureReason("Postfix ++ can only be applied to lvalue");
     }
     auto optional = std::visit(
-        overload{[&](const Representations::PrimitiveType& primitiveType) -> std::optional<FailureReason>
+        overload{[&](const Semantics::PrimitiveType& primitiveType) -> std::optional<FailureReason>
                  {
                      if (primitiveType.isFloatingPoint())
                      {
@@ -493,7 +493,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      }
                      return {};
                  },
-                 [&](const Representations::PointerType&) -> std::optional<FailureReason>
+                 [&](const Semantics::PointerType&) -> std::optional<FailureReason>
                  {
                      auto* one = llvm::ConstantInt::get(builder.getInt32Ty(), -1);
                      builder.CreateStore(builder.CreateInBoundsGEP(oldValue.first, {one}), load->getPointerOperand(),
@@ -520,7 +520,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    const Representations::RecordType* structType = std::get_if<Representations::RecordType>(&result->second.getType());
+    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->second.getType());
     if (!structType)
     {
         return FailureReason("Can only apply . to struct or union type");
@@ -555,14 +555,14 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    const Representations::PointerType* pointerType =
-        std::get_if<Representations::PointerType>(&result->second.getType());
+    const Semantics::PointerType* pointerType =
+        std::get_if<Semantics::PointerType>(&result->second.getType());
     if (!pointerType)
     {
         return FailureReason("Can only apply -> to pointer types");
     }
-    const Representations::RecordType* structType =
-        std::get_if<Representations::RecordType>(&pointerType->getElementType().getType());
+    const Semantics::RecordType* structType =
+        std::get_if<Semantics::RecordType>(&pointerType->getElementType().getType());
     if (!structType)
     {
         return FailureReason("Can only apply -> to pointer to struct or union type");
@@ -597,7 +597,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return result;
     }
     auto[value, type] = *result;
-    auto* function = std::get_if<Representations::FunctionType>(&type.getType());
+    auto* function = std::get_if<Semantics::FunctionType>(&type.getType());
     if (!function)
     {
         return FailureReason("Function call only possible on function type");
@@ -612,7 +612,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return argE;
         }
         auto[arg, argType] = *argE;
-        if (!std::holds_alternative<Representations::RecordType>(function->getArguments()[i].getType()))
+        if (!std::holds_alternative<Semantics::RecordType>(function->getArguments()[i].getType()))
         {
             arguments.emplace_back(castTo(argType, arg, function->getArguments()[i]));
         }
@@ -638,7 +638,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         i++;
     }
     // TODO: Make ellipses and non prototype functions work
-    if (!std::holds_alternative<Representations::RecordType>(function->getReturnType().getType()))
+    if (!std::holds_alternative<Semantics::RecordType>(function->getReturnType().getType()))
     {
         return std::pair{builder.CreateCall(value, arguments), function->getReturnType()};
     }
@@ -750,16 +750,16 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return FailureReason("& requires an lvalue as operand");
         }
         return std::pair{load->getPointerOperand(),
-                         Representations::PointerType::create(false, false, false, std::move(result->second))};
+                         Semantics::PointerType::create(false, false, false, std::move(result->second))};
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
     {
-        auto* pointer = std::get_if<Representations::PointerType>(&result->second.getType());
+        auto* pointer = std::get_if<Semantics::PointerType>(&result->second.getType());
         if (!pointer)
         {
             return FailureReason("Can only dereference pointer type");
         }
-        if (std::holds_alternative<Representations::FunctionType>(pointer->getElementType().getType()))
+        if (std::holds_alternative<Semantics::FunctionType>(pointer->getElementType().getType()))
         {
             return std::pair{result->first, pointer->getElementType()};
         }
@@ -772,7 +772,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
         if (!primitive)
         {
             return FailureReason("Unary + can only be applied to arithmetic type");
@@ -782,7 +782,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
         if (!primitive)
         {
             return FailureReason("Unary - can only be applied to arithmetic type");
@@ -799,7 +799,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Representations::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
         if (!primitive || primitive->isFloatingPoint())
         {
             return FailureReason("Unary ~ can only be applied to integer type");
@@ -816,7 +816,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         }
         auto* inv = builder.CreateNot(result->first);
         return std::pair{builder.CreateZExt(inv, builder.getInt32Ty()),
-                         Representations::PrimitiveType::create(false, false, false, true, 32)};
+                         Semantics::PrimitiveType::create(false, false, false, true, 32)};
     }
     }
     return result;
@@ -840,19 +840,19 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                      {
                          return result;
                      }
-                     std::vector<Representations::SpecifierQualifierRef> refs;
+                     std::vector<Semantics::SpecifierQualifierRef> refs;
                      refs.reserve(cast.first.getSpecifierQualifiers().size());
                      std::transform(
                          cast.first.getSpecifierQualifiers().begin(), cast.first.getSpecifierQualifiers().end(),
                          std::back_inserter(refs), [](const Syntax::SpecifierQualifier& specifierQualifier)
                          {
                              return std::visit(
-                                 [](const auto& value) -> Representations::SpecifierQualifierRef
+                                 [](const auto& value) -> Semantics::SpecifierQualifierRef
                                  { return value; },
                                  specifierQualifier);
                          });
-                     auto type = Representations::declaratorsToType(refs, cast.first.getAbstractDeclarator(),
-                                                                    gatherTypedefs(), {}, gatherStructsAndUnions());
+                     auto type = Semantics::declaratorsToType(refs, cast.first.getAbstractDeclarator(),
+                                                              gatherTypedefs(), {}, gatherStructsAndUnions());
                      if (!type)
                      {
                          return type;
@@ -862,11 +862,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         node.getVariant());
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Representations::Type leftType, llvm::Value* left,
-                                                                    Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Semantics::Type leftType, llvm::Value* left,
+                                                                    Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
     if (!leftPrimitive || !rightPrimitive)
     {
         return FailureReason("* only possible between arithmetic types");
@@ -883,11 +883,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Representati
     }
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Representations::Type leftType, llvm::Value* left,
-                                                                  Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Semantics::Type leftType, llvm::Value* left,
+                                                                  Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
     if (!leftPrimitive || !rightPrimitive)
     {
         return FailureReason("* only possible between arithmetic types");
@@ -905,12 +905,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Representation
     }
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRemainder(Representations::Type leftType, llvm::Value* left,
-                                                                     Representations::Type rightType,
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRemainder(Semantics::Type leftType, llvm::Value* left,
+                                                                     Semantics::Type rightType,
                                                                      llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
     if (!leftPrimitive || !leftPrimitive->isFloatingPoint() || !rightPrimitive || !rightPrimitive->isFloatingPoint())
     {
         return FailureReason("* only possible between integer types");
@@ -968,11 +968,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Representations::Type leftType, llvm::Value* left,
-                                                                 Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type leftType, llvm::Value* left,
+                                                                 Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
     if (leftPrimitive && rightPrimitive)
     {
         arithmeticCast(leftType, left, rightType);
@@ -988,8 +988,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Representations
     }
     else
     {
-        auto* leftPointer = std::get_if<Representations::PointerType>(&leftType.getType());
-        auto* rightPointer = std::get_if<Representations::PointerType>(&rightType.getType());
+        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
+        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
         if ((!leftPointer && !rightPointer)
             || ((!leftPrimitive || !leftPrimitive->isFloatingPoint())
                 && (!rightPrimitive || !rightPrimitive->isFloatingPoint())))
@@ -1001,11 +1001,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Representations
     }
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Representations::Type leftType, llvm::Value* left,
-                                                                Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Semantics::Type leftType, llvm::Value* left,
+                                                                Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
     if (leftPrimitive && rightPrimitive)
     {
         arithmeticCast(leftType, left, rightType);
@@ -1021,8 +1021,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Representations:
     }
     else
     {
-        auto* leftPointer = std::get_if<Representations::PointerType>(&leftType.getType());
-        auto* rightPointer = std::get_if<Representations::PointerType>(&rightType.getType());
+        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
+        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
         if ((!leftPointer && !rightPointer) || (leftPrimitive && leftPrimitive->isFloatingPoint())
             || (rightPrimitive && rightPrimitive->isFloatingPoint()) || (!leftPrimitive && !rightPrimitive))
         {
@@ -1062,17 +1062,17 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Representations::Type leftType,
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Semantics::Type leftType,
                                                                      llvm::Value* left,
-                                                                     OpenCL::Representations::Type rightType,
+                                                                     OpenCL::Semantics::Type rightType,
                                                                      llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1080,26 +1080,26 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Rep
     leftType = integerPromotion(leftType, &left);
     rightType = integerPromotion(rightType, &right);
     left = builder.CreateShl(left, right);
-    if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
     {
-        leftType = Representations::PrimitiveType::create(
-            false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        leftType = Semantics::PrimitiveType::create(
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
     }
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Representations::Type leftType,
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Semantics::Type leftType,
                                                                       llvm::Value* left,
-                                                                      OpenCL::Representations::Type rightType,
+                                                                      OpenCL::Semantics::Type rightType,
                                                                       llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1107,11 +1107,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Re
     leftType = integerPromotion(leftType, &left);
     rightType = integerPromotion(rightType, &right);
     left = builder.CreateAShr(left, right);
-    if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
     {
-        leftType = Representations::PrimitiveType::create(
-            false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        leftType = Semantics::PrimitiveType::create(
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1161,11 +1161,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return rightResult;
         }
         auto[right, rightType] = *rightResult;
-        if (!std::holds_alternative<Representations::PrimitiveType>(leftType.getType())
-            || !std::holds_alternative<Representations::PrimitiveType>(rightType.getType()))
+        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.getType())
+            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.getType()))
         {
-            auto* leftPointer = std::get_if<Representations::PointerType>(&leftType.getType());
-            auto* rightPointer = std::get_if<Representations::PointerType>(&rightType.getType());
+            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
+            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
             if (!leftPointer || !rightPointer)
             {
                 return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
@@ -1177,7 +1177,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         }
         arithmeticCast(leftType, left, rightType);
         arithmeticCast(rightType, right, leftType);
-        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
             primitive && primitive->isFloatingPoint())
         {
             switch (op)
@@ -1242,7 +1242,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             }
         }
         left = builder.CreateZExt(left, builder.getInt32Ty());
-        leftType = Representations::PrimitiveType::create(false, false, false, true, 32);
+        leftType = Semantics::PrimitiveType::create(false, false, false, true, 32);
     }
     return std::pair{left, leftType};
 }
@@ -1263,11 +1263,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return rightResult;
         }
         auto[right, rightType] = *rightResult;
-        if (!std::holds_alternative<Representations::PrimitiveType>(leftType.getType())
-            || !std::holds_alternative<Representations::PrimitiveType>(rightType.getType()))
+        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.getType())
+            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.getType()))
         {
-            auto* leftPointer = std::get_if<Representations::PointerType>(&leftType.getType());
-            auto* rightPointer = std::get_if<Representations::PointerType>(&rightType.getType());
+            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
+            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
             if (!leftPointer || !rightPointer)
             {
                 return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
@@ -1279,7 +1279,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         }
         arithmeticCast(leftType, left, rightType);
         arithmeticCast(rightType, right, leftType);
-        if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
             primitive && primitive->isFloatingPoint())
         {
             if (op == Syntax::EqualityExpression::EqualityOperator::Equal)
@@ -1303,20 +1303,20 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             }
         }
         left = builder.CreateZExt(left, builder.getInt32Ty());
-        leftType = Representations::PrimitiveType::create(false, false, false, true, 32);
+        leftType = Semantics::PrimitiveType::create(false, false, false, true, 32);
     }
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Representations::Type leftType, llvm::Value* left,
-                                                                  Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Semantics::Type leftType, llvm::Value* left,
+                                                                  Semantics::Type rightType, llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1324,11 +1324,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Representation
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateAnd(left, right);
-    if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
     {
-        leftType = Representations::PrimitiveType::create(
-            false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        leftType = Semantics::PrimitiveType::create(
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1360,15 +1360,15 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Representations::Type leftType, llvm::Value* left,
-                                                                  Representations::Type rightType, llvm::Value* right)
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Semantics::Type leftType, llvm::Value* left,
+                                                                  Semantics::Type rightType, llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for ^ operator");
     }
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for ^ operator");
@@ -1376,11 +1376,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Representation
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateXor(left, right);
-    if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
     {
-        leftType = Representations::PrimitiveType::create(
-            false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        leftType = Semantics::PrimitiveType::create(
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1412,17 +1412,17 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     return std::pair{left, leftType};
 }
 
-OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Representations::Type leftType,
+OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Semantics::Type leftType,
                                                                  llvm::Value* left,
-                                                                 OpenCL::Representations::Type rightType,
+                                                                 OpenCL::Semantics::Type rightType,
                                                                  llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for | operator");
     }
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for | operator");
@@ -1430,11 +1430,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Represe
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateOr(left, right);
-    if (!std::get<Representations::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Representations::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
     {
-        leftType = Representations::PrimitiveType::create(
-            false, false, false, true, std::get<Representations::PrimitiveType>(leftType.getType()).getBitCount());
+        leftType = Semantics::PrimitiveType::create(
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1508,7 +1508,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         pn->addIncoming(right, thenBB);
         pn->addIncoming(builder.getInt32(0), elseBB);
         value = pn;
-        type = Representations::PrimitiveType::create(false, false, false, true, 32);
+        type = Semantics::PrimitiveType::create(false, false, false, true, 32);
     }
     return std::pair{value, type};
 }
@@ -1555,7 +1555,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         pn->addIncoming(right, thenBB);
         pn->addIncoming(builder.getInt32(1), elseBB);
         value = pn;
-        type = Representations::PrimitiveType::create(false, false, false, true, 32);
+        type = Semantics::PrimitiveType::create(false, false, false, true, 32);
     }
     return std::pair{value, type};
 }
@@ -1814,7 +1814,7 @@ llvm::Constant* OpenCL::Codegen::Context::createZeroValue(llvm::Type* type)
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declaration& node)
 {
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
-    std::vector<Representations::SpecifierQualifierRef> specifierQualifiers;
+    std::vector<Semantics::SpecifierQualifierRef> specifierQualifiers;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
         std::visit(overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier)
@@ -1846,7 +1846,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 
     if (std::any_of(specifierQualifiers.begin(),
                     specifierQualifiers.end(),
-                    [](Representations::SpecifierQualifierRef value)
+                    [](Semantics::SpecifierQualifierRef value)
                     {
                         auto* specifier = std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
                         if (!specifier)
@@ -1857,9 +1857,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                                                                                                                 .getVariant());
                     }))
     {
-        auto recordE = Representations::declaratorsToType(
+        auto recordE = Semantics::declaratorsToType(
             {*std::find_if(specifierQualifiers.begin(), specifierQualifiers.end(),
-                           [](Representations::SpecifierQualifierRef value)
+                           [](Semantics::SpecifierQualifierRef value)
                            {
                                auto* specifier =
                                    std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
@@ -1877,10 +1877,10 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         auto record = *recordE;
         auto[result, inserted] = m_structsUnions.back().insert(
-            {std::get<Representations::RecordType>(record.getType()).getName(), record});
+            {std::get<Semantics::RecordType>(record.getType()).getName(), record});
         if (!inserted)
         {
-            if (auto structDecl = std::get_if<Representations::RecordType>(&result->second.getType());
+            if (auto structDecl = std::get_if<Semantics::RecordType>(&result->second.getType());
                 structDecl && structDecl->isDefinition())
             {
                 return FailureReason("Redefinition of record type " + result->first + " in the same scope");
@@ -1938,9 +1938,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 return result;
             }
         }
-        auto type = Representations::declaratorsToType(
+        auto type = Semantics::declaratorsToType(
             specifierQualifiers,
-            [& declarator = declarator]() -> Representations::PossiblyAbstractQualifierRef
+            [& declarator = declarator]() -> Semantics::PossiblyAbstractQualifierRef
             {
                 if (declarator)
                 {
@@ -1956,7 +1956,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return type.error();
         }
-        if (auto* abstractArray = std::get_if<Representations::AbstractArrayType>(&type->getType()))
+        if (auto* abstractArray = std::get_if<Semantics::AbstractArrayType>(&type->getType()))
         {
             if (!initializer)
             {
@@ -1964,7 +1964,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             }
 
         }
-        auto name = declarator ? Representations::declaratorToName(*declarator) : "";
+        auto name = declarator ? Semantics::declaratorToName(*declarator) : "";
         if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Typedef)
         {
             if (!m_typedefs.back().insert({name, *type}).second)
@@ -1977,9 +1977,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             continue;
         }
-        if (inGlobalScope() && !std::holds_alternative<Representations::FunctionType>(type->getType()))
+        if (inGlobalScope() && !std::holds_alternative<Semantics::FunctionType>(type->getType()))
         {
-            if (std::holds_alternative<Representations::ValArrayType>(type->getType()))
+            if (std::holds_alternative<Semantics::ValArrayType>(type->getType()))
             {
                 return FailureReason("Variable arrays not allowed in global scope");
             }
@@ -2007,7 +2007,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                     }
                     if (llvmType->isIntegerTy())
                     {
-                        bool isSigned = std::get<Representations::PrimitiveType>(type->getType()).isSigned();
+                        bool isSigned = std::get<Semantics::PrimitiveType>(type->getType()).isSigned();
                         if (isSigned)
                         {
                             initial = llvm::ConstantInt::getSigned(
@@ -2066,9 +2066,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 return FailureReason("Redefinition of symbol " + prev->first);
             }
         }
-        else if (std::holds_alternative<Representations::FunctionType>(type->getType()))
+        else if (std::holds_alternative<Semantics::FunctionType>(type->getType()))
         {
-            const auto& functionRP = std::get<Representations::FunctionType>(type->getType());
+            const auto& functionRP = std::get<Semantics::FunctionType>(type->getType());
             bool internalLinkage =
                 declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                         Syntax::StorageClassSpecifier::Extern);
@@ -2089,7 +2089,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                                                 llvm::Function::ExternalLinkage,
                                                 name, module.get());
             bool retIsStruct =
-                std::holds_alternative<Representations::RecordType>(functionRP.getReturnType().getType());
+                std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().getType());
             if (retIsStruct)
             {
                 func->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::StructRet));
@@ -2098,12 +2098,12 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             std::size_t i = 0;
             for (auto& iter : functionRP.getArguments())
             {
-                if (std::holds_alternative<Representations::RecordType>(iter.getType()))
+                if (std::holds_alternative<Semantics::RecordType>(iter.getType()))
                 {
                     func->addAttribute(i + (retIsStruct ? 2 : 1),
                                        llvm::Attribute::get(context, llvm::Attribute::ByVal));
                 }
-                if (auto* ptr = std::get_if<Representations::PointerType>(&iter.getType()); ptr && ptr->isRestricted())
+                if (auto* ptr = std::get_if<Semantics::PointerType>(&iter.getType()); ptr && ptr->isRestricted())
                 {
                     func->addAttribute(i + (retIsStruct ? 2 : 1),
                                        llvm::Attribute::get(context, llvm::Attribute::NoAlias));
@@ -2204,13 +2204,13 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FunctionDefinition& node)
 {
-    const Representations::FunctionType* ft = nullptr;
-    auto name = Representations::declaratorToName(node.getDeclarator());
+    const Semantics::FunctionType* ft = nullptr;
+    auto name = Semantics::declaratorToName(node.getDeclarator());
     auto* thisFunction = module->getFunction(name);
     if (!thisFunction)
     {
         // TODO: Refactor so this and Declarations have a common function
-        std::vector<Representations::SpecifierQualifierRef> specifierQualifiers;
+        std::vector<Semantics::SpecifierQualifierRef> specifierQualifiers;
         for (auto& iter : node.getDeclarationSpecifiers())
         {
             std::visit(
@@ -2235,13 +2235,13 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return FailureReason("A maximum of one storage class specifier allowed in declaration");
         }
-        auto type = Representations::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
-                                                       node.getDeclarations(), gatherStructsAndUnions());
-        if (!std::holds_alternative<Representations::FunctionType>(type->getType()))
+        auto type = Semantics::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
+                                                 node.getDeclarations(), gatherStructsAndUnions());
+        if (!std::holds_alternative<Semantics::FunctionType>(type->getType()))
         {
             return FailureReason("Internal compiler error: Function definition did not return a function type");
         }
-        const auto& functionRP = std::get<Representations::FunctionType>(type->getType());
+        const auto& functionRP = std::get<Semantics::FunctionType>(type->getType());
         bool internalLinkage =
             declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                     Syntax::StorageClassSpecifier::Extern);
@@ -2261,7 +2261,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         thisFunction = llvm::Function::Create(
             llvm::cast<llvm::FunctionType>(llvmFt),
             internalLinkage ? llvm::Function::InternalLinkage : llvm::Function::ExternalLinkage, name, module.get());
-        bool retIsStruct = std::holds_alternative<Representations::RecordType>(functionRP.getReturnType().getType());
+        bool retIsStruct = std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().getType());
         if (retIsStruct)
         {
             thisFunction->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::StructRet));
@@ -2270,12 +2270,12 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         std::size_t i = 0;
         for (auto& iter : functionRP.getArguments())
         {
-            if (std::holds_alternative<Representations::RecordType>(iter.getType()))
+            if (std::holds_alternative<Semantics::RecordType>(iter.getType()))
             {
                 thisFunction->addAttribute(i + (retIsStruct ? 2 : 1),
                                            llvm::Attribute::get(context, llvm::Attribute::ByVal));
             }
-            if (auto* ptr = std::get_if<Representations::PointerType>(&iter.getType()); ptr && ptr->isRestricted())
+            if (auto* ptr = std::get_if<Semantics::PointerType>(&iter.getType()); ptr && ptr->isRestricted())
             {
                 thisFunction->addAttribute(i + (retIsStruct ? 2 : 1),
                                            llvm::Attribute::get(context, llvm::Attribute::NoAlias));
@@ -2288,7 +2288,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         else
         {
-            ft = &std::get<Representations::FunctionType>(prev->second.second.getType());
+            ft = &std::get<Semantics::FunctionType>(prev->second.second.getType());
         }
     }
     else
@@ -2316,7 +2316,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return FailureReason("static in definition does not match (implicit) extern in declaration");
         }
-        ft = &std::get<Representations::FunctionType>(result->second.getType());
+        ft = &std::get<Semantics::FunctionType>(result->second.getType());
     }
 
     currentFunction = ft;
@@ -2339,7 +2339,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             {
                 return FailureReason("Parameter name omitted");
             }
-            iter.setName(Representations::declaratorToName(**declarator));
+            iter.setName(Semantics::declaratorToName(**declarator));
         }
         else if (identifierList)
         {
@@ -2347,10 +2347,10 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
     }
 
-    std::map<std::string, Representations::Type> declarationMap;
+    std::map<std::string, Semantics::Type> declarationMap;
     for (auto& iter : node.getDeclarations())
     {
-        std::vector<Representations::SpecifierQualifierRef> refs;
+        std::vector<Semantics::SpecifierQualifierRef> refs;
         for (auto& specifiers : iter.getDeclarationSpecifiers())
         {
             auto result = std::visit(
@@ -2393,12 +2393,12 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 return FailureReason("Declarations in function definitions are not allowed to have initializers");
             }
             auto result =
-                Representations::declaratorsToType(refs, *pair.first, gatherTypedefs(), {}, gatherStructsAndUnions());
+                Semantics::declaratorsToType(refs, *pair.first, gatherTypedefs(), {}, gatherStructsAndUnions());
             if (!result)
             {
                 return result.error();
             }
-            declarationMap.emplace(Representations::declaratorToName(*pair.first), *result);
+            declarationMap.emplace(Semantics::declaratorToName(*pair.first), *result);
         }
     }
     if (!identifierList && !declarationMap.empty())
@@ -2607,10 +2607,10 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node)
 {}
 
-std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>>
+std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>>
 OpenCL::Codegen::Context::gatherTypedefs() const
 {
-    std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>> result;
+    std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>> result;
     for (auto iter = m_typedefs.rbegin(); iter != m_typedefs.rend(); iter++)
     {
         result.insert(iter->begin(), iter->end());
@@ -2618,13 +2618,13 @@ OpenCL::Codegen::Context::gatherTypedefs() const
     return result;
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Type& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::Type& node)
 {
     return std::visit([this](auto&& value) -> llvm::Type*
                       { return visit(value); }, node.getType());
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::PrimitiveType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PrimitiveType& node)
 {
     if (node.isFloatingPoint())
     {
@@ -2652,29 +2652,29 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Primi
     return nullptr;
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::ArrayType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ArrayType& node)
 {
     return llvm::ArrayType::get(visit(node.getType()), node.getSize());
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::AbstractArrayType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::AbstractArrayType& node)
 {
     return llvm::PointerType::getUnqual(visit(node.getType()));
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::ValArrayType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ValArrayType& node)
 {
     return llvm::PointerType::getUnqual(visit(node.getType()));
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::FunctionType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::FunctionType& node)
 {
     std::vector<llvm::Type*> arguments;
-    bool isStruct = std::holds_alternative<Representations::RecordType>(node.getReturnType().getType());
+    bool isStruct = std::holds_alternative<Semantics::RecordType>(node.getReturnType().getType());
     for (auto& type : node.getArguments())
     {
         auto* argType = visit(type);
-        if (!std::holds_alternative<Representations::RecordType>(type.getType()))
+        if (!std::holds_alternative<Semantics::RecordType>(type.getType()))
         {
             arguments.emplace_back(argType);
         }
@@ -2691,7 +2691,7 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Funct
                                    node.isLastVararg());
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::RecordType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::RecordType& node)
 {
     // TODO: structs must be scoped and allow overshadowing
     if (auto* record = module->getTypeByName((node.isUnion() ? "union." : "struct.") + node.getName()))
@@ -2728,12 +2728,12 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Recor
     return record;
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::EnumType&)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::EnumType&)
 {
     return builder.getInt32Ty();
 }
 
-llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::PointerType& node)
+llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PointerType& node)
 {
     auto* elemType = visit(node.getElementType());
     if (elemType->isVoidTy())
@@ -2746,10 +2746,10 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Representations::Point
     }
 }
 
-OpenCL::Representations::Type OpenCL::Codegen::Context::integerPromotion(const OpenCL::Representations::Type& type,
-                                                                         llvm::Value** optionalValue)
+OpenCL::Semantics::Type OpenCL::Codegen::Context::integerPromotion(const OpenCL::Semantics::Type& type,
+                                                                   llvm::Value** optionalValue)
 {
-    if (auto* primitive = std::get_if<Representations::PrimitiveType>(&type.getType()))
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&type.getType()))
     {
         if (!primitive->isFloatingPoint() && primitive->getBitCount() < 32)
         {
@@ -2757,14 +2757,14 @@ OpenCL::Representations::Type OpenCL::Codegen::Context::integerPromotion(const O
             {
                 *optionalValue = builder.CreateIntCast(*optionalValue, builder.getInt32Ty(), primitive->isSigned());
             }
-            return Representations::PrimitiveType::create(type.isConst(), type.isVolatile(), false, true, 32);
+            return Semantics::PrimitiveType::create(type.isConst(), type.isVolatile(), false, true, 32);
         }
     }
     return type;
 }
 
-void OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type, llvm::Value*& value,
-                                              const Representations::Type& otherType)
+void OpenCL::Codegen::Context::arithmeticCast(Semantics::Type& type, llvm::Value*& value,
+                                              const Semantics::Type& otherType)
 {
     if (type.isCompatibleWith(otherType))
     {
@@ -2772,8 +2772,8 @@ void OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type, llvm:
     }
     auto copy = integerPromotion(otherType);
     type = integerPromotion(type, &value);
-    if (auto[primitiveType, otherPrimitive] = std::pair(std::get_if<Representations::PrimitiveType>(&type.getType()),
-                                                        std::get_if<Representations::PrimitiveType>(&copy.getType()));
+    if (auto[primitiveType, otherPrimitive] = std::pair(std::get_if<Semantics::PrimitiveType>(&type.getType()),
+                                                        std::get_if<Semantics::PrimitiveType>(&copy.getType()));
         primitiveType && otherPrimitive)
     {
         if (otherPrimitive->isFloatingPoint()
@@ -2814,14 +2814,14 @@ void OpenCL::Codegen::Context::arithmeticCast(Representations::Type& type, llvm:
     }
 }
 
-std::map<std::string, OpenCL::Representations::RecordType> OpenCL::Codegen::Context::gatherStructsAndUnions() const
+std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Codegen::Context::gatherStructsAndUnions() const
 {
-    std::map<std::string, OpenCL::Representations::RecordType> result;
+    std::map<std::string, OpenCL::Semantics::RecordType> result;
     for (auto iter = m_structsUnions.rbegin(); iter != m_structsUnions.rend(); iter++)
     {
         for (auto&[key, value] : *iter)
         {
-            if (auto* record = std::get_if<Representations::RecordType>(&value.getType()))
+            if (auto* record = std::get_if<Semantics::RecordType>(&value.getType()))
             {
                 result.emplace(key, *record);
             }

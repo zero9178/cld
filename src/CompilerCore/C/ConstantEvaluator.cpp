@@ -408,7 +408,7 @@ OpenCL::Constant::ConstRetType
 {
     return std::visit(
         overload{[this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Constant::ConstRetType {
-                     std::vector<Representations::SpecifierQualifierRef> refs;
+            std::vector<Semantics::SpecifierQualifierRef> refs;
                      for(auto& iter : typeName->getSpecifierQualifiers())
                      {
                          std::visit([&refs](auto&& value)
@@ -416,12 +416,16 @@ OpenCL::Constant::ConstRetType
                              refs.emplace_back(std::cref(value));
                                     },iter);
                      }
-                     auto type = Representations::declaratorsToType(refs,typeName->getAbstractDeclarator(),m_typedefs,{},m_structOrUnions);
+            auto type = Semantics::declaratorsToType(refs,
+                                                     typeName->getAbstractDeclarator(),
+                                                     m_typedefs,
+                                                     {},
+                                                     m_structOrUnions);
                      if(!type)
                      {
                          return type;
                      }
-                     auto result =  Representations::sizeOf(*type);
+            auto result = Semantics::sizeOf(*type);
                      if(!result)
                      {
                          return result;
@@ -1312,8 +1316,8 @@ OpenCL::Constant::ConstRetType
         node.getVariant());
 }
 OpenCL::Constant::ConstantEvaluator::ConstantEvaluator(
-    const std::map<std::string, OpenCL::Representations::RecordType>& structOrUnions,
-    const std::map<std::string, std::reference_wrapper<const OpenCL::Representations::Type>>& typedefs)
+    const std::map<std::string, OpenCL::Semantics::RecordType>& structOrUnions,
+    const std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>>& typedefs)
     : m_structOrUnions(structOrUnions), m_typedefs(typedefs)
 {
 }

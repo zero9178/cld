@@ -1,7 +1,7 @@
 #ifndef OPENCLPARSER_PARSER_HPP
 #define OPENCLPARSER_PARSER_HPP
 
-#include "Representations.hpp"
+#include "Semantics.hpp"
 #include "Syntax.hpp"
 
 #include <map>
@@ -17,8 +17,7 @@ namespace OpenCL::Parser
 
     public:
         std::vector<std::set<std::string>> typedefs;
-        std::set<std::string> functions;
-        std::map<std::string, Representations::RecordType> structOrUnions;
+        std::map<std::string, Semantics::RecordType> structOrUnions;
         std::vector<std::map<std::string, std::pair<std::size_t, std::size_t>>> enumDefinitions;
 
         bool isTypedef(const std::string& name);
