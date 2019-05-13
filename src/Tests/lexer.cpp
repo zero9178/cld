@@ -23,6 +23,8 @@ TEST_CASE("Literals", "[lexer]")
             REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
             REQUIRE(std::holds_alternative<std::uint32_t>(result[0].getValue()));
             CHECK(std::get<std::uint32_t>(result[0].getValue()) == 534534);
+
+            CHECK_THROWS(OpenCL::Lexer::tokenize("5u5"));
         }
     }
     SECTION("Floating point")
@@ -45,6 +47,16 @@ TEST_CASE("Literals", "[lexer]")
             REQUIRE(std::holds_alternative<float>(result[0].getValue()));
             CHECK(std::get<float>(result[0].getValue()) == 534534.f);
         }
+        SECTION("Dot only")
+        {
+            auto result = OpenCL::Lexer::tokenize(".5");
+            REQUIRE_FALSE(result.empty());
+            CHECK(result.size() == 1);
+            REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+            REQUIRE(std::holds_alternative<double>(result[0].getValue()));
+            CHECK(std::get<double>(result[0].getValue()) == 0.5);
+        }
+        CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3"));
     }
     SECTION("Octal")
     {
@@ -63,6 +75,8 @@ TEST_CASE("Literals", "[lexer]")
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<int32_t>(result[0].getValue()));
         CHECK(std::get<int32_t>(result[0].getValue()) == 56);
+
+        CHECK_THROWS(OpenCL::Lexer::tokenize("0x5x5"));
     }
     SECTION("Integer type selection")
     {
@@ -105,12 +119,13 @@ TEST_CASE("Literals", "[lexer]")
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::int64_t>(result[0].getValue()));
         CHECK(std::get<std::int64_t>(result[0].getValue()) == 534534);
+
         CHECK_THROWS(OpenCL::Lexer::tokenize("534534lL"));
         CHECK_THROWS(OpenCL::Lexer::tokenize("534534Ll"));
     }
 }
 
-TEST_CASE("AmbiguousOperators", "lexer")
+TEST_CASE("AmbiguousOperators", "[lexer]")
 {
     auto result =
         OpenCL::Lexer::tokenize(". ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>=");

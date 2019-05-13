@@ -456,7 +456,7 @@ OpenCL::Expected<OpenCL::Syntax::StructOrUnionSpecifier, OpenCL::FailureReason>
                 {
                     return constant;
                 }
-                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
                 auto value = evaluator.visit(*constant);
                 if (!value)
                 {
@@ -490,7 +490,7 @@ OpenCL::Expected<OpenCL::Syntax::StructOrUnionSpecifier, OpenCL::FailureReason>
                 {
                     return constant;
                 }
-                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
                 auto value = evaluator.visit(*constant);
                 if (!value)
                 {
@@ -1371,7 +1371,7 @@ Expected<EnumDeclaration, FailureReason> OpenCL::Parser::parseEnumDeclaration(To
             {
                 return constant;
             }
-            Constant::ConstantEvaluator evaluator(context.structOrUnions);
+            Semantics::ConstantEvaluator evaluator(context.structOrUnions);
             auto constValue = evaluator.visit(*constant);
             if (!constValue)
             {
@@ -1669,7 +1669,7 @@ Expected<InitializerList, FailureReason> OpenCL::Parser::parseInitializerList(To
                     }
                 }
                 curr++;
-                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
                 auto constValue = evaluator.visit(*constant);
                 if (!constValue)
                 {
@@ -2044,7 +2044,7 @@ Expected<Statement, FailureReason> OpenCL::Parser::parseStatement(Tokens::const_
                     return FailureReason("Expected : after constant expression of case");
                 }
                 curr++;
-                Constant::ConstantEvaluator evaluator(context.structOrUnions);
+                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
                 auto statement = parseStatement(curr, end, context);
                 if (!statement)
                 {

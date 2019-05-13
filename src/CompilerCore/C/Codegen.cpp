@@ -1999,7 +1999,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
             {
                 if (auto* assignment = std::get_if<Syntax::AssignmentExpression>(&initializer->getVariant()))
                 {
-                    Constant::ConstantEvaluator evaluator(gatherStructsAndUnions(), gatherTypedefs());
+                    Semantics::ConstantEvaluator evaluator(gatherStructsAndUnions(), gatherTypedefs());
                     auto result = evaluator.visit(*assignment);
                     if (!result)
                     {

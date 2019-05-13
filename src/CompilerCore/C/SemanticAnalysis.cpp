@@ -1,7 +1,7 @@
 #include <utility>
 #include <algorithm>
 
-#include "ResultingType.hpp"
+#include "SemanticAnalysis.hpp"
 
 namespace
 {
@@ -158,25 +158,15 @@ namespace
     }
 }
 
-OpenCL::Constant::ResultingType::ResultingType(std::map<std::string,
-                                                        OpenCL::Semantics::RecordType> structOrUnions,
-                                               std::map<std::string,
-                                                        std::reference_wrapper<const OpenCL::Semantics::Type>> typedefs,
-                                               std::map<std::string,
-                                                        OpenCL::Semantics::Type> typesOfNamedValues)
-    : m_structOrUnions(std::move(structOrUnions)), m_typedefs(std::move(typedefs)),
-      m_typesOfNamedValues(std::move(typesOfNamedValues))
-{}
-
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PrimaryExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
     return std::visit([this](auto&& value)
                       { return visit(value); }, node.getVariant());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
 {
     auto result = m_typesOfNamedValues.find(node.getIdentifier());
     if (result == m_typesOfNamedValues.end())
@@ -187,7 +177,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     return std::visit(
         overload{[](std::int32_t) -> Semantics::Type
@@ -224,13 +214,13 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
 {
     return visit(node.getExpression());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
     return std::visit([this](auto&& value)
                       {
@@ -239,13 +229,13 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
 {
     auto result = visit(node.getPostFixExpression());
     if (!result)
@@ -266,19 +256,19 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
 {
     return visit(node.getPostFixExpression());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
 {
     return visit(node.getPostFixExpression());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
 {
     auto result = visit(node.getPostFixExpression());
     if (!result)
@@ -301,7 +291,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
 {
     auto result = visit(node.getPostFixExpression());
     if (!result)
@@ -331,7 +321,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& node)
 {
     auto result = visit(node.getPostFixExpression());
     if (!result)
@@ -361,7 +351,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
 {
     std::vector<Semantics::SpecifierQualifierRef> specifierQualifierRefs;
     for(auto& iter : node.getTypeName().getSpecifierQualifiers())
@@ -379,7 +369,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::UnaryExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
     return std::visit([this](auto&& value)
                      {
@@ -388,19 +378,19 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
     return Semantics::PrimitiveType::create(false, false, false, false, 64);
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
     auto result = visit(node.getUnaryExpression());
     if(!result)
@@ -436,91 +426,127 @@ OpenCL::Expected<OpenCL::Semantics::Type,
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::CastExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::CastExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::Term& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Term& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::AdditiveExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::ShiftExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::RelationalExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::EqualityExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::BitAndExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::BitXorExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::BitOrExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::ConditionalExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::AssignmentExpression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::AssignmentExpressionAssignment& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AssignmentExpressionAssignment& node)
 {
 
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Constant::ResultingType::visit(const OpenCL::Syntax::Expression& node)
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Expression& node)
+{
+
+}
+
+OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(
+    const Syntax::TranslationUnit& node)
+{
+    std::vector<TranslationUnit::variant> globals;
+    for (auto& iter : node.getGlobals())
+    {
+        auto result = std::visit(overload{
+            [this, &globals](const Syntax::FunctionDefinition& function) -> Expected<TranslationUnit::variant,
+                                                                                     FailureReason>
+            {
+                auto result = visit(function);
+                if (!result)
+                {
+                    return result;
+                }
+                if (result->hasPrototype())
+                {
+
+                }
+                return *result;
+            },
+            [this](const Syntax::Declaration& declaration) -> Expected<TranslationUnit::variant, FailureReason>
+            {
+
+            }
+        }, iter.getVariant());
+    }
+    return TranslationUnit(std::move(globals));
+}
+
+OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::FunctionDefinition& node)
 {
 
 }

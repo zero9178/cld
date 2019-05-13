@@ -460,7 +460,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     {
                         currentState = State::Text;
                     }
-                    else if ((iter >= '0' && iter <= '9') || iter == '.')
+                    else if ((iter >= '0' && iter <= '9'))
                     {
                         currentState = State::Number;
                     }
@@ -533,6 +533,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     currentState = State::Start;
                     handeled = false;
                 }
+                break;
             }
             case State::LineComment: break;
             case State::BlockComment:
@@ -740,7 +741,16 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     break;
                 }
                 default:lastTokenIsAmbiguous = false;
-                    currentState = State::Start;
+                    if (result.back().getTokenType() == TokenType::Dot && iter >= '0' && iter <= '9')
+                    {
+                        result.pop_back();
+                        characters += '.';
+                        currentState = State::Number;
+                    }
+                    else
+                    {
+                        currentState = State::Start;
+                    }
                     handeled = false;
                     break;
                 }

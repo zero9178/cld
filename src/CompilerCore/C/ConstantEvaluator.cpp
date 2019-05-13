@@ -215,15 +215,16 @@ namespace
     };
 } // namespace
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
     return std::visit(
-        [](auto&& value) -> Constant::ConstRetType {
+        [](auto&& value) -> Semantics::ConstRetType
+        {
             using T = std::decay_t<decltype(value)>;
             if constexpr (!std::is_same_v<T, std::string>)
             {
-                return Constant::ConstRetType::ValueType(value);
+                return Semantics::ConstRetType::ValueType(value);
             }
             else
             {
@@ -233,26 +234,26 @@ OpenCL::Constant::ConstRetType
         node.getValue());
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
 {
     return visit(node.getExpression());
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
     auto value = visit(node.getUnaryExpression());
     if (!value)
@@ -274,7 +275,7 @@ OpenCL::Constant::ConstRetType
                     using T = std::decay_t<decltype(value)>;
                     if constexpr (hasNegate<T>{})
                     {
-                        return Constant::ConstRetType::ValueType(-value);
+                        return Semantics::ConstRetType::ValueType(-value);
                     }
                     else
                     {
@@ -290,7 +291,7 @@ OpenCL::Constant::ConstRetType
                     using T = std::decay_t<decltype(value)>;
                     if constexpr (hasBitNegate<T>{})
                     {
-                        return Constant::ConstRetType::ValueType(~value);
+                        return Semantics::ConstRetType::ValueType(~value);
                     }
                     else
                     {
@@ -306,7 +307,7 @@ OpenCL::Constant::ConstRetType
                     using T = std::decay_t<decltype(value)>;
                     if constexpr (hasLogicNegate<T>{})
                     {
-                        return Constant::ConstRetType::ValueType(!value);
+                        return Semantics::ConstRetType::ValueType(!value);
                     }
                     else
                     {
@@ -403,11 +404,12 @@ namespace
     overload(Ts...)->overload<Ts...>;
 } // namespace
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
     return std::visit(
-        overload{[this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Constant::ConstRetType {
+        overload{[this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Semantics::ConstRetType
+                 {
             std::vector<Semantics::SpecifierQualifierRef> refs;
                      for(auto& iter : typeName->getSpecifierQualifiers())
                      {
@@ -432,17 +434,19 @@ OpenCL::Constant::ConstRetType
                      }
                      return *result;
                  },
-                 [](auto &&) -> OpenCL::Constant::ConstRetType { throw std::runtime_error("Not implemented yet"); }},
+                 [](auto&&) -> OpenCL::Semantics::ConstRetType
+                 { throw std::runtime_error("Not implemented yet"); }},
         node.getVariant());
 }
 
 namespace
 {
     template <class T>
-    OpenCL::Constant::ConstRetType castVariant(const OpenCL::Constant::ConstRetType& variant)
+    OpenCL::Semantics::ConstRetType castVariant(const OpenCL::Semantics::ConstRetType& variant)
     {
         return std::visit(
-            [](auto&& value) -> OpenCL::Constant::ConstRetType {
+            [](auto&& value) -> OpenCL::Semantics::ConstRetType
+            {
                 using U = std::decay_t<decltype(value)>;
                 if constexpr (std::is_convertible_v<U, T>)
                 {
@@ -457,10 +461,11 @@ namespace
     }
 } // namespace
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
 {
     return std::visit(
-        [this](auto&& value) -> OpenCL::Constant::ConstRetType {
+        [this](auto&& value) -> OpenCL::Semantics::ConstRetType
+        {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<T, OpenCL::Syntax::UnaryExpression>)
             {
@@ -548,7 +553,7 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
 {
     if (node.getOptionalCastExpressions().empty())
     {
@@ -649,8 +654,8 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return value;
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
     if (node.getOptionalTerms().empty())
     {
@@ -732,7 +737,7 @@ OpenCL::Constant::ConstRetType
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
     if (node.getOptionalAdditiveExpressions().empty())
     {
@@ -806,7 +811,7 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
     if (node.getOptionalEqualityExpressions().empty())
     {
@@ -846,7 +851,7 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
     if (node.getOptionalBitAndExpressions().empty())
     {
@@ -882,7 +887,7 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
     if (node.getOptionalBitXorExpressions().empty())
     {
@@ -922,8 +927,8 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
     if (node.getOptionalBitOrExpressions().empty())
     {
@@ -963,8 +968,8 @@ OpenCL::Constant::ConstRetType
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
     if (node.getOptionalAndExpressions().empty())
     {
@@ -1004,8 +1009,8 @@ OpenCL::Constant::ConstRetType
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
 {
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
@@ -1032,8 +1037,8 @@ OpenCL::Constant::ConstRetType
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
     if (node.getOptionalShiftExpressions().empty())
     {
@@ -1161,8 +1166,8 @@ OpenCL::Constant::ConstRetType
     return currentValue;
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
     if (node.getOptionalRelationalExpressions().empty())
     {
@@ -1240,23 +1245,23 @@ OpenCL::Constant::ConstRetType
 #pragma GCC diagnostic pop
 #pragma GCC diagnostic pop
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot&)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
     return std::visit(overload{[this](auto&& value) -> ConstRetType { return visit(value); },
                                [](const Syntax::PrimaryExpressionIdentifier&) -> ConstRetType {
@@ -1265,7 +1270,7 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
                       node.getVariant());
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
 {
     return std::visit(overload{[this](auto&& value) -> ConstRetType { return visit(value); },
                                [](const Syntax::PostFixExpressionFunctionCall&) -> ConstRetType {
@@ -1283,13 +1288,14 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
                       node.getVariant());
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value) -> OpenCL::Constant::ConstRetType { return visit(value); },
+    return std::visit([this](auto&& value) -> OpenCL::Semantics::ConstRetType
+                      { return visit(value); },
                       node.getVariant());
 }
 
-OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
 {
     if (node.getAssignmentExpressions().size() != 1)
     {
@@ -1298,11 +1304,12 @@ OpenCL::Constant::ConstRetType OpenCL::Constant::ConstantEvaluator::visit(const 
     return visit(node.getAssignmentExpressions()[0]);
 }
 
-OpenCL::Constant::ConstRetType
-    OpenCL::Constant::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
+OpenCL::Semantics::ConstRetType
+OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
     return std::visit(
-        [this](auto&& value) -> OpenCL::Constant::ConstRetType {
+        [this](auto&& value) -> OpenCL::Semantics::ConstRetType
+        {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<Syntax::ConditionalExpression, T>)
             {
@@ -1315,7 +1322,8 @@ OpenCL::Constant::ConstRetType
         },
         node.getVariant());
 }
-OpenCL::Constant::ConstantEvaluator::ConstantEvaluator(
+
+OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(
     const std::map<std::string, OpenCL::Semantics::RecordType>& structOrUnions,
     const std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>>& typedefs)
     : m_structOrUnions(structOrUnions), m_typedefs(typedefs)

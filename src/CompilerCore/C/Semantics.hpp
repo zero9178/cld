@@ -234,18 +234,72 @@ namespace OpenCL::Semantics
         bool isCompatibleWith(const Type& rhs) const;
     };
 
+    class FunctionPrototype final
+    {
+        FunctionType m_type;
+        std::vector<std::string> m_argumentNames;
+
+    public:
+
+        FunctionPrototype(const FunctionType& type, const std::vector<std::string>& argumentNames);
+
+        const FunctionType& getType() const;
+
+        const std::vector<std::string>& getArgumentNames() const;
+
+    };
+
+    class FunctionDefinition final
+    {
+        FunctionType m_type;
+        std::string m_name;
+        std::vector<std::string> m_argumentNames;
+        bool m_hasPrototype;
+
+    public:
+
+        FunctionDefinition(const FunctionType& type,
+                           std::string name,
+                           std::vector<std::string> argumentNames,
+                           bool hasPrototype);
+
+        const std::string& getName() const;
+
+        const FunctionType& getType() const;
+
+        const std::vector<std::string>& getArgumentNames() const;
+
+        bool hasPrototype() const;
+    };
+
+    class TranslationUnit final
+    {
+    public:
+        using variant = std::variant<FunctionPrototype, FunctionDefinition>;
+
+    private:
+
+        std::vector<variant> m_globals;
+
+    public:
+
+        explicit TranslationUnit(std::vector<variant> globals);
+
+        const std::vector<std::variant<FunctionPrototype, FunctionDefinition>>& getGlobals() const;
+    };
+
     using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,
                                                std::reference_wrapper<const Syntax::TypeQualifier>>;
 
     using PossiblyAbstractQualifierRef =
-        std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
+    std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
 
     Expected<Type, FailureReason>
-        declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
-                          PossiblyAbstractQualifierRef declarator = {},
-                          const std::map<std::string, std::reference_wrapper<const Type>>& typedefs = {},
-                          const std::vector<Syntax::Declaration>& declarations = {},
-                          const std::map<std::string, Semantics::RecordType>& structOrUnions = {});
+    declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
+                      PossiblyAbstractQualifierRef declarator = {},
+                      const std::map<std::string, std::reference_wrapper<const Type>>& typedefs = {},
+                      const std::vector<Syntax::Declaration>& declarations = {},
+                      const std::map<std::string, Semantics::RecordType>& structOrUnions = {});
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 

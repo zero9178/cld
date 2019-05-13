@@ -1,23 +1,19 @@
-#ifndef OPENCLPARSER_RESULTINGTYPE_HPP
-#define OPENCLPARSER_RESULTINGTYPE_HPP
+#ifndef OPENCLPARSER_SEMANTICANALYSIS_HPP
+#define OPENCLPARSER_SEMANTICANALYSIS_HPP
 
 #include <map>
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-namespace OpenCL::Constant
+namespace OpenCL::Semantics
 {
-    class ResultingType final
+    class SemanticAnalysis final
     {
         std::map<std::string, Semantics::RecordType> m_structOrUnions;
         std::map<std::string, std::reference_wrapper<const Semantics::Type>> m_typedefs;
         std::map<std::string, Semantics::Type> m_typesOfNamedValues;
 
     public:
-
-        ResultingType(std::map<std::string, Semantics::RecordType> structOrUnions,
-                      std::map<std::string, std::reference_wrapper<const Semantics::Type>> typedefs,
-                      std::map<std::string, Semantics::Type> typesOfNamedValues);
 
         Expected<Semantics::Type, FailureReason> visit(const Syntax::PrimaryExpression& node);
 
@@ -82,7 +78,11 @@ namespace OpenCL::Constant
         Expected<Semantics::Type, FailureReason> visit(const Syntax::AssignmentExpressionAssignment& node);
 
         Expected<Semantics::Type, FailureReason> visit(const Syntax::Expression& node);
+
+        Expected<Semantics::TranslationUnit, FailureReason> visit(const Syntax::TranslationUnit& node);
+
+        Expected<Semantics::FunctionDefinition, FailureReason> visit(const Syntax::FunctionDefinition& node);
     };
 }
 
-#endif //OPENCLPARSER_RESULTINGTYPE_HPP
+#endif //OPENCLPARSER_SEMANTICANALYSIS_HPP

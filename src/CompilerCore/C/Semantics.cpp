@@ -7,6 +7,7 @@
 #include <map>
 #include <sstream>
 #include <utility>
+#include <cassert>
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {
@@ -281,6 +282,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, b
 
 bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::PrimitiveType& rhs) const
 {
+    if (m_bitCount == 0 && rhs.m_bitCount == 0)
+    {
+        return true;
+    }
     return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount)
            == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
 }
@@ -760,7 +765,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                    }
                                    else
                                    {
-                                       Constant::ConstantEvaluator evaluator(structOrUnions, typedefs);
+                                       Semantics::ConstantEvaluator evaluator(structOrUnions, typedefs);
                                        auto result = evaluator.visit(
                                            *directAbstractDeclaratorAssignmentExpression.getAssignmentExpression());
                                        if (!result)
@@ -937,7 +942,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                                 }
                                                                                 else
                                                                                 {
-                                                                                    Constant::ConstantEvaluator
+                                                                                    Semantics::ConstantEvaluator
                                                                                         evaluator(structOrUnions,
                                                                                                   typedefs);
                                                                                     auto result = evaluator.visit(
@@ -1000,7 +1005,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                                     getQualifiers(
                                                                                         directDeclaratorStatic
                                                                                             .getTypeQualifiers());
-                                                                                Constant::ConstantEvaluator evaluator(
+                                                                                Semantics::ConstantEvaluator evaluator(
                                                                                     structOrUnions, typedefs);
                                                                                 auto result = evaluator.visit(
                                                                                     directDeclaratorStatic
@@ -1595,4 +1600,60 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                                [](const EnumType&) -> Expected<std::size_t, FailureReason> { return 4; },
                                [](const PointerType&) -> Expected<std::size_t, FailureReason> { return 8; }},
                       type.getType());
+}
+
+OpenCL::Semantics::FunctionPrototype::FunctionPrototype(const FunctionType& type,
+                                                        const std::vector<std::string>& argumentNames)
+    : m_type(type), m_argumentNames(argumentNames)
+{
+
+}
+
+const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionPrototype::getType() const
+{
+    return m_type;
+}
+
+const std::vector<std::string>& OpenCL::Semantics::FunctionPrototype::getArgumentNames() const
+{
+    return m_argumentNames;
+}
+
+OpenCL::Semantics::FunctionDefinition::FunctionDefinition(const FunctionType& type,
+                                                          std::string name,
+                                                          std::vector<std::string> argumentNames,
+                                                          bool hasPrototype)
+    : m_type(type), m_name(std::move(name)), m_argumentNames(std::move(argumentNames)), m_hasPrototype(hasPrototype)
+{
+    assert(m_argumentNames.size() == type.getArguments().size());
+}
+
+const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionDefinition::getType() const
+{
+    return m_type;
+}
+
+const std::vector<std::string>& OpenCL::Semantics::FunctionDefinition::getArgumentNames() const
+{
+    return m_argumentNames;
+}
+
+bool OpenCL::Semantics::FunctionDefinition::hasPrototype() const
+{
+    return m_hasPrototype;
+}
+
+const std::string& OpenCL::Semantics::FunctionDefinition::getName() const
+{
+    return m_name;
+}
+
+OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<std::variant<OpenCL::Semantics::FunctionPrototype,
+                                                                             OpenCL::Semantics::FunctionDefinition>> globals)
+    : m_globals(std::move(globals))
+{}
+
+const std::vector<OpenCL::Semantics::TranslationUnit::variant>& OpenCL::Semantics::TranslationUnit::getGlobals() const
+{
+    return m_globals;
 }

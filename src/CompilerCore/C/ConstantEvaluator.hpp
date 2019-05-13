@@ -8,7 +8,7 @@
 
 #include <map>
 
-namespace OpenCL::Constant
+namespace OpenCL::Semantics
 {
     using ConstRetType =
         OpenCL::Expected<std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>,
@@ -76,6 +76,6 @@ namespace OpenCL::Constant
 
         ConstRetType visit(const Syntax::ConditionalExpression& node);
     };
-} // namespace OpenCL::Constant
+} // namespace OpenCL::Semantics
 
 #endif // OPENCLPARSER_CONSTANTEVALUATOR_HPP
