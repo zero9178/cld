@@ -528,7 +528,9 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
                 }
                 if (result->hasPrototype())
                 {
-
+                    globals.emplace_back(FunctionPrototype(result->getType(),
+                                                           result->getName(),
+                                                           result->getArgumentNames()));
                 }
                 return *result;
             },
@@ -537,6 +539,11 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
 
             }
         }, iter.getVariant());
+        if (!result)
+        {
+            return result;
+        }
+        globals.push_back(std::move(*result));
     }
     return TranslationUnit(std::move(globals));
 }
@@ -743,7 +750,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                               name,
                               std::move(argumentNames),
                               paramterTypeList,
-                              internalLinkage ? FunctionDefinition::Internal : FunctionDefinition::External);
+                              internalLinkage ? Linkage::Internal : Linkage::External);
 }
 
 std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Semantics::SemanticAnalysis::gatherStructsAndUnions() const

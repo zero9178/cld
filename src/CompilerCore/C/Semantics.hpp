@@ -14,6 +14,12 @@ namespace OpenCL::Semantics
 {
     class Type;
 
+    enum class Linkage
+    {
+        Internal,
+        External
+    };
+
     class PrimitiveType final
     {
         bool m_isFloatingPoint;
@@ -24,6 +30,28 @@ namespace OpenCL::Semantics
 
     public:
         static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
+
+        static Type createChar(bool isConst, bool isVolatile);
+
+        static Type createUnsignedChar(bool isConst, bool isVolatile);
+
+        static Type createShort(bool isConst, bool isVolatile);
+
+        static Type createUnsignedShort(bool isConst, bool isVolatile);
+
+        static Type createInt(bool isConst, bool isVolatile);
+
+        static Type createUnsignedInt(bool isConst, bool isVolatile);
+
+        static Type createLongLong(bool isConst, bool isVolatile);
+
+        static Type createUnsignedLongLong(bool isConst, bool isVolatile);
+
+        static Type createFloat(bool isConst, bool isVolatile);
+
+        static Type createDouble(bool isConst, bool isVolatile);
+
+        static Type createVoid(bool isConst, bool isVolatile);
 
         bool isFloatingPoint() const;
 
@@ -225,13 +253,18 @@ namespace OpenCL::Semantics
     class FunctionPrototype final
     {
         FunctionType m_type;
+        std::string m_name;
         std::vector<std::string> m_argumentNames;
 
     public:
 
-        FunctionPrototype(FunctionType type, std::vector<std::string> argumentNames);
+        FunctionPrototype(FunctionType type,
+                          std::string name,
+                          std::vector<std::string> argumentNames);
 
         const FunctionType& getType() const;
+
+        const std::string& getName() const;
 
         const std::vector<std::string>& getArgumentNames() const;
 
@@ -243,17 +276,6 @@ namespace OpenCL::Semantics
         std::string m_name;
         std::vector<std::string> m_argumentNames;
         bool m_hasPrototype;
-
-    public:
-
-        enum Linkage
-        {
-            External,
-            Internal
-        };
-
-    private:
-
         Linkage m_linkage;
 
     public:

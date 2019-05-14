@@ -11,6 +11,7 @@
 #include <utility>
 #include <cassert>
 
+
 const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {
     return *m_type;
@@ -265,6 +266,61 @@ bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::Primi
     return !(rhs == *this);
 }
 
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 8);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, false, 8);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 16);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, false, 16);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 32);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, false, 32);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 64);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, false, 64);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, true, true, 32);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, true, true, 64);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 0);
+}
+
 OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted,
                                               std::shared_ptr<OpenCL::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
@@ -509,7 +565,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                             {
                                 return FailureReason("Can't combine void with other primitive type specifier");
                             }
-                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 0);
+                            return PrimitiveType::create(isConst, isVolatile, false, false, 0);
                         }
                         case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char:
                         {
@@ -1649,8 +1705,10 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                       type.getType());
 }
 
-OpenCL::Semantics::FunctionPrototype::FunctionPrototype(FunctionType type, std::vector<std::string> argumentNames)
-    : m_type(std::move(type)), m_argumentNames(std::move(argumentNames))
+OpenCL::Semantics::FunctionPrototype::FunctionPrototype(FunctionType type,
+                                                        std::string name,
+                                                        std::vector<std::string> argumentNames)
+    : m_type(std::move(type)), m_name(std::move(name)), m_argumentNames(std::move(argumentNames))
 {
 
 }
@@ -1665,12 +1723,18 @@ const std::vector<std::string>& OpenCL::Semantics::FunctionPrototype::getArgumen
     return m_argumentNames;
 }
 
+const std::string& OpenCL::Semantics::FunctionPrototype::getName() const
+{
+    return m_name;
+}
+
 OpenCL::Semantics::FunctionDefinition::FunctionDefinition(const FunctionType& type,
                                                           std::string name,
                                                           std::vector<std::string> argumentNames,
                                                           bool hasPrototype,
                                                           Linkage linkage)
-    : m_type(type), m_name(std::move(name)), m_argumentNames(std::move(argumentNames)), m_hasPrototype(hasPrototype)
+    : m_type(type), m_name(std::move(name)), m_argumentNames(std::move(argumentNames)), m_hasPrototype(hasPrototype),
+      m_linkage(linkage)
 {
     assert(m_argumentNames.size() == type.getArguments().size());
 }
@@ -1695,7 +1759,7 @@ const std::string& OpenCL::Semantics::FunctionDefinition::getName() const
     return m_name;
 }
 
-OpenCL::Semantics::FunctionDefinition::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() const
+OpenCL::Semantics::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() const
 {
     return m_linkage;
 }
