@@ -34,4 +34,5 @@ TEST_CASE("Function definition", "[semantics]")
               == OpenCL::Semantics::PrimitiveType::create(false, false, false, true, 32));
     CHECK(definition->getType().getArguments()[1]
               == OpenCL::Semantics::PrimitiveType::create(false, false, true, true, 32));
+    CHECK(definition->getLinkage() == OpenCL::Semantics::FunctionDefinition::External);
 }

@@ -3,24 +3,12 @@
 
 #include "Expected.hpp"
 #include "FailureReason.hpp"
+#include "Syntax.hpp"
 
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace OpenCL::Syntax
-{
-    class TypeSpecifier;
-
-    enum class TypeQualifier;
-
-    class AbstractDeclarator;
-
-    class Declarator;
-
-    class Declaration;
-} // namespace OpenCL::Syntax
 
 namespace OpenCL::Semantics
 {
@@ -166,7 +154,7 @@ namespace OpenCL::Semantics
         std::string m_name;
         std::vector<std::pair<std::string, std::int32_t>> m_values;
 
-        EnumType(const std::string& name, std::vector<std::pair<std::string, std::int32_t>> values);
+        EnumType(std::string  name, std::vector<std::pair<std::string, std::int32_t>> values);
 
     public:
         static Type create(bool isConst, bool isVolatile, const std::string& name,
@@ -241,7 +229,7 @@ namespace OpenCL::Semantics
 
     public:
 
-        FunctionPrototype(const FunctionType& type, const std::vector<std::string>& argumentNames);
+        FunctionPrototype(FunctionType type, std::vector<std::string> argumentNames);
 
         const FunctionType& getType() const;
 
@@ -258,10 +246,23 @@ namespace OpenCL::Semantics
 
     public:
 
+        enum Linkage
+        {
+            External,
+            Internal
+        };
+
+    private:
+
+        Linkage m_linkage;
+
+    public:
+
         FunctionDefinition(const FunctionType& type,
                            std::string name,
                            std::vector<std::string> argumentNames,
-                           bool hasPrototype);
+                           bool hasPrototype,
+                           Linkage linkage);
 
         const std::string& getName() const;
 
@@ -270,6 +271,8 @@ namespace OpenCL::Semantics
         const std::vector<std::string>& getArgumentNames() const;
 
         bool hasPrototype() const;
+
+        Linkage getLinkage() const;
     };
 
     class TranslationUnit final

@@ -2607,17 +2607,6 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node)
 {}
 
-std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>>
-OpenCL::Codegen::Context::gatherTypedefs() const
-{
-    std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>> result;
-    for (auto iter = m_typedefs.rbegin(); iter != m_typedefs.rend(); iter++)
-    {
-        result.insert(iter->begin(), iter->end());
-    }
-    return result;
-}
-
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::Type& node)
 {
     return std::visit([this](auto&& value) -> llvm::Type*
@@ -2814,18 +2803,4 @@ void OpenCL::Codegen::Context::arithmeticCast(Semantics::Type& type, llvm::Value
     }
 }
 
-std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Codegen::Context::gatherStructsAndUnions() const
-{
-    std::map<std::string, OpenCL::Semantics::RecordType> result;
-    for (auto iter = m_structsUnions.rbegin(); iter != m_structsUnions.rend(); iter++)
-    {
-        for (auto&[key, value] : *iter)
-        {
-            if (auto* record = std::get_if<Semantics::RecordType>(&value.getType()))
-            {
-                result.emplace(key, *record);
-            }
-        }
-    }
-    return result;
-}
+

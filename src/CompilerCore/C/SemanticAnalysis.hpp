@@ -9,9 +9,27 @@ namespace OpenCL::Semantics
 {
     class SemanticAnalysis final
     {
-        std::map<std::string, Semantics::RecordType> m_structOrUnions;
-        std::map<std::string, std::reference_wrapper<const Semantics::Type>> m_typedefs;
-        std::map<std::string, Semantics::Type> m_typesOfNamedValues;
+        std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
+        std::vector<std::map<std::string, Semantics::Type>> m_typedefs{1};
+        std::vector<std::map<std::string, Semantics::Type>> m_typesOfNamedValues{1};
+
+        std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
+
+        std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
+
+        void popScope()
+        {
+            m_typesOfNamedValues.pop_back();
+            m_structsUnions.pop_back();
+            m_typedefs.pop_back();
+        }
+
+        void pushScope()
+        {
+            m_typesOfNamedValues.emplace_back();
+            m_structsUnions.emplace_back();
+            m_typedefs.emplace_back();
+        }
 
     public:
 

@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Semantics.hpp"
 
 #include "ConstantEvaluator.hpp"
@@ -125,8 +127,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, boo
         name = elementType.getName().substr(0, openParenthese) + "(*)" + elementType.getName().substr(openParenthese);
     }
     else if (std::holds_alternative<ArrayType>(elementType.getType())
-             || std::holds_alternative<ValArrayType>(elementType.getType())
-             || std::holds_alternative<AbstractArrayType>(elementType.getType()))
+        || std::holds_alternative<ValArrayType>(elementType.getType())
+        || std::holds_alternative<AbstractArrayType>(elementType.getType()))
     {
         auto openBracket = elementType.getName().find('[');
         name = elementType.getName().substr(0, openBracket) + "(*)" + elementType.getName().substr(openBracket);
@@ -149,9 +151,9 @@ bool OpenCL::Semantics::PointerType::operator!=(const OpenCL::Semantics::Pointer
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::EnumType::EnumType(const std::string& name,
+OpenCL::Semantics::EnumType::EnumType(std::string name,
                                       std::vector<std::pair<std::string, std::int32_t>> values)
-    : m_name(name), m_values(std::move(values))
+    : m_name(std::move(name)), m_values(std::move(values))
 {
 }
 
@@ -172,7 +174,7 @@ bool OpenCL::Semantics::EnumType::isAnonymous() const
 
 OpenCL::Semantics::Type
 OpenCL::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
-                                              std::vector<std::pair<std::string, std::int32_t>> values)
+                                    std::vector<std::pair<std::string, std::int32_t>> values)
 {
     return OpenCL::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
 }
@@ -217,66 +219,34 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, b
                                                                  std::uint8_t bitCount)
 {
     return OpenCL::Semantics::Type(isConst, isVolatile,
-                                   [=]() -> const char* {
-                                             if (isFloatingPoint)
-                                             {
-                                                 if (bitCount == 32)
-                                                 {
-                                                     return "float";
-                                                 }
-                                                 else if (bitCount == 64)
-                                                 {
-                                                     return "double";
-                                                 }
-                                             }
-                                             else
-                                             {
-                                                 switch (bitCount)
-                                                 {
-                                                     case 8:
-                                                         if (isSigned)
-                                                         {
-                                                             return "char";
-                                                         }
-                                                         else
-                                                         {
-                                                             return "unsigned char";
-                                                         }
-                                                         break;
-                                                     case 16:
-                                                         if (isSigned)
-                                                         {
-                                                             return "short";
-                                                         }
-                                                         else
-                                                         {
-                                                             return "unsigned short";
-                                                         }
-                                                         break;
-                                                     case 32:
-                                                         if (isSigned)
-                                                         {
-                                                             return "int";
-                                                         }
-                                                         else
-                                                         {
-                                                             return "unsigned int";
-                                                         }
-                                                         break;
-                                                     case 64:
-                                                         if (isSigned)
-                                                         {
-                                                             return "long long";
-                                                         }
-                                                         else
-                                                         {
-                                                             return "unsigned long long";
-                                                         }
-                                                         break;
-                                                 }
-                                             }
-                                             return "";
-                                         }(),
+                                   [=]() -> const char*
+                                   {
+                                       if (isFloatingPoint)
+                                       {
+                                           if (bitCount == 32)
+                                           {
+                                               return "float";
+                                           }
+                                           else if (bitCount == 64)
+                                           {
+                                               return "double";
+                                           }
+                                           return "";
+                                       }
+                                       switch (bitCount)
+                                       {
+                                       case 8:
+                                           return isSigned ? "char" : "unsigned char";
+                                       case 16:
+                                           return isSigned ? "short" : "unsigned short";
+                                       case 32:
+                                           return isSigned ? "int" : "unsigned int";
+                                       case 64:
+                                           return isSigned ? "long long" : "unsigned long long";
+                                       default:return "void";
+                                       }
+                                       return "";
+                                   }(),
                                    PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
 
@@ -287,7 +257,7 @@ bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::Primi
         return true;
     }
     return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount)
-           == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
+        == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
 }
 
 bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::PrimitiveType& rhs) const
@@ -357,7 +327,7 @@ bool OpenCL::Semantics::FunctionType::isLastVararg() const
 OpenCL::Semantics::Type
 OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
                                         std::vector<OpenCL::Semantics::Type>&& arguments,
-                                                  bool lastIsVararg, bool hasPrototype)
+                                        bool lastIsVararg, bool hasPrototype)
 {
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
@@ -377,7 +347,7 @@ OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
 bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::FunctionType& rhs) const
 {
     return std::tie(*m_returnType, m_arguments, m_lastIsVararg)
-           == std::tie(*rhs.m_returnType, rhs.m_arguments, rhs.m_lastIsVararg);
+        == std::tie(*rhs.m_returnType, rhs.m_arguments, rhs.m_lastIsVararg);
 }
 
 bool OpenCL::Semantics::FunctionType::operator!=(const OpenCL::Semantics::FunctionType& rhs) const
@@ -431,7 +401,7 @@ namespace
     struct Y
     {
         template <typename... X>
-        decltype(auto) operator()(X&&... x) const&
+        decltype(auto) operator()(X&& ... x) const&
         {
             return g(*this, std::forward<X>(x)...);
         }
@@ -443,7 +413,7 @@ namespace
     Y(G)->Y<G>;
 
     template <class... Ts>
-    struct overload : Ts...
+    struct overload : Ts ...
     {
         using Ts::operator()...;
     };
@@ -468,28 +438,29 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
         {
             switch (*typeQualifier)
             {
-                case Syntax::TypeQualifier::Const:
-                {
-                    isConst = true;
-                    break;
-                }
-                case Syntax::TypeQualifier::Restrict:
-                {
-                    isRestricted = true;
-                    break;
-                }
-                case Syntax::TypeQualifier::Volatile:
-                {
-                    isVolatile = true;
-                    break;
-                }
+            case Syntax::TypeQualifier::Const:
+            {
+                isConst = true;
+                break;
+            }
+            case Syntax::TypeQualifier::Restrict:
+            {
+                isRestricted = true;
+                break;
+            }
+            case Syntax::TypeQualifier::Volatile:
+            {
+                isVolatile = true;
+                break;
+            }
             }
         }
     }
 
     std::vector<const Syntax::TypeSpecifier*> typeSpecifiers;
     std::transform(specifierQualifiers.begin(), specifierQualifiers.end(), std::back_inserter(typeSpecifiers),
-                   [](const auto& value) -> const Syntax::TypeSpecifier* {
+                   [](const auto& value) -> const Syntax::TypeSpecifier*
+                   {
                        auto* refPointer = std::get_if<std::reference_wrapper<const Syntax::TypeSpecifier>>(&value);
                        if (!refPointer)
                        {
@@ -508,142 +479,147 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
         auto result = std::visit(
             overload{
                 [&typeSpecifiers, isConst,
-                 isVolatile](Syntax::TypeSpecifier::PrimitiveTypeSpecifier) -> ThisReturnType {
-                    if (!std::all_of(typeSpecifiers.begin(), typeSpecifiers.end(), [](const auto pointer) {
-                            return std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
-                                pointer->getVariant());
-                        }))
+                    isVolatile](Syntax::TypeSpecifier::PrimitiveTypeSpecifier) -> ThisReturnType
+                {
+                    if (!std::all_of(typeSpecifiers.begin(), typeSpecifiers.end(), [](const auto pointer)
+                    {
+                        return std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
+                            pointer->getVariant());
+                    }))
                     {
                         return FailureReason(
                             "Primitive type specifiers mixed with struct, union, enum and typedef names");
                     }
                     std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
                     std::transform(typeSpecifiers.begin(), typeSpecifiers.end(),
-                                   std::back_inserter(primitiveTypeSpecifier), [](const auto pointer) {
+                                   std::back_inserter(primitiveTypeSpecifier), [](const auto pointer)
+                                   {
                                        return std::get<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
                                            pointer->getVariant());
                                    });
 
                     auto convert = [isConst, isVolatile](auto&& self, auto begin, auto end,
-                                                         bool isSigned) -> ThisReturnType {
+                                                         bool isSigned) -> ThisReturnType
+                    {
                         switch (*begin)
                         {
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void:
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void:
+                        {
+                            if (begin + 1 < end)
                             {
-                                if (begin + 1 < end)
-                                {
-                                    return FailureReason("Can't combine void with other primitive type specifier");
-                                }
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 0);
+                                return FailureReason("Can't combine void with other primitive type specifier");
                             }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char:
+                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 0);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char:
+                        {
+                            if (begin + 1 < end)
                             {
-                                if (begin + 1 < end)
-                                {
-                                    return FailureReason("Can't combine char with other primitive type specifier");
-                                }
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 8);
+                                return FailureReason("Can't combine char with other primitive type specifier");
                             }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short:
+                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 8);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short:
+                        {
+                            if (begin + 1 < end)
                             {
-                                if (begin + 1 < end)
+                                if (*(begin + 1) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int)
                                 {
-                                    if (*(begin + 1) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int)
-                                    {
-                                        return FailureReason(
-                                            "Only int is allowed to follow short in primitive type specifiers");
-                                    }
+                                    return FailureReason(
+                                        "Only int is allowed to follow short in primitive type specifiers");
                                 }
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 16);
                             }
+                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 16);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
+                        {
+                            if (begin + 1 < end)
+                            {
+                                return FailureReason("Can't combine int with other primitive type specifier");
+                            }
+                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
+                        {
+                            if (begin + 1 == end)
+                            {
+                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
+                            }
+                            switch (*(begin + 1))
+                            {
                             case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
                             {
-                                if (begin + 1 < end)
+                                if (begin + 2 < end)
                                 {
-                                    return FailureReason("Can't combine int with other primitive type specifier");
+                                    return FailureReason(
+                                        "Can't combine long int with any other primitive type specifiers");
                                 }
                                 return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
                             }
                             case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
                             {
-                                if (begin + 1 == end)
-                                {
-                                    return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
-                                }
-                                switch (*(begin + 1))
-                                {
-                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
-                                    {
-                                        if (begin + 2 < end)
-                                        {
-                                            return FailureReason(
-                                                "Can't combine long int with any other primitive type specifiers");
-                                        }
-                                        return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
-                                    }
-                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
-                                    {
-                                        if (begin + 3 < end
-                                            || (begin + 2 < end
-                                                && *(begin + 2) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long))
-                                        {
-                                            return FailureReason(
-                                                "Can't combine long long int with any other primitive type specifiers");
-                                        }
-                                        return PrimitiveType::create(isConst, isVolatile, false, isSigned, 64);
-                                    }
-                                    default:
-                                        return FailureReason(
-                                            "Can't combine long int with any other primitive type specifiers");
-                                }
-                            }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float:
-                            {
-                                if (begin + 1 < end)
+                                if (begin + 3 < end
+                                    || (begin + 2 < end
+                                        && *(begin + 2) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long))
                                 {
                                     return FailureReason(
-                                        "Can't combine float with any other primitive type specifiers");
+                                        "Can't combine long long int with any other primitive type specifiers");
                                 }
-                                return PrimitiveType::create(isConst, isVolatile, true, isSigned, 32);
+                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 64);
                             }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double:
+                            default:
+                                return FailureReason(
+                                    "Can't combine long int with any other primitive type specifiers");
+                            }
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float:
+                        {
+                            if (begin + 1 < end)
                             {
-                                if (begin + 1 < end)
-                                {
-                                    return FailureReason(
-                                        "Can't combine double with any other primitive type specifiers");
-                                }
-                                return PrimitiveType::create(isConst, isVolatile, true, isSigned, 64);
+                                return FailureReason(
+                                    "Can't combine float with any other primitive type specifiers");
                             }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed:
+                            return PrimitiveType::create(isConst, isVolatile, true, isSigned, 32);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double:
+                        {
+                            if (begin + 1 < end)
                             {
-                                auto result = self(self, begin + 1, end, true);
-                                if (!result)
-                                {
-                                    return result;
-                                }
-                                return *result;
+                                return FailureReason(
+                                    "Can't combine double with any other primitive type specifiers");
                             }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned:
+                            return PrimitiveType::create(isConst, isVolatile, true, isSigned, 64);
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed:
+                        {
+                            auto result = self(self, begin + 1, end, true);
+                            if (!result)
                             {
-                                auto result = self(self, begin + 1, end, false);
-                                if (!result)
-                                {
-                                    return result;
-                                }
-                                return *result;
+                                return result;
                             }
+                            return *result;
+                        }
+                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned:
+                        {
+                            auto result = self(self, begin + 1, end, false);
+                            if (!result)
+                            {
+                                return result;
+                            }
+                            return *result;
+                        }
                         }
                         return FailureReason("Invalid primitive type specifiers");
                     };
                     return convert(convert, primitiveTypeSpecifier.begin(), primitiveTypeSpecifier.end(), true);
                 },
                 [&typeSpecifiers, isConst, isVolatile, &typedefs, &declarations](
-                    const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> ThisReturnType {
+                    const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> ThisReturnType
+                {
                     if (typeSpecifiers.size() != 1)
                     {
                         return FailureReason(std::string("Expected no further type specifiers after ")
-                                             + (structOrUnion->isUnion() ? "union" : "struct") + " specifier");
+                                                 + (structOrUnion->isUnion() ? "union" : "struct") + " specifier");
                     }
                     if (structOrUnion->getStructDeclarations().empty())
                     {
@@ -651,17 +627,19 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                   structOrUnion->getIdentifier());
                     }
                     std::vector<std::tuple<Type, std::string, std::int64_t>> members;
-                    for (auto& [structSpecifiers, structDecls] : structOrUnion->getStructDeclarations())
+                    for (auto&[structSpecifiers, structDecls] : structOrUnion->getStructDeclarations())
                     {
                         std::vector<SpecifierQualifierRef> refs;
                         for (auto& iter : structSpecifiers)
                         {
-                            std::visit([&refs](auto&& value) { refs.push_back(value); }, iter);
+                            std::visit([&refs](auto&& value)
+                                       { refs.push_back(value); }, iter);
                         }
                         for (auto& iter : structDecls)
                         {
                             auto type = declaratorsToType(refs,
-                                                          [&]() -> PossiblyAbstractQualifierRef {
+                                                          [&]() -> PossiblyAbstractQualifierRef
+                                                          {
                                                               if (iter.first)
                                                               {
                                                                   return *iter.first;
@@ -684,21 +662,25 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                               structOrUnion->getIdentifier(), std::move(members));
                 },
                 [&typeSpecifiers, isConst,
-                 isVolatile](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> ThisReturnType {
+                    isVolatile](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> ThisReturnType
+                {
                     if (typeSpecifiers.size() != 1)
                     {
                         return FailureReason("Expected no further type specifiers after enum");
                     }
                     std::vector<std::pair<std::string, std::int32_t>> values;
-                    auto name = std::visit(overload{[](const std::string& name) { return name; },
-                                                    [&values](const Syntax::EnumDeclaration& declaration) {
+                    auto name = std::visit(overload{[](const std::string& name)
+                                                    { return name; },
+                                                    [&values](const Syntax::EnumDeclaration& declaration)
+                                                    {
                                                         values = declaration.getValues();
                                                         return declaration.getName();
                                                     }},
                                            enumSpecifier->getVariant());
                     return EnumType::create(isConst, isVolatile, name, std::move(values));
                 },
-                [&](const std::string& typedefName) -> ThisReturnType {
+                [&](const std::string& typedefName) -> ThisReturnType
+                {
                     auto result = typedefs.find(typedefName);
                     if (result == typedefs.end())
                     {
@@ -720,7 +702,8 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
         return FailureReason("Only pointers can be restricted");
     }
 
-    auto getQualifiers = [](const std::vector<Syntax::TypeQualifier>& typeQualifiers) -> std::tuple<bool, bool, bool> {
+    auto getQualifiers = [](const std::vector<Syntax::TypeQualifier>& typeQualifiers) -> std::tuple<bool, bool, bool>
+    {
         bool isConst = false;
         bool isVolatile = false;
         bool isRestricted = false;
@@ -728,10 +711,13 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
         {
             switch (typeQual)
             {
-                case Syntax::TypeQualifier::Const: isConst = true; break;
-                case Syntax::TypeQualifier::Restrict: isRestricted = true; break;
-                case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
-                default: break;
+            case Syntax::TypeQualifier::Const: isConst = true;
+                break;
+            case Syntax::TypeQualifier::Restrict: isRestricted = true;
+                break;
+            case Syntax::TypeQualifier::Volatile: isVolatile = true;
+                break;
+            default: break;
             }
         }
         return std::tie(isConst, isVolatile, isRestricted);
@@ -739,26 +725,29 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
 
     auto result = std::visit(
         Y{overload{[&](auto&& self,
-                       const Syntax::AbstractDeclarator* abstractDeclarator) -> std::optional<FailureReason> {
+                       const Syntax::AbstractDeclarator* abstractDeclarator) -> std::optional<FailureReason>
+                   {
                        if (!abstractDeclarator)
                        {
                            return {};
                        }
                        for (auto& iter : abstractDeclarator->getPointers())
                        {
-                           auto [isConst, isVolatile, isRestricted] = getQualifiers(iter.getTypeQualifiers());
+                           auto[isConst, isVolatile, isRestricted] = getQualifiers(iter.getTypeQualifiers());
                            baseType = PointerType::create(isConst, isVolatile, isRestricted, std::move(baseType));
                        }
                        return std::visit(
                            Y{overload{
                                [&](auto&&, const std::unique_ptr<Syntax::AbstractDeclarator>& abstractDeclarator)
-                                   -> std::optional<FailureReason> {
+                                   -> std::optional<FailureReason>
+                               {
                                    // Might need to watch out for 6.7.5.3.11 not sure yet
                                    return self(abstractDeclarator.get());
                                },
                                [&](auto&& directSelf,
                                    const Syntax::DirectAbstractDeclaratorAssignmentExpression&
-                                       directAbstractDeclaratorAssignmentExpression) -> std::optional<FailureReason> {
+                                   directAbstractDeclaratorAssignmentExpression) -> std::optional<FailureReason>
+                               {
                                    if (!directAbstractDeclaratorAssignmentExpression.getAssignmentExpression())
                                    {
                                        baseType = AbstractArrayType::create(false, false, false, std::move(baseType));
@@ -775,7 +764,8 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                        else
                                        {
                                            auto size = std::visit(
-                                               [](auto&& value) -> std::optional<std::size_t> {
+                                               [](auto&& value) -> std::optional<std::size_t>
+                                               {
                                                    using T = std::decay_t<decltype(value)>;
                                                    if constexpr (std::is_convertible_v<T, std::size_t>)
                                                    {
@@ -795,22 +785,25 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                    if (directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator())
                                    {
                                        return std::visit(
-                                           [&directSelf](auto&& value) -> std::optional<FailureReason> {
+                                           [&directSelf](auto&& value) -> std::optional<FailureReason>
+                                           {
                                                return directSelf(value);
                                            },
                                            directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator()
-                                               ->getVariant());
+                                                                                       ->getVariant());
                                    }
                                    return {};
                                },
                                [&](auto&& directSelf,
                                    const std::unique_ptr<Syntax::DirectAbstractDeclarator>& directAbstractDeclarator)
-                                   -> std::optional<FailureReason> {
+                                   -> std::optional<FailureReason>
+                               {
                                    baseType = ValArrayType::create(false, false, false, std::move(baseType));
                                    if (directAbstractDeclarator)
                                    {
                                        return std::visit(
-                                           [&directSelf](auto&& value) -> std::optional<FailureReason> {
+                                           [&directSelf](auto&& value) -> std::optional<FailureReason>
+                                           {
                                                return directSelf(value);
                                            },
                                            directAbstractDeclarator->getVariant());
@@ -819,13 +812,14 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                },
                                [&](auto&& directSelf,
                                    const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList)
-                                   -> std::optional<FailureReason> {
+                                   -> std::optional<FailureReason>
+                               {
                                    std::vector<Type> arguments;
                                    if (parameterTypeList.getParameterTypeList())
                                    {
                                        for (auto& pair : parameterTypeList.getParameterTypeList()
-                                                             ->getParameterList()
-                                                             .getParameterDeclarations())
+                                                                          ->getParameterList()
+                                                                          .getParameterDeclarations())
                                        {
                                            std::vector<SpecifierQualifierRef> specifierQualifiers;
                                            for (auto& iter : pair.first)
@@ -834,19 +828,23 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                    overload{
                                                        [&specifierQualifiers](
                                                            const Syntax::TypeSpecifier& typeSpecifier)
-                                                           -> std::optional<FailureReason> {
+                                                           -> std::optional<FailureReason>
+                                                       {
                                                            specifierQualifiers.emplace_back(typeSpecifier);
                                                            return {};
                                                        },
                                                        [&specifierQualifiers](
                                                            const Syntax::TypeQualifier& typeQualifier)
-                                                           -> std::optional<FailureReason> {
+                                                           -> std::optional<FailureReason>
+                                                       {
                                                            specifierQualifiers.emplace_back(typeQualifier);
                                                            return {};
                                                        },
                                                        [](const Syntax::StorageClassSpecifier&)
-                                                           -> std::optional<FailureReason> { return {}; },
-                                                       [](Syntax::FunctionSpecifier) -> std::optional<FailureReason> {
+                                                           -> std::optional<FailureReason>
+                                                       { return {}; },
+                                                       [](Syntax::FunctionSpecifier) -> std::optional<FailureReason>
+                                                       {
                                                            return FailureReason(
                                                                "Inline not allowed in paramter type list");
                                                        }},
@@ -861,11 +859,13 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                std::visit(
                                                    overload{
                                                        [](const std::unique_ptr<Syntax::Declarator>& directDeclarator)
-                                                           -> PossiblyAbstractQualifierRef {
+                                                           -> PossiblyAbstractQualifierRef
+                                                       {
                                                            return std::cref(*directDeclarator);
                                                        },
                                                        [](const std::unique_ptr<Syntax::AbstractDeclarator>&
-                                                              abstractDeclarator) -> PossiblyAbstractQualifierRef {
+                                                       abstractDeclarator) -> PossiblyAbstractQualifierRef
+                                                       {
                                                            return abstractDeclarator.get();
                                                        }},
                                                    pair.second),
@@ -885,7 +885,8 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                    if (parameterTypeList.getDirectAbstractDeclarator())
                                    {
                                        return std::visit(
-                                           [&directSelf](auto&& value) -> std::optional<FailureReason> {
+                                           [&directSelf](auto&& value) -> std::optional<FailureReason>
+                                           {
                                                return directSelf(value);
                                            },
                                            parameterTypeList.getDirectAbstractDeclarator()->getVariant());
@@ -895,523 +896,547 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                            abstractDeclarator->getDirectAbstractDeclarator().getVariant());
                    },
                    [&](auto&& self, std::
-                                        reference_wrapper<const Syntax::Declarator>
-                                            declarator) -> std::
-                                                            optional<FailureReason> {
-                                                                for (auto& iter : declarator.get().getPointers())
+                   reference_wrapper<const Syntax::Declarator>
+                   declarator) -> std::
+                   optional<FailureReason>
+                   {
+                       for (auto& iter : declarator.get().getPointers())
+                       {
+                           auto[isConst, isVolatile, isRestricted] =
+                           getQualifiers(iter.getTypeQualifiers());
+                           baseType = PointerType::create(isConst, isVolatile,
+                                                          isRestricted,
+                                                          std::move(baseType));
+                       }
+                       return std::visit(
+                           Y{
+                               overload{
+                                   [&](auto&&, const std::string&)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       return {};
+                                   },
+                                   [&](auto&&,
+                                       const std::unique_ptr<
+                                           Syntax::Declarator>& declarator)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       // Might need to watch out
+                                       // for 6.7.5.3.11 not sure yet
+                                       return self(std::cref(*declarator));
+                                   },
+                                   [&](auto&& directSelf,
+                                       const Syntax::
+                                       DirectDeclaratorNoStaticOrAsterisk&
+                                       dirWithoutStaticOrAsterisk)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       auto[isConst, isVolatile,
+                                       isRestricted] =
+                                       getQualifiers(
+                                           dirWithoutStaticOrAsterisk
+                                               .getTypeQualifiers());
+                                       if (!dirWithoutStaticOrAsterisk
+                                           .getAssignmentExpression())
+                                       {
+                                           baseType =
+                                               AbstractArrayType::create(
+                                                   isConst, isVolatile,
+                                                   isRestricted,
+                                                   std::move(baseType));
+                                       }
+                                       else
+                                       {
+                                           Semantics::ConstantEvaluator
+                                               evaluator(structOrUnions,
+                                                         typedefs);
+                                           auto result = evaluator.visit(
+                                               *dirWithoutStaticOrAsterisk
+                                                   .getAssignmentExpression());
+                                           if (!result)
+                                           {
+                                               baseType = ValArrayType::create(
+                                                   isConst, isVolatile,
+                                                   isRestricted,
+                                                   std::move(baseType));
+                                           }
+                                           else
+                                           {
+                                               auto size = std::visit(
+                                                   [](auto&& value)
+                                                       -> std::optional<
+                                                       std::size_t>
+                                                   {
+                                                       using T = std::decay_t<
+                                                           decltype(value)>;
+                                                       if constexpr (
+                                                           std::
+                                                           is_convertible_v<
+                                                               T,
+                                                               std::
+                                                               size_t>)
+                                                       {
+                                                           return value;
+                                                       }
+                                                       return {};
+                                                   },
+                                                   *result);
+                                               if (!size)
+                                               {
+                                                   return FailureReason(
+                                                       "Invalid type in result of constant expression");
+                                               }
+                                               baseType = ArrayType::create(
+                                                   isConst, isVolatile,
+                                                   isRestricted,
+                                                   std::move(baseType), *size);
+                                           }
+                                       }
+                                       return std::visit(
+                                           [&directSelf](auto&& value)
+                                               -> std::optional<
+                                               FailureReason>
+                                           {
+                                               return directSelf(value);
+                                           },
+                                           dirWithoutStaticOrAsterisk
+                                               .getDirectDeclarator()
+                                               .getVariant());
+                                   },
+                                   [&](auto&& directSelf,
+                                       const Syntax::DirectDeclaratorStatic&
+                                       directDeclaratorStatic)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       auto[isConst, isVolatile,
+                                       isRestricted] =
+                                       getQualifiers(
+                                           directDeclaratorStatic
+                                               .getTypeQualifiers());
+                                       Semantics::ConstantEvaluator evaluator(
+                                           structOrUnions, typedefs);
+                                       auto result = evaluator.visit(
+                                           directDeclaratorStatic
+                                               .getAssignmentExpression());
+                                       if (!result)
+                                       {
+                                           baseType = ValArrayType::create(
+                                               isConst, isVolatile,
+                                               isRestricted,
+                                               std::move(baseType));
+                                       }
+                                       else
+                                       {
+                                           auto size = std::visit(
+                                               [](auto&& value)
+                                                   -> std::optional<
+                                                   std::size_t>
+                                               {
+                                                   using T =
+                                                   std::decay_t<decltype(
+                                                                value)>;
+                                                   if constexpr (
+                                                       std::is_convertible_v<
+                                                           T, std::size_t>)
+                                                   {
+                                                       return value;
+                                                   }
+                                                   return {};
+                                               },
+                                               *result);
+                                           if (!size)
+                                           {
+                                               return FailureReason(
+                                                   "Invalid type in result of constant expression");
+                                           }
+                                           baseType = ArrayType::create(
+                                               isConst, isVolatile,
+                                               isRestricted,
+                                               std::move(baseType), *size);
+                                       }
+                                       return std::visit(
+                                           [&directSelf](auto&& value)
+                                               -> std::optional<
+                                               FailureReason>
+                                           {
+                                               return directSelf(value);
+                                           },
+                                           directDeclaratorStatic
+                                               .getDirectDeclarator()
+                                               .getVariant());
+                                   },
+                                   [&](auto&& directSelf,
+                                       const Syntax::DirectDeclaratorAsterisk&
+                                       directDeclaratorAsterisk)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       auto[isConst, isVolatile,
+                                       isRestricted] =
+                                       getQualifiers(
+                                           directDeclaratorAsterisk
+                                               .getTypeQualifiers());
+                                       baseType = ValArrayType::create(
+                                           isConst, isVolatile, isRestricted,
+                                           std::move(baseType));
+                                       return std::visit(
+                                           [&directSelf](auto&& value)
+                                               -> std::optional<
+                                               FailureReason>
+                                           {
+                                               return directSelf(value);
+                                           },
+                                           directDeclaratorAsterisk
+                                               .getDirectDeclarator()
+                                               .getVariant());
+                                   },
+                                   [&](auto&& directSelf,
+                                       const Syntax::
+                                       DirectDeclaratorParentheseParameters&
+                                       parentheseParameters)
+                                       -> std::optional<FailureReason>
+                                   {
+                                       std::vector<Type> arguments;
+                                       for (auto& pair :
+                                           parentheseParameters
+                                               .getParameterTypeList()
+                                               .getParameterList()
+                                               .getParameterDeclarations())
+                                       {
+                                           std::vector<SpecifierQualifierRef>
+                                               specifierQualifiers;
+                                           for (auto& iter : pair.first)
+                                           {
+                                               auto optional = std::visit(
+                                                   overload{
+                                                       [&specifierQualifiers](
+                                                           const Syntax::
+                                                           TypeSpecifier&
+                                                           typeSpecifier)
+                                                           -> std::optional<
+                                                           FailureReason>
+                                                       {
+                                                           specifierQualifiers
+                                                               .emplace_back(
+                                                                   typeSpecifier);
+                                                           return {};
+                                                       },
+                                                       [&specifierQualifiers](
+                                                           const Syntax::
+                                                           TypeQualifier&
+                                                           typeQualifier)
+                                                           -> std::optional<
+                                                           FailureReason>
+                                                       {
+                                                           specifierQualifiers
+                                                               .emplace_back(
+                                                                   typeQualifier);
+                                                           return {};
+                                                       },
+                                                       [](const Syntax::
+                                                       StorageClassSpecifier&)
+                                                           -> std::optional<
+                                                           FailureReason>
+                                                       {
+                                                           return {};
+                                                       },
+                                                       [](Syntax::
+                                                          FunctionSpecifier)
+                                                           -> std::optional<
+                                                           FailureReason>
+                                                       {
+                                                           return FailureReason(
+                                                               "Inline not allowed in paramter type list");
+                                                       }},
+                                                   iter);
+                                               if (optional)
+                                               {
+                                                   return optional;
+                                               }
+                                           }
+                                           auto result = declaratorsToType(
+                                               specifierQualifiers,
+                                               std::visit(
+                                                   overload{
+                                                       [](const std::unique_ptr<
+                                                           Syntax::Declarator>&
+                                                       directDeclarator)
+                                                           -> PossiblyAbstractQualifierRef
+                                                       {
+                                                           return std::cref(
+                                                               *directDeclarator);
+                                                       },
+                                                       [](const std::unique_ptr<
+                                                           Syntax::
+                                                           AbstractDeclarator>&
+                                                       abstractDeclarator)
+                                                           -> PossiblyAbstractQualifierRef
+                                                       {
+                                                           return abstractDeclarator
+                                                               .get();
+                                                       }},
+                                                   pair.second),
+                                               typedefs, declarations,
+                                               structOrUnions);
+                                           if (!result)
+                                           {
+                                               return result.error();
+                                           }
+                                           arguments.push_back(
+                                               std::move(*result));
+                                       }
+                                       baseType = FunctionType::create(
+                                           std::move(baseType),
+                                           std::move(arguments),
+                                           parentheseParameters
+                                               .getParameterTypeList()
+                                               .hasEllipse(),
+                                           true);
+                                       return std::visit(
+                                           [&directSelf](auto&& value)
+                                               -> std::optional<
+                                               FailureReason>
+                                           {
+                                               return directSelf(value);
+                                           },
+                                           parentheseParameters
+                                               .getDirectDeclarator()
+                                               .getVariant());
+                                   },
+                                   [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers&
+                                   identifiers) -> std::
+                                   optional<
+                                       FailureReason>
+                                   {
+                                       std::vector<Type> arguments(
+                                           identifiers
+                                               .getIdentifiers()
+                                               .size(),
+                                           PrimitiveType::create(
+                                               false,
+                                               false,
+                                               false,
+                                               true,
+                                               32));
+                                       std::map<
+                                           std::
+                                           string,
+                                           Type>
+                                           declarationMap;
+                                       for (
+                                           auto&
+                                               iter :
+                                           declarations)
+                                       {
+                                           std::vector<
+                                               SpecifierQualifierRef>
+                                               refs;
+                                           for (
+                                               auto&
+                                                   specifiers :
+                                               iter.getDeclarationSpecifiers())
+                                           {
+                                               auto result =
+                                                   std::visit(
+                                                       overload{[](Syntax::StorageClassSpecifier
+                                                                   storageClassSpecifier)
+                                                                    -> std::optional<
+                                                               FailureReason>
                                                                 {
-                                                                    auto [isConst, isVolatile, isRestricted] =
-                                                                        getQualifiers(iter.getTypeQualifiers());
-                                                                    baseType = PointerType::create(isConst, isVolatile,
-                                                                                                   isRestricted,
-                                                                                                   std::move(baseType));
-                                                                }
-                                                                return std::visit(
-                                                                    Y{
-                                                                        overload{
-                                                                            [&](auto&&, const std::string&)
-                                                                                -> std::optional<FailureReason> {
-                                                                                return {};
-                                                                            },
-                                                                            [&](auto&&,
-                                                                                const std::unique_ptr<
-                                                                                    Syntax::Declarator>& declarator)
-                                                                                -> std::optional<FailureReason> {
-                                                                                // Might need to watch out
-                                                                                // for 6.7.5.3.11 not sure yet
-                                                                                return self(std::cref(*declarator));
-                                                                            },
-                                                                            [&](auto&& directSelf,
-                                                                                const Syntax::
-                                                                                    DirectDeclaratorNoStaticOrAsterisk&
-                                                                                        dirWithoutStaticOrAsterisk)
-                                                                                -> std::optional<FailureReason> {
-                                                                                auto [isConst, isVolatile,
-                                                                                      isRestricted] =
-                                                                                    getQualifiers(
-                                                                                        dirWithoutStaticOrAsterisk
-                                                                                            .getTypeQualifiers());
-                                                                                if (!dirWithoutStaticOrAsterisk
-                                                                                         .getAssignmentExpression())
-                                                                                {
-                                                                                    baseType =
-                                                                                        AbstractArrayType::create(
-                                                                                            isConst, isVolatile,
-                                                                                            isRestricted,
-                                                                                            std::move(baseType));
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    Semantics::ConstantEvaluator
-                                                                                        evaluator(structOrUnions,
-                                                                                                  typedefs);
-                                                                                    auto result = evaluator.visit(
-                                                                                        *dirWithoutStaticOrAsterisk
-                                                                                             .getAssignmentExpression());
-                                                                                    if (!result)
-                                                                                    {
-                                                                                        baseType = ValArrayType::create(
-                                                                                            isConst, isVolatile,
-                                                                                            isRestricted,
-                                                                                            std::move(baseType));
-                                                                                    }
-                                                                                    else
-                                                                                    {
-                                                                                        auto size = std::visit(
-                                                                                            [](auto&& value)
-                                                                                                -> std::optional<
-                                                                                                    std::size_t> {
-                                                                                                using T = std::decay_t<
-                                                                                                    decltype(value)>;
-                                                                                                if constexpr (
-                                                                                                    std::
-                                                                                                        is_convertible_v<
-                                                                                                            T,
-                                                                                                            std::
-                                                                                                                size_t>)
-                                                                                                {
-                                                                                                    return value;
-                                                                                                }
-                                                                                                return {};
-                                                                                            },
-                                                                                            *result);
-                                                                                        if (!size)
-                                                                                        {
-                                                                                            return FailureReason(
-                                                                                                "Invalid type in result of constant expression");
-                                                                                        }
-                                                                                        baseType = ArrayType::create(
-                                                                                            isConst, isVolatile,
-                                                                                            isRestricted,
-                                                                                            std::move(baseType), *size);
-                                                                                    }
-                                                                                }
-                                                                                return std::visit(
-                                                                                    [&directSelf](auto&& value)
-                                                                                        -> std::optional<
-                                                                                            FailureReason> {
-                                                                                        return directSelf(value);
-                                                                                    },
-                                                                                    dirWithoutStaticOrAsterisk
-                                                                                        .getDirectDeclarator()
-                                                                                        .getVariant());
-                                                                            },
-                                                                            [&](auto&& directSelf,
-                                                                                const Syntax::DirectDeclaratorStatic&
-                                                                                    directDeclaratorStatic)
-                                                                                -> std::optional<FailureReason> {
-                                                                                auto [isConst, isVolatile,
-                                                                                      isRestricted] =
-                                                                                    getQualifiers(
-                                                                                        directDeclaratorStatic
-                                                                                            .getTypeQualifiers());
-                                                                                Semantics::ConstantEvaluator evaluator(
-                                                                                    structOrUnions, typedefs);
-                                                                                auto result = evaluator.visit(
-                                                                                    directDeclaratorStatic
-                                                                                        .getAssignmentExpression());
-                                                                                if (!result)
-                                                                                {
-                                                                                    baseType = ValArrayType::create(
-                                                                                        isConst, isVolatile,
-                                                                                        isRestricted,
-                                                                                        std::move(baseType));
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    auto size = std::visit(
-                                                                                        [](auto&& value)
-                                                                                            -> std::optional<
-                                                                                                std::size_t> {
-                                                                                            using T =
-                                                                                                std::decay_t<decltype(
-                                                                                                    value)>;
-                                                                                            if constexpr (
-                                                                                                std::is_convertible_v<
-                                                                                                    T, std::size_t>)
-                                                                                            {
-                                                                                                return value;
-                                                                                            }
-                                                                                            return {};
-                                                                                        },
-                                                                                        *result);
-                                                                                    if (!size)
-                                                                                    {
-                                                                                        return FailureReason(
-                                                                                            "Invalid type in result of constant expression");
-                                                                                    }
-                                                                                    baseType = ArrayType::create(
-                                                                                        isConst, isVolatile,
-                                                                                        isRestricted,
-                                                                                        std::move(baseType), *size);
-                                                                                }
-                                                                                return std::visit(
-                                                                                    [&directSelf](auto&& value)
-                                                                                        -> std::optional<
-                                                                                            FailureReason> {
-                                                                                        return directSelf(value);
-                                                                                    },
-                                                                                    directDeclaratorStatic
-                                                                                        .getDirectDeclarator()
-                                                                                        .getVariant());
-                                                                            },
-                                                                            [&](auto&& directSelf,
-                                                                                const Syntax::DirectDeclaratorAsterisk&
-                                                                                    directDeclaratorAsterisk)
-                                                                                -> std::optional<FailureReason> {
-                                                                                auto [isConst, isVolatile,
-                                                                                      isRestricted] =
-                                                                                    getQualifiers(
-                                                                                        directDeclaratorAsterisk
-                                                                                            .getTypeQualifiers());
-                                                                                baseType = ValArrayType::create(
-                                                                                    isConst, isVolatile, isRestricted,
-                                                                                    std::move(baseType));
-                                                                                return std::visit(
-                                                                                    [&directSelf](auto&& value)
-                                                                                        -> std::optional<
-                                                                                            FailureReason> {
-                                                                                        return directSelf(value);
-                                                                                    },
-                                                                                    directDeclaratorAsterisk
-                                                                                        .getDirectDeclarator()
-                                                                                        .getVariant());
-                                                                            },
-                                                                            [&](auto&& directSelf,
-                                                                                const Syntax::
-                                                                                    DirectDeclaratorParentheseParameters&
-                                                                                        parentheseParameters)
-                                                                                -> std::optional<FailureReason> {
-                                                                                std::vector<Type> arguments;
-                                                                                for (auto& pair :
-                                                                                     parentheseParameters
-                                                                                         .getParameterTypeList()
-                                                                                         .getParameterList()
-                                                                                         .getParameterDeclarations())
-                                                                                {
-                                                                                    std::vector<SpecifierQualifierRef>
-                                                                                        specifierQualifiers;
-                                                                                    for (auto& iter : pair.first)
-                                                                                    {
-                                                                                        auto optional = std::visit(
-                                                                                            overload{
-                                                                                                [&specifierQualifiers](
-                                                                                                    const Syntax::
-                                                                                                        TypeSpecifier&
-                                                                                                            typeSpecifier)
-                                                                                                    -> std::optional<
-                                                                                                        FailureReason> {
-                                                                                                    specifierQualifiers
-                                                                                                        .emplace_back(
-                                                                                                            typeSpecifier);
-                                                                                                    return {};
-                                                                                                },
-                                                                                                [&specifierQualifiers](
-                                                                                                    const Syntax::
-                                                                                                        TypeQualifier&
-                                                                                                            typeQualifier)
-                                                                                                    -> std::optional<
-                                                                                                        FailureReason> {
-                                                                                                    specifierQualifiers
-                                                                                                        .emplace_back(
-                                                                                                            typeQualifier);
-                                                                                                    return {};
-                                                                                                },
-                                                                                                [](const Syntax::
-                                                                                                       StorageClassSpecifier&)
-                                                                                                    -> std::optional<
-                                                                                                        FailureReason> {
-                                                                                                    return {};
-                                                                                                },
-                                                                                                [](Syntax::
-                                                                                                       FunctionSpecifier)
-                                                                                                    -> std::optional<
-                                                                                                        FailureReason> {
-                                                                                                    return FailureReason(
-                                                                                                        "Inline not allowed in paramter type list");
-                                                                                                }},
-                                                                                            iter);
-                                                                                        if (optional)
-                                                                                        {
-                                                                                            return optional;
-                                                                                        }
-                                                                                    }
-                                                                                    auto result = declaratorsToType(
-                                                                                        specifierQualifiers,
-                                                                                        std::visit(
-                                                                                            overload{
-                                                                                                [](const std::unique_ptr<
-                                                                                                    Syntax::Declarator>&
-                                                                                                       directDeclarator)
-                                                                                                    -> PossiblyAbstractQualifierRef {
-                                                                                                    return std::cref(
-                                                                                                        *directDeclarator);
-                                                                                                },
-                                                                                                [](const std::unique_ptr<
-                                                                                                    Syntax::
-                                                                                                        AbstractDeclarator>&
-                                                                                                       abstractDeclarator)
-                                                                                                    -> PossiblyAbstractQualifierRef {
-                                                                                                    return abstractDeclarator
-                                                                                                        .get();
-                                                                                                }},
-                                                                                            pair.second),
-                                                                                        typedefs, declarations,
-                                                                                        structOrUnions);
-                                                                                    if (!result)
-                                                                                    {
-                                                                                        return result.error();
-                                                                                    }
-                                                                                    arguments.push_back(
-                                                                                        std::move(*result));
-                                                                                }
-                                                                                baseType = FunctionType::create(
-                                                                                    std::move(baseType),
-                                                                                    std::move(arguments),
-                                                                                    parentheseParameters
-                                                                                        .getParameterTypeList()
-                                                                                        .hasEllipse(),
-                                                                                    true);
-                                                                                return std::visit(
-                                                                                    [&directSelf](auto&& value)
-                                                                                        -> std::optional<
-                                                                                            FailureReason> {
-                                                                                        return directSelf(value);
-                                                                                    },
-                                                                                    parentheseParameters
-                                                                                        .getDirectDeclarator()
-                                                                                        .getVariant());
-                                                                            },
-                                                                            [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers&
-                                                                                                       identifiers) -> std::
-                                                                                                                        optional<
-                                                                                                                            FailureReason> {
-                                                                                                                            std::vector<Type> arguments(
-                                                                                                                                identifiers
-                                                                                                                                    .getIdentifiers()
-                                                                                                                                    .size(),
-                                                                                                                                PrimitiveType::create(
-                                                                                                                                    false,
-                                                                                                                                    false,
-                                                                                                                                    false,
-                                                                                                                                    true,
-                                                                                                                                    32));
-                                                                                                                            std::map<
-                                                                                                                                std::
-                                                                                                                                    string,
-                                                                                                                                Type>
-                                                                                                                                declarationMap;
-                                                                                                                            for (
-                                                                                                                                auto&
-                                                                                                                                    iter :
-                                                                                                                                declarations)
-                                                                                                                            {
-                                                                                                                                std::vector<
-                                                                                                                                    SpecifierQualifierRef>
-                                                                                                                                    refs;
-                                                                                                                                for (
-                                                                                                                                    auto&
-                                                                                                                                        specifiers :
-                                                                                                                                    iter.getDeclarationSpecifiers())
-                                                                                                                                {
-                                                                                                                                    auto result =
-                                                                                                                                        std::visit(
-                                                                                                                                            overload{[](Syntax::StorageClassSpecifier
-                                                                                                                                                            storageClassSpecifier)
-                                                                                                                                                         -> std::optional<
-                                                                                                                                                             FailureReason> {
-                                                                                                                                                         if (storageClassSpecifier
-                                                                                                                                                             == Syntax::
-                                                                                                                                                                 StorageClassSpecifier::
-                                                                                                                                                                     Register)
-                                                                                                                                                         {
-                                                                                                                                                             return {};
-                                                                                                                                                         }
-                                                                                                                                                         else
-                                                                                                                                                         {
-                                                                                                                                                             return FailureReason(
-                                                                                                                                                                 "Storage class specifiers not allowed in declarations of function parameters");
-                                                                                                                                                         }
-                                                                                                                                                     },
-                                                                                                                                                     [&refs](
-                                                                                                                                                         const Syntax::TypeSpecifier& typeSpecifier) -> std::
-                                                                                                                                                                                                         optional<
-                                                                                                                                                                                                             FailureReason> {
-                                                                                                                                                                                                             refs.emplace_back(
-                                                                                                                                                                                                                 typeSpecifier);
-                                                                                                                                                                                                             return {};
-                                                                                                                                                                                                         },
-                                                                                                                                                     [&refs](
-                                                                                                                                                         const Syntax::
-                                                                                                                                                             TypeQualifier&
-                                                                                                                                                                 typeQualifier)
-                                                                                                                                                         -> std::optional<
-                                                                                                                                                             FailureReason> {
-                                                                                                                                                         refs.emplace_back(
-                                                                                                                                                             typeQualifier);
-                                                                                                                                                         return {};
-                                                                                                                                                     },
-                                                                                                                                                     [](Syntax::
-                                                                                                                                                            FunctionSpecifier)
-                                                                                                                                                         -> std::optional<
-                                                                                                                                                             FailureReason> {
-                                                                                                                                                         return FailureReason(
-                                                                                                                                                             "inline keyword not allowed in this context");
-                                                                                                                                                     }},
-                                                                                                                                            specifiers);
-                                                                                                                                    if (result)
-                                                                                                                                    {
-                                                                                                                                        return result;
-                                                                                                                                    }
-                                                                                                                                }
-                                                                                                                                for (
-                                                                                                                                    auto&
-                                                                                                                                        pair :
-                                                                                                                                    iter.getInitDeclarators())
-                                                                                                                                {
-                                                                                                                                    if (pair.second)
-                                                                                                                                    {
-                                                                                                                                        return FailureReason(
-                                                                                                                                            "Declarations in function definitions are not allowed to have initializers");
-                                                                                                                                    }
-                                                                                                                                    auto
-                                                                                                                                        name
-                                                                                                                                        = Semantics::
-                                                                                                                                        declaratorToName(
-                                                                                                                                            *pair.first);
-                                                                                                                                    auto
-                                                                                                                                        result
-                                                                                                                                        = Semantics::declaratorsToType(
-                                                                                                                                        refs,
-                                                                                                                                        *pair.first,
-                                                                                                                                        typedefs,
-                                                                                                                                        {},
-                                                                                                                                        structOrUnions);
-                                                                                                                                    if (!result)
-                                                                                                                                    {
-                                                                                                                                        return result
-                                                                                                                                            .error();
-                                                                                                                                    }
-                                                                                                                                    declarationMap
-                                                                                                                                        .emplace(
-                                                                                                                                            name,
-                                                                                                                                            *result);
-                                                                                                                                }
-                                                                                                                            }
+                                                                    if (storageClassSpecifier
+                                                                        == Syntax::
+                                                                        StorageClassSpecifier::
+                                                                        Register)
+                                                                    {
+                                                                        return {};
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        return FailureReason(
+                                                                            "Storage class specifiers not allowed in declarations of function parameters");
+                                                                    }
+                                                                },
+                                                                [&refs](
+                                                                    const Syntax::TypeSpecifier& typeSpecifier) -> std::
+                                                                optional<
+                                                                    FailureReason>
+                                                                {
+                                                                    refs.emplace_back(
+                                                                        typeSpecifier);
+                                                                    return {};
+                                                                },
+                                                                [&refs](
+                                                                    const Syntax::
+                                                                    TypeQualifier&
+                                                                    typeQualifier)
+                                                                    -> std::optional<
+                                                                    FailureReason>
+                                                                {
+                                                                    refs.emplace_back(
+                                                                        typeQualifier);
+                                                                    return {};
+                                                                },
+                                                                [](Syntax::
+                                                                   FunctionSpecifier)
+                                                                    -> std::optional<
+                                                                    FailureReason>
+                                                                {
+                                                                    return FailureReason(
+                                                                        "inline keyword not allowed in this context");
+                                                                }},
+                                                       specifiers);
+                                               if (result)
+                                               {
+                                                   return result;
+                                               }
+                                           }
+                                           for (
+                                               auto&
+                                                   pair :
+                                               iter.getInitDeclarators())
+                                           {
+                                               if (pair.second)
+                                               {
+                                                   return FailureReason(
+                                                       "Declarations in function definitions are not allowed to have initializers");
+                                               }
+                                               auto
+                                                   name
+                                                   = Semantics::
+                                               declaratorToName(
+                                                   *pair.first);
+                                               auto
+                                                   result
+                                                   = Semantics::declaratorsToType(
+                                                   refs,
+                                                   *pair.first,
+                                                   typedefs,
+                                                   {},
+                                                   structOrUnions);
+                                               if (!result)
+                                               {
+                                                   return result
+                                                       .error();
+                                               }
+                                               declarationMap
+                                                   .emplace(
+                                                       name,
+                                                       *result);
+                                           }
+                                       }
 
-                                                                                                                            for (
-                                                                                                                                std::size_t
-                                                                                                                                    i = 0;
-                                                                                                                                i
-                                                                                                                                < identifiers
-                                                                                                                                      .getIdentifiers()
-                                                                                                                                      .size();
-                                                                                                                                i++)
-                                                                                                                            {
-                                                                                                                                auto result =
-                                                                                                                                    declarationMap
-                                                                                                                                        .find(
-                                                                                                                                            identifiers
-                                                                                                                                                .getIdentifiers()
-                                                                                                                                                    [i]);
-                                                                                                                                if (result
-                                                                                                                                    == declarationMap
-                                                                                                                                           .end())
-                                                                                                                                {
-                                                                                                                                    continue;
-                                                                                                                                }
-                                                                                                                                if (auto* primitive =
-                                                                                                                                        std::get_if<
-                                                                                                                                            PrimitiveType>(
-                                                                                                                                            &result
-                                                                                                                                                 ->second
-                                                                                                                                                 .getType()))
-                                                                                                                                {
-                                                                                                                                    if (primitive
-                                                                                                                                            ->isFloatingPoint())
-                                                                                                                                    {
-                                                                                                                                        arguments[i] = PrimitiveType::create(
-                                                                                                                                            result
-                                                                                                                                                ->second
-                                                                                                                                                .isConst(),
-                                                                                                                                            result
-                                                                                                                                                ->second
-                                                                                                                                                .isVolatile(),
-                                                                                                                                            true,
-                                                                                                                                            true,
-                                                                                                                                            64);
-                                                                                                                                    }
-                                                                                                                                    else if (
-                                                                                                                                        primitive
-                                                                                                                                            ->getBitCount()
-                                                                                                                                        < 32)
-                                                                                                                                    {
-                                                                                                                                        arguments[i] = PrimitiveType::create(
-                                                                                                                                            result
-                                                                                                                                                ->second
-                                                                                                                                                .isConst(),
-                                                                                                                                            result
-                                                                                                                                                ->second
-                                                                                                                                                .isVolatile(),
-                                                                                                                                            false,
-                                                                                                                                            true,
-                                                                                                                                            32);
-                                                                                                                                    }
-                                                                                                                                    else
-                                                                                                                                    {
-                                                                                                                                        arguments
-                                                                                                                                            [i] =
-                                                                                                                                                result
-                                                                                                                                                    ->second;
-                                                                                                                                    }
-                                                                                                                                }
-                                                                                                                                else
-                                                                                                                                {
-                                                                                                                                    arguments
-                                                                                                                                        [i] =
-                                                                                                                                            result
-                                                                                                                                                ->second;
-                                                                                                                                }
-                                                                                                                                declarationMap
-                                                                                                                                    .erase(
-                                                                                                                                        result);
-                                                                                                                            }
+                                       for (
+                                           std::size_t
+                                               i = 0;
+                                           i
+                                               < identifiers
+                                                   .getIdentifiers()
+                                                   .size();
+                                           i++)
+                                       {
+                                           auto result =
+                                               declarationMap
+                                                   .find(
+                                                       identifiers
+                                                           .getIdentifiers()
+                                                       [i]);
+                                           if (result
+                                               == declarationMap
+                                                   .end())
+                                           {
+                                               continue;
+                                           }
+                                           if (auto* primitive =
+                                               std::get_if<
+                                                   PrimitiveType>(
+                                                   &result
+                                                       ->second
+                                                       .getType()))
+                                           {
+                                               if (primitive
+                                                   ->isFloatingPoint())
+                                               {
+                                                   arguments[i] = PrimitiveType::create(
+                                                       result
+                                                           ->second
+                                                           .isConst(),
+                                                       result
+                                                           ->second
+                                                           .isVolatile(),
+                                                       true,
+                                                       true,
+                                                       64);
+                                               }
+                                               else if (
+                                                   primitive
+                                                       ->getBitCount()
+                                                       < 32)
+                                               {
+                                                   arguments[i] = PrimitiveType::create(
+                                                       result
+                                                           ->second
+                                                           .isConst(),
+                                                       result
+                                                           ->second
+                                                           .isVolatile(),
+                                                       false,
+                                                       true,
+                                                       32);
+                                               }
+                                               else
+                                               {
+                                                   arguments
+                                                   [i] =
+                                                       result
+                                                           ->second;
+                                               }
+                                           }
+                                           else
+                                           {
+                                               arguments
+                                               [i] =
+                                                   result
+                                                       ->second;
+                                           }
+                                           declarationMap
+                                               .erase(
+                                                   result);
+                                       }
 
-                                                                                                                            std::string
-                                                                                                                                error;
-                                                                                                                            for (
-                                                                                                                                auto&
-                                                                                                                                    iter :
-                                                                                                                                declarationMap)
-                                                                                                                            {
-                                                                                                                                error +=
-                                                                                                                                    iter.first;
-                                                                                                                            }
-                                                                                                                            if (!error
-                                                                                                                                     .empty())
-                                                                                                                            {
-                                                                                                                                return FailureReason(
-                                                                                                                                    error
-                                                                                                                                    + " named in declaration but not as parameter in identifier list");
-                                                                                                                            }
+                                       std::string
+                                           error;
+                                       for (
+                                           auto&
+                                               iter :
+                                           declarationMap)
+                                       {
+                                           error +=
+                                               iter.first;
+                                       }
+                                       if (!error
+                                           .empty())
+                                       {
+                                           return FailureReason(
+                                               error
+                                                   + " named in declaration but not as parameter in identifier list");
+                                       }
 
-                                                                                                                            baseType = FunctionType::create(
-                                                                                                                                std::move(
-                                                                                                                                    baseType),
-                                                                                                                                std::move(
-                                                                                                                                    arguments),
-                                                                                                                                false,
-                                                                                                                                false);
-                                                                                                                            return std::visit(
-                                                                                                                                directSelf,
-                                                                                                                                identifiers
-                                                                                                                                    .getDirectDeclarator()
-                                                                                                                                    .getVariant());
-                                                                                                                        }}},
-                                                                    declarator.get()
-                                                                        .getDirectDeclarator()
-                                                                        .getVariant());
-                                                            }}},
+                                       baseType = FunctionType::create(
+                                           std::move(
+                                               baseType),
+                                           std::move(
+                                               arguments),
+                                           false,
+                                           false);
+                                       return std::visit(
+                                           directSelf,
+                                           identifiers
+                                               .getDirectDeclarator()
+                                               .getVariant());
+                                   }}},
+                           declarator.get()
+                                     .getDirectDeclarator()
+                                     .getVariant());
+                   }}},
         declarator);
     return baseType;
 }
@@ -1419,13 +1444,18 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
 std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
 {
     return std::visit(
-        Y{overload{[](auto&&, const std::string& name) -> std::string { return name; },
-                   [](auto&& self, const std::unique_ptr<OpenCL::Syntax::Declarator>& declarator) -> std::string {
-                       return std::visit([&self](auto&& value) -> std::string { return self(value); },
+        Y{overload{[](auto&&, const std::string& name) -> std::string
+                   { return name; },
+                   [](auto&& self, const std::unique_ptr<OpenCL::Syntax::Declarator>& declarator) -> std::string
+                   {
+                       return std::visit([&self](auto&& value) -> std::string
+                                         { return self(value); },
                                          declarator->getDirectDeclarator().getVariant());
                    },
-                   [](auto&& self, auto&& value) -> std::string {
-                       return std::visit([&self](auto&& value) -> std::string { return self(value); },
+                   [](auto&& self, auto&& value) -> std::string
+                   {
+                       return std::visit([&self](auto&& value) -> std::string
+                                         { return self(value); },
                                          value.getDirectDeclarator().getVariant());
                    }}},
         declarator.getDirectDeclarator().getVariant());
@@ -1458,7 +1488,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::RecordType::create(
     std::vector<std::tuple<OpenCL::Semantics::Type, std::string, int64_t>>&& members)
 {
     return OpenCL::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
-                                         RecordType(name, isUnion, std::move(members)));
+                                   RecordType(name, isUnion, std::move(members)));
 }
 
 bool OpenCL::Semantics::RecordType::operator==(const OpenCL::Semantics::RecordType& rhs) const
@@ -1479,22 +1509,28 @@ const std::string& OpenCL::Semantics::RecordType::getName() const
 OpenCL::Expected<std::size_t, OpenCL::FailureReason>
 OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
 {
-    return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason> {
+    return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason>
+                               {
                                    return primitiveType.getBitCount() / 8;
                                },
-                               [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason> {
+                               [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason>
+                               {
                                    return alignmentOf(arrayType.getType());
                                },
-                               [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason> {
+                               [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason>
+                               {
                                    return FailureReason("Incomplete type in sizeof");
                                },
-                               [](const ValArrayType& valArrayType) -> Expected<std::size_t, FailureReason> {
+                               [](const ValArrayType& valArrayType) -> Expected<std::size_t, FailureReason>
+                               {
                                    return alignmentOf(valArrayType.getType());
                                },
-                               [](const FunctionType&) -> Expected<std::size_t, FailureReason> {
+                               [](const FunctionType&) -> Expected<std::size_t, FailureReason>
+                               {
                                    return FailureReason("Function type not allowed in sizeof operator");
                                },
-                               [](const RecordType& recordType) -> Expected<std::size_t, FailureReason> {
+                               [](const RecordType& recordType) -> Expected<std::size_t, FailureReason>
+                               {
                                    if (recordType.getMembers().empty())
                                    {
                                        return FailureReason("Incomplete type in sizeof");
@@ -1502,7 +1538,7 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                                    if (!recordType.isUnion())
                                    {
                                        std::size_t currentAlignment = 0;
-                                       for (auto& [type, name, bits] : recordType.getMembers())
+                                       for (auto&[type, name, bits] : recordType.getMembers())
                                        {
                                            (void)name;
                                            (void)bits;
@@ -1520,7 +1556,8 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                                        std::optional<FailureReason> failure;
                                        auto result = std::max_element(
                                            recordType.getMembers().begin(), recordType.getMembers().end(),
-                                           [&failure](const auto& lhs, const auto& rhs) {
+                                           [&failure](const auto& lhs, const auto& rhs)
+                                           {
                                                auto lhsSize = sizeOf(std::get<0>(lhs));
                                                if (!lhsSize)
                                                {
@@ -1540,18 +1577,22 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                                        return alignmentOf(std::get<0>(*result));
                                    }
                                },
-                               [](const EnumType&) -> Expected<std::size_t, FailureReason> { return 4; },
-                               [](const PointerType&) -> Expected<std::size_t, FailureReason> { return 8; }},
+                               [](const EnumType&) -> Expected<std::size_t, FailureReason>
+                               { return 4; },
+                               [](const PointerType&) -> Expected<std::size_t, FailureReason>
+                               { return 8; }},
                       type.getType());
 }
 
 OpenCL::Expected<std::size_t, OpenCL::FailureReason>
 OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
 {
-    return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason> {
+    return std::visit(overload{[](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason>
+                               {
                                    return primitiveType.getBitCount() / 8;
                                },
-                               [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason> {
+                               [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason>
+                               {
                                    auto result = sizeOf(arrayType.getType());
                                    if (!result)
                                    {
@@ -1559,22 +1600,26 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                                    }
                                    return *result * arrayType.getSize();
                                },
-                               [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason> {
+                               [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason>
+                               {
                                    return FailureReason("Incomplete type in sizeof");
                                },
-                               [](const ValArrayType&) -> Expected<std::size_t, FailureReason> {
+                               [](const ValArrayType&) -> Expected<std::size_t, FailureReason>
+                               {
                                    return FailureReason("sizeof Val array cannot be determined in constant expression");
                                },
-                               [](const FunctionType&) -> Expected<std::size_t, FailureReason> {
+                               [](const FunctionType&) -> Expected<std::size_t, FailureReason>
+                               {
                                    return FailureReason("Function type not allowed in sizeof operator");
                                },
-                               [](const RecordType& recordType) -> Expected<std::size_t, FailureReason> {
+                               [](const RecordType& recordType) -> Expected<std::size_t, FailureReason>
+                               {
                                    std::size_t currentSize = 0;
                                    if (recordType.getMembers().empty())
                                    {
                                        return FailureReason("Incomplete type in sizeof");
                                    }
-                                   for (auto& [type, name, bits] : recordType.getMembers())
+                                   for (auto&[type, name, bits] : recordType.getMembers())
                                    {
                                        (void)name;
                                        (void)bits;
@@ -1597,14 +1642,15 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                                    }
                                    return currentSize;
                                },
-                               [](const EnumType&) -> Expected<std::size_t, FailureReason> { return 4; },
-                               [](const PointerType&) -> Expected<std::size_t, FailureReason> { return 8; }},
+                               [](const EnumType&) -> Expected<std::size_t, FailureReason>
+                               { return 4; },
+                               [](const PointerType&) -> Expected<std::size_t, FailureReason>
+                               { return 8; }},
                       type.getType());
 }
 
-OpenCL::Semantics::FunctionPrototype::FunctionPrototype(const FunctionType& type,
-                                                        const std::vector<std::string>& argumentNames)
-    : m_type(type), m_argumentNames(argumentNames)
+OpenCL::Semantics::FunctionPrototype::FunctionPrototype(FunctionType type, std::vector<std::string> argumentNames)
+    : m_type(std::move(type)), m_argumentNames(std::move(argumentNames))
 {
 
 }
@@ -1622,7 +1668,8 @@ const std::vector<std::string>& OpenCL::Semantics::FunctionPrototype::getArgumen
 OpenCL::Semantics::FunctionDefinition::FunctionDefinition(const FunctionType& type,
                                                           std::string name,
                                                           std::vector<std::string> argumentNames,
-                                                          bool hasPrototype)
+                                                          bool hasPrototype,
+                                                          Linkage linkage)
     : m_type(type), m_name(std::move(name)), m_argumentNames(std::move(argumentNames)), m_hasPrototype(hasPrototype)
 {
     assert(m_argumentNames.size() == type.getArguments().size());
@@ -1646,6 +1693,11 @@ bool OpenCL::Semantics::FunctionDefinition::hasPrototype() const
 const std::string& OpenCL::Semantics::FunctionDefinition::getName() const
 {
     return m_name;
+}
+
+OpenCL::Semantics::FunctionDefinition::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() const
+{
+    return m_linkage;
 }
 
 OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<std::variant<OpenCL::Semantics::FunctionPrototype,
