@@ -46,7 +46,7 @@ TEST_CASE("Failure2", "[parser]")
     REQUIRE_FALSE(OpenCL::Parser::buildTree(tokens));
 }
 
-TEST_CASE("Declarations", "[parser]")
+TEST_CASE("Declaration parsing", "[parser]")
 {
     auto program = R"(int main()
 {

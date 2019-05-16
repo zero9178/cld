@@ -149,7 +149,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                                  if (explicitConversion)
                                  {
                                      if (!std::holds_alternative<Semantics::FunctionType>(
-                                         pointerType.getElementType().getType()))
+                                         pointerType.getElementType().get()))
                                      {
                                          return builder.CreateIntToPtr(source, visit(destinationType));
                                      }
@@ -185,7 +185,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                              },
                              [](auto&&) -> llvm::Value*
                              { return nullptr; }},
-                    destinationType.getType());
+                    destinationType.get());
             },
             [&](const Semantics::PointerType& pointerType) -> llvm::Value*
             {
@@ -202,9 +202,9 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                                                if (!explicitConversion)
                                                {
                                                    auto* primitive = std::get_if<Semantics::PrimitiveType>(
-                                                       &pointerType.getElementType().getType());
+                                                       &pointerType.getElementType().get());
                                                    auto* otherPrimitive = std::get_if<Semantics::PrimitiveType>(
-                                                       &otherPointer.getElementType().getType());
+                                                       &otherPointer.getElementType().get());
                                                    if ((!primitive || primitive->getBitCount() == 0)
                                                        && (!otherPrimitive || otherPrimitive->getBitCount() == 0))
                                                    {
@@ -219,14 +219,14 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                                            },
                                            [](auto&&) -> llvm::Value*
                                            { return nullptr; }},
-                                  destinationType.getType());
+                                  destinationType.get());
             },
             [&](const Semantics::FunctionType& functionType) -> llvm::Value*
             {
                 return std::visit(overload{[&](const Semantics::PointerType& pointerType) -> llvm::Value*
                                            {
                                                if (auto* function = std::get_if<Semantics::FunctionType>(
-                                                       &pointerType.getElementType().getType());
+                                                       &pointerType.getElementType().get());
                                                    function && *function == functionType)
                                                {
                                                    return source;
@@ -235,7 +235,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                                            },
                                            [](auto&&) -> llvm::Value*
                                            { return nullptr; }},
-                                  destinationType.getType());
+                                  destinationType.get());
             },
             [&](const Semantics::EnumType&) -> llvm::Value*
             {
@@ -258,7 +258,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
                                            { return source; },
                                            [](auto&&) -> llvm::Value*
                                            { return nullptr; }},
-                                  destinationType.getType());
+                                  destinationType.get());
             },
             [&](const Semantics::ArrayType& arrayType) -> llvm::Value*
             {
@@ -275,7 +275,7 @@ llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sou
             },
             [](auto&&) -> llvm::Value*
             { return nullptr; }},
-        sourceType.getType());
+        sourceType.get());
 }
 
 llvm::Value* OpenCL::Codegen::Context::toBool(llvm::Value* source)
@@ -323,7 +323,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return FailureReason("Undefined reference to " + node.getIdentifier());
     }
-    if (std::holds_alternative<Semantics::FunctionType>(result->second.getType()))
+    if (std::holds_alternative<Semantics::FunctionType>(result->second.get()))
     {
         return std::pair{result->first, result->second};
     }
@@ -405,7 +405,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return plus;
     }
-    auto* ptr = std::get_if<Semantics::PointerType>(&plus->second.getType());
+    auto* ptr = std::get_if<Semantics::PointerType>(&plus->second.get());
     if (!ptr)
     {
         return FailureReason("[] operator can only be applied to pointers and arrays");
@@ -454,7 +454,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                  {
                      return FailureReason("Postfix ++ can only be applied to pointer and arithmetic types");
                  }},
-        oldValue.second.getType());
+        oldValue.second.get());
     if (optional)
     {
         return *optional;
@@ -504,7 +504,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
                  {
                      return FailureReason("Postfix ++ can only be applied to pointer and arithmetic types");
                  }},
-        oldValue.second.getType());
+        oldValue.second.get());
     if (optional)
     {
         return *optional;
@@ -520,7 +520,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     {
         return result;
     }
-    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->second.getType());
+    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->second.get());
     if (!structType)
     {
         return FailureReason("Can only apply . to struct or union type");
@@ -556,13 +556,13 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return result;
     }
     const Semantics::PointerType* pointerType =
-        std::get_if<Semantics::PointerType>(&result->second.getType());
+        std::get_if<Semantics::PointerType>(&result->second.get());
     if (!pointerType)
     {
         return FailureReason("Can only apply -> to pointer types");
     }
     const Semantics::RecordType* structType =
-        std::get_if<Semantics::RecordType>(&pointerType->getElementType().getType());
+        std::get_if<Semantics::RecordType>(&pointerType->getElementType().get());
     if (!structType)
     {
         return FailureReason("Can only apply -> to pointer to struct or union type");
@@ -597,7 +597,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         return result;
     }
     auto[value, type] = *result;
-    auto* function = std::get_if<Semantics::FunctionType>(&type.getType());
+    auto* function = std::get_if<Semantics::FunctionType>(&type.get());
     if (!function)
     {
         return FailureReason("Function call only possible on function type");
@@ -638,7 +638,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         i++;
     }
     // TODO: Make ellipses and non prototype functions work
-    if (!std::holds_alternative<Semantics::RecordType>(function->getReturnType().getType()))
+    if (!std::holds_alternative<Semantics::RecordType>(function->getReturnType().get()))
     {
         return std::pair{builder.CreateCall(value, arguments), function->getReturnType()};
     }
@@ -754,12 +754,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     }
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
     {
-        auto* pointer = std::get_if<Semantics::PointerType>(&result->second.getType());
+        auto* pointer = std::get_if<Semantics::PointerType>(&result->second.get());
         if (!pointer)
         {
             return FailureReason("Can only dereference pointer type");
         }
-        if (std::holds_alternative<Semantics::FunctionType>(pointer->getElementType().getType()))
+        if (std::holds_alternative<Semantics::FunctionType>(pointer->getElementType().get()))
         {
             return std::pair{result->first, pointer->getElementType()};
         }
@@ -772,7 +772,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.get());
         if (!primitive)
         {
             return FailureReason("Unary + can only be applied to arithmetic type");
@@ -782,7 +782,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.get());
         if (!primitive)
         {
             return FailureReason("Unary - can only be applied to arithmetic type");
@@ -799,7 +799,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
     {
         auto ret = integerPromotion(result->second, &result->first);
-        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.getType());
+        auto* primitive = std::get_if<Semantics::PrimitiveType>(&ret.get());
         if (!primitive || primitive->isFloatingPoint())
         {
             return FailureReason("Unary ~ can only be applied to integer type");
@@ -865,8 +865,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Semantics::Type leftType, llvm::Value* left,
                                                                     Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
     if (!leftPrimitive || !rightPrimitive)
     {
         return FailureReason("* only possible between arithmetic types");
@@ -886,8 +886,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Semantics::T
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Semantics::Type leftType, llvm::Value* left,
                                                                   Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
     if (!leftPrimitive || !rightPrimitive)
     {
         return FailureReason("* only possible between arithmetic types");
@@ -909,8 +909,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRemainder(Semantics::
                                                                      Semantics::Type rightType,
                                                                      llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
     if (!leftPrimitive || !leftPrimitive->isFloatingPoint() || !rightPrimitive || !rightPrimitive->isFloatingPoint())
     {
         return FailureReason("* only possible between integer types");
@@ -971,8 +971,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type leftType, llvm::Value* left,
                                                                  Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
     if (leftPrimitive && rightPrimitive)
     {
         arithmeticCast(leftType, left, rightType);
@@ -988,8 +988,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type
     }
     else
     {
-        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
-        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
+        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.get());
+        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
         if ((!leftPointer && !rightPointer)
             || ((!leftPrimitive || !leftPrimitive->isFloatingPoint())
                 && (!rightPrimitive || !rightPrimitive->isFloatingPoint())))
@@ -1004,8 +1004,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Semantics::Type leftType, llvm::Value* left,
                                                                 Semantics::Type rightType, llvm::Value* right)
 {
-    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
-    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
+    auto* rightPrimitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
     if (leftPrimitive && rightPrimitive)
     {
         arithmeticCast(leftType, left, rightType);
@@ -1021,8 +1021,8 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Semantics::Type 
     }
     else
     {
-        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
-        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
+        auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.get());
+        auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
         if ((!leftPointer && !rightPointer) || (leftPrimitive && leftPrimitive->isFloatingPoint())
             || (rightPrimitive && rightPrimitive->isFloatingPoint()) || (!leftPrimitive && !rightPrimitive))
         {
@@ -1067,12 +1067,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Sem
                                                                      OpenCL::Semantics::Type rightType,
                                                                      llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1080,11 +1080,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Sem
     leftType = integerPromotion(leftType, &left);
     rightType = integerPromotion(rightType, &right);
     left = builder.CreateShl(left, right);
-    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.get()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
     {
         leftType = Semantics::PrimitiveType::create(
-            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1094,12 +1094,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Se
                                                                       OpenCL::Semantics::Type rightType,
                                                                       llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1107,11 +1107,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Se
     leftType = integerPromotion(leftType, &left);
     rightType = integerPromotion(rightType, &right);
     left = builder.CreateAShr(left, right);
-    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.get()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
     {
         leftType = Semantics::PrimitiveType::create(
-            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1161,11 +1161,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return rightResult;
         }
         auto[right, rightType] = *rightResult;
-        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.getType())
-            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.getType()))
+        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.get())
+            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.get()))
         {
-            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
-            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
+            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.get());
+            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
             if (!leftPointer || !rightPointer)
             {
                 return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
@@ -1177,7 +1177,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         }
         arithmeticCast(leftType, left, rightType);
         arithmeticCast(rightType, right, leftType);
-        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
             primitive && primitive->isFloatingPoint())
         {
             switch (op)
@@ -1263,11 +1263,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
             return rightResult;
         }
         auto[right, rightType] = *rightResult;
-        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.getType())
-            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.getType()))
+        if (!std::holds_alternative<Semantics::PrimitiveType>(leftType.get())
+            || !std::holds_alternative<Semantics::PrimitiveType>(rightType.get()))
         {
-            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.getType());
-            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.getType());
+            auto* leftPointer = std::get_if<Semantics::PointerType>(&leftType.get());
+            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
             if (!leftPointer || !rightPointer)
             {
                 return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
@@ -1279,7 +1279,7 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
         }
         arithmeticCast(leftType, left, rightType);
         arithmeticCast(rightType, right, leftType);
-        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+        if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
             primitive && primitive->isFloatingPoint())
         {
             if (op == Syntax::EqualityExpression::EqualityOperator::Equal)
@@ -1311,12 +1311,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Semantics::Type leftType, llvm::Value* left,
                                                                   Semantics::Type rightType, llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
     }
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for & operator");
@@ -1324,11 +1324,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Semantics::Typ
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateAnd(left, right);
-    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.get()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
     {
         leftType = Semantics::PrimitiveType::create(
-            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1363,12 +1363,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Synta
 OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Semantics::Type leftType, llvm::Value* left,
                                                                   Semantics::Type rightType, llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for ^ operator");
     }
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for ^ operator");
@@ -1376,11 +1376,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Semantics::Typ
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateXor(left, right);
-    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.get()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
     {
         leftType = Semantics::PrimitiveType::create(
-            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1417,12 +1417,12 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Semanti
                                                                  OpenCL::Semantics::Type rightType,
                                                                  llvm::Value* right)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for | operator");
     }
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.getType());
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&rightType.get());
         !primitive || primitive->isFloatingPoint())
     {
         return FailureReason("Type must be of integer type for | operator");
@@ -1430,11 +1430,11 @@ OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Semanti
     arithmeticCast(leftType, left, rightType);
     arithmeticCast(rightType, right, leftType);
     left = builder.CreateOr(left, right);
-    if (!std::get<Semantics::PrimitiveType>(leftType.getType()).isSigned()
-        && std::get<Semantics::PrimitiveType>(rightType.getType()).isSigned())
+    if (!std::get<Semantics::PrimitiveType>(leftType.get()).isSigned()
+        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
     {
         leftType = Semantics::PrimitiveType::create(
-            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.getType()).getBitCount());
+            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
     }
     return std::pair{left, leftType};
 }
@@ -1877,10 +1877,10 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         auto record = *recordE;
         auto[result, inserted] = m_structsUnions.back().insert(
-            {std::get<Semantics::RecordType>(record.getType()).getName(), record});
+            {std::get<Semantics::RecordType>(record.get()).getName(), record});
         if (!inserted)
         {
-            if (auto structDecl = std::get_if<Semantics::RecordType>(&result->second.getType());
+            if (auto structDecl = std::get_if<Semantics::RecordType>(&result->second.get());
                 structDecl && structDecl->isDefinition())
             {
                 return FailureReason("Redefinition of record type " + result->first + " in the same scope");
@@ -1956,7 +1956,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return type.error();
         }
-        if (auto* abstractArray = std::get_if<Semantics::AbstractArrayType>(&type->getType()))
+        if (auto* abstractArray = std::get_if<Semantics::AbstractArrayType>(&type->get()))
         {
             if (!initializer)
             {
@@ -1977,9 +1977,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             continue;
         }
-        if (inGlobalScope() && !std::holds_alternative<Semantics::FunctionType>(type->getType()))
+        if (inGlobalScope() && !std::holds_alternative<Semantics::FunctionType>(type->get()))
         {
-            if (std::holds_alternative<Semantics::ValArrayType>(type->getType()))
+            if (std::holds_alternative<Semantics::ValArrayType>(type->get()))
             {
                 return FailureReason("Variable arrays not allowed in global scope");
             }
@@ -2007,7 +2007,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                     }
                     if (llvmType->isIntegerTy())
                     {
-                        bool isSigned = std::get<Semantics::PrimitiveType>(type->getType()).isSigned();
+                        bool isSigned = std::get<Semantics::PrimitiveType>(type->get()).isSigned();
                         if (isSigned)
                         {
                             initial = llvm::ConstantInt::getSigned(
@@ -2066,9 +2066,9 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                 return FailureReason("Redefinition of symbol " + prev->first);
             }
         }
-        else if (std::holds_alternative<Semantics::FunctionType>(type->getType()))
+        else if (std::holds_alternative<Semantics::FunctionType>(type->get()))
         {
-            const auto& functionRP = std::get<Semantics::FunctionType>(type->getType());
+            const auto& functionRP = std::get<Semantics::FunctionType>(type->get());
             bool internalLinkage =
                 declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                         Syntax::StorageClassSpecifier::Extern);
@@ -2089,7 +2089,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
                                                 llvm::Function::ExternalLinkage,
                                                 name, module.get());
             bool retIsStruct =
-                std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().getType());
+                std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().get());
             if (retIsStruct)
             {
                 func->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::StructRet));
@@ -2237,11 +2237,11 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         auto type = Semantics::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
                                                  node.getDeclarations(), gatherStructsAndUnions());
-        if (!std::holds_alternative<Semantics::FunctionType>(type->getType()))
+        if (!std::holds_alternative<Semantics::FunctionType>(type->get()))
         {
             return FailureReason("Internal compiler error: Function definition did not return a function type");
         }
-        const auto& functionRP = std::get<Semantics::FunctionType>(type->getType());
+        const auto& functionRP = std::get<Semantics::FunctionType>(type->get());
         bool internalLinkage =
             declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                     Syntax::StorageClassSpecifier::Extern);
@@ -2261,7 +2261,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         thisFunction = llvm::Function::Create(
             llvm::cast<llvm::FunctionType>(llvmFt),
             internalLinkage ? llvm::Function::InternalLinkage : llvm::Function::ExternalLinkage, name, module.get());
-        bool retIsStruct = std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().getType());
+        bool retIsStruct = std::holds_alternative<Semantics::RecordType>(functionRP.getReturnType().get());
         if (retIsStruct)
         {
             thisFunction->addAttribute(1, llvm::Attribute::get(context, llvm::Attribute::StructRet));
@@ -2288,7 +2288,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         }
         else
         {
-            ft = &std::get<Semantics::FunctionType>(prev->second.second.getType());
+            ft = &std::get<Semantics::FunctionType>(prev->second.second.get());
         }
     }
     else
@@ -2316,7 +2316,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
         {
             return FailureReason("static in definition does not match (implicit) extern in declaration");
         }
-        ft = &std::get<Semantics::FunctionType>(result->second.getType());
+        ft = &std::get<Semantics::FunctionType>(result->second.get());
     }
 
     currentFunction = ft;
@@ -2610,7 +2610,7 @@ std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenC
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::Type& node)
 {
     return std::visit([this](auto&& value) -> llvm::Type*
-                      { return visit(value); }, node.getType());
+                      { return visit(value); }, node.get());
 }
 
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PrimitiveType& node)
@@ -2659,7 +2659,7 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ValArrayTyp
 llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::FunctionType& node)
 {
     std::vector<llvm::Type*> arguments;
-    bool isStruct = std::holds_alternative<Semantics::RecordType>(node.getReturnType().getType());
+    bool isStruct = std::holds_alternative<Semantics::RecordType>(node.getReturnType().get());
     for (auto& type : node.getArguments())
     {
         auto* argType = visit(type);
@@ -2738,7 +2738,7 @@ llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PointerType
 OpenCL::Semantics::Type OpenCL::Codegen::Context::integerPromotion(const OpenCL::Semantics::Type& type,
                                                                    llvm::Value** optionalValue)
 {
-    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&type.getType()))
+    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&type.get()))
     {
         if (!primitive->isFloatingPoint() && primitive->getBitCount() < 32)
         {
@@ -2761,8 +2761,8 @@ void OpenCL::Codegen::Context::arithmeticCast(Semantics::Type& type, llvm::Value
     }
     auto copy = integerPromotion(otherType);
     type = integerPromotion(type, &value);
-    if (auto[primitiveType, otherPrimitive] = std::pair(std::get_if<Semantics::PrimitiveType>(&type.getType()),
-                                                        std::get_if<Semantics::PrimitiveType>(&copy.getType()));
+    if (auto[primitiveType, otherPrimitive] = std::pair(std::get_if<Semantics::PrimitiveType>(&type.get()),
+                                                        std::get_if<Semantics::PrimitiveType>(&copy.get()));
         primitiveType && otherPrimitive)
     {
         if (otherPrimitive->isFloatingPoint()

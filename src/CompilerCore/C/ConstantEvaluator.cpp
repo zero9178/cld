@@ -320,64 +320,6 @@ OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressio
     return value;
 }
 
-// namespace
-//{
-//    std::size_t getAlignment(const std::shared_ptr<OpenCL::Syntax::IType>& ptr,
-//                             const std::map<std::string, const OpenCL::Syntax::StructOrUnionDeclaration*>& map)
-//    {
-//        if (auto primitives = std::dynamic_pointer_cast<OpenCL::Syntax::PrimitiveType>(ptr))
-//        {
-//            return primitives->getBitCount() / 8;
-//        }
-//        else if (std::dynamic_pointer_cast<OpenCL::Syntax::PointerType>(ptr))
-//        {
-//            return 8;
-//        }
-//        else if (std::dynamic_pointer_cast<OpenCL::Syntax::EnumType>(ptr))
-//        {
-//            return 4;
-//        }
-//        else if (auto array = std::dynamic_pointer_cast<OpenCL::Syntax::ArrayType>(ptr))
-//        {
-//            return getAlignment(array->getType()->clone(), map);
-//        }
-//        else if (auto structType = std::dynamic_pointer_cast<OpenCL::Syntax::StructType>(ptr))
-//        {
-//            auto result = map.find(structType->getName());
-//            if (result == map.end() || result->second->isUnion())
-//            {
-//                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-//            }
-//            std::size_t currentAlignment = 0;
-//            for (auto& iter : result->second->getTypes())
-//            {
-//                currentAlignment = std::max(getAlignment(iter.first, map), currentAlignment);
-//            }
-//            return currentAlignment;
-//        }
-//        else
-//        {
-//            auto unionType = std::dynamic_pointer_cast<OpenCL::Syntax::UnionType>(ptr);
-//            auto result = map.find(unionType->getName());
-//            if (result == map.end() || !result->second->isUnion())
-//            {
-//                throw std::runtime_error("Unknown struct of name " + structType->getName() + " inside of sizeof");
-//            }
-//            std::vector<std::pair<std::size_t, std::shared_ptr<OpenCL::Syntax::IType>>> sizes;
-//            std::transform(result->second->getTypes().begin(),
-//                           result->second->getTypes().end(),
-//                           std::back_inserter(sizes),
-//                           [&map](const std::pair<std::shared_ptr<OpenCL::Syntax::IType>,
-//                                                  std::string>& pair) -> std::pair<std::size_t,
-//                                                                                   std::shared_ptr<OpenCL::Syntax::IType>>
-//                           {
-//                               return {getAlignment(pair.first, map), pair.first};
-//                           });
-//            return getAlignment(std::max_element(sizes.begin(), sizes.end())->second, map);
-//        }
-//    }
-//}
-
 namespace
 {
     template <typename G>

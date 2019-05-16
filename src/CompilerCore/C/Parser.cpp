@@ -339,7 +339,7 @@ OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason>
                     {
                         return type;
                     }
-                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->getType()));
+                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->get()));
                 }
                 begin = curr;
                 return DeclarationSpecifier{std::move(result)};
@@ -604,7 +604,7 @@ OpenCL::Expected<OpenCL::Syntax::SpecifierQualifier, OpenCL::FailureReason>
                     {
                         return type;
                     }
-                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->getType()));
+                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->get()));
                 }
                 begin = curr;
                 return SpecifierQualifier{std::move(result)};

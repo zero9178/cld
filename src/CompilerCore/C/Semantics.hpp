@@ -17,7 +17,8 @@ namespace OpenCL::Semantics
     enum class Linkage
     {
         Internal,
-        External
+        External,
+        None
     };
 
     class PrimitiveType final
@@ -235,7 +236,7 @@ namespace OpenCL::Semantics
     public:
         Type(bool isConst, bool isVolatile, std::string name, variant&& type);
 
-        const variant& getType() const;
+        const variant& get() const;
 
         bool isConst() const;
 
@@ -252,48 +253,55 @@ namespace OpenCL::Semantics
         bool isCompatibleWith(const Type& rhs) const;
     };
 
-    class Declaration final
+    enum class Lifetime
     {
-
+        Automatic,
+        Static,
+        Register,
+        Temporary
     };
 
-    class FunctionPrototype final
+    class Declaration final
     {
-        FunctionType m_type;
-        std::string m_name;
+        Type m_type;
         Linkage m_linkage;
+        Lifetime m_lifetime;
+        std::string m_name;
+        //initializer
 
     public:
 
-        FunctionPrototype(FunctionType type, std::string name, Linkage linkage);
+        Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name);
 
-        const FunctionType& getType() const;
-
-        const std::string& getName() const;
+        const Type& getType() const;
 
         Linkage getLinkage() const;
 
+        Lifetime getLifetime() const;
+
+        const std::string& getName() const;
     };
 
     class FunctionDefinition final
     {
         FunctionType m_type;
         std::string m_name;
-        std::vector<Type> m_realTypes;
+        std::vector<Declaration> m_parameterDeclarations;
         Linkage m_linkage;
+        //Compound statement
 
     public:
 
         FunctionDefinition(FunctionType type,
                            std::string name,
-                           std::vector<Type> realTypes,
+                           std::vector<Declaration> parameterDeclarations,
                            Linkage linkage);
 
         const std::string& getName() const;
 
         const FunctionType& getType() const;
 
-        const std::vector<Type>& getRealTypes() const;
+        const std::vector<Declaration>& getParameterDeclarations() const;
 
         bool hasPrototype() const;
 
@@ -303,7 +311,7 @@ namespace OpenCL::Semantics
     class TranslationUnit final
     {
     public:
-        using variant = std::variant<FunctionPrototype, FunctionDefinition, Declaration>;
+        using variant = std::variant<FunctionDefinition, Declaration>;
 
     private:
 

@@ -11,7 +11,8 @@ namespace OpenCL::Semantics
     {
         std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
         std::vector<std::map<std::string, Semantics::Type>> m_typedefs{1};
-        std::vector<std::map<std::string, Semantics::Type>> m_typesOfNamedValues{1};
+        std::vector<std::map<std::string, Semantics::Declaration>> m_typesOfNamedValues{1};
+        std::set<std::string> m_definedFunctions;
 
         std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
 
@@ -101,7 +102,7 @@ namespace OpenCL::Semantics
 
         Expected<FunctionDefinition, FailureReason> visit(const Syntax::FunctionDefinition& node);
 
-        Expected<std::vector<std::variant<FunctionPrototype,Declaration>>,FailureReason> visit(const Syntax::Declaration& node);
+        Expected<std::vector<OpenCL::Semantics::Declaration>, FailureReason> visit(const Syntax::Declaration& node);
     };
 }
 

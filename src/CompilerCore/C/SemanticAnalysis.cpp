@@ -74,7 +74,7 @@ namespace
                                      if (explicitConversion)
                                      {
                                          return !std::holds_alternative<OpenCL::Semantics::FunctionType>(
-                                             pointerType.getElementType().getType());
+                                             pointerType.getElementType().get());
                                      }
                                      else
                                      {
@@ -87,7 +87,7 @@ namespace
                                  },
                                  [](auto&&) -> bool
                                  { return false; }},
-                        destinationType.getType());
+                        destinationType.get());
                 },
                 [&](const OpenCL::Semantics::PointerType& pointerType) -> bool
                 {
@@ -100,10 +100,10 @@ namespace
                                                    if (!explicitConversion)
                                                    {
                                                        auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(
-                                                           &pointerType.getElementType().getType());
+                                                           &pointerType.getElementType().get());
                                                        auto* otherPrimitive
                                                            = std::get_if<OpenCL::Semantics::PrimitiveType>(
-                                                               &otherPointer.getElementType().getType());
+                                                               &otherPointer.getElementType().get());
                                                        if ((!primitive || primitive->getBitCount() == 0)
                                                            && (!otherPrimitive || otherPrimitive->getBitCount() == 0))
                                                        {
@@ -118,14 +118,14 @@ namespace
                                                },
                                                [](auto&&) -> bool
                                                { return false; }},
-                                      destinationType.getType());
+                                      destinationType.get());
                 },
                 [&](const OpenCL::Semantics::FunctionType& functionType) -> bool
                 {
                     return std::visit(overload{[&](const OpenCL::Semantics::PointerType& pointerType) -> bool
                                                {
                                                    if (auto* function = std::get_if<OpenCL::Semantics::FunctionType>(
-                                                           &pointerType.getElementType().getType());
+                                                           &pointerType.getElementType().get());
                                                        function && *function == functionType)
                                                    {
                                                        return true;
@@ -134,7 +134,7 @@ namespace
                                                },
                                                [](auto&&) -> bool
                                                { return false; }},
-                                      destinationType.getType());
+                                      destinationType.get());
                 },
                 [&](const OpenCL::Semantics::EnumType&) -> bool
                 {
@@ -150,7 +150,7 @@ namespace
                                                { return true; },
                                                [](auto&&) -> bool
                                                { return false; }},
-                                      destinationType.getType());
+                                      destinationType.get());
                 },
                 [&](const OpenCL::Semantics::ArrayType& arrayType) -> bool
                 {
@@ -162,12 +162,12 @@ namespace
                 },
                 [](auto&&) -> bool
                 { return false; }},
-            sourceType.getType());
+            sourceType.get());
     }
 
     OpenCL::Semantics::Type integerPromotion(const OpenCL::Semantics::Type& type)
     {
-        if (auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(&type.getType()))
+        if (auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(&type.get()))
         {
             if (!primitive->isFloatingPoint() && primitive->getBitCount() < 32)
             {
@@ -262,7 +262,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
     {
         return index;
     }
-    auto* ptr = std::get_if<Semantics::PointerType>(&result->getType());
+    auto* ptr = std::get_if<Semantics::PointerType>(&result->get());
     if (!ptr)
     {
         return FailureReason("[] operator can only be applied to pointers and arrays");
@@ -290,7 +290,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
     {
         return result;
     }
-    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->getType());
+    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->get());
     if (!structType)
     {
         return FailureReason("Can only apply . to struct or union type");
@@ -314,13 +314,13 @@ OpenCL::Expected<OpenCL::Semantics::Type,
         return result;
     }
     const Semantics::PointerType* pointerType =
-        std::get_if<Semantics::PointerType>(&result->getType());
+        std::get_if<Semantics::PointerType>(&result->get());
     if (!pointerType)
     {
         return FailureReason("Can only apply -> to pointer types");
     }
     const Semantics::RecordType* structType =
-        std::get_if<Semantics::RecordType>(&pointerType->getElementType().getType());
+        std::get_if<Semantics::RecordType>(&pointerType->getElementType().get());
     if (!structType)
     {
         return FailureReason("Can only apply -> to pointer to struct or union type");
@@ -344,7 +344,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
         return result;
     }
     auto type = *result;
-    auto* function = std::get_if<Semantics::FunctionType>(&type.getType());
+    auto* function = std::get_if<Semantics::FunctionType>(&type.get());
     if (!function)
     {
         return FailureReason("Function call only possible on function type");
@@ -426,7 +426,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
                                               std::move(type));
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
     {
-        auto* pointer = std::get_if<Semantics::PointerType>(&type.getType());
+        auto* pointer = std::get_if<Semantics::PointerType>(&type.get());
         if (!pointer)
         {
             return FailureReason("Can only dereference pointer type");
@@ -538,7 +538,7 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
     for (auto& iter : node.getGlobals())
     {
         auto result = std::visit(overload{
-            [this, &globals](const Syntax::FunctionDefinition& function) -> Expected<TranslationUnit::variant,
+            [this, &globals](const Syntax::FunctionDefinition& function) -> Expected<std::optional<TranslationUnit::variant>,
                                                                                      FailureReason>
             {
                 auto result = visit(function);
@@ -548,12 +548,14 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
                 }
                 if (result->hasPrototype())
                 {
-                    globals.emplace_back(FunctionPrototype(result->getType(),
-                                                           result->getName(), result->getLinkage()));
+                    globals.emplace_back(Declaration(Type(false, false, "", result->getType()),
+                                                     result->getLinkage(),
+                                                     Lifetime::Static,
+                                                     result->getName()));
                 }
                 return *result;
             },
-            [this, &globals](const Syntax::Declaration& declaration) -> Expected<TranslationUnit::variant,
+            [this, &globals](const Syntax::Declaration& declaration) -> Expected<std::optional<TranslationUnit::variant>,
                                                                                  FailureReason>
             {
                 auto result = visit(declaration);
@@ -561,25 +563,18 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
                 {
                     return result;
                 }
-                if (result->size() == 1)
-                {
-                    return variant_cast((*result)[0]);
-                }
-                std::transform(result->begin(),
-                               result->end() - 1,
-                               std::back_inserter(globals),
-                               [](const auto& variant) -> TranslationUnit::variant
-                               {
-                                   return variant_cast(variant);
-                               });
-                return TranslationUnit::variant(variant_cast(result->back()));
+                globals.insert(globals.end(), result->begin(), result->end());
+                return std::optional<TranslationUnit::variant>{};
             }
         }, iter.getVariant());
         if (!result)
         {
             return result;
         }
-        globals.push_back(std::move(*result));
+        if (*result)
+        {
+            globals.push_back(std::move(**result));
+        }
     }
     return TranslationUnit(std::move(globals));
 }
@@ -646,11 +641,15 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     }
     auto type = Semantics::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
                                              node.getDeclarations(), gatherStructsAndUnions());
-    if (!std::holds_alternative<Semantics::FunctionType>(type->getType()))
+    if (!type)
+    {
+        return type;
+    }
+    if (!std::holds_alternative<Semantics::FunctionType>(type->get()))
     {
         return FailureReason("Expected parameter list in function definition");
     }
-    auto functionRP = std::get<Semantics::FunctionType>(type->getType());
+    auto functionRP = std::get<Semantics::FunctionType>(type->get());
     if (std::any_of(functionRP.getArguments().begin(), functionRP.getArguments().end(), [](const auto& pair)
     {
         return pair.second.empty();
@@ -668,9 +667,9 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     {
         return FailureReason("Can't combine static with extern");
     }
-    if (auto[prev, success] = m_typesOfNamedValues.back().insert({name, std::move(*type)}); !success)
+    if (!m_definedFunctions.insert(name).second)
     {
-        return FailureReason("Redefinition of symbol " + prev->first);
+        return FailureReason("Redefinition of function " + name);
     }
 
     auto* paramterTypeList = std::get_if<Syntax::DirectDeclaratorParentheseParameters>(
@@ -737,8 +736,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     }
 
     pushScope();
-    std::vector<std::string> argumentNames;
-    std::vector<Type> realTypes;
+    std::vector<Declaration> declarations;
     for (std::size_t i = 0; i < functionRP.getArguments().size(); i++)
     {
         if (paramterTypeList)
@@ -750,41 +748,48 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                 return FailureReason("Parameter name omitted");
             }
             auto argName = declaratorToName(**declarator);
-            if (!m_typesOfNamedValues.back().emplace(argName, functionRP.getArguments()[i].first).second)
-            {
-                return FailureReason("Parameter with name " + argName + " already exists");
-            }
-            argumentNames.push_back(argName);
+            auto& specifiers = paramterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i]
+                .first;
+            declarations.emplace_back(functionRP.getArguments()[i].first,
+                                      Linkage::None,
+                                      declarationSpecifierHas<Syntax::StorageClassSpecifier>(specifiers.begin(),
+                                                                                             specifiers.end(),
+                                                                                             Syntax::StorageClassSpecifier::Register)
+                                      ? Lifetime::Register : Lifetime::Automatic,
+                                      functionRP.getArguments()[i].second);
         }
         else
         {
             auto result = declarationMap.find(identifierList->getIdentifiers()[i]);
             if (result == declarationMap.end())
             {
-                if (!m_typesOfNamedValues.back()
-                                         .emplace(identifierList->getIdentifiers()[i],
-                                                  functionRP.getArguments()[i].first)
-                                         .second)
-                {
-                    return FailureReason(
-                        "Parameter with name " + identifierList->getIdentifiers()[i] + " already exists");
-                }
-                realTypes.push_back(functionRP.getArguments()[i].first);
+                declarations.emplace_back(functionRP.getArguments()[i].first,
+                                          Linkage::None,
+                                          Lifetime::Automatic,
+                                          functionRP.getArguments()[i].second);
             }
             else
             {
-                if (!m_typesOfNamedValues.back().emplace(identifierList->getIdentifiers()[i], result->second).second)
-                {
-                    return FailureReason(
-                        "Parameter with name " + identifierList->getIdentifiers()[i] + " already exists");
-                }
-                realTypes.push_back(result->second);
+                declarations.emplace_back(result->second,
+                                          Linkage::None,
+                                          declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarations()[i]
+                                                                                                     .getDeclarationSpecifiers()
+                                                                                                     .begin(),
+                                                                                                 node.getDeclarations()[i]
+                                                                                                     .getDeclarationSpecifiers()
+                                                                                                     .end(),
+                                                                                                 Syntax::StorageClassSpecifier::Register)
+                                          ? Lifetime::Register : Lifetime::Automatic,
+                                          functionRP.getArguments()[i].second);
             }
-            argumentNames.push_back(identifierList->getIdentifiers()[i]);
+        }
+        if (!m_typesOfNamedValues.back().emplace(declarations.back().getName(), declarations.back()).second)
+        {
+            return FailureReason("Parameter with name " + declarations.back().getName() + " already exists");
         }
     }
 
-
+    //TODO:
     //    auto result = visit(node.getCompoundStatement(),false);
     //    if(result)
     //    {
@@ -795,7 +800,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
 
     return FunctionDefinition(functionRP,
                               name,
-                              std::move(realTypes),
+                              std::move(declarations),
                               internalLinkage ? Linkage::Internal : Linkage::External);
 }
 
@@ -823,11 +828,21 @@ OpenCL::Semantics::SemanticAnalysis::gatherTypedefs() const
     return result;
 }
 
-OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, OpenCL::Semantics::Declaration>>,
+OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                  OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Declaration& node)
 {
-    std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, OpenCL::Semantics::Declaration>> decls;
+    std::vector<OpenCL::Semantics::Declaration> decls;
     std::vector<SpecifierQualifierRef> refs;
+    if (std::count_if(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
+                      [](const Syntax::DeclarationSpecifier& specifier)
+                      {
+                          return std::holds_alternative<Syntax::StorageClassSpecifier>(specifier);
+                      })
+        > 1)
+    {
+        return FailureReason("A maximum of one storage class specifier allowed in declaration");
+    }
+    const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
         std::visit(overload{[&refs](const Syntax::TypeSpecifier& typeSpecifier)
@@ -843,23 +858,13 @@ OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, 
         if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter);m_typesOfNamedValues.size() == 1
             && storage)
         {
+            storageClassSpecifier = storage;
             if (*storage == Syntax::StorageClassSpecifier::Auto
                 || *storage == Syntax::StorageClassSpecifier::Register)
             {
                 return FailureReason("auto and register not allowed in declaration in file scope");
             }
         }
-    }
-
-    bool hasStatic = declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
-                                                                            node.getDeclarationSpecifiers().end(),
-                                                                            Syntax::StorageClassSpecifier::Static);
-    bool hasExtern = declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
-                                                                            node.getDeclarationSpecifiers().end(),
-                                                                            Syntax::StorageClassSpecifier::Extern);
-    if (hasExtern && hasStatic)
-    {
-        return FailureReason("static and extern can't appear in the same declaration");
     }
 
     for (auto&[declarator, initializer] : node.getInitDeclarators())
@@ -870,7 +875,11 @@ OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, 
         {
             return result;
         }
-        if (auto* functionType = std::get_if<FunctionType>(&result->getType()))
+        if (isVoid(*result))
+        {
+            return FailureReason("Type in declaration is not allowed to be void");
+        }
+        if (auto* functionType = std::get_if<FunctionType>(&result->get()))
         {
             if (declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
                                                                          node.getDeclarationSpecifiers().end(),
@@ -888,7 +897,8 @@ OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, 
             {
                 return FailureReason("Initializer not allowed for function prototype");
             }
-            if (m_typesOfNamedValues.size() > 1 && hasStatic)
+            if (m_typesOfNamedValues.size() > 1 && storageClassSpecifier
+                && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static)
             {
                 return FailureReason("static at function prototype only allowed at file scope");
             }
@@ -896,13 +906,41 @@ OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, 
             {
                 return FailureReason("Identifier list not allowed in function prototype");
             }
-            decls.emplace_back(FunctionPrototype(*functionType,
-                                                 name,
-                                                 hasStatic ? Linkage::Internal : Linkage::External));
+            decls.emplace_back(Declaration(std::move(*result),
+                                           storageClassSpecifier
+                                               && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
+                                           ? Linkage::Internal : Linkage::External, Lifetime::Static, std::move(name)));
         }
         else
         {
-            []{}();
+            Linkage linkage = Linkage::None;
+            Lifetime lifetime = m_typesOfNamedValues.size() > 1 ? Lifetime::Automatic : Lifetime::Static;
+            if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static)
+            {
+                if (m_typesOfNamedValues.size() > 1)
+                {
+                    lifetime = Lifetime::Static;
+                }
+                else
+                {
+                    linkage = Linkage::Internal;
+                }
+            }
+            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+            {
+                linkage = Linkage::External;
+            }
+            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Register)
+            {
+                lifetime = Lifetime::Register;
+            }
+            auto declaration = Declaration(std::move(*result), linkage, lifetime, std::move(name));
+            if (auto[prev, success] = m_typesOfNamedValues.back().emplace(name, declaration);!success
+                && (prev->second.getLinkage() == Linkage::None || linkage == Linkage::None))
+            {
+                return FailureReason("Redeclaration of " + prev->first);
+            }
+            decls.emplace_back(std::move(declaration));
         }
     }
     return decls;
