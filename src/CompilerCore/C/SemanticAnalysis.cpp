@@ -28,6 +28,26 @@ namespace
     template <class... Ts>
     overload(Ts...)->overload<Ts...>;
 
+    template <class... Args>
+    struct variant_cast_proxy
+    {
+        std::variant<Args...> v;
+
+        template <class... ToArgs>
+        operator std::variant<ToArgs...>() const
+        {
+            return std::visit([](auto&& arg) -> std::variant<ToArgs...>
+                              { return arg; },
+                              v);
+        }
+    };
+
+    template <class... Args>
+    auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
+    {
+        return {v};
+    }
+
     bool canCastTo(const OpenCL::Semantics::Type& sourceType,
                    const OpenCL::Semantics::Type& destinationType,
                    bool explicitConversion)
@@ -337,11 +357,11 @@ OpenCL::Expected<OpenCL::Semantics::Type,
         {
             return argType;
         }
-        if (!canCastTo(*argType, function->getArguments()[i++], false))
+        if (!canCastTo(*argType, function->getArguments()[i++].first, false))
         {
             return FailureReason(
                 "Argument " + std::to_string(i - 1) + " in function call can not be cast from " + argType->getName()
-                    + " to " + function->getArguments()[i - 1].getName());
+                    + " to " + function->getArguments()[i - 1].first.getName());
         }
     }
     return function->getReturnType();
@@ -529,14 +549,30 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
                 if (result->hasPrototype())
                 {
                     globals.emplace_back(FunctionPrototype(result->getType(),
-                                                           result->getName(),
-                                                           result->getArgumentNames()));
+                                                           result->getName(), result->getLinkage()));
                 }
                 return *result;
             },
-            [this](const Syntax::Declaration& declaration) -> Expected<TranslationUnit::variant, FailureReason>
+            [this, &globals](const Syntax::Declaration& declaration) -> Expected<TranslationUnit::variant,
+                                                                                 FailureReason>
             {
-
+                auto result = visit(declaration);
+                if (!result)
+                {
+                    return result;
+                }
+                if (result->size() == 1)
+                {
+                    return variant_cast((*result)[0]);
+                }
+                std::transform(result->begin(),
+                               result->end() - 1,
+                               std::back_inserter(globals),
+                               [](const auto& variant) -> TranslationUnit::variant
+                               {
+                                   return variant_cast(variant);
+                               });
+                return TranslationUnit::variant(variant_cast(result->back()));
             }
         }, iter.getVariant());
         if (!result)
@@ -615,6 +651,13 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
         return FailureReason("Expected parameter list in function definition");
     }
     auto functionRP = std::get<Semantics::FunctionType>(type->getType());
+    if (std::any_of(functionRP.getArguments().begin(), functionRP.getArguments().end(), [](const auto& pair)
+    {
+        return pair.second.empty();
+    }))
+    {
+        return FailureReason("Parameter name omitted");
+    }
     bool internalLinkage =
         declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                 Syntax::StorageClassSpecifier::Extern);
@@ -695,6 +738,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
 
     pushScope();
     std::vector<std::string> argumentNames;
+    std::vector<Type> realTypes;
     for (std::size_t i = 0; i < functionRP.getArguments().size(); i++)
     {
         if (paramterTypeList)
@@ -706,7 +750,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                 return FailureReason("Parameter name omitted");
             }
             auto argName = declaratorToName(**declarator);
-            if (!m_typesOfNamedValues.back().emplace(argName, functionRP.getArguments()[i]).second)
+            if (!m_typesOfNamedValues.back().emplace(argName, functionRP.getArguments()[i].first).second)
             {
                 return FailureReason("Parameter with name " + argName + " already exists");
             }
@@ -718,12 +762,14 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
             if (result == declarationMap.end())
             {
                 if (!m_typesOfNamedValues.back()
-                                         .emplace(identifierList->getIdentifiers()[i], functionRP.getArguments()[i])
+                                         .emplace(identifierList->getIdentifiers()[i],
+                                                  functionRP.getArguments()[i].first)
                                          .second)
                 {
                     return FailureReason(
                         "Parameter with name " + identifierList->getIdentifiers()[i] + " already exists");
                 }
+                realTypes.push_back(functionRP.getArguments()[i].first);
             }
             else
             {
@@ -732,6 +778,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                     return FailureReason(
                         "Parameter with name " + identifierList->getIdentifiers()[i] + " already exists");
                 }
+                realTypes.push_back(result->second);
             }
             argumentNames.push_back(identifierList->getIdentifiers()[i]);
         }
@@ -748,8 +795,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
 
     return FunctionDefinition(functionRP,
                               name,
-                              std::move(argumentNames),
-                              paramterTypeList,
+                              std::move(realTypes),
                               internalLinkage ? Linkage::Internal : Linkage::External);
 }
 
@@ -775,4 +821,89 @@ OpenCL::Semantics::SemanticAnalysis::gatherTypedefs() const
         result.insert(iter->begin(), iter->end());
     }
     return result;
+}
+
+OpenCL::Expected<std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, OpenCL::Semantics::Declaration>>,
+                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Declaration& node)
+{
+    std::vector<std::variant<OpenCL::Semantics::FunctionPrototype, OpenCL::Semantics::Declaration>> decls;
+    std::vector<SpecifierQualifierRef> refs;
+    for (auto& iter : node.getDeclarationSpecifiers())
+    {
+        std::visit(overload{[&refs](const Syntax::TypeSpecifier& typeSpecifier)
+                            {
+                                refs.emplace_back(typeSpecifier);
+                            },
+                            [&refs](const Syntax::TypeQualifier& typeQualifier)
+                            {
+                                refs.emplace_back(typeQualifier);
+                            },
+                            [](auto&&)
+                            {}}, iter);
+        if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter);m_typesOfNamedValues.size() == 1
+            && storage)
+        {
+            if (*storage == Syntax::StorageClassSpecifier::Auto
+                || *storage == Syntax::StorageClassSpecifier::Register)
+            {
+                return FailureReason("auto and register not allowed in declaration in file scope");
+            }
+        }
+    }
+
+    bool hasStatic = declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
+                                                                            node.getDeclarationSpecifiers().end(),
+                                                                            Syntax::StorageClassSpecifier::Static);
+    bool hasExtern = declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
+                                                                            node.getDeclarationSpecifiers().end(),
+                                                                            Syntax::StorageClassSpecifier::Extern);
+    if (hasExtern && hasStatic)
+    {
+        return FailureReason("static and extern can't appear in the same declaration");
+    }
+
+    for (auto&[declarator, initializer] : node.getInitDeclarators())
+    {
+        auto name = declaratorToName(*declarator);
+        auto result = declaratorsToType(refs, *declarator, gatherTypedefs(), {}, gatherStructsAndUnions());
+        if (!result)
+        {
+            return result;
+        }
+        if (auto* functionType = std::get_if<FunctionType>(&result->getType()))
+        {
+            if (declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
+                                                                         node.getDeclarationSpecifiers().end(),
+                                                                         [](Syntax::StorageClassSpecifier storageClassSpecifier)
+                                                                         {
+                                                                             return storageClassSpecifier
+                                                                                 != Syntax::StorageClassSpecifier::Static
+                                                                                 && storageClassSpecifier
+                                                                                     != Syntax::StorageClassSpecifier::Extern;
+                                                                         }))
+            {
+                return FailureReason("Only static and extern are allowed storage specifiers for function declarations");
+            }
+            if (initializer)
+            {
+                return FailureReason("Initializer not allowed for function prototype");
+            }
+            if (m_typesOfNamedValues.size() > 1 && hasStatic)
+            {
+                return FailureReason("static at function prototype only allowed at file scope");
+            }
+            if (!functionType->hasPrototype() && !functionType->getArguments().empty())
+            {
+                return FailureReason("Identifier list not allowed in function prototype");
+            }
+            decls.emplace_back(FunctionPrototype(*functionType,
+                                                 name,
+                                                 hasStatic ? Linkage::Internal : Linkage::External));
+        }
+        else
+        {
+            []{}();
+        }
+    }
+    return decls;
 }

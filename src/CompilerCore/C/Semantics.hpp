@@ -67,7 +67,7 @@ namespace OpenCL::Semantics
     class ArrayType final
     {
         bool m_restricted;
-        std::shared_ptr<Type> m_type;
+        std::shared_ptr<const Type> m_type;
         std::size_t m_size;
 
         ArrayType(bool isRestricted, std::shared_ptr<Type>&& type, std::size_t size);
@@ -89,7 +89,7 @@ namespace OpenCL::Semantics
     class AbstractArrayType final
     {
         bool m_restricted;
-        std::shared_ptr<Type> m_type;
+        std::shared_ptr<const Type> m_type;
 
         AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
 
@@ -108,7 +108,7 @@ namespace OpenCL::Semantics
     class ValArrayType final
     {
         bool m_restricted;
-        std::shared_ptr<Type> m_type;
+        std::shared_ptr<const Type> m_type;
 
         ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type);
 
@@ -126,22 +126,24 @@ namespace OpenCL::Semantics
 
     class FunctionType final
     {
-        std::shared_ptr<Type> m_returnType;
-        std::vector<Type> m_arguments;
+        std::shared_ptr<const Type> m_returnType;
+        std::vector<std::pair<Type,std::string>> m_arguments;
         bool m_lastIsVararg;
         bool m_hasPrototype;
 
-        FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments, bool lastIsVararg,
+        FunctionType(std::shared_ptr<Type>&& returnType,
+                     std::vector<std::pair<Type, std::string>> arguments,
+                     bool lastIsVararg,
                      bool hasPrototype);
 
     public:
         static Type create(OpenCL::Semantics::Type&& returnType,
-                           std::vector<OpenCL::Semantics::Type>&& arguments, bool lastIsVararg,
+                           std::vector<std::pair<Type,std::string>>&& arguments, bool lastIsVararg,
                            bool hasPrototype);
 
         const Type& getReturnType() const;
 
-        const std::vector<Type>& getArguments() const;
+        const std::vector<std::pair<Type,std::string>>& getArguments() const;
 
         bool isLastVararg() const;
 
@@ -204,7 +206,7 @@ namespace OpenCL::Semantics
     class PointerType final
     {
         bool m_restricted;
-        std::shared_ptr<Type> m_elementType;
+        std::shared_ptr<const Type> m_elementType;
 
         PointerType(bool isRestricted, std::shared_ptr<Type>&& elementType);
 
@@ -250,23 +252,26 @@ namespace OpenCL::Semantics
         bool isCompatibleWith(const Type& rhs) const;
     };
 
+    class Declaration final
+    {
+
+    };
+
     class FunctionPrototype final
     {
         FunctionType m_type;
         std::string m_name;
-        std::vector<std::string> m_argumentNames;
+        Linkage m_linkage;
 
     public:
 
-        FunctionPrototype(FunctionType type,
-                          std::string name,
-                          std::vector<std::string> argumentNames);
+        FunctionPrototype(FunctionType type, std::string name, Linkage linkage);
 
         const FunctionType& getType() const;
 
         const std::string& getName() const;
 
-        const std::vector<std::string>& getArgumentNames() const;
+        Linkage getLinkage() const;
 
     };
 
@@ -274,23 +279,21 @@ namespace OpenCL::Semantics
     {
         FunctionType m_type;
         std::string m_name;
-        std::vector<std::string> m_argumentNames;
-        bool m_hasPrototype;
+        std::vector<Type> m_realTypes;
         Linkage m_linkage;
 
     public:
 
-        FunctionDefinition(const FunctionType& type,
+        FunctionDefinition(FunctionType type,
                            std::string name,
-                           std::vector<std::string> argumentNames,
-                           bool hasPrototype,
+                           std::vector<Type> realTypes,
                            Linkage linkage);
 
         const std::string& getName() const;
 
         const FunctionType& getType() const;
 
-        const std::vector<std::string>& getArgumentNames() const;
+        const std::vector<Type>& getRealTypes() const;
 
         bool hasPrototype() const;
 
@@ -300,7 +303,7 @@ namespace OpenCL::Semantics
     class TranslationUnit final
     {
     public:
-        using variant = std::variant<FunctionPrototype, FunctionDefinition>;
+        using variant = std::variant<FunctionPrototype, FunctionDefinition, Declaration>;
 
     private:
 
@@ -310,7 +313,7 @@ namespace OpenCL::Semantics
 
         explicit TranslationUnit(std::vector<variant> globals);
 
-        const std::vector<std::variant<FunctionPrototype, FunctionDefinition>>& getGlobals() const;
+        const std::vector<variant>& getGlobals() const;
     };
 
     using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,
@@ -331,6 +334,8 @@ namespace OpenCL::Semantics
     Expected<std::size_t, FailureReason> sizeOf(const Type& type);
 
     Expected<std::size_t, FailureReason> alignmentOf(const Type& type);
+
+    bool isVoid(const Type& type);
 } // namespace OpenCL::Semantics
 
 #endif //OPENCLPARSER_SEMANTICS_HPP

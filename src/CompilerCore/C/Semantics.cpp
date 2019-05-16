@@ -1,5 +1,7 @@
 #include <utility>
 
+#include <utility>
+
 #include "Semantics.hpp"
 
 #include "ConstantEvaluator.hpp"
@@ -10,7 +12,6 @@
 #include <sstream>
 #include <utility>
 #include <cassert>
-
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {
@@ -236,14 +237,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, b
                                        }
                                        switch (bitCount)
                                        {
-                                       case 8:
-                                           return isSigned ? "char" : "unsigned char";
-                                       case 16:
-                                           return isSigned ? "short" : "unsigned short";
-                                       case 32:
-                                           return isSigned ? "int" : "unsigned int";
-                                       case 64:
-                                           return isSigned ? "long long" : "unsigned long long";
+                                       case 8:return isSigned ? "char" : "unsigned char";
+                                       case 16:return isSigned ? "short" : "unsigned short";
+                                       case 32:return isSigned ? "int" : "unsigned int";
+                                       case 64:return isSigned ? "long long" : "unsigned long long";
                                        default:return "void";
                                        }
                                        return "";
@@ -356,8 +353,10 @@ bool OpenCL::Semantics::ValArrayType::operator!=(const OpenCL::Semantics::ValArr
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType, std::vector<Type> arguments,
-                                              bool lastIsVararg, bool hasPrototype)
+OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
+                                              std::vector<std::pair<Type, std::string>> arguments,
+                                              bool lastIsVararg,
+                                              bool hasPrototype)
     : m_returnType(std::move(returnType)),
       m_arguments(std::move(arguments)),
       m_lastIsVararg(lastIsVararg),
@@ -370,7 +369,8 @@ const OpenCL::Semantics::Type& OpenCL::Semantics::FunctionType::getReturnType() 
     return *m_returnType;
 }
 
-const std::vector<OpenCL::Semantics::Type>& OpenCL::Semantics::FunctionType::getArguments() const
+const std::vector<std::pair<OpenCL::Semantics::Type,
+                            std::string>>& OpenCL::Semantics::FunctionType::getArguments() const
 {
     return m_arguments;
 }
@@ -382,13 +382,13 @@ bool OpenCL::Semantics::FunctionType::isLastVararg() const
 
 OpenCL::Semantics::Type
 OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
-                                        std::vector<OpenCL::Semantics::Type>&& arguments,
+                                        std::vector<std::pair<Type, std::string>>&& arguments,
                                         bool lastIsVararg, bool hasPrototype)
 {
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
     {
-        argumentsNames += arguments[i].getName();
+        argumentsNames += arguments[i].first.getName();
         if (i + 1 < arguments.size())
         {
             argumentsNames += ", ";
@@ -402,8 +402,13 @@ OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
 
 bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::FunctionType& rhs) const
 {
-    return std::tie(*m_returnType, m_arguments, m_lastIsVararg)
-        == std::tie(*rhs.m_returnType, rhs.m_arguments, rhs.m_lastIsVararg);
+    std::vector<Type> thisTypes, rhsTypes;
+    auto pairFirst = [](const auto& pair)
+    { return pair.first; };
+    std::transform(m_arguments.begin(), m_arguments.end(), std::back_inserter(thisTypes), pairFirst);
+    std::transform(rhs.m_arguments.begin(), rhs.m_arguments.end(), std::back_inserter(rhsTypes), pairFirst);
+    return std::tie(*m_returnType, thisTypes, m_lastIsVararg)
+        == std::tie(*rhs.m_returnType, rhsTypes, rhs.m_lastIsVararg);
 }
 
 bool OpenCL::Semantics::FunctionType::operator!=(const OpenCL::Semantics::FunctionType& rhs) const
@@ -870,13 +875,23 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                    const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList)
                                    -> std::optional<FailureReason>
                                {
-                                   std::vector<Type> arguments;
+                                   std::vector<std::pair<Type, std::string>> arguments;
                                    if (parameterTypeList.getParameterTypeList())
                                    {
                                        for (auto& pair : parameterTypeList.getParameterTypeList()
                                                                           ->getParameterList()
                                                                           .getParameterDeclarations())
                                        {
+                                           if(parameterTypeList.getParameterTypeList()->getParameterList().getParameterDeclarations().size() == 1 && pair.first.size() == 1)
+                                           {
+                                               if(auto* typeSpecifier = std::get_if<Syntax::TypeSpecifier>(&pair.first[0]))
+                                               {
+                                                   if(auto* primitive = std::get_if<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(&typeSpecifier->getVariant());primitive && *primitive == Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void)
+                                                   {
+                                                       break;
+                                                   }
+                                               }
+                                           }
                                            std::vector<SpecifierQualifierRef> specifierQualifiers;
                                            for (auto& iter : pair.first)
                                            {
@@ -930,7 +945,15 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                            {
                                                return result.error();
                                            }
-                                           arguments.push_back(std::move(*result));
+                                           if(isVoid(*result))
+                                           {
+                                               return FailureReason("Parameter can't be void");
+                                           }
+                                           arguments.emplace_back(std::move(*result),
+                                                                  std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(
+                                                                      pair.second)
+                                                                  ? declaratorToName(*std::get<std::unique_ptr<Syntax::Declarator>>(
+                                                                      pair.second)) : "");
                                        }
                                    }
                                    baseType = FunctionType::create(
@@ -1151,12 +1174,13 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                        parentheseParameters)
                                        -> std::optional<FailureReason>
                                    {
-                                       std::vector<Type> arguments;
+                                       std::vector<std::pair<Type, std::string>> arguments;
+                                       auto& parameterDeclarations = parentheseParameters
+                                           .getParameterTypeList()
+                                           .getParameterList()
+                                           .getParameterDeclarations();
                                        for (auto& pair :
-                                           parentheseParameters
-                                               .getParameterTypeList()
-                                               .getParameterList()
-                                               .getParameterDeclarations())
+                                           parameterDeclarations)
                                        {
                                            std::vector<SpecifierQualifierRef>
                                                specifierQualifiers;
@@ -1237,8 +1261,20 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                            {
                                                return result.error();
                                            }
-                                           arguments.push_back(
-                                               std::move(*result));
+                                           if(parameterDeclarations.size() == 1 && *result == PrimitiveType::createVoid(false,false))
+                                           {
+                                               break;
+                                           }
+                                           if(isVoid(*result))
+                                           {
+                                               return FailureReason("Parameter is not allowed to have void datatype");
+                                           }
+                                           arguments.emplace_back(
+                                               std::move(*result),
+                                               std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(pair.second)
+                                               ?
+                                               declaratorToName(*std::get<std::unique_ptr<Syntax::Declarator>>(pair.second))
+                                               : "");
                                        }
                                        baseType = FunctionType::create(
                                            std::move(baseType),
@@ -1263,16 +1299,16 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                    optional<
                                        FailureReason>
                                    {
-                                       std::vector<Type> arguments(
+                                       std::vector<std::pair<Type, std::string>> arguments(
                                            identifiers
                                                .getIdentifiers()
                                                .size(),
-                                           PrimitiveType::create(
+                                           {PrimitiveType::create(
                                                false,
                                                false,
                                                false,
                                                true,
-                                               32));
+                                               32), ""});
                                        std::map<
                                            std::
                                            string,
@@ -1411,7 +1447,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                if (primitive
                                                    ->isFloatingPoint())
                                                {
-                                                   arguments[i] = PrimitiveType::create(
+                                                   arguments[i] = {PrimitiveType::create(
                                                        result
                                                            ->second
                                                            .isConst(),
@@ -1420,14 +1456,18 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                            .isVolatile(),
                                                        true,
                                                        true,
-                                                       64);
+                                                       64), result->first};
+                                               }
+                                               else if(primitive->getBitCount() == 0)
+                                               {
+                                                   return FailureReason("Declaration can't have void");
                                                }
                                                else if (
                                                    primitive
                                                        ->getBitCount()
                                                        < 32)
                                                {
-                                                   arguments[i] = PrimitiveType::create(
+                                                   arguments[i] = {PrimitiveType::create(
                                                        result
                                                            ->second
                                                            .isConst(),
@@ -1436,22 +1476,16 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                            .isVolatile(),
                                                        false,
                                                        true,
-                                                       32);
+                                                       32), result->first};
                                                }
                                                else
                                                {
-                                                   arguments
-                                                   [i] =
-                                                       result
-                                                           ->second;
+                                                   arguments[i] = {result->second, result->first};
                                                }
                                            }
                                            else
                                            {
-                                               arguments
-                                               [i] =
-                                                   result
-                                                       ->second;
+                                               arguments[i] = {result->second, result->first};
                                            }
                                            declarationMap
                                                .erase(
@@ -1640,6 +1674,16 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                       type.getType());
 }
 
+bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.getType());
+    if(!primitive)
+    {
+        return false;
+    }
+    return primitive->getBitCount() == 0;
+}
+
 OpenCL::Expected<std::size_t, OpenCL::FailureReason>
 OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
 {
@@ -1705,10 +1749,8 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                       type.getType());
 }
 
-OpenCL::Semantics::FunctionPrototype::FunctionPrototype(FunctionType type,
-                                                        std::string name,
-                                                        std::vector<std::string> argumentNames)
-    : m_type(std::move(type)), m_name(std::move(name)), m_argumentNames(std::move(argumentNames))
+OpenCL::Semantics::FunctionPrototype::FunctionPrototype(FunctionType type, std::string name, Linkage linkage)
+    : m_type(std::move(type)), m_name(std::move(name)), m_linkage(linkage)
 {
 
 }
@@ -1718,25 +1760,24 @@ const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionPrototype::get
     return m_type;
 }
 
-const std::vector<std::string>& OpenCL::Semantics::FunctionPrototype::getArgumentNames() const
-{
-    return m_argumentNames;
-}
-
 const std::string& OpenCL::Semantics::FunctionPrototype::getName() const
 {
     return m_name;
 }
 
-OpenCL::Semantics::FunctionDefinition::FunctionDefinition(const FunctionType& type,
+OpenCL::Semantics::Linkage OpenCL::Semantics::FunctionPrototype::getLinkage() const
+{
+    return m_linkage;
+}
+
+OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type,
                                                           std::string name,
-                                                          std::vector<std::string> argumentNames,
-                                                          bool hasPrototype,
+                                                          std::vector<Type> realTypes,
                                                           Linkage linkage)
-    : m_type(type), m_name(std::move(name)), m_argumentNames(std::move(argumentNames)), m_hasPrototype(hasPrototype),
+    : m_type(std::move(type)), m_name(std::move(name)), m_realTypes(std::move(realTypes)),
       m_linkage(linkage)
 {
-    assert(m_argumentNames.size() == type.getArguments().size());
+
 }
 
 const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionDefinition::getType() const
@@ -1744,14 +1785,9 @@ const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionDefinition::ge
     return m_type;
 }
 
-const std::vector<std::string>& OpenCL::Semantics::FunctionDefinition::getArgumentNames() const
-{
-    return m_argumentNames;
-}
-
 bool OpenCL::Semantics::FunctionDefinition::hasPrototype() const
 {
-    return m_hasPrototype;
+    return m_realTypes.empty();
 }
 
 const std::string& OpenCL::Semantics::FunctionDefinition::getName() const
@@ -1764,8 +1800,12 @@ OpenCL::Semantics::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() c
     return m_linkage;
 }
 
-OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<std::variant<OpenCL::Semantics::FunctionPrototype,
-                                                                             OpenCL::Semantics::FunctionDefinition>> globals)
+const std::vector<OpenCL::Semantics::Type>& OpenCL::Semantics::FunctionDefinition::getRealTypes() const
+{
+    return m_realTypes;
+}
+
+OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::variant> globals)
     : m_globals(std::move(globals))
 {}
 

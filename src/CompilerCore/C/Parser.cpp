@@ -1441,10 +1441,19 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
     if (auto* paramters =
             std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator().getVariant()))
     {
+        auto& parameterDeclarations = paramters->getParameterTypeList().getParameterList().getParameterDeclarations();
         for (auto& [specifier, paramDeclarator] :
-             paramters->getParameterTypeList().getParameterList().getParameterDeclarations())
+            parameterDeclarations)
         {
-            (void)specifier;
+            if(parameterDeclarations.size() == 1 && specifier.size() == 1 && std::holds_alternative<TypeSpecifier>(specifier[0]))
+            {
+                auto* primitive = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(&std::get<TypeSpecifier>(specifier[0]).getVariant());
+                if(primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
+                {
+                    break;
+                }
+            }
+
             if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
             {
                 return FailureReason("Only full declaration allowed in function definition");
@@ -2692,7 +2701,7 @@ Expected<TypeName, FailureReason> OpenCL::Parser::parseTypeName(Tokens::const_it
     }
     if (specifierQualifiers.empty())
     {
-        return FailureReason("Expected atleast one specifier qualifier at beginning of typename");
+        return FailureReason("Expected at least one specifier qualifier at beginning of typename");
     }
 
     if (auto abstractDec = parseAbstractDeclarator(curr, end, context))
