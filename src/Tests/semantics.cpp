@@ -64,7 +64,7 @@ TEST_CASE("Function definition", "[semantics]")
 
 TEST_CASE("K&R Function definition", "[semantics]")
 {
-    auto source = R"(void foo(i,f) short i;float f;{})";
+    auto source = R"(void foo(i,f) register short i;float f;{})";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
     if (!parsing)
     {
@@ -92,6 +92,7 @@ TEST_CASE("K&R Function definition", "[semantics]")
                   == OpenCL::Semantics::PrimitiveType::createInt(false, false));
         CHECK(definition->getParameterDeclarations()[0].getType()
                   == OpenCL::Semantics::PrimitiveType::createShort(false, false));
+        CHECK(definition->getParameterDeclarations()[0].getLifetime() == OpenCL::Semantics::Lifetime::Register);
         CHECK(definition->getType().getArguments()[1].first
                       == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
         CHECK(definition->getParameterDeclarations()[1].getType()
@@ -168,7 +169,7 @@ TEST_CASE("No argument function definition","[semantics]")
 
 TEST_CASE("Function prototype", "[semantics]")
 {
-    auto source = R"(void foo(int i,float f);)";
+    auto source = R"(void foo(register int i,float f);)";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
     if (!parsing)
     {
@@ -331,46 +332,239 @@ TEST_CASE("Function definitions and prototypes that should fail","[semantics]")
         "auto void foo(void);",
         "void foo(const void);",
         "void foo(a) void a;{}",
+        "void foo(static int i);",
+        "void foo(extern int i);",
+        "void foo(auto int i);"
     };
     for(auto& source : sources)
     {
+        DYNAMIC_SECTION(source)
+        {
+            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+            if (!parsing)
+            {
+                FAIL(parsing.error().getText());
+            }
+
+            OpenCL::Semantics::SemanticAnalysis analysis;
+            auto semantics = analysis.visit(*parsing);
+            REQUIRE(!semantics);
+        }
+    }
+}
+
+TEST_CASE("Primitive Declaration semantics", "[semantics]")
+{
+    SECTION("non cv qualified")
+    {
+        auto source = R"(int i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
         if (!parsing)
         {
-            FAIL_CHECK(parsing.error().getText());
+            FAIL(parsing.error().getText());
         }
 
         OpenCL::Semantics::SemanticAnalysis analysis;
         auto semantics = analysis.visit(*parsing);
         if (!semantics)
         {
-            continue;
+            FAIL(semantics.error().getText());
         }
-        FAIL_CHECK(source);
+        REQUIRE(semantics->getGlobals().size() == 1);
+        const OpenCL::Semantics::Declaration
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        REQUIRE(declaration);
+        CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(declaration->getName() == "i");
+        CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+        CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
+    }
+    SECTION("const")
+    {
+        auto source = R"(const int const i;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        if (!semantics)
+        {
+            FAIL(semantics.error().getText());
+        }
+        REQUIRE(semantics->getGlobals().size() == 1);
+        const OpenCL::Semantics::Declaration
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        REQUIRE(declaration);
+        CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(true, false));
+        CHECK(declaration->getName() == "i");
+        CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+        CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
+    }
+    SECTION("volatile")
+    {
+        auto source = R"(volatile int i;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        if (!semantics)
+        {
+            FAIL(semantics.error().getText());
+        }
+        REQUIRE(semantics->getGlobals().size() == 1);
+        const OpenCL::Semantics::Declaration
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        REQUIRE(declaration);
+        CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, true));
+        CHECK(declaration->getName() == "i");
+        CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+        CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
+    }
+    SECTION("const volatile")
+    {
+        auto source = R"(const int volatile i;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        if (!semantics)
+        {
+            FAIL(semantics.error().getText());
+        }
+        REQUIRE(semantics->getGlobals().size() == 1);
+        const OpenCL::Semantics::Declaration
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        REQUIRE(declaration);
+        CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(true, true));
+        CHECK(declaration->getName() == "i");
+        CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+        CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
+    }
+    SECTION("External linkage")
+    {
+        auto source = R"(extern int i;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        if (!semantics)
+        {
+            FAIL(semantics.error().getText());
+        }
+        REQUIRE(semantics->getGlobals().size() == 1);
+        const OpenCL::Semantics::Declaration
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        REQUIRE(declaration);
+        CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(declaration->getName() == "i");
+        CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+        CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::External);
+    }
+    SECTION("Various primitives")
+    {
+        std::array results = {
+            std::pair{"char i;",OpenCL::Semantics::PrimitiveType::createChar(false,false)},
+            std::pair{"signed char i;",OpenCL::Semantics::PrimitiveType::createChar(false,false)},
+            std::pair{"unsigned i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
+            std::pair{"short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"short int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"int short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"signed short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"short signed i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"signed short int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"short signed int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
+            std::pair{"unsigned short i;",OpenCL::Semantics::PrimitiveType::createUnsignedShort(false,false)},
+            std::pair{"unsigned short int i;",OpenCL::Semantics::PrimitiveType::createUnsignedShort(false,false)},
+            std::pair{"int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"signed int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"signed i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"unsigned int i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
+            std::pair{"unsigned i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
+            std::pair{"long i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"signed long i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"long int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"signed long int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
+            std::pair{"unsigned long i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
+            std::pair{"unsigned long int i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
+            std::pair{"long long i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
+            std::pair{"signed long long i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
+            std::pair{"long long int i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
+            std::pair{"signed long long int i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
+            std::pair{"unsigned long long i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
+            std::pair{"unsigned long long int i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
+            std::pair{"long unsigned int long i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
+            std::pair{"float i;",OpenCL::Semantics::PrimitiveType::createFloat(false,false)},
+            std::pair{"double i;",OpenCL::Semantics::PrimitiveType::createDouble(false,false)}
+        };
+        for(auto& [source,type] : results)
+        {
+            DYNAMIC_SECTION("Primitive:"<<source)
+            {
+                auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+                if (!parsing)
+                {
+                    FAIL(parsing.error().getText());
+                }
+
+                OpenCL::Semantics::SemanticAnalysis analysis;
+                auto semantics = analysis.visit(*parsing);
+                if (!semantics)
+                {
+                    FAIL(semantics.error().getText());
+                }
+                if(semantics->getGlobals().size() != 1)
+                {
+                    FAIL(source);
+                }
+                auto* declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+                REQUIRE(declaration);
+                CHECK(declaration->getType() == type);
+            }
+        }
     }
 }
 
-TEST_CASE("Declaration semantics", "[semantics]")
+TEST_CASE("Invalid primitive declarations","[semantics]")
 {
-    auto source = R"(int i;)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
+    std::array sources = {
+        "void i;",
+        "const void i;",
+        "static extern int i;",
+        "auto register int i;",
+        "short int long i;",
+        "char char i;",
+        "long short i;",
+        "float int i;",
+        "signed unsigned i;",
+    };
+    for(auto& source : sources)
     {
-        FAIL(parsing.error().getText());
-    }
+        DYNAMIC_SECTION(source)
+        {
+            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+            if (!parsing)
+            {
+                FAIL(parsing.error().getText());
+            }
 
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
+            OpenCL::Semantics::SemanticAnalysis analysis;
+            auto semantics = analysis.visit(*parsing);
+            REQUIRE(!semantics);
+        }
     }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    const OpenCL::Semantics::Declaration
-        * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
-    REQUIRE(declaration);
-    CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
-    CHECK(declaration->getName() == "i");
-    CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
-    CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
 }

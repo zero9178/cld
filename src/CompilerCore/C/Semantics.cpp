@@ -559,6 +559,254 @@ namespace
         }
         return arguments;
     }
+
+    OpenCL::Expected<OpenCL::Semantics::Type,
+                     OpenCL::FailureReason> primitivesToType(std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitives,
+                                                             bool isConst,
+                                                             bool isVolatile)
+    {
+        enum
+        {
+            Void = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void),
+            Char = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char),
+            Short = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short),
+            Int = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int),
+            Long = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long),
+            Float = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float),
+            Double = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double),
+            Signed = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
+            Unsigned = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
+        };
+        std::array<std::size_t,9> primitivesCount = {0};
+        for(auto &iter : primitives)
+        {
+            primitivesCount[static_cast<std::size_t>(iter)]++;
+        }
+        if(primitivesCount[Void] > 1)
+        {
+            return OpenCL::FailureReason("void appearing more than once");
+        }
+        if(primitivesCount[Char] > 1)
+        {
+            return OpenCL::FailureReason("char appearing more than once");
+        }
+        if(primitivesCount[Short] > 1)
+        {
+            return OpenCL::FailureReason("short appearing more than once");
+        }
+        if(primitivesCount[Int] > 1)
+        {
+            return OpenCL::FailureReason("int appearing more than once");
+        }
+        if(primitivesCount[Float] > 1)
+        {
+            return OpenCL::FailureReason("float appearing more than once");
+        }
+        if(primitivesCount[Double] > 1)
+        {
+            return OpenCL::FailureReason("double appearing more than once");
+        }
+        if(primitivesCount[Signed] > 1)
+        {
+            return OpenCL::FailureReason("signed appearing more than once");
+        }
+        if(primitivesCount[Unsigned] > 1)
+        {
+            return OpenCL::FailureReason("unsigned appearing more than once");
+        }
+        if(primitivesCount[Long] > 2)
+        {
+            return OpenCL::FailureReason("long appearing more than twice");
+        }
+        bool hasSigned = primitivesCount[Signed];
+        bool hasUnsigned = primitivesCount[Unsigned];
+        if(hasSigned && hasUnsigned)
+        {
+            return OpenCL::FailureReason("Can't have both signed and unsigned");
+        }
+        if(primitivesCount[Void])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i++ == Void)
+                {
+                    return false;
+                }
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can't combine void with any other primitives");
+            }
+            return OpenCL::Semantics::PrimitiveType::createVoid(isConst,isVolatile);
+        }
+        if(primitivesCount[Float])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i++ == Float)
+                {
+                    return false;
+                }
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can't combine float with any other primitives");
+            }
+            return OpenCL::Semantics::PrimitiveType::createFloat(isConst,isVolatile);
+        }
+        if(primitivesCount[Double])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i++ == Double)
+                {
+                    return false;
+                }
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can't combine double with any other primitives");
+            }
+            return OpenCL::Semantics::PrimitiveType::createDouble(isConst,isVolatile);
+        }
+        if(primitivesCount[Char])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i == Char || i == Signed || i == Unsigned)
+                {
+                    i++;
+                    return false;
+                }
+                i++;
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can only combine char with signed or unsigned");
+            }
+            if(hasUnsigned)
+            {
+                return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst,isVolatile);
+            }
+            else
+            {
+                return OpenCL::Semantics::PrimitiveType::createChar(isConst,isVolatile);
+            }
+        }
+        if(primitivesCount[Short])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i == Short || i == Signed || i == Unsigned || i == Int)
+                {
+                    i++;
+                    return false;
+                }
+                i++;
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can only combine short with signed,unsigned or int");
+            }
+            if(hasUnsigned)
+            {
+                return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst,isVolatile);
+            }
+            else
+            {
+                return OpenCL::Semantics::PrimitiveType::createShort(isConst,isVolatile);
+            }
+        }
+        if(primitivesCount[Long] == 1)
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i == Signed || i == Unsigned || i == Int || i == Long)
+                {
+                    i++;
+                    return false;
+                }
+                i++;
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can only combine long with long, signed, unsigned and int");
+            }
+            if(hasUnsigned)
+            {
+                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+            }
+            else
+            {
+                return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+            }
+        }
+        if(primitivesCount[Long] == 2)
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i == Signed || i == Unsigned || i == Int || i == Long)
+                {
+                    i++;
+                    return false;
+                }
+                i++;
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can only combine long with long, signed, unsigned and int");
+            }
+            if(hasUnsigned)
+            {
+                return OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(isConst,isVolatile);
+            }
+            else
+            {
+                return OpenCL::Semantics::PrimitiveType::createLongLong(isConst,isVolatile);
+            }
+        }
+        if(primitivesCount[Int])
+        {
+            std::size_t i = 0;
+            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            {
+                if(i == Signed || i == Unsigned || i == Int)
+                {
+                    i++;
+                    return false;
+                }
+                i++;
+                return count;
+            }))
+            {
+                return OpenCL::FailureReason("Can only combine int with signed or unsigned");
+            }
+            if(hasUnsigned)
+            {
+                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+            }
+            else
+            {
+                return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+            }
+        }
+        if(hasSigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+        }
+        else if(hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+        }
+        return OpenCL::FailureReason("Internal compiler error");
+    }
 } // namespace
 
 OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semantics::declaratorsToType(
@@ -613,230 +861,117 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                    });
     typeSpecifiers.erase(std::remove(typeSpecifiers.begin(), typeSpecifiers.end(), nullptr), typeSpecifiers.end());
 
-    Type baseType = PrimitiveType::create(isConst, isVolatile, false, true, 32);
-    if (!typeSpecifiers.empty())
+    if (typeSpecifiers.empty())
     {
-        auto result = std::visit(
-            overload{
-                [&typeSpecifiers, isConst,
-                    isVolatile](Syntax::TypeSpecifier::PrimitiveTypeSpecifier) -> ThisReturnType
-                {
-                    if (!std::all_of(typeSpecifiers.begin(), typeSpecifiers.end(), [](const auto pointer)
-                    {
-                        return std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
-                            pointer->getVariant());
-                    }))
-                    {
-                        return FailureReason(
-                            "Primitive type specifiers mixed with struct, union, enum and typedef names");
-                    }
-                    std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
-                    std::transform(typeSpecifiers.begin(), typeSpecifiers.end(),
-                                   std::back_inserter(primitiveTypeSpecifier), [](const auto pointer)
-                                   {
-                                       return std::get<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
-                                           pointer->getVariant());
-                                   });
-
-                    auto convert = [isConst, isVolatile](auto&& self, auto begin, auto end,
-                                                         bool isSigned) -> ThisReturnType
-                    {
-                        switch (*begin)
-                        {
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                return FailureReason("Can't combine void with other primitive type specifier");
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, false, false, 0);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                return FailureReason("Can't combine char with other primitive type specifier");
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 8);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                if (*(begin + 1) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int)
-                                {
-                                    return FailureReason(
-                                        "Only int is allowed to follow short in primitive type specifiers");
-                                }
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 16);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                return FailureReason("Can't combine int with other primitive type specifier");
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
-                        {
-                            if (begin + 1 == end)
-                            {
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
-                            }
-                            switch (*(begin + 1))
-                            {
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int:
-                            {
-                                if (begin + 2 < end)
-                                {
-                                    return FailureReason(
-                                        "Can't combine long int with any other primitive type specifiers");
-                                }
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 32);
-                            }
-                            case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long:
-                            {
-                                if (begin + 3 < end
-                                    || (begin + 2 < end
-                                        && *(begin + 2) != Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long))
-                                {
-                                    return FailureReason(
-                                        "Can't combine long long int with any other primitive type specifiers");
-                                }
-                                return PrimitiveType::create(isConst, isVolatile, false, isSigned, 64);
-                            }
-                            default:
-                                return FailureReason(
-                                    "Can't combine long int with any other primitive type specifiers");
-                            }
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                return FailureReason(
-                                    "Can't combine float with any other primitive type specifiers");
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, true, isSigned, 32);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double:
-                        {
-                            if (begin + 1 < end)
-                            {
-                                return FailureReason(
-                                    "Can't combine double with any other primitive type specifiers");
-                            }
-                            return PrimitiveType::create(isConst, isVolatile, true, isSigned, 64);
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed:
-                        {
-                            auto result = self(self, begin + 1, end, true);
-                            if (!result)
-                            {
-                                return result;
-                            }
-                            return *result;
-                        }
-                        case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned:
-                        {
-                            auto result = self(self, begin + 1, end, false);
-                            if (!result)
-                            {
-                                return result;
-                            }
-                            return *result;
-                        }
-                        }
-                        return FailureReason("Invalid primitive type specifiers");
-                    };
-                    return convert(convert, primitiveTypeSpecifier.begin(), primitiveTypeSpecifier.end(), true);
-                },
-                [&typeSpecifiers, isConst, isVolatile, &typedefs, &declarations](
-                    const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> ThisReturnType
-                {
-                    if (typeSpecifiers.size() != 1)
-                    {
-                        return FailureReason(std::string("Expected no further type specifiers after ")
-                                                 + (structOrUnion->isUnion() ? "union" : "struct") + " specifier");
-                    }
-                    if (structOrUnion->getStructDeclarations().empty())
-                    {
-                        return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
-                                                  structOrUnion->getIdentifier());
-                    }
-                    std::vector<std::tuple<Type, std::string, std::int64_t>> members;
-                    for (auto&[structSpecifiers, structDecls] : structOrUnion->getStructDeclarations())
-                    {
-                        std::vector<SpecifierQualifierRef> refs;
-                        for (auto& iter : structSpecifiers)
-                        {
-                            std::visit([&refs](auto&& value)
-                                       { refs.push_back(value); }, iter);
-                        }
-                        for (auto& iter : structDecls)
-                        {
-                            auto type = declaratorsToType(refs,
-                                                          [&]() -> PossiblyAbstractQualifierRef
-                                                          {
-                                                              if (iter.first)
-                                                              {
-                                                                  return *iter.first;
-                                                              }
-                                                              else
-                                                              {
-                                                                  return nullptr;
-                                                              }
-                                                          }(),
-                                                          typedefs, declarations);
-                            if (!type)
-                            {
-                                return type;
-                            }
-                            std::string name = iter.first ? declaratorToName(*iter.first) : "";
-                            members.emplace_back(std::move(*type), std::move(name), iter.second);
-                        }
-                    }
-                    return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
-                                              structOrUnion->getIdentifier(), std::move(members));
-                },
-                [&typeSpecifiers, isConst,
-                    isVolatile](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> ThisReturnType
-                {
-                    if (typeSpecifiers.size() != 1)
-                    {
-                        return FailureReason("Expected no further type specifiers after enum");
-                    }
-                    std::vector<std::pair<std::string, std::int32_t>> values;
-                    auto name = std::visit(overload{[](const std::string& name)
-                                                    { return name; },
-                                                    [&values](const Syntax::EnumDeclaration& declaration)
-                                                    {
-                                                        values = declaration.getValues();
-                                                        return declaration.getName();
-                                                    }},
-                                           enumSpecifier->getVariant());
-                    return EnumType::create(isConst, isVolatile, name, std::move(values));
-                },
-                [&](const std::string& typedefName) -> ThisReturnType
-                {
-                    auto result = typedefs.find(typedefName);
-                    if (result == typedefs.end())
-                    {
-                        return FailureReason("Could not find typedef of name " + typedefName);
-                    }
-                    Type copy = result->second;
-                    copy.setName(typedefName);
-                    return copy;
-                }},
-            typeSpecifiers[0]->getVariant());
-        if (!result)
-        {
-            return result;
-        }
-        baseType = *result;
+        return FailureReason("Atleast one type specifier must be present");
     }
+    auto primitiveResult = std::visit(
+        overload{
+            [&typeSpecifiers, isConst,
+                isVolatile](Syntax::TypeSpecifier::PrimitiveTypeSpecifier) -> ThisReturnType
+            {
+                if (!std::all_of(typeSpecifiers.begin(), typeSpecifiers.end(), [](const auto pointer)
+                {
+                    return std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
+                        pointer->getVariant());
+                }))
+                {
+                    return FailureReason(
+                        "Primitive type specifiers mixed with struct, union, enum and typedef names");
+                }
+                std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
+                std::transform(typeSpecifiers.begin(), typeSpecifiers.end(),
+                               std::back_inserter(primitiveTypeSpecifier), [](const auto pointer)
+                               {
+                                   return std::get<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
+                                       pointer->getVariant());
+                               });
+
+                return primitivesToType(std::move(primitiveTypeSpecifier), isConst, isVolatile);
+            },
+            [&typeSpecifiers, isConst, isVolatile, &typedefs, &declarations](
+                const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> ThisReturnType
+            {
+                if (typeSpecifiers.size() != 1)
+                {
+                    return FailureReason(std::string("Expected no further type specifiers after ")
+                                             + (structOrUnion->isUnion() ? "union" : "struct") + " specifier");
+                }
+                if (structOrUnion->getStructDeclarations().empty())
+                {
+                    return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
+                                              structOrUnion->getIdentifier());
+                }
+                std::vector<std::tuple<Type, std::string, std::int64_t>> members;
+                for (auto&[structSpecifiers, structDecls] : structOrUnion->getStructDeclarations())
+                {
+                    std::vector<SpecifierQualifierRef> refs;
+                    for (auto& iter : structSpecifiers)
+                    {
+                        std::visit([&refs](auto&& value)
+                                   { refs.push_back(value); }, iter);
+                    }
+                    for (auto& iter : structDecls)
+                    {
+                        auto type = declaratorsToType(refs,
+                                                      [&]() -> PossiblyAbstractQualifierRef
+                                                      {
+                                                          if (iter.first)
+                                                          {
+                                                              return *iter.first;
+                                                          }
+                                                          else
+                                                          {
+                                                              return nullptr;
+                                                          }
+                                                      }(),
+                                                      typedefs, declarations);
+                        if (!type)
+                        {
+                            return type;
+                        }
+                        std::string name = iter.first ? declaratorToName(*iter.first) : "";
+                        members.emplace_back(std::move(*type), std::move(name), iter.second);
+                    }
+                }
+                return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
+                                          structOrUnion->getIdentifier(), std::move(members));
+            },
+            [&typeSpecifiers, isConst,
+                isVolatile](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> ThisReturnType
+            {
+                if (typeSpecifiers.size() != 1)
+                {
+                    return FailureReason("Expected no further type specifiers after enum");
+                }
+                std::vector<std::pair<std::string, std::int32_t>> values;
+                auto name = std::visit(overload{[](const std::string& name)
+                                                { return name; },
+                                                [&values](const Syntax::EnumDeclaration& declaration)
+                                                {
+                                                    values = declaration.getValues();
+                                                    return declaration.getName();
+                                                }},
+                                       enumSpecifier->getVariant());
+                return EnumType::create(isConst, isVolatile, name, std::move(values));
+            },
+            [&](const std::string& typedefName) -> ThisReturnType
+            {
+                auto result = typedefs.find(typedefName);
+                if (result == typedefs.end())
+                {
+                    return FailureReason("Could not find typedef of name " + typedefName);
+                }
+                Type copy = result->second;
+                copy.setName(typedefName);
+                return copy;
+            }},
+        typeSpecifiers[0]->getVariant());
+    if (!primitiveResult)
+    {
+        return primitiveResult;
+    }
+    auto baseType = *primitiveResult;
     if (isRestricted)
     {
         return FailureReason("Only pointers can be restricted");
