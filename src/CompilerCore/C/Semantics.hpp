@@ -253,6 +253,11 @@ namespace OpenCL::Semantics
         bool isCompatibleWith(const Type& rhs) const;
     };
 
+    class CompoundStatement final
+    {
+
+    };
+
     enum class Lifetime
     {
         Automatic,

@@ -355,6 +355,47 @@ TEST_CASE("Function definitions and prototypes that should fail","[semantics]")
 
 TEST_CASE("Primitive Declaration semantics", "[semantics]")
 {
+    SECTION("Multi declarations")
+    {
+        auto source = R"(int i,f,c;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        if (!semantics)
+        {
+            FAIL(semantics.error().getText());
+        }
+        REQUIRE(semantics->getGlobals().size() == 3);
+        std::array names = {"i", "f", "c"};
+        std::size_t i = 0;
+        for (auto& iter : semantics->getGlobals())
+        {
+            auto* declaration = std::get_if<OpenCL::Semantics::Declaration>(&iter);
+            REQUIRE(declaration);
+            CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(declaration->getName() == names[i++]);
+            CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
+            CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
+        }
+    }
+    SECTION("Empty declaration")
+    {
+        auto source = R"(int;)";
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        if (!parsing)
+        {
+            FAIL(parsing.error().getText());
+        }
+
+        OpenCL::Semantics::SemanticAnalysis analysis;
+        auto semantics = analysis.visit(*parsing);
+        REQUIRE(!semantics);
+    }
     SECTION("non cv qualified")
     {
         auto source = R"(int i;)";
@@ -551,6 +592,7 @@ TEST_CASE("Invalid primitive declarations","[semantics]")
         "long short i;",
         "float int i;",
         "signed unsigned i;",
+        "restrict int i;",
     };
     for(auto& source : sources)
     {

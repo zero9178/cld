@@ -509,8 +509,13 @@ namespace
                         specifierQualifiers.emplace_back(typeQualifier);
                         return {};
                     },
-                    [](const OpenCL::Syntax::StorageClassSpecifier&) -> std::optional<OpenCL::FailureReason>
+                    [](const OpenCL::Syntax::StorageClassSpecifier& storageClassSpecifier) -> std::optional<OpenCL::FailureReason>
                     {
+                        if (storageClassSpecifier != OpenCL::Syntax::StorageClassSpecifier::Register)
+                        {
+                            return OpenCL::FailureReason(
+                                "No storage class specifiers except register allowed for function argument");
+                        }
                         return {};
                     },
                     [](OpenCL::Syntax::FunctionSpecifier) -> std::optional<OpenCL::FailureReason>
@@ -863,7 +868,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
 
     if (typeSpecifiers.empty())
     {
-        return FailureReason("Atleast one type specifier must be present");
+        return FailureReason("At least one type specifier must be present");
     }
     auto primitiveResult = std::visit(
         overload{
@@ -1301,15 +1306,13 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                  [](Syntax::StorageClassSpecifier storageClassSpecifier)
                                                                      -> std::optional<FailureReason>
                                                                  {
-                                                                     if (storageClassSpecifier == Syntax::StorageClassSpecifier::Register)
+                                                                     if (storageClassSpecifier
+                                                                         != Syntax::StorageClassSpecifier::Register)
                                                                      {
-                                                                         return {};
+                                                                         return OpenCL::FailureReason(
+                                                                             "No storage class specifiers except register allowed for function argument");
                                                                      }
-                                                                     else
-                                                                     {
-                                                                         return FailureReason(
-                                                                             "Storage class specifiers not allowed in declarations of function parameters");
-                                                                     }
+                                                                     return {};
                                                                  },
                                                                  [&refs](const Syntax::TypeSpecifier& typeSpecifier)
                                                                      -> std::optional<FailureReason>

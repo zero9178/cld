@@ -5,7 +5,7 @@
 
 namespace
 {
-    std::uint32_t charactersToCharLiteral(const std::string& characters)
+    std::int32_t charactersToCharLiteral(const std::string& characters)
     {
         if (characters.empty())
         {
@@ -22,6 +22,10 @@ namespace
         else if (characters == "\\\"")
         {
             return '"';
+        }
+        else if (characters == "\\?")
+        {
+            return '\?';
         }
         else if (characters == "\\\\")
         {
@@ -55,31 +59,48 @@ namespace
         {
             return '\v';
         }
-        else
+        else if (characters.front() == '\\')
         {
-            std::regex octalChar("\\\\[0-7]{1,3}");
-            if (std::regex_match(characters, octalChar))
+            if (characters[1] == 'x')
             {
-                std::istringstream ss(characters.substr(1, characters.size() - 1));
+                if (characters.size() <= 2)
+                {
+                    throw std::runtime_error("At least one hexadecimal digit required");
+                }
+                std::istringstream ss(characters.substr(2, characters.size() - 1));
                 std::int32_t number;
-                ss >> number;
+                if (!(ss >> std::hex >> number))
+                {
+                    throw std::runtime_error("Failed to convert " + ss.str() + " to hex character");
+                }
+                if (number > std::numeric_limits<std::uint8_t>::max())
+                {
+                    throw std::runtime_error(
+                        "Character constant is not allowed to have a value higher than the maximum value of unsigned char");
+                }
                 return number;
             }
             else
             {
-                std::regex hexChar("\\\\x[0-9a-fA-F]*");
-                std::smatch match;
-                std::regex_search(characters, match, hexChar);
-                if (match.empty())
+                if (characters.size() <= 1)
                 {
-                    throw std::runtime_error("Could not find hex chars");
+                    throw std::runtime_error("At least one octal digit required");
                 }
-                std::istringstream ss(match[0]);
+                std::istringstream ss(characters.substr(1, characters.size() - 1));
                 std::int32_t number;
-                ss >> number;
+                if (!(ss >> std::oct >> number))
+                {
+                    throw std::runtime_error("Failed to convert " + ss.str() + " to octal character");
+                }
+                if (number > std::numeric_limits<std::uint8_t>::max())
+                {
+                    throw std::runtime_error(
+                        "Character constant is not allowed to have a value higher than the maximum value of unsigned char");
+                }
                 return number;
             }
         }
+        throw std::runtime_error("Incorrect sequence for character literal:" + characters);
     }
 
     bool isKeyword(const std::string& characters)
@@ -239,9 +260,8 @@ namespace
 
     OpenCL::Lexer::Token charactersToNumber(std::string lastText, std::uint64_t line, std::uint64_t column)
     {
-        static std::regex integerLiteralMatch("(0x)?[0-9a-fA-F]+([uU]?(l{0,2}|L{0,2})|(l{0,2}|L{0,2})[uU]?)?");
-        static std::regex floatLiteralMatch("[0-9]*\\.[0-9]*[fF]?");
-        if (std::regex_match(lastText, integerLiteralMatch))
+        if (!(lastText.find('.') != std::string::npos || (lastText.size() >= 2 && lastText.substr(0, 2) == "0x"
+            && (lastText.find('e') != std::string::npos || lastText.find('E') != std::string::npos))))
         {
             static std::regex numbers("[0-9a-fA-F]+");
             bool isHex = false;
@@ -335,7 +355,7 @@ namespace
                 }
             }
         }
-        else if (std::regex_match(lastText, floatLiteralMatch))
+        else
         {
             if (lastText.back() == 'f' || lastText.back() == 'F')
             {
@@ -351,10 +371,6 @@ namespace
                 ss >> number;
                 return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
             }
-        }
-        else
-        {
-            throw std::runtime_error("Illegal token" + lastText);
         }
     }
 
@@ -474,7 +490,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             }
             case State::CharacterLiteral:
             {
-                if (iter == '\'')
+                if (iter == '\'' && (characters.empty() || characters.back() != '\\'))
                 {
                     currentState = State::Start;
                     result.emplace_back(line, column, TokenType::Literal, charactersToCharLiteral(characters));

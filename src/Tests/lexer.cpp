@@ -2,7 +2,7 @@
 #include "catch.hpp"
 #include <sstream>
 
-TEST_CASE("Literals", "[lexer]")
+TEST_CASE("Number Literals", "[lexer]")
 {
     SECTION("Integers")
     {
@@ -57,6 +57,24 @@ TEST_CASE("Literals", "[lexer]")
             CHECK(std::get<double>(result[0].getValue()) == 0.5);
         }
         CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3"));
+        std::array results = {
+            std::pair{"1e-19", 1e-19},
+            std::pair{"2e32", 2e32},
+            std::pair{"01e-19", 01e-19},
+            std::pair{"02e32", 02e32},
+        };
+        for (auto[input, resulting] : results)
+        {
+            DYNAMIC_SECTION(input)
+            {
+                auto result = OpenCL::Lexer::tokenize(input);
+                REQUIRE_FALSE(result.empty());
+                CHECK(result.size() == 1);
+                REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<double>(result[0].getValue()));
+                CHECK(std::get<double>(result[0].getValue()) == resulting);
+            }
+        }
     }
     SECTION("Octal")
     {
@@ -175,3 +193,72 @@ TEST_CASE("Comments", "[lexer]")
     CHECK(result.at(1).getLine() == 2);
 }
 
+TEST_CASE("Character literals", "[lexer]")
+{
+    SECTION("Normal")
+    {
+        auto result = OpenCL::Lexer::tokenize("'5'");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '5');
+    }
+    SECTION("Escape characters")
+    {
+        std::array results = {
+            std::pair{"'\\''", '\''},
+            std::pair{"'\\\"'", '"'},
+            std::pair{"'\\?'", '\?'},
+            std::pair{"'\\a'", '\a'},
+            std::pair{"'\\b'", '\b'},
+            std::pair{"'\\f'", '\f'},
+            std::pair{"'\\n'", '\n'},
+            std::pair{"'\\r'", '\r'},
+            std::pair{"'\\t'", '\t'},
+            std::pair{"'\\v'", '\v'},
+        };
+        for (auto[input, chara] : results)
+        {
+            DYNAMIC_SECTION(input)
+            {
+                auto result = OpenCL::Lexer::tokenize(input);
+                REQUIRE(result.size() == 1);
+                REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
+                REQUIRE(std::get<std::int32_t>(result[0].getValue()) == chara);
+            }
+        }
+    }
+    SECTION("Octals")
+    {
+        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\9'"));
+        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\0700'"));
+        auto result = OpenCL::Lexer::tokenize("'\\070'");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\070');
+    }
+    SECTION("Hex")
+    {
+        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\xG'"));
+        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\x'"));
+        auto result = OpenCL::Lexer::tokenize("'\\x070'");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\x070');
+    }
+}
+
+TEST_CASE("String literals", "[lexer]")
+{
+    SECTION("Normal")
+    {
+        auto result = OpenCL::Lexer::tokenize("\"test\"");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
+        CHECK(std::get<std::string>(result[0].getValue()) == "test");
+    }
+}

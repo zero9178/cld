@@ -615,6 +615,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
 {
     auto name = declaratorToName(node.getDeclarator());
     std::vector<Semantics::SpecifierQualifierRef> specifierQualifiers;
+    const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
         std::visit(
@@ -629,15 +630,18 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                      [](auto&&)
                      {}},
             iter);
-    }
-    if (std::count_if(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                      [](const Syntax::DeclarationSpecifier& specifier)
-                      {
-                          return std::holds_alternative<Syntax::StorageClassSpecifier>(specifier);
-                      })
-        > 1)
-    {
-        return FailureReason("A maximum of one storage class specifier allowed in declaration");
+        if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter))
+        {
+            if (storageClassSpecifier)
+            {
+                return FailureReason("A maximum of one storage class specifier allowed in function definition");
+            }
+            if (*storage != Syntax::StorageClassSpecifier::Static && *storage != Syntax::StorageClassSpecifier::Extern)
+            {
+                return FailureReason("Only static or extern are allowed storage class specifiers in function definition");
+            }
+            storageClassSpecifier = storage;
+        }
     }
     auto type = Semantics::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
                                              node.getDeclarations(), gatherStructsAndUnions());
@@ -656,16 +660,6 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     }))
     {
         return FailureReason("Parameter name omitted");
-    }
-    bool internalLinkage =
-        declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                                Syntax::StorageClassSpecifier::Extern);
-    bool externalLinkage =
-        declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                                Syntax::StorageClassSpecifier::Static);
-    if (internalLinkage && externalLinkage)
-    {
-        return FailureReason("Can't combine static with extern");
     }
     if (!m_definedFunctions.insert(name).second)
     {
@@ -801,7 +795,8 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     return FunctionDefinition(functionRP,
                               name,
                               std::move(declarations),
-                              internalLinkage ? Linkage::Internal : Linkage::External);
+                              storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
+                              ? Linkage::Internal : Linkage::External);
 }
 
 std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Semantics::SemanticAnalysis::gatherStructsAndUnions() const
@@ -866,7 +861,39 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
             }
         }
     }
-
+    if (node.getInitDeclarators().empty())
+    {
+        if (std::none_of(refs.begin(), refs.end(), [](const SpecifierQualifierRef& ref)
+        {
+            return std::visit(overload{
+                [](const Syntax::TypeSpecifier& typeSpecifier) -> bool
+                {
+                    return std::visit(overload{
+                        [](const Syntax::StructOrUnionSpecifier&)
+                        {
+                            return true;
+                        },
+                        [](const Syntax::EnumDeclaration&)
+                        {
+                            return true;
+                        },
+                        [](auto&&) -> bool
+                        {
+                            return false;
+                        }
+                    }, typeSpecifier.getVariant());
+                },
+                [](auto&&) -> bool
+                {
+                    return false;
+                }
+            }, ref);
+        }))
+        {
+            return FailureReason("There must be at least one declaration");
+        }
+        return decls;
+    }
     for (auto&[declarator, initializer] : node.getInitDeclarators())
     {
         auto name = declaratorToName(*declarator);
@@ -910,6 +937,7 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                                            storageClassSpecifier
                                                && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
                                            ? Linkage::Internal : Linkage::External, Lifetime::Static, std::move(name)));
+            m_typesOfNamedValues.back().emplace(decls.back().getName(), decls.back());
         }
         else
         {
@@ -934,7 +962,7 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
             {
                 lifetime = Lifetime::Register;
             }
-            auto declaration = Declaration(std::move(*result), linkage, lifetime, std::move(name));
+            auto declaration = Declaration(std::move(*result), linkage, lifetime, name);
             if (auto[prev, success] = m_typesOfNamedValues.back().emplace(name, declaration);!success
                 && (prev->second.getLinkage() == Linkage::None || linkage == Linkage::None))
             {
