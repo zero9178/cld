@@ -249,6 +249,7 @@ TEST_CASE("Character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\x070');
     }
+    CHECK_THROWS(OpenCL::Lexer::tokenize("'\\'"));
 }
 
 TEST_CASE("String literals", "[lexer]")
@@ -260,5 +261,22 @@ TEST_CASE("String literals", "[lexer]")
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "test");
+    }
+    SECTION("Escapes")
+    {
+        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa\n\r\f\\ab\x07"")");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
+        CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
+        CHECK_THROWS(OpenCL::Lexer::tokenize(R"("\")"));
+    }
+    SECTION("Concatenation")
+    {
+        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa""dwadwadawdwa")");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
+        CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwadwadwadawdwa");
     }
 }

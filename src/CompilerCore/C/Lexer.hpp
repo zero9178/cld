@@ -109,6 +109,9 @@ namespace OpenCL::Lexer
         friend std::vector<Token> tokenize(std::string source);
 
     public:
+
+        using ValueType = variant;
+
         explicit Token(std::uint64_t line, std::uint64_t column, TokenType tokenType) noexcept
             : m_line(line), m_column(column), m_tokenType(tokenType)
         {

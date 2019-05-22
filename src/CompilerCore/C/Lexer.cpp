@@ -19,43 +19,43 @@ namespace
         {
             return '\'';
         }
-        else if (characters == "\\\"")
+        if (characters == "\\\"")
         {
             return '"';
         }
-        else if (characters == "\\?")
+        if (characters == "\\?")
         {
             return '\?';
         }
-        else if (characters == "\\\\")
+        if (characters == "\\\\")
         {
             return '\\';
         }
-        else if (characters == "\\a")
+        if (characters == "\\a")
         {
             return '\a';
         }
-        else if (characters == "\\b")
+        if (characters == "\\b")
         {
             return '\b';
         }
-        else if (characters == "\\f")
+        if (characters == "\\f")
         {
             return '\f';
         }
-        else if (characters == "\\n")
+        if (characters == "\\n")
         {
             return '\n';
         }
-        else if (characters == "\\r")
+        if (characters == "\\r")
         {
             return '\r';
         }
-        else if (characters == "\\t")
+        if (characters == "\\t")
         {
             return '\t';
         }
-        else if (characters == "\\v")
+        if (characters == "\\v")
         {
             return '\v';
         }
@@ -260,44 +260,31 @@ namespace
 
     OpenCL::Lexer::Token charactersToNumber(std::string lastText, std::uint64_t line, std::uint64_t column)
     {
-        if (!(lastText.find('.') != std::string::npos || (lastText.size() >= 2 && lastText.substr(0, 2) == "0x"
-            && (lastText.find('e') != std::string::npos || lastText.find('E') != std::string::npos))))
+        if (lastText.find('.') == std::string::npos
+            && ((lastText.size() >= 2 && (lastText.substr(0, 2) == "0x" || lastText.substr(0, 2) == "0X"))
+                || (lastText.find('e') == std::string::npos && lastText.find('E') == std::string::npos))
+            && lastText.find('p') == std::string::npos && lastText.find('P') == std::string::npos)
         {
-            static std::regex numbers("[0-9a-fA-F]+");
-            bool isHex = false;
-            if (lastText.size() > 1 && lastText[0] == '0' && lastText[1] == 'x')
-            {
-                lastText = lastText.substr(2, lastText.size() - 2);
-                isHex = true;
-            }
+            static std::regex numbers("(0x)?[0-9a-fA-F]+");
             std::smatch match;
             std::regex_search(lastText, match, numbers);
             std::string filtered = match[0];
 
-            std::stringstream ss = [&lastText, &filtered, isHex]
-            {
-                std::stringstream ss;
-                if (isHex)
-                {
-                    ss << std::hex;
-                }
-                else if (lastText[0] == '0')
-                {
-                    ss << std::oct;
-                }
-                ss << filtered;
-                return ss;
-            }();
             std::string suffix = lastText.substr(filtered.size(), lastText.size() - filtered.size());
             if (std::any_of(suffix.begin(), suffix.end(), [](char c)
             { return c == 'u'; }))
             {
                 auto erase = std::remove(suffix.begin(), suffix.end(), 'u');
                 suffix.erase(erase, suffix.end());
+
+                char* endptr = nullptr;
+                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
+                if (endptr != filtered.c_str() + filtered.size())
+                {
+                    throw std::runtime_error("Invalid constant " + filtered);
+                }
                 if (suffix.empty() || suffix == "l" || suffix == "L")
                 {
-                    std::uint64_t number;
-                    ss >> number;
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
                         return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
@@ -310,8 +297,6 @@ namespace
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    std::uint64_t number;
-                    ss >> number;
                     return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                 }
                 else
@@ -321,10 +306,14 @@ namespace
             }
             else
             {
+                char* endptr = nullptr;
+                std::int64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
+                if (endptr != filtered.c_str() + filtered.size())
+                {
+                    throw std::runtime_error("Invalid constant " + filtered);
+                }
                 if (suffix.empty() || suffix == "l" || suffix == "L")
                 {
-                    std::int64_t number;
-                    ss >> number;
                     if (number > std::numeric_limits<std::int32_t>::max())
                     {
                         if (number <= std::numeric_limits<std::uint32_t>::max())
@@ -345,8 +334,6 @@ namespace
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    std::int64_t number;
-                    ss >> number;
                     return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
                 }
                 else
@@ -357,18 +344,24 @@ namespace
         }
         else
         {
+            char* endptr = nullptr;
             if (lastText.back() == 'f' || lastText.back() == 'F')
             {
-                std::istringstream ss(lastText.substr(0, lastText.size() - 1));
-                float number;
-                ss >> number;
+                lastText = lastText.substr(0, lastText.size() - 1);
+                float number = std::strtof(lastText.c_str(), &endptr);
+                if (endptr != lastText.c_str() + lastText.size())
+                {
+                    throw std::runtime_error("Invalid floating point constant " + lastText);
+                }
                 return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
             }
             else
             {
-                std::istringstream ss(lastText);
-                double number;
-                ss >> number;
+                double number = std::strtod(lastText.c_str(), &endptr);
+                if (endptr != lastText.c_str() + lastText.size())
+                {
+                    throw std::runtime_error("Invalid floating point constant " + lastText);
+                }
                 return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
             }
         }
@@ -505,11 +498,36 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 if (iter == '"' && (characters.empty() || characters.back() != '\\'))
                 {
                     currentState = State::Start;
-                    result.emplace_back(line, column, TokenType::Literal, characters);
+                    if (!result.empty() && result.back().getTokenType() == TokenType::Literal
+                        && std::holds_alternative<std::string>(result.back().getValue()))
+                    {
+                        result.back() = Token(result.back().getLine(),
+                                              result.back().getColumn(),
+                                              TokenType::Literal,
+                                              std::get<std::string>(result.back().getValue()) + characters);
+                    }
+                    else
+                    {
+                        result.emplace_back(line, column, TokenType::Literal, characters);
+                    }
                     characters.clear();
                     continue;
                 }
-                characters += iter;
+                static bool lastIsBackSlash = false;
+                if (!characters.empty() && characters.back() == '\\' && !lastIsBackSlash)
+                {
+                    characters = characters.substr(0, characters.size() - 1)
+                        + static_cast<char>(charactersToCharLiteral(std::string("\\") + iter));
+                    if (characters.back() == '\\')
+                    {
+                        lastIsBackSlash = true;
+                    }
+                }
+                else
+                {
+                    lastIsBackSlash = false;
+                    characters += iter;
+                }
                 break;
             }
             case State::Text:
@@ -538,7 +556,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             case State::Number:
             {
                 if ((iter >= '0' && iter <= '9') || (iter >= 'a' && iter <= 'f') || (iter >= 'A' && iter <= 'F')
-                    || iter == 'x' || iter == '.' || iter == 'u' || iter == 'U' || iter == 'l' || iter == 'L')
+                    || iter == 'x' || iter == 'X' || iter == '.' || iter == 'u' || iter == 'U' || iter == 'l'
+                    || iter == 'L')
+                {
+                    characters += iter;
+                }
+                else if ((iter == '+' || iter == '-') && !characters.empty()
+                    && (characters.back() == 'e' || characters.back() == 'E' || characters.back() == 'p'
+                        || characters.back() == 'P'))
                 {
                     characters += iter;
                 }
@@ -804,9 +829,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
                 }
                 else if constexpr (!std::is_same_v<std::monostate, T>)
                 {
-                    std::ostringstream ss;
-                    ss << value;
-                    return ss.str();
+                    return std::to_string(value);
                 }
                 else
                 {
