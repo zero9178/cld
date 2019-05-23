@@ -2,6 +2,8 @@
 #include "catch.hpp"
 #include <sstream>
 
+using namespace Catch::Matchers;
+
 TEST_CASE("Number Literals", "[lexer]")
 {
     SECTION("Integers")
@@ -249,7 +251,7 @@ TEST_CASE("Character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\x070');
     }
-    CHECK_THROWS(OpenCL::Lexer::tokenize("'\\'"));
+    CHECK_THROWS(OpenCL::Lexer::tokenize("'\'\n"));
 }
 
 TEST_CASE("String literals", "[lexer]")
@@ -264,12 +266,11 @@ TEST_CASE("String literals", "[lexer]")
     }
     SECTION("Escapes")
     {
-        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa\n\r\f\\ab\x07"")");
+        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa\n\r\f\\ab\x07\"")");
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
-        CHECK_THROWS(OpenCL::Lexer::tokenize(R"("\")"));
     }
     SECTION("Concatenation")
     {
@@ -277,6 +278,7 @@ TEST_CASE("String literals", "[lexer]")
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
-        CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwadwadwadawdwa");
+        CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa""dwadwadawdwa");
     }
+    CHECK_THROWS(OpenCL::Lexer::tokenize("\"\n"));
 }

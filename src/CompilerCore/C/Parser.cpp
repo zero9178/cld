@@ -181,7 +181,11 @@ Expected<Declaration, FailureReason>
         {
             break;
         }
-        context.addToScope(Semantics::declaratorToName(*declarator));
+        auto optional = context.addToScope(Semantics::declaratorToName(*declarator));
+        if(optional)
+        {
+            return *optional;
+        }
         if (curr->getTokenType() != TokenType::Assignment)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
@@ -1488,7 +1492,11 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
             auto result = std::visit(Y{visitor}, decl->getDirectDeclarator().getVariant());
             if (!result.empty())
             {
-                context.addToScope(result);
+                auto optional = context.addToScope(result);
+                if(optional)
+                {
+                    return *optional;
+                }
             }
         }
     }
@@ -1497,7 +1505,11 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
     {
         for (auto& iter : identifierList->getIdentifiers())
         {
-            context.addToScope(iter);
+            auto optional = context.addToScope(iter);
+            if(optional)
+            {
+                return *optional;
+            }
         }
     }
     auto compoundStatement = parseCompoundStatement(current, end, context);
@@ -1509,7 +1521,11 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
 
     begin = current;
     {
-        context.addToScope(Semantics::declaratorToName(*declarator));
+        auto optional = context.addToScope(Semantics::declaratorToName(*declarator));
+        if(optional)
+        {
+            return *optional;
+        }
     }
     return FunctionDefinition(line, column, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));

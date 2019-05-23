@@ -40,12 +40,13 @@ namespace OpenCL::Parser
 
         ParsingContext& operator=(ParsingContext&&) = delete;
 
-        void addToScope(std::string name)
+        std::optional<FailureReason> addToScope(std::string name)
         {
             if (auto result = m_currentScope.back().insert(std::move(name)); !result.second)
             {
-                throw std::runtime_error(*result.first + " already exists in this scope");
+                return FailureReason(*result.first + " already exists in this scope");
             }
+            return {};
         }
 
         bool isInScope(const std::string& name)

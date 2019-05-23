@@ -406,6 +406,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             {
                 currentState = State::Start;
             }
+            else if (currentState == State::CharacterLiteral)
+            {
+                throw std::runtime_error("Newline in character literal, use \\n instead");
+            }
+            else if (currentState == State::StringLiteral)
+            {
+                throw std::runtime_error("Newline in string literal, use \\n instead");
+            }
             line++;
             column = 0;
             continue;
@@ -498,6 +506,19 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 if (iter == '"' && (characters.empty() || characters.back() != '\\'))
                 {
                     currentState = State::Start;
+                    {
+                        static std::regex escapes(R"(\\([0-7]{1,3}|x[0-9a-fA-F]+|.))");
+                        std::smatch matches;
+                        auto start = characters.cbegin();
+                        while (start < characters.cend() && std::regex_search(start, characters.cend(), matches, escapes))
+                        {
+                            auto size = matches.suffix().first - characters.cbegin() - (matches[0].second - matches[0].first) + 1;
+                            characters = std::string(characters.cbegin(),matches[0].first) +
+                                static_cast<char>(charactersToCharLiteral({matches[0].first, matches[0].second}))
+                                + std::string(matches[0].second, characters.cend());
+                            start = characters.cbegin() + size;
+                        }
+                    }
                     if (!result.empty() && result.back().getTokenType() == TokenType::Literal
                         && std::holds_alternative<std::string>(result.back().getValue()))
                     {
@@ -513,21 +534,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     characters.clear();
                     continue;
                 }
-                static bool lastIsBackSlash = false;
-                if (!characters.empty() && characters.back() == '\\' && !lastIsBackSlash)
-                {
-                    characters = characters.substr(0, characters.size() - 1)
-                        + static_cast<char>(charactersToCharLiteral(std::string("\\") + iter));
-                    if (characters.back() == '\\')
-                    {
-                        lastIsBackSlash = true;
-                    }
-                }
-                else
-                {
-                    lastIsBackSlash = false;
-                    characters += iter;
-                }
+                characters += iter;
                 break;
             }
             case State::Text:
