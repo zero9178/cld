@@ -59,20 +59,3 @@ TEST_CASE("Declaration parsing", "[parser]")
     INFO("The error is:\"" << (expected.hasError() ? expected.error().getText() : "") << '\\');
     REQUIRE(expected);
 }
-
-TEST_CASE("Traditional argument scope","[parser]")
-{
-    std::array sources  = {
-        std::pair{"int x(a) int a; {return a;}\n",true},
-        std::pair{"int y(b) int b; {return a;}\n",false},
-        std::pair{"int a(a)int a;{a=10;return a;}",true}
-    };
-    for(auto [source,succeed] : sources)
-    {
-        DYNAMIC_SECTION(source)
-        {
-            auto expected = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-            REQUIRE(static_cast<bool>(expected) == succeed);
-        }
-    }
-}

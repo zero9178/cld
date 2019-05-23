@@ -124,13 +124,9 @@ namespace
                 {
                     return std::visit(overload{[&](const OpenCL::Semantics::PointerType& pointerType) -> bool
                                                {
-                                                   if (auto* function = std::get_if<OpenCL::Semantics::FunctionType>(
-                                                           &pointerType.getElementType().get());
-                                                       function && *function == functionType)
-                                                   {
-                                                       return true;
-                                                   }
-                                                   return false;
+                                                   auto* function = std::get_if<OpenCL::Semantics::FunctionType>(
+                                                       &pointerType.getElementType().get());
+                                                   return function && *function == functionType;
                                                },
                                                [](auto&&) -> bool
                                                { return false; }},

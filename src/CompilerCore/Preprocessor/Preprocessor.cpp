@@ -521,7 +521,8 @@ std::string OpenCL::PP::preprocess(std::string&& source)
     source = std::regex_replace(source, std::regex(R"(//.*)"), "");
 
     std::smatch blockComments;
-    while (std::regex_search(source, blockComments, std::regex(R"(/\*(.|\n)*\*/)")))
+    std::regex blockRegex(R"(/\*(.|\n)*\*/)");
+    while (std::regex_search(source, blockComments, blockRegex))
     {
         auto text = blockComments[0].str();
         auto newLines = std::count(text.begin(), text.end(), '\n');

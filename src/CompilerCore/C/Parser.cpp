@@ -143,21 +143,6 @@ Expected<Declaration, FailureReason>
     {
         curr++;
         begin = curr;
-        for (auto& iter : declarationSpecifiers)
-        {
-            if (auto* typeSpec = std::get_if<TypeSpecifier>(&iter))
-            {
-                if (auto* enumSpec = std::get_if<std::unique_ptr<EnumSpecifier>>(&typeSpec->getVariant());
-                    enumSpec && std::holds_alternative<EnumDeclaration>((*enumSpec)->getVariant()))
-                {
-                    auto& enumDecl = std::get<EnumDeclaration>((*enumSpec)->getVariant());
-                    for (auto& [name, value] : enumDecl.getValues())
-                    {
-                        context.addEnumConstant(name, value);
-                    }
-                }
-            }
-        }
         return Declaration(line, column, std::move(declarationSpecifiers), {});
     }
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
@@ -181,11 +166,7 @@ Expected<Declaration, FailureReason>
         {
             break;
         }
-        auto optional = context.addToScope(Semantics::declaratorToName(*declarator));
-        if(optional)
-        {
-            return *optional;
-        }
+        context.addToScope(Semantics::declaratorToName(*declarator));
         if (curr->getTokenType() != TokenType::Assignment)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
@@ -232,21 +213,6 @@ Expected<Declaration, FailureReason>
                 }
             };
             context.typedefs.back().insert(std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant()));
-        }
-    }
-    for (auto& iter : declarationSpecifiers)
-    {
-        if (auto* typeSpec = std::get_if<TypeSpecifier>(&iter))
-        {
-            if (auto* enumSpec = std::get_if<std::unique_ptr<EnumSpecifier>>(&typeSpec->getVariant());
-                enumSpec && std::holds_alternative<EnumDeclaration>((*enumSpec)->getVariant()))
-            {
-                auto& enumDecl = std::get<EnumDeclaration>((*enumSpec)->getVariant());
-                for (auto& [name, value] : enumDecl.getValues())
-                {
-                    context.addEnumConstant(name, value);
-                }
-            }
         }
     }
     begin = curr;
@@ -1492,11 +1458,7 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
             auto result = std::visit(Y{visitor}, decl->getDirectDeclarator().getVariant());
             if (!result.empty())
             {
-                auto optional = context.addToScope(result);
-                if(optional)
-                {
-                    return *optional;
-                }
+                context.addToScope(result);
             }
         }
     }
@@ -1505,11 +1467,7 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
     {
         for (auto& iter : identifierList->getIdentifiers())
         {
-            auto optional = context.addToScope(iter);
-            if(optional)
-            {
-                return *optional;
-            }
+            context.addToScope(iter);
         }
     }
     auto compoundStatement = parseCompoundStatement(current, end, context);
@@ -1520,13 +1478,7 @@ OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
     }
 
     begin = current;
-    {
-        auto optional = context.addToScope(Semantics::declaratorToName(*declarator));
-        if(optional)
-        {
-            return *optional;
-        }
-    }
+    context.addToScope(Semantics::declaratorToName(*declarator));
     return FunctionDefinition(line, column, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));
 }
@@ -3101,22 +3053,10 @@ Expected<PrimaryExpression, FailureReason> OpenCL::Parser::parsePrimaryExpressio
     auto column = currToken.getColumn();
     if (currToken.getTokenType() == TokenType::Identifier)
     {
-        const auto& name = std::get<std::string>(currToken.getValue());
-        if (context.isInScope(name))
-        {
-            begin = curr;
-            return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line, column, name));
-        }
-        else
-        {
-            auto* result = context.getEnumConstant(name);
-            if (!result)
-            {
-                return FailureReason("Unknown reference to variable or enum constant " + name);
-            }
-            begin = curr;
-            return PrimaryExpression(line, column, PrimaryExpressionConstant(line, column, *result));
-        }
+        begin = curr;
+        return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line, column,
+                                                                           std::get<std::string>(currToken
+                                                                                                     .getValue())));
     }
     else if (currToken.getTokenType() == TokenType::Literal)
     {
