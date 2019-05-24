@@ -165,7 +165,8 @@ namespace OpenCL::Syntax
         std::uint64_t m_column;
 
     public:
-        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column) {}
+        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column)
+        {}
 
         virtual ~Node() = default;
 
@@ -221,7 +222,7 @@ namespace OpenCL::Syntax
     {
     public:
         using variant =
-            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
+        std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
 
     private:
         variant m_value;
@@ -253,7 +254,7 @@ namespace OpenCL::Syntax
     class PrimaryExpression final : public Node
     {
         using variant =
-            std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParenthese>;
+        std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParenthese>;
         variant m_variant;
 
     public:
@@ -408,9 +409,9 @@ namespace OpenCL::Syntax
     class PostFixExpression final : public Node
     {
         using variant =
-            std::variant<PostFixExpressionPrimaryExpression, PostFixExpressionSubscript, PostFixExpressionDot,
-                         PostFixExpressionFunctionCall, PostFixExpressionArrow, PostFixExpressionIncrement,
-                         PostFixExpressionDecrement, PostFixExpressionTypeInitializer>;
+        std::variant<PostFixExpressionPrimaryExpression, PostFixExpressionSubscript, PostFixExpressionDot,
+                     PostFixExpressionFunctionCall, PostFixExpressionArrow, PostFixExpressionIncrement,
+                     PostFixExpressionDecrement, PostFixExpressionTypeInitializer>;
 
         variant m_variant;
 
@@ -497,7 +498,7 @@ namespace OpenCL::Syntax
     class UnaryExpression final : public Node
     {
         using variant =
-            std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator, UnaryExpressionSizeOf>;
+        std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator, UnaryExpressionSizeOf>;
         variant m_variant;
 
     public:
@@ -956,7 +957,7 @@ namespace OpenCL::Syntax
     class CaseStatement final : public Node
     {
         using constantVariant =
-            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
+        std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
 
         constantVariant m_constant;
         std::unique_ptr<Statement> m_statement;
@@ -1067,7 +1068,7 @@ namespace OpenCL::Syntax
         const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
         const std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&
-            getInitDeclarators() const;
+        getInitDeclarators() const;
     };
 
     /**
@@ -1260,8 +1261,8 @@ namespace OpenCL::Syntax
     class DirectAbstractDeclarator final : public Node
     {
         using variant =
-            std::variant<std::unique_ptr<AbstractDeclarator>, DirectAbstractDeclaratorAssignmentExpression,
-                         std::unique_ptr<DirectAbstractDeclarator>, DirectAbstractDeclaratorParameterTypeList>;
+        std::variant<std::unique_ptr<AbstractDeclarator>, DirectAbstractDeclaratorAssignmentExpression,
+                     std::unique_ptr<DirectAbstractDeclarator>, DirectAbstractDeclaratorParameterTypeList>;
 
         variant m_variant;
 
@@ -1293,8 +1294,8 @@ namespace OpenCL::Syntax
      *                          | <DeclarationSpecifier> { <DelcarationSpecifier> } [ <AbstractDeclarator> ]
      */
     using ParameterDeclaration =
-        std::pair<std::vector<DeclarationSpecifier>,
-                  std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
+    std::pair<std::vector<DeclarationSpecifier>,
+              std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
 
     /**
      * <ParameterList> ::= <ParameterDeclaration> { <TokenType::Comma> <ParameterDeclaration> }

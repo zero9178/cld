@@ -13,19 +13,20 @@ namespace OpenCL::Parser
     class ParsingContext final
     {
         std::vector<std::set<std::string>> m_currentScope;
+        bool m_backtracking = false;
 
     public:
         std::vector<std::set<std::string>> typedefs;
         std::map<std::string, Semantics::RecordType> structOrUnions;
-        std::vector<std::map<std::string, std::pair<std::size_t, std::size_t>>> enumDefinitions;
 
-        bool isTypedef(const std::string& name);
+        bool isTypedef(const std::string& name) const;
+
+        void logError(const std::string& text);
 
         ParsingContext()
         {
             m_currentScope.emplace_back();
             typedefs.emplace_back();
-            enumDefinitions.emplace_back();
         }
 
         ~ParsingContext() = default;
@@ -43,7 +44,7 @@ namespace OpenCL::Parser
             m_currentScope.back().insert(std::move(name));
         }
 
-        bool isInScope(const std::string& name)
+        bool isInScope(const std::string& name) const
         {
             for (auto& iter : m_currentScope)
             {
@@ -59,15 +60,15 @@ namespace OpenCL::Parser
         {
             m_currentScope.emplace_back();
             typedefs.emplace_back();
-            enumDefinitions.emplace_back();
         }
 
         void popScope()
         {
             m_currentScope.pop_back();
             typedefs.emplace_back();
-            enumDefinitions.pop_back();
         }
+
+        void setBackTracking(bool backtracking);
     };
 
     Expected<Syntax::TranslationUnit, FailureReason> buildTree(const std::vector<Lexer::Token>& tokens);
