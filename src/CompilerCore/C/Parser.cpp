@@ -10,11 +10,11 @@ using namespace OpenCL;
 using namespace OpenCL::Lexer;
 using namespace OpenCL::Syntax;
 
-Expected<TranslationUnit, FailureReason> OpenCL::Parser::buildTree(const std::vector<Token>& tokens)
+std::pair<TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Token>& tokens)
 {
     ParsingContext context;
     auto begin = tokens.cbegin();
-    return parseTranslationUnit(begin, tokens.cend(), context);
+    return {parseTranslationUnit(begin, tokens.cend(), context), context.getErrors().empty()};
 }
 
 namespace
@@ -29,7 +29,7 @@ namespace
     }
 } // namespace
 
-OpenCL::Expected<OpenCL::Syntax::TranslationUnit, OpenCL::FailureReason>
+OpenCL::Syntax::TranslationUnit
 OpenCL::Parser::parseTranslationUnit(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                      ParsingContext& context)
 {
@@ -43,13 +43,13 @@ OpenCL::Parser::parseTranslationUnit(Tokens::const_iterator& begin, Tokens::cons
         }
         else
         {
-            return result;
+            context.logError(result.error().getText());
         }
     }
     return TranslationUnit(std::move(global));
 }
 
-OpenCL::Expected<OpenCL::Syntax::ExternalDeclaration, OpenCL::FailureReason>
+std::optional<Syntax::ExternalDeclaration>
 OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                          ParsingContext& context)
 {
@@ -57,19 +57,32 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
     auto column = begin->getColumn();
     auto curr = begin;
     //backtracking
+    auto prevErrorCount = context.getErrors().size();
     auto function = parseFunctionDefinition(curr, end, context);
-    if (function)
+    auto pos = curr;
+    if (function && context.getErrors().size() == prevErrorCount)
     {
         begin = curr;
         return ExternalDeclaration(line, column, std::move(*function));
     }
-    else if (auto declaration = parseDeclaration(curr = begin, end, context))
+    auto copy = std::vector(context.getErrors().begin() + prevErrorCount, context.getErrors().end());
+    context.getErrors().resize(prevErrorCount);
+    if (auto declaration = parseDeclaration(curr = begin, end, context);declaration
+        && context.getErrors().size() == prevErrorCount)
     {
         begin = curr;
         return ExternalDeclaration(line, column, std::move(*declaration));
     }
     else
     {
+        bool declWentFurther = std::distance(begin, curr) > std::distance(begin, pos);
+        begin = declWentFurther ? curr : pos;
+        if (!declWentFurther)
+        {
+            context.getErrors().resize(prevErrorCount);
+            context.getErrors().insert(context.getErrors().end(), copy.begin(), copy.end());
+            return function;
+        }
         return declaration;
     }
 }
@@ -150,7 +163,7 @@ namespace
     Y(G)->Y<G>;
 } // namespace
 
-Expected<Declaration, FailureReason>
+std::optional<Syntax::Declaration>
 OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context)
 {
     if (begin >= end)
@@ -265,7 +278,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     return Declaration(line, column, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
-OpenCL::Expected<OpenCL::Syntax::DeclarationSpecifier, OpenCL::FailureReason>
+std::optional<Syntax::DeclarationSpecifier>
 OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                           OpenCL::Parser::ParsingContext& context)
 {
@@ -295,8 +308,8 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
     case TokenType::FloatKeyword:
     case TokenType::DoubleKeyword:
     case TokenType::SignedKeyword:
-    case TokenType::UnsignedKeyword: begin++; [[fallthrough]];
-    case TokenType::Identifier: begin++;
+    case TokenType::Identifier:
+    case TokenType::UnsignedKeyword: begin++;
     default: break;
     }
     switch (currToken.getTokenType())
@@ -868,7 +881,9 @@ Expected<DirectDeclarator, FailureReason> OpenCL::Parser::parseDirectDeclarator(
         return FailureReason("Unexpected end of tokens");
     }
     std::unique_ptr<DirectDeclarator> directDeclarator;
-    while (begin < end)
+    while (begin < end
+        && (begin->getTokenType() == TokenType::Identifier || begin->getTokenType() == TokenType::OpenParenthese
+            || begin->getTokenType() == TokenType::OpenSquareBracket))
     {
         switch (begin->getTokenType())
         {
@@ -947,44 +962,58 @@ Expected<DirectDeclarator, FailureReason> OpenCL::Parser::parseDirectDeclarator(
         {
             if (!directDeclarator)
             {
-                return FailureReason("Expected Direct Declarator before [");
+                return FailureReason("Expected declarator before [");
             }
             auto line = directDeclarator->getLine();
             auto column = directDeclarator->getColumn();
-            auto curr = begin;
-            //backtracking
-            context.setBackTracking(true);
-            if (auto noAsteriskOrStatic =
-                parseDirectDeclaratorNoStaticOrAsterisk(*directDeclarator, curr, end, context))
+            begin++;
+            if (begin >= end)
             {
-                begin = curr;
-                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*noAsteriskOrStatic));
+                return FailureReason("Expected ] to match [");
             }
-            else if (auto staticDecl = parseDirectDeclaratorStatic(*directDeclarator, curr = begin, end, context))
+            if (std::any_of(begin, std::find_if(begin, end, [](const auto& token)
+            { return token.getTokenType() == TokenType::CloseSquareBracket; }), [](const auto& token)
+                            {
+                                return token.getTokenType() == TokenType::Asterisk;
+                            }))
             {
-                begin = curr;
-                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*staticDecl));
-            }
-            else if (auto asterisk = parseDirectDeclaratorAsterisk(*directDeclarator, curr = begin, end, context))
-            {
-                begin = curr;
+                auto asterisk = parseDirectDeclaratorAsterisk(*directDeclarator, begin, end, context);
+                if (!asterisk)
+                {
+                    return asterisk;
+                }
                 directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*asterisk));
+            }
+            else if (std::any_of(begin, std::find_if(begin, end, [](const auto& token)
+            { return token.getTokenType() == TokenType::CloseSquareBracket; }), [](const auto& token)
+                                 {
+                                     return token.getTokenType() == TokenType::StaticKeyword;
+                                 }))
+            {
+                auto staticDecl = parseDirectDeclaratorStatic(*directDeclarator, begin, end, context);
+                if (!staticDecl)
+                {
+                    return staticDecl;
+                }
+                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*staticDecl));
             }
             else
             {
-                context.setBackTracking(false);
-                return noAsteriskOrStatic;
+                auto noStaticDecl = parseDirectDeclaratorNoStaticOrAsterisk(*directDeclarator, begin, end, context);
+                if (!noStaticDecl)
+                {
+                    return noStaticDecl;
+                }
+                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*noStaticDecl));
             }
-            context.setBackTracking(false);
             break;
         }
-        default:goto Exit;
+        default:break;
         }
     }
-Exit:
     if (!directDeclarator)
     {
-        return FailureReason("Invalid token for direct declarator");
+        return FailureReason("Expected declarator");
     }
     return std::move(*directDeclarator);
 }
@@ -1029,37 +1058,41 @@ Expected<ParameterList, FailureReason> OpenCL::Parser::parseParameterList(OpenCL
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
-    auto line = curr->getLine();
-    auto column = curr->getColumn();
+    auto line = begin->getLine();
+    auto column = begin->getColumn();
     std::vector<ParameterDeclaration> parameterDeclarations;
     bool first = true;
-    while (true)
+    while (begin < end)
     {
-        auto before = curr;
+        auto before = begin;
         if (first)
         {
             first = false;
         }
-        else if (curr->getTokenType() == TokenType::Comma)
+        else if (begin->getTokenType() == TokenType::Comma)
         {
-            curr++;
+            begin++;
         }
         else
         {
             break;
         }
         std::vector<DeclarationSpecifier> declarationSpecifiers;
-        while (auto result = parseDeclarationSpecifier(curr, end, context))
+        while (begin < end && isDeclarationSpecifier(*begin, context))
         {
+            auto result = parseDeclarationSpecifier(begin, end, context);
+            if (!result)
+            {
+                return result;
+            }
             declarationSpecifiers.push_back(std::move(*result));
         }
         if (declarationSpecifiers.empty())
         {
-            curr = before;
+            begin = before;
             break;
         }
-        auto result = std::find_if(curr, end, [](const Token& token)
+        auto result = std::find_if(begin, end, [](const Token& token)
         {
             switch (token.getTokenType())
             {
@@ -1071,25 +1104,28 @@ Expected<ParameterList, FailureReason> OpenCL::Parser::parseParameterList(OpenCL
             }
             return true;
         });
+        if (result == end)
+        {
+            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
+            continue;
+        }
 
         if (result->getTokenType() == TokenType::OpenSquareBracket)
         {
-            auto abstractDeclarator = parseAbstractDeclarator(curr, end, context);
+            auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
             if (!abstractDeclarator)
             {
-                curr = before;
-                break;
+                return abstractDeclarator;
             }
             parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
         }
         else if (result->getTokenType() == TokenType::Identifier)
         {
-            auto declarator = parseDeclarator(curr, end, context);
+            auto declarator = parseDeclarator(begin, end, context);
             if (!declarator)
             {
-                curr = before;
-                break;
+                return declarator;
             }
             parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                std::make_unique<Declarator>(std::move(*declarator)));
@@ -1102,12 +1138,11 @@ Expected<ParameterList, FailureReason> OpenCL::Parser::parseParameterList(OpenCL
                 result++;
                 if (result->getTokenType() == TokenType::Identifier)
                 {
-                    auto declarator = parseDeclarator(curr, end, context);
+                    auto declarator = parseDeclarator(begin, end, context);
                     if (!declarator)
                     {
                         declarationSpecifiers.pop_back();
-                        curr = before;
-                        break;
+                        return declarator;
                     }
                     parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                        std::make_unique<Declarator>(std::move(*declarator)));
@@ -1115,12 +1150,11 @@ Expected<ParameterList, FailureReason> OpenCL::Parser::parseParameterList(OpenCL
                 }
                 else if (result->getTokenType() != TokenType::OpenParenthese)
                 {
-                    auto abstractDeclarator = parseAbstractDeclarator(curr, end, context);
+                    auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                     if (!abstractDeclarator)
                     {
                         declarationSpecifiers.pop_back();
-                        curr = before;
-                        break;
+                        return abstractDeclarator;
                     }
                     parameterDeclarations.emplace_back(
                         std::move(declarationSpecifiers),
@@ -1136,32 +1170,31 @@ Expected<ParameterList, FailureReason> OpenCL::Parser::parseParameterList(OpenCL
     }
     if (parameterDeclarations.empty())
     {
-        return FailureReason("Expected at least one parameter declaration");
+        context.logError("Expected at least one parameter declaration");
     }
-    begin = curr;
     return ParameterList(line, column, std::move(parameterDeclarations));
 }
 
 Expected<Pointer, FailureReason> OpenCL::Parser::parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                              ParsingContext&)
+                                                              ParsingContext& context)
 {
     if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
-    if (curr->getTokenType() != TokenType::Asterisk)
+    if (begin->getTokenType() != TokenType::Asterisk)
     {
-        return FailureReason("Expected * at the beginning of pointer");
+        context.logError("Expected * at the beginning of pointer");
     }
-    auto line = curr->getLine();
-    auto column = curr->getColumn();
-    curr++;
+    auto line = begin->getLine();
+    auto column = begin->getColumn();
+    begin++;
     std::vector<TypeQualifier> typeQualifier;
-    while (curr->getTokenType() == TokenType::ConstKeyword || curr->getTokenType() == TokenType::RestrictKeyword
-        || curr->getTokenType() == TokenType::VolatileKeyword)
+    while (begin < end
+        && (begin->getTokenType() == TokenType::ConstKeyword || begin->getTokenType() == TokenType::RestrictKeyword
+            || begin->getTokenType() == TokenType::VolatileKeyword))
     {
-        switch (curr->getTokenType())
+        switch (begin->getTokenType())
         {
         case TokenType::ConstKeyword: typeQualifier.push_back(TypeQualifier::Const);
             break;
@@ -1171,9 +1204,8 @@ Expected<Pointer, FailureReason> OpenCL::Parser::parsePointer(Tokens::const_iter
             break;
         default: break;
         }
-        curr++;
+        begin++;
     }
-    begin = curr;
     return Pointer(line, column, std::move(typeQualifier));
 }
 
@@ -1181,24 +1213,27 @@ Expected<AbstractDeclarator, FailureReason>
 OpenCL::Parser::parseAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& begin, Tokens::const_iterator end,
                                         OpenCL::Parser::ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
-    auto line = curr->getLine();
-    auto column = curr->getColumn();
+    auto line = begin->getLine();
+    auto column = begin->getColumn();
     std::vector<Syntax::Pointer> pointers;
-    while (auto result = parsePointer(curr, end, context))
+    while (begin < end && begin->getTokenType() == TokenType::Asterisk)
     {
+        auto result = parsePointer(begin, end, context);
+        if (!result)
+        {
+            return result;
+        }
         pointers.push_back(std::move(*result));
     }
-    auto result = parseDirectAbstractDeclarator(curr, end, context);
+    auto result = parseDirectAbstractDeclarator(begin, end, context);
     if (!result)
     {
         return result;
     }
-    begin = curr;
     return AbstractDeclarator(line, column, std::move(pointers), std::move(*result));
 }
 
@@ -1206,29 +1241,26 @@ Expected<DirectAbstractDeclarator, FailureReason>
 OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& begin,
                                               Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
-    while (true)
+    while (begin < end)
     {
-        auto before = curr;
-        switch (curr->getTokenType())
+        switch (begin->getTokenType())
         {
         case TokenType::OpenParenthese:
         {
-            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : curr->getLine();
-            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : curr->getColumn();
-            curr++;
-            if (isDeclarationSpecifier(*curr, context))
+            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : begin->getLine();
+            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : begin->getColumn();
+            begin++;
+            if (begin < end && isDeclarationSpecifier(*begin, context))
             {
-                auto parameterTypeList = parseParameterTypeList(curr, end, context);
+                auto parameterTypeList = parseParameterTypeList(begin, end, context);
                 if (!parameterTypeList)
                 {
-                    curr = before;
-                    goto Exit;
+                    return parameterTypeList;
                 }
                 directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                     line, colunn,
@@ -1236,15 +1268,14 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                         line, colunn, std::move(directAbstractDeclarator),
                         std::make_unique<ParameterTypeList>(std::move(*parameterTypeList))));
             }
-            else if (curr->getTokenType() == TokenType::OpenParenthese
-                || curr->getTokenType() == TokenType::OpenSquareBracket
-                || curr->getTokenType() == TokenType::Asterisk)
+            else if (begin < end && (begin->getTokenType() == TokenType::OpenParenthese
+                || begin->getTokenType() == TokenType::OpenSquareBracket
+                || begin->getTokenType() == TokenType::Asterisk))
             {
-                auto abstractDeclarator = parseAbstractDeclarator(curr, end, context);
+                auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                 if (!abstractDeclarator)
                 {
-                    curr = before;
-                    goto Exit;
+                    return abstractDeclarator;
                 }
                 directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                     line, colunn, std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
@@ -1256,34 +1287,35 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                     DirectAbstractDeclaratorParameterTypeList(line, colunn, std::move(directAbstractDeclarator),
                                                               nullptr));
             }
-            if (curr->getTokenType() != TokenType::CloseParenthese)
+            if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
             {
-                curr = before;
-                goto Exit;
+                context.logError("Expected ) to match (");
             }
-            curr++;
+            else
+            {
+                begin++;
+            }
             break;
         }
         case TokenType::OpenSquareBracket:
         {
-            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : curr->getLine();
-            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : curr->getColumn();
-            curr++;
-            if (curr->getTokenType() == TokenType::Asterisk)
+            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : begin->getLine();
+            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : begin->getColumn();
+            begin++;
+            if (begin < end && begin->getTokenType() == TokenType::Asterisk)
             {
-                curr++;
+                begin++;
                 directAbstractDeclarator =
                     std::make_unique<DirectAbstractDeclarator>(line, colunn, std::move(directAbstractDeclarator));
             }
             else
             {
-                if (curr->getTokenType() != TokenType::CloseSquareBracket)
+                if (begin < end && begin->getTokenType() != TokenType::CloseSquareBracket)
                 {
-                    auto assignment = parseAssignmentExpression(curr, end, context);
+                    auto assignment = parseAssignmentExpression(begin, end, context);
                     if (!assignment)
                     {
-                        curr = before;
-                        goto Exit;
+                        return assignment;
                     }
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                         line, colunn,
@@ -1299,45 +1331,39 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                                                                      std::move(directAbstractDeclarator), nullptr));
                 }
             }
-            if (curr->getTokenType() != TokenType::CloseSquareBracket)
+            if (begin >= end || begin->getTokenType() != TokenType::CloseSquareBracket)
             {
-                curr = before;
-                goto Exit;
+                context.logError("Expected ] to match [");
             }
-            curr++;
             break;
         }
-        default:
-        {
-Exit:
-            if (!directAbstractDeclarator)
-            {
-                return FailureReason("Invalid tokens for direct abstract declarator");
-            }
-            begin = curr;
-            return std::move(*directAbstractDeclarator);
-        }
+        default:goto Exit;
         }
     }
+Exit:
+    if (!directAbstractDeclarator)
+    {
+        return FailureReason("Invalid tokens for direct abstract declarator");
+    }
+    return std::move(*directAbstractDeclarator);
 }
 
 Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::Tokens::const_iterator& begin,
                                                                           Tokens::const_iterator end,
                                                                           OpenCL::Parser::ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
     auto line = begin->getLine();
     auto colunn = begin->getColumn();
-    if (curr->getTokenType() != TokenType::EnumKeyword)
+    if (begin->getTokenType() != TokenType::EnumKeyword)
     {
         return FailureReason("Expected enum keyword at begin of enum specifier");
     }
-    curr++;
-    if (curr->getTokenType() == TokenType::OpenBrace)
+    begin++;
+    if (begin < end && begin->getTokenType() == TokenType::OpenBrace)
     {
         auto declaration = parseEnumDeclaration(begin, end, context);
         if (!declaration)
@@ -1346,12 +1372,15 @@ Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL
         }
         return EnumSpecifier(line, colunn, std::move(*declaration));
     }
-    else if (curr->getTokenType() != TokenType::Identifier)
+    else if (begin >= end || begin->getTokenType() != TokenType::Identifier)
     {
-        return FailureReason("Expected Identifier or { after enum");
+        context.logError("Expected Identifier or { after enum");
     }
-    curr++;
-    if (curr->getTokenType() == TokenType::OpenBrace)
+    else
+    {
+        begin++;
+    }
+    if (begin < end && begin->getTokenType() == TokenType::OpenBrace)
     {
         auto declaration = parseEnumDeclaration(begin, end, context);
         if (!declaration)
@@ -1361,7 +1390,15 @@ Expected<EnumSpecifier, FailureReason> OpenCL::Parser::parseEnumSpecifier(OpenCL
         return EnumSpecifier(line, colunn, std::move(*declaration));
     }
     begin++;
-    auto name = std::get<std::string>(begin->getValue());
+    auto name = std::string();
+    if (begin < end)
+    {
+        name = std::get<std::string>(begin->getValue());
+    }
+    else
+    {
+        context.logError("Expected name for enum specifier");
+    }
     begin++;
     return EnumSpecifier(line, colunn, std::move(name));
 }
@@ -1374,35 +1411,41 @@ Expected<EnumDeclaration, FailureReason> OpenCL::Parser::parseEnumDeclaration(To
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
-    auto line = curr->getLine();
-    auto column = curr->getColumn();
-    curr++;
+    auto line = begin->getLine();
+    auto column = begin->getColumn();
+    begin++;
     std::string name;
-    if (curr->getTokenType() == TokenType::Identifier)
+    if (begin < end && begin->getTokenType() == TokenType::Identifier)
     {
-        name = std::get<std::string>(curr->getValue());
-        curr++;
+        name = std::get<std::string>(begin->getValue());
+        begin++;
     }
-    if (curr->getTokenType() != TokenType::OpenBrace)
+    if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
-        return FailureReason("Expected { after enum declaration");
+        context.logError("Expected { after enum declaration");
     }
-    curr++;
+    else
+    {
+        begin++;
+    }
     std::vector<std::pair<std::string, std::int32_t>> values;
     do
     {
-        if (curr->getTokenType() != TokenType::Identifier)
+        std::string valueName;
+        if (begin >= end || begin->getTokenType() != TokenType::Identifier)
         {
             return FailureReason("Expected Identifier in enum value list");
         }
-        const auto& valueName = std::get<std::string>(curr->getValue());
-        curr++;
-        std::int32_t value = values.empty() ? 0 : values.back().second + 1;
-        if (curr->getTokenType() == TokenType::Assignment)
+        else
         {
-            curr++;
-            auto constant = parseAssignmentExpression(curr, end, context);
+            valueName = std::get<std::string>(begin->getValue());
+            begin++;
+        }
+        std::int32_t value = values.empty() ? 0 : values.back().second + 1;
+        if (begin < end && begin->getTokenType() == TokenType::Assignment)
+        {
+            begin++;
+            auto constant = parseAssignmentExpression(begin, end, context);
             if (!constant)
             {
                 return constant;
@@ -1428,50 +1471,65 @@ Expected<EnumDeclaration, FailureReason> OpenCL::Parser::parseEnumDeclaration(To
                 },
                 *constValue);
         }
-        if (curr->getTokenType() == TokenType::Comma)
+        if (begin < end && begin->getTokenType() == TokenType::Comma)
         {
-            curr++;
+            begin++;
         }
-        else if (curr->getTokenType() != TokenType::CloseBrace)
+        else if (begin >= end && begin->getTokenType() != TokenType::CloseBrace)
         {
-            throw std::runtime_error("Expected , after non final value in enum list");
+            context.logError("Expected , after non final value in enum list");
         }
         values.emplace_back(valueName, value);
     }
-    while (curr->getTokenType() != TokenType::CloseBrace);
-    curr++;
-    begin = curr;
+    while (begin < end && begin->getTokenType() != TokenType::CloseBrace);
+    if (begin < end)
+    {
+        begin++;
+    }
+    else
+    {
+        context.logError("Expected } at the end of enum definition");
+    }
     return EnumDeclaration(line, column, std::move(name), values);
 }
 
-OpenCL::Expected<OpenCL::Syntax::FunctionDefinition, OpenCL::FailureReason>
+std::optional<Syntax::FunctionDefinition>
 OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                         ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
     auto line = begin->getLine();
     auto column = begin->getColumn();
     std::vector<DeclarationSpecifier> declarationSpecifiers;
-    auto current = begin;
-    while (auto result = parseDeclarationSpecifier(current, end, context))
+    while (begin < end && isDeclarationSpecifier(*begin, context))
     {
+        auto result = parseDeclarationSpecifier(begin, end, context);
+        if (!result)
+        {
+            return result;
+        }
         declarationSpecifiers.push_back(std::move(*result));
     }
     if (declarationSpecifiers.empty())
     {
-        return FailureReason("Expected declaration specifiers at beginning of function definition");
+        context.logError("Expected declaration specifiers at beginning of function definition");
     }
-    auto declarator = parseDeclarator(current, end, context);
+    auto declarator = parseDeclarator(begin, end, context);
     if (!declarator)
     {
         return declarator;
     }
     std::vector<Declaration> declarations;
-    while (auto result = parseDeclaration(current, end, context))
+    while (begin < end && isDeclarationSpecifier(*begin, context))
     {
+        auto result = parseDeclaration(begin, end, context);
+        if (!result)
+        {
+            return result;
+        }
         declarations.push_back(std::move(*result));
     }
 
@@ -1498,7 +1556,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
 
             if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
             {
-                return FailureReason("Only full declaration allowed in function definition");
+                return FailureReason("Parameter name omitted");
             }
             auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
             auto visitor = [](auto self, auto&& value) -> std::string
@@ -1546,14 +1604,13 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
             context.addToScope(iter);
         }
     }
-    auto compoundStatement = parseCompoundStatement(current, end, context);
+    auto compoundStatement = parseCompoundStatement(begin, end, context);
     context.popScope();
     if (!compoundStatement)
     {
         return compoundStatement;
     }
 
-    begin = current;
     return FunctionDefinition(line, column, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));
 }
@@ -1562,31 +1619,40 @@ Expected<CompoundStatement, FailureReason>
 OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin, Tokens::const_iterator end,
                                        OpenCL::Parser::ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
-    auto curr = begin;
-    auto line = curr->getLine();
-    auto column = curr->getColumn();
-    if (curr->getTokenType() != TokenType::OpenBrace)
+    auto line = begin->getLine();
+    auto column = begin->getColumn();
+    if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
-        return FailureReason("Expected { at start of Compound Statement");
+        context.logError("Expected { at start of Compound Statement");
     }
-    curr++;
+    else
+    {
+        begin++;
+    }
     std::vector<CompoundItem> items;
     context.pushScope();
-    while (auto result = parseCompoundItem(curr, end, context))
+    while (begin < end && begin->getTokenType() != TokenType::CloseBrace)
     {
+        auto result = parseCompoundItem(begin, end, context);
+        if (!result)
+        {
+            return result;
+        }
         items.push_back(std::move(*result));
     }
     context.popScope();
-    if (curr->getTokenType() != TokenType::CloseBrace)
+    if (begin >= end || begin->getTokenType() != TokenType::CloseBrace)
     {
-        return FailureReason("Expected } at end of Compound Statement");
+        context.logError("Expected } at end of Compound Statement");
     }
-    curr++;
-    begin = curr;
+    else
+    {
+        begin++;
+    }
     return CompoundStatement(line, column, std::move(items));
 }
 
@@ -1594,7 +1660,7 @@ Expected<CompoundItem, FailureReason> OpenCL::Parser::parseCompoundItem(Tokens::
                                                                         Tokens::const_iterator end,
                                                                         ParsingContext& context)
 {
-    if (begin == end)
+    if (begin >= end)
     {
         return FailureReason("Unexpected end of tokens");
     }
@@ -1602,17 +1668,24 @@ Expected<CompoundItem, FailureReason> OpenCL::Parser::parseCompoundItem(Tokens::
     auto line = curr->getLine();
     auto column = curr->getColumn();
     //backtracking
-    if (auto declaration = parseDeclaration(curr, end, context))
+    auto prevErrorCount = context.getErrors().size();
+    if (auto declaration = parseDeclaration(curr, end, context); declaration
+        && prevErrorCount == context.getErrors().size())
     {
         begin = curr;
         return CompoundItem(line, column, std::move(*declaration));
     }
     else
     {
-        auto statement = parseStatement(curr, end, context);
-        if (!statement)
+        auto copy = std::vector(context.getErrors().begin() + prevErrorCount, context.getErrors().end());
+        context.getErrors().resize(prevErrorCount);
+        auto pos = curr;
+        auto statement = parseStatement(curr = begin, end, context);
+        if (!statement || context.getErrors().size() != prevErrorCount)
         {
-            return statement;
+            bool statementWentFurther = std::distance(begin, curr) > std::distance(begin, pos);
+            begin = statementWentFurther ? curr : pos;
+            return statementWentFurther ? statement.error() : declaration.error();
         }
         begin = curr;
         return CompoundItem(line, column, std::move(*statement));
@@ -3183,12 +3256,12 @@ bool Parser::ParsingContext::isTypedef(const std::string& name) const
     return false;
 }
 
-void Parser::ParsingContext::logError(const std::string&)
+void Parser::ParsingContext::logError(const std::string& error)
 {
-
+    m_errors.push_back(error);
 }
 
-void Parser::ParsingContext::setBackTracking(bool backtracking)
+std::vector<std::string>& Parser::ParsingContext::getErrors()
 {
-    m_backtracking = backtracking;
+    return m_errors;
 }

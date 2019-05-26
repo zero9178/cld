@@ -13,6 +13,5 @@ TEST_CASE("Declaration parsing", "[parser]")
 )";
     auto tokens = OpenCL::Lexer::tokenize(program);
     auto expected = OpenCL::Parser::buildTree(tokens);
-    INFO("The error is:\"" << (expected.hasError() ? expected.error().getText() : "") << '\\');
-    REQUIRE(expected);
+    REQUIRE(expected.second);
 }

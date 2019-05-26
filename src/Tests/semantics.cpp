@@ -6,13 +6,10 @@ TEST_CASE("Function definition", "[semantics]")
 {
     auto source = "void foo(int i,float f){}";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -66,13 +63,10 @@ TEST_CASE("K&R Function definition", "[semantics]")
 {
     auto source = R"(void foo(i,f) register short i;float f;{})";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -106,13 +100,10 @@ TEST_CASE("No argument function prototype","[semantics]")
 {
     auto source = R"(void foo(void);)";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -132,13 +123,10 @@ TEST_CASE("No argument function definition","[semantics]")
 {
     auto source = R"(void foo(void){})";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -171,13 +159,10 @@ TEST_CASE("Function prototype", "[semantics]")
 {
     auto source = R"(void foo(register int i,float f);)";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -206,13 +191,10 @@ TEST_CASE("Empty identifier list function prototype","[semantics]")
 {
     auto source = R"(double foo();)";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -233,13 +215,10 @@ TEST_CASE("Ellipsis function","[semantics]")
 {
     auto source = R"(void foo(int i,float f,...);)";
     auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-    if (!parsing)
-    {
-        FAIL(parsing.error().getText());
-    }
+    REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(*parsing);
+    auto semantics = analysis.visit(parsing.first);
     if (!semantics)
     {
         FAIL(semantics.error().getText());
@@ -271,13 +250,10 @@ TEST_CASE("Function linkage","[semantics]")
     {
         auto source = R"(static void foo(void);)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -297,13 +273,10 @@ TEST_CASE("Function linkage","[semantics]")
     {
         auto source = R"(extern void foo(void);)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -341,13 +314,10 @@ TEST_CASE("Function definitions and prototypes that should fail","[semantics]")
         DYNAMIC_SECTION(source)
         {
             auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-            if (!parsing)
-            {
-                FAIL(parsing.error().getText());
-            }
+            REQUIRE(parsing.second);
 
             OpenCL::Semantics::SemanticAnalysis analysis;
-            auto semantics = analysis.visit(*parsing);
+            auto semantics = analysis.visit(parsing.first);
             REQUIRE(!semantics);
         }
     }
@@ -359,13 +329,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(int i,f,c;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -387,26 +354,20 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(int;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         REQUIRE(!semantics);
     }
     SECTION("non cv qualified")
     {
         auto source = R"(int i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -424,13 +385,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(const int const i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -448,13 +406,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(volatile int i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -472,13 +427,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(const int volatile i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -496,13 +448,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     {
         auto source = R"(extern int i;)";
         auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-        if (!parsing)
-        {
-            FAIL(parsing.error().getText());
-        }
+        REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(*parsing);
+        auto semantics = analysis.visit(parsing.first);
         if (!semantics)
         {
             FAIL(semantics.error().getText());
@@ -557,13 +506,10 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
             DYNAMIC_SECTION("Primitive:"<<source)
             {
                 auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-                if (!parsing)
-                {
-                    FAIL(parsing.error().getText());
-                }
+                REQUIRE(parsing.second);
 
                 OpenCL::Semantics::SemanticAnalysis analysis;
-                auto semantics = analysis.visit(*parsing);
+                auto semantics = analysis.visit(parsing.first);
                 if (!semantics)
                 {
                     FAIL(semantics.error().getText());
@@ -599,13 +545,10 @@ TEST_CASE("Invalid primitive declarations","[semantics]")
         DYNAMIC_SECTION(source)
         {
             auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
-            if (!parsing)
-            {
-                FAIL(parsing.error().getText());
-            }
+            REQUIRE(parsing.second);
 
             OpenCL::Semantics::SemanticAnalysis analysis;
-            auto semantics = analysis.visit(*parsing);
+            auto semantics = analysis.visit(parsing.first);
             REQUIRE(!semantics);
         }
     }
