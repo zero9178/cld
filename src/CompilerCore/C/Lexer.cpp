@@ -258,7 +258,7 @@ namespace
         throw std::runtime_error("Invalid keyword " + characters);
     }
 
-    OpenCL::Lexer::Token charactersToNumber(std::string lastText, std::uint64_t line, std::uint64_t column)
+    OpenCL::Lexer::Token charactersToNumber(const std::string& lastText, std::uint64_t line, std::uint64_t column)
     {
         if (lastText.find('.') == std::string::npos
             && ((lastText.size() >= 2 && (lastText.substr(0, 2) == "0x" || lastText.substr(0, 2) == "0X"))
@@ -287,17 +287,23 @@ namespace
                 {
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
-                        return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                        return OpenCL::Lexer::Token(line,
+                                                    column,
+                                                    lastText.size(),
+                                                    OpenCL::Lexer::TokenType::Literal,
+                                                    number,
+                                                    lastText);
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::uint32_t>(number));
+                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::uint32_t>(number), lastText);
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                    return OpenCL::Lexer::Token(line, column,
+                                                lastText.size(), OpenCL::Lexer::TokenType::Literal, number, lastText);
                 }
                 else
                 {
@@ -318,23 +324,33 @@ namespace
                     {
                         if (number <= std::numeric_limits<std::uint32_t>::max())
                         {
-                            return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal,
-                                                        static_cast<std::uint32_t>(number));
+                            return OpenCL::Lexer::Token(line,
+                                                        column,
+                                                        lastText.size(),
+                                                        OpenCL::Lexer::TokenType::Literal,
+                                                        static_cast<std::uint32_t>(number),
+                                                        lastText);
                         }
                         else
                         {
-                            return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                            return OpenCL::Lexer::Token(line,
+                                                        column,
+                                                        lastText.size(),
+                                                        OpenCL::Lexer::TokenType::Literal,
+                                                        number,
+                                                        lastText);
                         }
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::int32_t>(number));
+                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::int32_t>(number), lastText);
                     }
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                    return OpenCL::Lexer::Token(line, column,
+                                                lastText.size(), OpenCL::Lexer::TokenType::Literal, number, lastText);
                 }
                 else
                 {
@@ -347,13 +363,14 @@ namespace
             char* endptr = nullptr;
             if (lastText.back() == 'f' || lastText.back() == 'F')
             {
-                lastText = lastText.substr(0, lastText.size() - 1);
-                float number = std::strtof(lastText.c_str(), &endptr);
-                if (endptr != lastText.c_str() + lastText.size())
+                auto filtered = lastText.substr(0, lastText.size() - 1);
+                float number = std::strtof(filtered.c_str(), &endptr);
+                if (endptr != filtered.c_str() + filtered.size())
                 {
                     throw std::runtime_error("Invalid floating point constant " + lastText);
                 }
-                return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                return OpenCL::Lexer::Token(line, column,
+                                            lastText.size(), OpenCL::Lexer::TokenType::Literal, number, lastText);
             }
             else
             {
@@ -362,7 +379,8 @@ namespace
                 {
                     throw std::runtime_error("Invalid floating point constant " + lastText);
                 }
-                return OpenCL::Lexer::Token(line, column, OpenCL::Lexer::TokenType::Literal, number);
+                return OpenCL::Lexer::Token(line, column,
+                                            lastText.size(), OpenCL::Lexer::TokenType::Literal, number, lastText);
             }
         }
     }
@@ -418,6 +436,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             column = 0;
             continue;
         }
+        else if (iter == '\t')
+        {
+            column += 4;
+        }
         else
         {
             column++;
@@ -438,40 +460,44 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 case '"':characters.clear();
                     currentState = State::StringLiteral;
                     break;
-                case '(': result.emplace_back(line, column, TokenType::OpenParenthese);
+                case '(': result.emplace_back(line, column - 1, 1, TokenType::OpenParenthese);
                     break;
-                case ')': result.emplace_back(line, column, TokenType::CloseParenthese);
+                case ')': result.emplace_back(line, column - 1, 1, TokenType::CloseParenthese);
                     break;
-                case '{': result.emplace_back(line, column, TokenType::OpenBrace);
+                case '{': result.emplace_back(line, column - 1, 1, TokenType::OpenBrace);
                     break;
-                case '}': result.emplace_back(line, column, TokenType::CloseBrace);
+                case '}': result.emplace_back(line, column - 1, 1, TokenType::CloseBrace);
                     break;
-                case '[': result.emplace_back(line, column, TokenType::OpenSquareBracket);
+                case '[': result.emplace_back(line, column - 1, 1, TokenType::OpenSquareBracket);
                     break;
-                case ']': result.emplace_back(line, column, TokenType::CloseSquareBracket);
+                case ']': result.emplace_back(line, column - 1, 1, TokenType::CloseSquareBracket);
                     break;
-                case ';': result.emplace_back(line, column, TokenType::SemiColon);
+                case ';': result.emplace_back(line, column - 1, 1, TokenType::SemiColon);
                     break;
-                case ',': result.emplace_back(line, column, TokenType::Comma);
+                case ',': result.emplace_back(line, column - 1, 1, TokenType::Comma);
                     break;
-                case ':': result.emplace_back(line, column, TokenType::Colon);
+                case ':': result.emplace_back(line, column - 1, 1, TokenType::Colon);
                     break;
-                case '?': result.emplace_back(line, column, TokenType::QuestionMark);
+                case '?': result.emplace_back(line, column - 1, 1, TokenType::QuestionMark);
                     break;
-                case '~':result.emplace_back(line, column, TokenType::BitWiseNegation);
+                case '~':result.emplace_back(line, column - 1, 1, TokenType::BitWiseNegation);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '^':result.emplace_back(line, column, TokenType::BitXor);
+                case '^':result.emplace_back(line, column - 1, 1, TokenType::BitXor);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '%':result.emplace_back(line, column, TokenType::Modulo);
+                case '%':result.emplace_back(line, column - 1, 1, TokenType::Modulo);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '!':result.emplace_back(line, column, TokenType::LogicalNegation);
+                case '!':result.emplace_back(line, column - 1, 1, TokenType::LogicalNegation);
                     lastTokenIsAmbiguous = true;
                     break;
-                case ' ': break;
-                default:handeled = false;
+                default:
+                    if (std::isspace(iter))
+                    {
+                        break;
+                    }
+                    handeled = false;
                     characters.clear();
                     if ((iter >= 'a' && iter <= 'z') || (iter >= 'A' && iter <= 'Z') || (iter == '_'))
                     {
@@ -494,7 +520,11 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 if (iter == '\'' && (characters.empty() || characters.back() != '\\'))
                 {
                     currentState = State::Start;
-                    result.emplace_back(line, column, TokenType::Literal, charactersToCharLiteral(characters));
+                    result.emplace_back(line,
+                                        column - characters.size() - 2,
+                                        characters.size() + 2,
+                                        TokenType::Literal,
+                                        charactersToCharLiteral(characters), '\'' + characters + '\'');
                     characters.clear();
                     continue;
                 }
@@ -505,15 +535,18 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             {
                 if (iter == '"' && (characters.empty() || characters.back() != '\\'))
                 {
+                    auto csize = characters.size();
                     currentState = State::Start;
                     {
                         static std::regex escapes(R"(\\([0-7]{1,3}|x[0-9a-fA-F]+|.))");
                         std::smatch matches;
                         auto start = characters.cbegin();
-                        while (start < characters.cend() && std::regex_search(start, characters.cend(), matches, escapes))
+                        while (start < characters.cend()
+                            && std::regex_search(start, characters.cend(), matches, escapes))
                         {
-                            auto size = matches.suffix().first - characters.cbegin() - (matches[0].second - matches[0].first) + 1;
-                            characters = std::string(characters.cbegin(),matches[0].first) +
+                            auto size = matches.suffix().first - characters.cbegin()
+                                - (matches[0].second - matches[0].first) + 1;
+                            characters = std::string(characters.cbegin(), matches[0].first) +
                                 static_cast<char>(charactersToCharLiteral({matches[0].first, matches[0].second}))
                                 + std::string(matches[0].second, characters.cend());
                             start = characters.cbegin() + size;
@@ -522,14 +555,24 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     if (!result.empty() && result.back().getTokenType() == TokenType::Literal
                         && std::holds_alternative<std::string>(result.back().getValue()))
                     {
+                        auto prevRep = result.back().emitBack();
                         result.back() = Token(result.back().getLine(),
                                               result.back().getColumn(),
+                                              result.back().getLength() + csize + 2,
                                               TokenType::Literal,
-                                              std::get<std::string>(result.back().getValue()) + characters);
+                                              std::get<std::string>(result.back().getValue()) + characters,
+                                              prevRep += std::string(
+                                                  line == result.back().getLine() ? (column - 2 - csize
+                                                      - prevRep.size()) : 0, ' ') + '\"' + characters + '\"');
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Literal, characters);
+                        result.emplace_back(line,
+                                            column - 2 - csize,
+                                            2 + csize,
+                                            TokenType::Literal,
+                                            characters,
+                                            '\"' + characters + '\"');
                     }
                     characters.clear();
                     continue;
@@ -548,11 +591,18 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 {
                     if (isKeyword(characters))
                     {
-                        result.emplace_back(line, column, charactersToKeyword(characters));
+                        result.emplace_back(line,
+                                            column - characters.size() - 1,
+                                            characters.size(),
+                                            charactersToKeyword(characters));
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Identifier, characters);
+                        result.emplace_back(line,
+                                            column - characters.size() - 1,
+                                            characters.size(),
+                                            TokenType::Identifier,
+                                            characters, characters);
                     }
                     characters.clear();
                     currentState = State::Start;
@@ -576,7 +626,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 }
                 else
                 {
-                    result.push_back(charactersToNumber(characters, line, column));
+                    result.push_back(charactersToNumber(characters, line, column - characters.size()));
                     characters.clear();
                     currentState = State::Start;
                     handeled = false;
@@ -588,7 +638,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             {
                 lastTokenIsAmbiguous = false;
                 characters += iter;
-                if (characters.size() > 2 && characters.back() == '/'
+                if (characters.size() > 3 && characters.back() == '/'
                     && characters.at(characters.size() - 2) == '*')
                 {
                     currentState = State::Start;
@@ -601,42 +651,43 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 {
                 case '/':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Division)
                     {
                         currentState = State::LineComment;
                         result.pop_back();
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Division);
+                        result.emplace_back(line, column - 1, 1, TokenType::Division);
                     }
                     break;
                 }
                 case '*':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Division)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Division)
                     {
                         currentState = State::BlockComment;
                         result.pop_back();
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Asterisk);
+                        result.emplace_back(line, column - 1, 1, TokenType::Asterisk);
                     }
                     break;
                 }
                 case '.':
                 {
-                    if (result.size() > 2 && result.back().getTokenType() == TokenType::Dot
-                        && result.at(result.size() - 2).getTokenType() == TokenType::Dot)
+                    if (lastTokenIsAmbiguous && result.size() > 2 && result.back().getTokenType() == TokenType::Dot
+                        && result.at(result.size() - 2).getTokenType() == TokenType::Dot
+                        && result.back().getColumn() - 1 == result.at(result.size() - 2).getColumn())
                     {
                         result.pop_back();
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::Ellipse);
+                        result.emplace_back(line, column - 3, 3, TokenType::Ellipse);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Dot);
+                        result.emplace_back(line, column - 1, 1, TokenType::Dot);
                     }
                     break;
                 }
@@ -644,152 +695,152 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 {
                     if (lastTokenIsAmbiguous)
                     {
-                        if (result.back().getTokenType() == TokenType::Negation)
+                        if (!result.empty() && result.back().getTokenType() == TokenType::Minus)
                         {
                             result.pop_back();
-                            result.emplace_back(line, column, TokenType::Arrow);
+                            result.emplace_back(line, column - 2, 2, TokenType::Arrow);
                         }
-                        else if (result.back().getTokenType() == TokenType::GreaterThan)
+                        else if (!result.empty() && result.back().getTokenType() == TokenType::GreaterThan)
                         {
                             result.pop_back();
-                            result.emplace_back(line, column, TokenType::ShiftRight);
+                            result.emplace_back(line, column - 2, 2, TokenType::ShiftRight);
                         }
                         else
                         {
-                            result.emplace_back(line, column, TokenType::GreaterThan);
+                            result.emplace_back(line, column - 1, 1, TokenType::GreaterThan);
                         }
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::GreaterThan);
+                        result.emplace_back(line, column - 1, 1, TokenType::GreaterThan);
                     }
                     break;
                 }
                 case '<':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::LessThan)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::LessThan)
                     {
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::ShiftLeft);
+                        result.emplace_back(line, column - 2, 2, TokenType::ShiftLeft);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::LessThan);
+                        result.emplace_back(line, column - 1, 1, TokenType::LessThan);
                     }
                     break;
                 }
                 case '&':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Ampersand)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Ampersand)
                     {
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::LogicAnd);
+                        result.emplace_back(line, column - 2, 2, TokenType::LogicAnd);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Ampersand);
+                        result.emplace_back(line, column - 1, 1, TokenType::Ampersand);
                     }
                     break;
                 }
                 case '|':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::BitOr)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::BitOr)
                     {
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::LogicOr);
+                        result.emplace_back(line, column - 2, 2, TokenType::LogicOr);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::BitOr);
+                        result.emplace_back(line, column - 1, 1, TokenType::BitOr);
                     }
                     break;
                 }
                 case '+':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Addition)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Plus)
                     {
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::Increment);
+                        result.emplace_back(line, column - 2, 2, TokenType::Increment);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Addition);
+                        result.emplace_back(line, column - 1, 1, TokenType::Plus);
                     }
                     break;
                 }
                 case '-':
                 {
-                    if (lastTokenIsAmbiguous && result.back().getTokenType() == TokenType::Negation)
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Minus)
                     {
                         result.pop_back();
-                        result.emplace_back(line, column, TokenType::Decrement);
+                        result.emplace_back(line, column - 2, 2, TokenType::Decrement);
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Negation);
+                        result.emplace_back(line, column - 1, 1, TokenType::Minus);
                     }
                     break;
                 }
                 case '=':
                 {
-                    if (lastTokenIsAmbiguous)
+                    if (!result.empty() && lastTokenIsAmbiguous)
                     {
                         switch (result.back().getTokenType())
                         {
                         case TokenType::Assignment:result.pop_back();
-                            result.emplace_back(line, column, TokenType::Equal);
+                            result.emplace_back(line, column - 2, 2, TokenType::Equal);
                             break;
                         case TokenType::LogicalNegation:result.pop_back();
-                            result.emplace_back(line, column, TokenType::NotEqual);
+                            result.emplace_back(line, column - 2, 2, TokenType::NotEqual);
                             break;
                         case TokenType::GreaterThan:result.pop_back();
-                            result.emplace_back(line, column, TokenType::GreaterThanOrEqual);
+                            result.emplace_back(line, column - 2, 2, TokenType::GreaterThanOrEqual);
                             break;
                         case TokenType::LessThan:result.pop_back();
-                            result.emplace_back(line, column, TokenType::LessThanOrEqual);
+                            result.emplace_back(line, column - 2, 2, TokenType::LessThanOrEqual);
                             break;
-                        case TokenType::Addition:result.pop_back();
-                            result.emplace_back(line, column, TokenType::PlusAssign);
+                        case TokenType::Plus:result.pop_back();
+                            result.emplace_back(line, column - 2, 2, TokenType::PlusAssign);
                             break;
-                        case TokenType::Negation:result.pop_back();
-                            result.emplace_back(line, column, TokenType::MinusAssign);
+                        case TokenType::Minus:result.pop_back();
+                            result.emplace_back(line, column - 2, 2, TokenType::MinusAssign);
                             break;
                         case TokenType::Division:result.pop_back();
-                            result.emplace_back(line, column, TokenType::DivideAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::DivideAssign);
                             break;
                         case TokenType::Asterisk:result.pop_back();
-                            result.emplace_back(line, column, TokenType::MultiplyAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::MultiplyAssign);
                             break;
                         case TokenType::Modulo:result.pop_back();
-                            result.emplace_back(line, column, TokenType::ModuloAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::ModuloAssign);
                             break;
                         case TokenType::Ampersand:result.pop_back();
-                            result.emplace_back(line, column, TokenType::BitAndAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::BitAndAssign);
                             break;
                         case TokenType::BitOr:result.pop_back();
-                            result.emplace_back(line, column, TokenType::BitOrAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::BitOrAssign);
                             break;
                         case TokenType::BitXor:result.pop_back();
-                            result.emplace_back(line, column, TokenType::BitXorAssign);
+                            result.emplace_back(line, column - 2, 2, TokenType::BitXorAssign);
                             break;
                         case TokenType::ShiftLeft:result.pop_back();
-                            result.emplace_back(line, column, TokenType::ShiftLeftAssign);
+                            result.emplace_back(line, column - 3, 3, TokenType::ShiftLeftAssign);
                             break;
                         case TokenType::ShiftRight:result.pop_back();
-                            result.emplace_back(line, column, TokenType::ShiftRightAssign);
+                            result.emplace_back(line, column - 3, 3, TokenType::ShiftRightAssign);
                             break;
-                        default: result.emplace_back(line, column, TokenType::Assignment);
+                        default: result.emplace_back(line, column - 1, 1, TokenType::Assignment);
                             break;
                         }
                     }
                     else
                     {
-                        result.emplace_back(line, column, TokenType::Assignment);
+                        result.emplace_back(line, column - 1, 1, TokenType::Assignment);
                     }
                     break;
                 }
                 default:lastTokenIsAmbiguous = false;
-                    if (result.back().getTokenType() == TokenType::Dot && iter >= '0' && iter <= '9')
+                    if (!result.empty() && result.back().getTokenType() == TokenType::Dot && iter >= '0' && iter <= '9')
                     {
                         result.pop_back();
                         characters += '.';
@@ -825,31 +876,13 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::CloseParenthese: return ")";
     case TokenType::OpenBrace: return "{";
     case TokenType::CloseBrace: return "}";
-    case TokenType::Literal:
-        return std::visit(
-            [](auto&& value) -> std::string
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<std::string, T>)
-                {
-                    return value;
-                }
-                else if constexpr (!std::is_same_v<std::monostate, T>)
-                {
-                    return std::to_string(value);
-                }
-                else
-                {
-                    return "";
-                }
-            },
-            getValue());
+    case TokenType::Literal:return m_valueRepresentation;
     case TokenType::SemiColon: return ";";
     case TokenType::Comma: return ",";
-    case TokenType::Negation: return "-";
+    case TokenType::Minus: return "-";
     case TokenType::BitWiseNegation: return "~";
     case TokenType::LogicalNegation: return "!";
-    case TokenType::Addition: return "+";
+    case TokenType::Plus: return "+";
     case TokenType::Asterisk: return "*";
     case TokenType::Division: return "/";
     case TokenType::Modulo: return "%";
@@ -922,4 +955,32 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::InlineKeyword: return "inline";
     }
     return "";
+}
+
+std::uint64_t OpenCL::Lexer::Token::getLength() const
+{
+    return m_length;
+}
+
+std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                       std::vector<OpenCL::Lexer::Token>::const_iterator end)
+{
+    std::string result;
+    for (auto curr = begin; curr != end; curr++)
+    {
+        if (curr != begin)
+        {
+            auto prev = curr - 1;
+            if (curr->getLine() == prev->getLine())
+            {
+                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
+            }
+            else
+            {
+                result += '\n' + std::string(curr->getColumn(), ' ');
+            }
+        }
+        result += curr->emitBack();
+    }
+    return result;
 }

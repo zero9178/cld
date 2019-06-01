@@ -1,8 +1,8 @@
 #ifndef OPENCLPARSER_CONSTANTEVALUATOR_HPP
 #define OPENCLPARSER_CONSTANTEVALUATOR_HPP
 
-#include "Expected.hpp"
-#include "FailureReason.hpp"
+#include "../Common/Expected.hpp"
+#include "../Common/FailureReason.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 

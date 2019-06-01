@@ -17,10 +17,10 @@ namespace OpenCL::Lexer
         Literal,
         SemiColon,
         Comma,
-        Negation,
+        Minus,
         BitWiseNegation,
         LogicalNegation,
-        Addition,
+        Plus,
         Asterisk,
         Division,
         Modulo,
@@ -101,10 +101,12 @@ namespace OpenCL::Lexer
     {
         std::uint64_t m_line;
         std::uint64_t m_column;
+        std::uint64_t m_length;
         using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float,
                                      double, std::string>;
         TokenType m_tokenType;
         variant m_value;
+        std::string m_valueRepresentation;
 
         friend std::vector<Token> tokenize(std::string source);
 
@@ -112,14 +114,20 @@ namespace OpenCL::Lexer
 
         using ValueType = variant;
 
-        explicit Token(std::uint64_t line, std::uint64_t column, TokenType tokenType) noexcept
-            : m_line(line), m_column(column), m_tokenType(tokenType)
+        Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType) noexcept
+            : Token(line, column, length, tokenType, std::monostate{},"")
         {
         }
 
         template <class T>
-        Token(std::uint64_t line, std::uint64_t column, TokenType tokenType, T&& value)
-            : m_line(line), m_column(column), m_tokenType(tokenType), m_value(std::forward<T>(value))
+        Token(std::uint64_t line,
+              std::uint64_t column,
+              std::uint64_t length,
+              TokenType tokenType,
+              T&& value,
+              std::string valueRepresentation)
+            : m_line(line), m_column(column), m_length(length), m_tokenType(tokenType), m_value(std::forward<T>(value)),
+              m_valueRepresentation(std::move(valueRepresentation))
         {
         }
 
@@ -133,18 +141,22 @@ namespace OpenCL::Lexer
             return m_value;
         }
 
-        uint64_t getLine() const
+        std::uint64_t getLine() const
         {
             return m_line;
         }
 
-        uint64_t getColumn() const
+        std::uint64_t getColumn() const
         {
             return m_column;
         }
 
+        std::uint64_t getLength() const;
+
         std::string emitBack() const;
     };
+
+    std::string reconstruct(std::vector<Token>::const_iterator begin,std::vector<Token>::const_iterator end);
 } // namespace OpenCL::Lexer
 
 #endif // OPENCLPARSER_LEXER_HPP

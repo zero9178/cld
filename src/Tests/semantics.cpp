@@ -503,7 +503,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
         };
         for(auto& [source,type] : results)
         {
-            DYNAMIC_SECTION("Primitive:"<<source)
+            DYNAMIC_SECTION("Primitive: "<<source)
             {
                 auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
                 REQUIRE(parsing.second);

@@ -51,6 +51,7 @@ namespace
                 {
                     iter = OpenCL::Lexer::Token(iter.getLine(),
                                                 iter.getColumn(),
+                                                iter.getLength(),
                                                 iter.getTokenType(),
                                                 std::visit([](auto&& value) -> OpenCL::Lexer::Token::ValueType
                                                            {
@@ -72,7 +73,7 @@ namespace
                                                                {
                                                                    return static_cast<std::uint64_t>(value);
                                                                }
-                                                           }, iter.getValue()));
+                                                           }, iter.getValue()),iter.emitBack());
                 }
             }
         }

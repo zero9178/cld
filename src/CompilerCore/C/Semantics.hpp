@@ -1,8 +1,8 @@
 #ifndef OPENCLPARSER_SEMANTICS_HPP
 #define OPENCLPARSER_SEMANTICS_HPP
 
-#include "Expected.hpp"
-#include "FailureReason.hpp"
+#include "CompilerCore/Common/Expected.hpp"
+#include "CompilerCore/Common/FailureReason.hpp"
 #include "Syntax.hpp"
 
 #include <map>
