@@ -15,6 +15,7 @@ namespace OpenCL::Lexer
         OpenBrace,
         CloseBrace,
         Literal,
+        StringLiteral,
         SemiColon,
         Comma,
         Minus,

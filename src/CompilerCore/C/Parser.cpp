@@ -3245,6 +3245,15 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
                            },
                            currToken.getValue())));
     }
+    else if (currToken.getTokenType() == TokenType::StringLiteral)
+    {
+        std::string result = std::get<std::string>(currToken.getValue());
+        while(begin < end && begin->getTokenType() == TokenType::StringLiteral)
+        {
+            result += std::get<std::string>(begin->getValue());
+        }
+        return PrimaryExpression(line,column,PrimaryExpressionConstant(line,column,result));
+    }
     else if (currToken.getTokenType() == TokenType::OpenParenthese)
     {
         auto expression = parseExpression(begin, end, context);

@@ -216,7 +216,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <PrimaryExpressionConstant> ::= <TokenType::Constant>
+     * <PrimaryExpressionConstant> ::= <TokenType::Literal>
+     *                               | <TokenType::StringLiteral> {<TokenType::StringLiteral>
      */
     class PrimaryExpressionConstant final : public Node
     {

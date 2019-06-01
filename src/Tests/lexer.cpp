@@ -11,6 +11,7 @@ CATCH_REGISTER_ENUM(OpenCL::Lexer::TokenType,
                     OpenCL::Lexer::TokenType::OpenBrace,
                     OpenCL::Lexer::TokenType::CloseBrace,
                     OpenCL::Lexer::TokenType::Literal,
+                    OpenCL::Lexer::TokenType::StringLiteral,
                     OpenCL::Lexer::TokenType::SemiColon,
                     OpenCL::Lexer::TokenType::Comma,
                     OpenCL::Lexer::TokenType::Minus,
@@ -344,7 +345,7 @@ TEST_CASE("String literals", "[lexer]")
     {
         auto result = OpenCL::Lexer::tokenize("\"test\"");
         REQUIRE(result.size() == 1);
-        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        CHECK(result[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "test");
     }
@@ -352,17 +353,9 @@ TEST_CASE("String literals", "[lexer]")
     {
         auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa\n\r\f\\ab\x07\"")");
         REQUIRE(result.size() == 1);
-        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        CHECK(result[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
-    }
-    SECTION("Concatenation")
-    {
-        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa""dwadwadawdwa")");
-        REQUIRE(result.size() == 1);
-        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-        REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
-        CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa""dwadwadawdwa");
     }
     CHECK_THROWS(OpenCL::Lexer::tokenize("\"\n"));
 }
@@ -388,12 +381,12 @@ TEST_CASE("Positions", "[lexer]")
                    {TokenType::Colon, 1, 8, 1},
                    {TokenType::QuestionMark, 1, 9, 1},
                    {TokenType::Literal, 1, 11, 3},
-                   {TokenType::Literal, 1, 14, 6},
+                   {TokenType::StringLiteral, 1, 14, 6},
                    {TokenType::Identifier, 1, 20, 4},
-                   {TokenType::Literal, 1, 26, 4},
-                   {TokenType::Literal, 1, 31, 5},
-                   {TokenType::Literal, 1, 37, 4},
-                   {TokenType::Literal, 1, 42, 3},
+                   {TokenType::Literal, 1, 25, 4},
+                   {TokenType::Literal, 1, 30, 5},
+                   {TokenType::Literal, 1, 36, 4},
+                   {TokenType::Literal, 1, 41, 3},
                    {TokenType::Identifier, 2, 5, 4},
                    {TokenType::Division, 2, 10, 1},
                    {TokenType::Asterisk, 2, 12, 1},
@@ -453,8 +446,8 @@ TEST_CASE("Positions", "[lexer]")
     }
     5 + 7 - .53f + "dwawd""test"id
 })");
-        REQUIRE(result.size() == 60);
-        std::array<std::tuple<OpenCL::Lexer::TokenType, std::uint64_t, std::uint64_t, std::uint64_t>, 60> correct
+        REQUIRE(result.size() == 61);
+        std::array<std::tuple<OpenCL::Lexer::TokenType, std::uint64_t, std::uint64_t, std::uint64_t>, 61> correct
             = {{
                    {TokenType::VoidKeyword, 1, 0, 4},
                    {TokenType::Identifier, 1, 5, 12},
@@ -513,7 +506,8 @@ TEST_CASE("Positions", "[lexer]")
                    {TokenType::Minus, 11, 10, 1},
                    {TokenType::Literal, 11, 12, 4},
                    {TokenType::Plus, 11, 17, 1},
-                   {TokenType::Literal, 11, 19, 13},
+                   {TokenType::StringLiteral, 11, 19, 7},
+                   {TokenType::StringLiteral, 11, 26, 6},
                    {TokenType::Identifier, 11, 32, 2},
                    {TokenType::CloseBrace, 12, 0, 1}
                }};
@@ -542,8 +536,22 @@ TEST_CASE("Input reconstruction", "[lexer]")
     {
         h->height = height(h->left);
     }
-    5 + 7 - .53f + "dwawd""test"
 })";
     auto result = OpenCL::Lexer::tokenize(source);
+    REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == source);
+}
+
+TEST_CASE("Multiline token", "[lexer]")
+{
+    auto source = R"("test"
+                     "yes")";
+    auto result = OpenCL::Lexer::tokenize(source);
+    REQUIRE(result.size() == 2);
+    CHECK(result[0].getColumn() == 0);
+    CHECK(result[0].getLine() == 1);
+    CHECK(result[0].getLength() == 6);
+    CHECK(result[1].getColumn() == 21);
+    CHECK(result[1].getLine() == 2);
+    CHECK(result[1].getLength() == 5);
     REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == source);
 }
