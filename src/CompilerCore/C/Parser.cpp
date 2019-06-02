@@ -10,9 +10,10 @@ using namespace OpenCL;
 using namespace OpenCL::Lexer;
 using namespace OpenCL::Syntax;
 
-std::pair<TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Token>& tokens)
+std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Lexer::Token>& tokens,
+                                                                           std::ostream* reporter)
 {
-    ParsingContext context;
+    ParsingContext context(reporter);
     auto begin = tokens.cbegin();
     return {parseTranslationUnit(begin, tokens.cend(), context), !context.isErrorsOccured()};
 }
@@ -158,7 +159,6 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
         return {};
     }
     auto line = begin->getLine();
@@ -175,7 +175,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     }
     if (declarationSpecifiers.empty())
     {
-        context.logError({"Expected declaration specifiers at beginning of declaration"});
+        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER,begin,findSemicolonOrEOL(begin,end),{Modifier(begin,begin+1,Modifier::PointAtBeginning)}});
     }
     if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
     {
@@ -185,7 +185,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
         else
         {
-            context.logError({"Missing ; at the end of declaration"});
+            context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION});
         }
         return Declaration(line, column, std::move(declarationSpecifiers), {});
     }
@@ -230,7 +230,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     while (true);
     if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
     {
-        context.logError({"Expected ; at the end of declaration"});
+        context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION});
     }
     else
     {
@@ -275,7 +275,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -391,7 +391,8 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
         else if (context.isTypedef(name))
         {
             context.logError({
-                "\"" + name + "\" is a typedef but cannot be used as such because another symbol overshadows it"});
+                                 "\"" + name
+                                     + "\" is a typedef but cannot be used as such because another symbol overshadows it"});
             return {};
         }
         break;
@@ -408,7 +409,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
     }
     auto line = begin->getLine();
     auto column = begin->getColumn();
@@ -546,7 +547,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
         if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
         {
             context.logError({std::string("Expected ; at the end of ") + (isUnion ? "union" : "struct")
-                                 + " field declaration"});
+                                  + " field declaration"});
         }
         begin++;
         structDeclarations.push_back({std::move(specifierQualifiers), std::move(declarators)});
@@ -569,7 +570,7 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto currToken = *begin;
@@ -670,7 +671,8 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
         else if (context.isTypedef(name))
         {
             context.logError({
-                "\"" + name + "\" is a typedef but cannot be used as such because another symbol overshadows it"});
+                                 "\"" + name
+                                     + "\" is a typedef but cannot be used as such because another symbol overshadows it"});
             return {};
         }
         break;
@@ -687,7 +689,7 @@ OpenCL::Parser::parseDeclarator(Tokens::const_iterator& begin, Tokens::const_ite
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -718,7 +720,7 @@ namespace
     {
         if (begin >= end)
         {
-            context.logError({"Unexpected end of tokens"});
+
             return {};
         }
         auto line = begin->getLine();
@@ -768,7 +770,7 @@ namespace
     {
         if (begin >= end)
         {
-            context.logError({"Unexpected end of tokens"});
+
             return {};
         }
         auto line = begin->getLine();
@@ -879,7 +881,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     std::unique_ptr<DirectDeclarator> directDeclarator;
@@ -1029,7 +1031,7 @@ OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator& begin, Tokens::co
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1062,7 +1064,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1187,7 +1189,7 @@ std::optional<Pointer> OpenCL::Parser::parsePointer(Tokens::const_iterator& begi
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     if (begin->getTokenType() != TokenType::Asterisk)
@@ -1223,7 +1225,7 @@ OpenCL::Parser::parseAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& 
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1252,7 +1254,7 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
@@ -1365,7 +1367,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1422,7 +1424,7 @@ std::optional<EnumDeclaration> OpenCL::Parser::parseEnumDeclaration(Tokens::cons
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1514,7 +1516,6 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
         return {};
     }
     auto line = begin->getLine();
@@ -1531,7 +1532,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
     }
     if (declarationSpecifiers.empty())
     {
-        context.logError({"Expected declaration specifiers at beginning of function definition"});
+        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER});
     }
     auto declarator = parseDeclarator(begin, end, context);
     if (!declarator)
@@ -1572,7 +1573,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
 
             if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
             {
-                context.logError({"Parameter name omitted"});
+                context.logError({ErrorMessages::MISSING_PARAMETER_NAME});
                 return {};
             }
             auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
@@ -1638,7 +1639,7 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1680,12 +1681,13 @@ std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iter
 {
     if (begin >= end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
     auto column = begin->getColumn();
-    if(isDeclarationSpecifier(*begin,context) && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end && (begin + 1)->getTokenType() == TokenType::Colon))
+    if (isDeclarationSpecifier(*begin, context) && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end
+        && (begin + 1)->getTokenType() == TokenType::Colon))
     {
         auto declaration = parseDeclaration(begin, end, context);
         if (declaration)
@@ -1709,7 +1711,7 @@ OpenCL::Parser::parseInitializer(Tokens::const_iterator& begin, Tokens::const_it
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     if (begin->getTokenType() != TokenType::OpenBrace)
@@ -1729,7 +1731,8 @@ OpenCL::Parser::parseInitializer(Tokens::const_iterator& begin, Tokens::const_it
         {
             return {};
         }
-        if (begin == end || (begin->getTokenType() != TokenType::CloseBrace && begin->getTokenType() != TokenType::Comma))
+        if (begin == end
+            || (begin->getTokenType() != TokenType::CloseBrace && begin->getTokenType() != TokenType::Comma))
         {
             context.logError({"Expected } after initializer list"});
             return {};
@@ -1754,7 +1757,7 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -1891,7 +1894,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2280,7 +2283,7 @@ std::optional<Expression> OpenCL::Parser::parseExpression(Tokens::const_iterator
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2317,7 +2320,7 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2384,7 +2387,7 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2429,7 +2432,7 @@ std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Toke
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2463,7 +2466,7 @@ std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(To
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2497,7 +2500,7 @@ std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::cons
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2532,7 +2535,7 @@ std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::co
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2567,7 +2570,7 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2593,7 +2596,6 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
         list.push_back(std::move(*newEqual));
     }
 
-
     return BitAndExpression(line, column, std::move(*result), std::move(list));
 }
 
@@ -2603,7 +2605,7 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2632,7 +2634,6 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
                                            std::move(*newRelational));
     }
 
-
     return EqualityExpression(line, column, std::move(*result), std::move(relationalExpressions));
 }
 
@@ -2642,7 +2643,7 @@ std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(To
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2694,7 +2695,7 @@ std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::cons
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2733,7 +2734,7 @@ std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2770,7 +2771,7 @@ std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tok
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2819,7 +2820,7 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2852,7 +2853,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
 
@@ -2894,7 +2895,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     auto line = begin->getLine();
@@ -2998,7 +2999,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
+
         return {};
     }
     std::stack<std::unique_ptr<PostFixExpression>> stack;
@@ -3211,7 +3212,6 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
 {
     if (begin == end)
     {
-        context.logError({"Unexpected end of tokens"});
         return {};
     }
 
@@ -3248,11 +3248,11 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
     else if (currToken.getTokenType() == TokenType::StringLiteral)
     {
         std::string result = std::get<std::string>(currToken.getValue());
-        while(begin < end && begin->getTokenType() == TokenType::StringLiteral)
+        while (begin < end && begin->getTokenType() == TokenType::StringLiteral)
         {
             result += std::get<std::string>(begin->getValue());
         }
-        return PrimaryExpression(line,column,PrimaryExpressionConstant(line,column,result));
+        return PrimaryExpression(line, column, PrimaryExpressionConstant(line, column, result));
     }
     else if (currToken.getTokenType() == TokenType::OpenParenthese)
     {
@@ -3295,13 +3295,21 @@ bool Parser::ParsingContext::isTypedef(const std::string& name) const
 
 void Parser::ParsingContext::logError(const ErrorReporter& errorReporter)
 {
-    if (m_branches.empty() || m_branches.top().empty())
+    if (m_branches.empty() || (m_branches.size() == 1 && m_branches.back().empty()))
     {
-        std::cerr << errorReporter;
+        m_errorsOccured = true;
+        if (m_reporter)
+        {
+            *m_reporter << errorReporter;
+        }
+    }
+    else if (m_branches.back().empty())
+    {
+        m_branches[m_branches.size() - 2].back()->m_errors.push_back(errorReporter);
     }
     else
     {
-        m_branches.top().back()->m_errors.push_back(errorReporter);
+        m_branches.back().back()->m_errors.push_back(errorReporter);
     }
 }
 
@@ -3347,7 +3355,7 @@ std::unique_ptr<Parser::ParsingContext::Branch> Parser::ParsingContext::createBr
 Parser::ParsingContext::Branch::Branch(ParsingContext& context, std::vector<Lexer::Token>::const_iterator& begin)
     : context(context), m_begin(begin), m_curr(begin)
 {
-    context.m_branches.top().push_back(this);
+    context.m_branches.back().push_back(this);
 }
 
 std::vector<Token>::const_iterator& Parser::ParsingContext::Branch::getCurrent()
@@ -3362,24 +3370,28 @@ Parser::ParsingContext::Branch::operator bool() const
 
 Parser::ParsingContext::Branch::~Branch()
 {
-    if (!context.m_branches.top().empty())
+    if (!context.m_branches.back().empty())
     {
         if (*this)
         {
             m_begin = m_curr;
-            context.m_branches.top().clear();
+            context.m_branches.back().clear();
         }
         else
         {
-            Branch* result = *std::max_element(context.m_branches.top().begin(),
-                                               context.m_branches.top().begin(),
+            Branch* result = *std::max_element(context.m_branches.back().begin(),
+                                               context.m_branches.back().end(),
                                                [](Branch* const lhs, Branch* const rhs)
                                                {
-                                                   return std::distance(lhs->m_begin, lhs->m_curr)
-                                                       < std::distance(rhs->m_begin, rhs->m_curr);
+                                                   return std::tuple(std::distance(lhs->m_begin, lhs->m_curr),
+                                                                     std::numeric_limits<std::size_t>::max()
+                                                                         - lhs->m_errors.size())
+                                                       < std::tuple(std::distance(rhs->m_begin, rhs->m_curr),
+                                                                    std::numeric_limits<std::size_t>::max()
+                                                                        - rhs->m_errors.size());
                                                });
-            context.m_branches.top().clear();
-            m_begin = m_curr;
+            context.m_branches.back().clear();
+            m_begin = result->m_curr;
             for (auto& iter : result->m_errors)
             {
                 context.logError(iter);

@@ -17,11 +17,15 @@ if(UNIX)
     set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
 endif()
 
+if (WIN32)
+    add_compile_definitions(_WIN32_WINNT=0x0600 WINVER=0x0600)
+endif ()
+
 option(BUILD_TESTS "Build tests" ON)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
+include_directories(SYSTEM 3rdParty)
 include_directories(src)
-include_directories(3rdParty)
 message(STATUS ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 list(APPEND CMAKE_CXX_FLAGS "-pedantic -Wall -Wextra -fdiagnostics-color=always")

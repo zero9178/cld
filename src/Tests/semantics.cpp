@@ -5,7 +5,7 @@
 TEST_CASE("Function definition", "[semantics]")
 {
     auto source = "void foo(int i,float f){}";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -62,7 +62,7 @@ TEST_CASE("Function definition", "[semantics]")
 TEST_CASE("K&R Function definition", "[semantics]")
 {
     auto source = R"(void foo(i,f) register short i;float f;{})";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -99,7 +99,7 @@ TEST_CASE("K&R Function definition", "[semantics]")
 TEST_CASE("No argument function prototype","[semantics]")
 {
     auto source = R"(void foo(void);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -122,7 +122,7 @@ TEST_CASE("No argument function prototype","[semantics]")
 TEST_CASE("No argument function definition","[semantics]")
 {
     auto source = R"(void foo(void){})";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -158,7 +158,7 @@ TEST_CASE("No argument function definition","[semantics]")
 TEST_CASE("Function prototype", "[semantics]")
 {
     auto source = R"(void foo(register int i,float f);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -190,7 +190,7 @@ TEST_CASE("Function prototype", "[semantics]")
 TEST_CASE("Empty identifier list function prototype","[semantics]")
 {
     auto source = R"(double foo();)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -214,7 +214,7 @@ TEST_CASE("Empty identifier list function prototype","[semantics]")
 TEST_CASE("Ellipsis function","[semantics]")
 {
     auto source = R"(void foo(int i,float f,...);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
     REQUIRE(parsing.second);
 
     OpenCL::Semantics::SemanticAnalysis analysis;
@@ -249,7 +249,7 @@ TEST_CASE("Function linkage","[semantics]")
     SECTION("internal")
     {
         auto source = R"(static void foo(void);)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -272,7 +272,7 @@ TEST_CASE("Function linkage","[semantics]")
     SECTION("External")
     {
         auto source = R"(extern void foo(void);)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -313,7 +313,7 @@ TEST_CASE("Function definitions and prototypes that should fail","[semantics]")
     {
         DYNAMIC_SECTION(source)
         {
-            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
             REQUIRE(parsing.second);
 
             OpenCL::Semantics::SemanticAnalysis analysis;
@@ -328,7 +328,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("Multi declarations")
     {
         auto source = R"(int i,f,c;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -353,7 +353,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("Empty declaration")
     {
         auto source = R"(int;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -363,7 +363,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("non cv qualified")
     {
         auto source = R"(int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -384,7 +384,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("const")
     {
         auto source = R"(const int const i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -405,7 +405,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("volatile")
     {
         auto source = R"(volatile int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -426,7 +426,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("const volatile")
     {
         auto source = R"(const int volatile i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -447,7 +447,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("External linkage")
     {
         auto source = R"(extern int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
         REQUIRE(parsing.second);
 
         OpenCL::Semantics::SemanticAnalysis analysis;
@@ -505,7 +505,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
         {
             DYNAMIC_SECTION("Primitive: "<<source)
             {
-                auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+                auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
                 REQUIRE(parsing.second);
 
                 OpenCL::Semantics::SemanticAnalysis analysis;
@@ -544,7 +544,7 @@ TEST_CASE("Invalid primitive declarations","[semantics]")
     {
         DYNAMIC_SECTION(source)
         {
-            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source));
+            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
             REQUIRE(parsing.second);
 
             OpenCL::Semantics::SemanticAnalysis analysis;

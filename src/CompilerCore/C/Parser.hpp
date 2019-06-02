@@ -3,19 +3,29 @@
 
 #include "Semantics.hpp"
 #include "Syntax.hpp"
-#include "ParserMessage.hpp"
+#include "Message.hpp"
 
-#include <map>
-#include <stack>
 
 namespace OpenCL::Parser
 {
     using Tokens = std::vector<OpenCL::Lexer::Token>;
 
-    using ErrorReporter = ParserMessage;
+    using ErrorReporter = Message;
+
+    namespace ErrorMessages
+    {
+        constexpr auto UNEXPECTED_ENDS_OF_TOKENS = "Unexpected end of tokens";
+
+        constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename";
+
+        constexpr auto MISSING_SEMICOLON_AT_END_OF_DECLARATION = "Expected ; at the end of declaration";
+
+        constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
+    }
 
     class ParsingContext final
     {
+        std::ostream* m_reporter;
         bool m_errorsOccured = false;
         std::vector<std::set<std::string>> m_currentScope{1};
         std::vector<std::set<std::string>> m_typedefs{1};
@@ -40,7 +50,7 @@ namespace OpenCL::Parser
             std::vector<Lexer::Token>::const_iterator& getCurrent();
         };
 
-        std::stack<std::vector<Branch*>> m_branches;
+        std::vector<std::vector<Branch*>> m_branches;
 
         friend class Branch;
 
@@ -53,7 +63,8 @@ namespace OpenCL::Parser
 
         void logError(const ErrorReporter& error);
 
-        ParsingContext() = default;
+        explicit ParsingContext(std::ostream* reporter = &std::cerr) : m_reporter(reporter)
+        {}
 
         ~ParsingContext() = default;
 
@@ -78,10 +89,10 @@ namespace OpenCL::Parser
         template<class F>
         auto doBacktracking(F&& f)
         {
-            m_branches.emplace();
+            m_branches.emplace_back();
             auto deleter = [this](void*)
             {
-                m_branches.pop();
+                m_branches.pop_back();
             };
             std::unique_ptr<void, decltype(deleter)> ptr((void*)1,deleter);
             return std::forward<F>(f)();
@@ -90,7 +101,8 @@ namespace OpenCL::Parser
         std::unique_ptr<Branch> createBranch(Tokens::const_iterator& begin);
     };
 
-    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens);
+    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
+                                                               std::ostream* reporter = &std::cerr);
 
     OpenCL::Syntax::TranslationUnit
     parseTranslationUnit(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);

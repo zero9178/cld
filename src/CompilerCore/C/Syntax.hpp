@@ -1053,7 +1053,7 @@ namespace OpenCL::Syntax
      *
      * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
      *
-     * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
+     * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>]
      *                   { <TokenType::Comma> <InitDeclarator> } ] <TokenType::SemiColon>
      */
     class Declaration final : public Node
