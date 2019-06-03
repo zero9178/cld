@@ -39,11 +39,7 @@ namespace OpenCL
         const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
 
         Action getAction() const;
-
-        friend std::ostream& operator<<(std::ostream& os, const Modifier& modifier);
     };
-
-    std::ostream& operator<<(std::ostream& os, const Modifier& modifier);
 
     class Message
     {

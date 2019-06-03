@@ -79,7 +79,7 @@ const std::vector<OpenCL::Message::Note>& OpenCL::Message::getNotes() const
     return m_notes;
 }
 
-const std::optional<Modifier>& OpenCL::Message::getModifier() const
+const std::optional<OpenCL::Modifier>& OpenCL::Message::getModifier() const
 {
     return m_modifier;
 }
@@ -88,11 +88,6 @@ OpenCL::Modifier::Modifier(const std::vector<OpenCL::Lexer::Token>::const_iterat
                            const std::vector<OpenCL::Lexer::Token>::const_iterator& anEnd,
                            OpenCL::Modifier::Action action) : m_begin(begin), m_end(anEnd), m_action(action)
 {}
-
-std::ostream& OpenCL::operator<<(std::ostream& os, const OpenCL::Modifier& modifier)
-{
-    return os;
-}
 
 const std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Modifier::getBegin() const
 {
