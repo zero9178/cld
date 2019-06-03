@@ -88,7 +88,7 @@ namespace OpenCL
 
         const std::vector<Note>& getNotes() const;
 
-        friend std::ostream& operator<<(std::ostream& ostream, const Message& message);
+        const std::optional<Modifier>& getModifier() const;
     };
 
     std::ostream& operator<<(std::ostream& os, const Message& message);

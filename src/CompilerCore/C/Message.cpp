@@ -23,14 +23,27 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
     os << rang::fg::red << rang::style::bold << "error: " << rang::fg::blue << rang::style::reset
        << message.getMessage() << '\n';
 
+    auto numSize = std::to_string(message.getAnEnd()->getLine()).size();
+    auto remainder = numSize % 4;
+    if(remainder != 0)
+    {
+        numSize += 4 - remainder;
+    }
     for (auto curr = message.getBegin(); curr != message.getAnEnd();)
     {
         auto next = findEOL(curr, message.getAnEnd());
         auto text = Lexer::reconstruct(curr, next);
-        auto pos = os.tellp();
-        os << "  " << curr->getLine() << "|  ";
-        auto sideOffset = os.tellp() - pos;
-        os << text << '\n';
+        auto line = std::to_string(curr->getLine());
+        os << std::string(numSize - line.size(),' ') << line << '|';
+        if(message.getModifier() && message.getModifier()->getBegin()->getLine() == curr->getLine())
+        {
+            auto highlitedEOL = findEOL(message.getModifier()->getBegin(),message.getModifier()->getAnEnd());
+            os << text.substr(0,message.getModifier()->getBegin()->getColumn()) << rang::fg::red ;
+        }
+        else
+        {
+            os << text << '\n';
+        }
         curr = next;
     }
 
@@ -64,6 +77,11 @@ const std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Message::getAnE
 const std::vector<OpenCL::Message::Note>& OpenCL::Message::getNotes() const
 {
     return m_notes;
+}
+
+const std::optional<Modifier>& OpenCL::Message::getModifier() const
+{
+    return m_modifier;
 }
 
 OpenCL::Modifier::Modifier(const std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
