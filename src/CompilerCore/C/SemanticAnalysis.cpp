@@ -178,7 +178,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
                  OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpression& node)
 {
     return std::visit([this](auto&& value)
-                      { return visit(value); }, node.getVariant());
+                      { return visit(value); }, node);
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
@@ -236,7 +236,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
     return std::visit([this](auto&& value)
                       {
                           return visit(value);
-                      }, node.getVariant());
+                      }, node);
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
@@ -387,7 +387,7 @@ OpenCL::Expected<OpenCL::Semantics::Type,
     return std::visit([this](auto&& value)
                       {
                           return visit(value);
-                      }, node.getVariant());
+                      }, node);
 }
 
 OpenCL::Expected<OpenCL::Semantics::Type,
@@ -632,7 +632,8 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
             {
                 return FailureReason("A maximum of one storage class specifier allowed in function definition");
             }
-            if (*storage != Syntax::StorageClassSpecifier::Static && *storage != Syntax::StorageClassSpecifier::Extern)
+            if (storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
+                && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
             {
                 return FailureReason("Only static or extern are allowed storage class specifiers in function definition");
             }
@@ -663,9 +664,9 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     }
 
     auto* paramterTypeList = std::get_if<Syntax::DirectDeclaratorParentheseParameters>(
-        &node.getDeclarator().getDirectDeclarator().getVariant());
+        &node.getDeclarator().getDirectDeclarator());
     auto* identifierList = std::get_if<Syntax::DirectDeclaratorParentheseIdentifiers>(
-        &node.getDeclarator().getDirectDeclarator().getVariant());
+        &node.getDeclarator().getDirectDeclarator());
     std::map<std::string, Semantics::Type> declarationMap;
     for (auto& iter : node.getDeclarations())
     {
@@ -675,7 +676,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
             auto result = std::visit(
                 overload{[](Syntax::StorageClassSpecifier storageClassSpecifier) -> std::optional<FailureReason>
                          {
-                             if (storageClassSpecifier == Syntax::StorageClassSpecifier::Register)
+                             if (storageClassSpecifier.getSpecifier() == Syntax::StorageClassSpecifier::Register)
                              {
                                  return {};
                              }
@@ -742,9 +743,14 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                 .first;
             declarations.emplace_back(functionRP.getArguments()[i].first,
                                       Linkage::None,
-                                      declarationSpecifierHas<Syntax::StorageClassSpecifier>(specifiers.begin(),
-                                                                                             specifiers.end(),
-                                                                                             Syntax::StorageClassSpecifier::Register)
+                                      declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(specifiers.begin(),
+                                                                                               specifiers.end(),
+                                                                                               [](const Syntax::StorageClassSpecifier& specifier)
+                                                                                               {
+                                                                                                   return specifier
+                                                                                                       .getSpecifier()
+                                                                                                       == Syntax::StorageClassSpecifier::Register;
+                                                                                               })
                                       ? Lifetime::Register : Lifetime::Automatic,
                                       functionRP.getArguments()[i].second);
         }
@@ -762,13 +768,18 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
             {
                 declarations.emplace_back(result->second,
                                           Linkage::None,
-                                          declarationSpecifierHas<Syntax::StorageClassSpecifier>(node.getDeclarations()[i]
+                                          declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(node.getDeclarations()[i]
                                                                                                      .getDeclarationSpecifiers()
                                                                                                      .begin(),
                                                                                                  node.getDeclarations()[i]
                                                                                                      .getDeclarationSpecifiers()
                                                                                                      .end(),
-                                                                                                 Syntax::StorageClassSpecifier::Register)
+                                                                                                 [](const Syntax::StorageClassSpecifier& specifier)
+                                                                                                 {
+                                                                                                     return specifier
+                                                                                                         .getSpecifier()
+                                                                                                         == Syntax::StorageClassSpecifier::Register;
+                                                                                                 })
                                           ? Lifetime::Register : Lifetime::Automatic,
                                           functionRP.getArguments()[i].second);
             }
@@ -791,7 +802,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     return FunctionDefinition(functionRP,
                               name,
                               std::move(declarations),
-                              storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
+                              storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static
                               ? Linkage::Internal : Linkage::External);
 }
 
@@ -850,8 +861,8 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
             && storage)
         {
             storageClassSpecifier = storage;
-            if (*storage == Syntax::StorageClassSpecifier::Auto
-                || *storage == Syntax::StorageClassSpecifier::Register)
+            if (storage->getSpecifier() == Syntax::StorageClassSpecifier::Auto
+                || storage->getSpecifier() == Syntax::StorageClassSpecifier::Register)
             {
                 return FailureReason("auto and register not allowed in declaration in file scope");
             }
@@ -908,9 +919,9 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                                                                          node.getDeclarationSpecifiers().end(),
                                                                          [](Syntax::StorageClassSpecifier storageClassSpecifier)
                                                                          {
-                                                                             return storageClassSpecifier
+                                                                             return storageClassSpecifier.getSpecifier()
                                                                                  != Syntax::StorageClassSpecifier::Static
-                                                                                 && storageClassSpecifier
+                                                                                 && storageClassSpecifier.getSpecifier()
                                                                                      != Syntax::StorageClassSpecifier::Extern;
                                                                          }))
             {
@@ -921,7 +932,7 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                 return FailureReason("Initializer not allowed for function prototype");
             }
             if (m_typesOfNamedValues.size() > 1 && storageClassSpecifier
-                && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static)
+                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
                 return FailureReason("static at function prototype only allowed at file scope");
             }
@@ -931,7 +942,7 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
             }
             decls.emplace_back(Declaration(std::move(*result),
                                            storageClassSpecifier
-                                               && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static
+                                               && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static
                                            ? Linkage::Internal : Linkage::External, Lifetime::Static, std::move(name)));
             m_typesOfNamedValues.back().emplace(decls.back().getName(), decls.back());
         }
@@ -939,7 +950,7 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
         {
             Linkage linkage = Linkage::None;
             Lifetime lifetime = m_typesOfNamedValues.size() > 1 ? Lifetime::Automatic : Lifetime::Static;
-            if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Static)
+            if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
                 if (m_typesOfNamedValues.size() > 1)
                 {
@@ -950,11 +961,11 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                     linkage = Linkage::Internal;
                 }
             }
-            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+            else if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
             {
                 linkage = Linkage::External;
             }
-            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Register)
+            else if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Register)
             {
                 lifetime = Lifetime::Register;
             }

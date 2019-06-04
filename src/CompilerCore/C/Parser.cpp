@@ -50,8 +50,7 @@ std::optional<Syntax::ExternalDeclaration>
 OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                          ParsingContext& context)
 {
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     //backtracking
     return context.doBacktracking([&]() -> std::optional<Syntax::ExternalDeclaration>
                                   {
@@ -61,7 +60,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                                                               context);
                                       if (*functionBranch)
                                       {
-                                          return ExternalDeclaration(line, column, std::move(*function));
+                                          return ExternalDeclaration(start, begin, std::move(*function));
                                       }
 
                                       auto declarationBranch = context.createBranch(begin);
@@ -69,7 +68,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                           declaration = parseDeclaration(declarationBranch->getCurrent(), end, context);
                                       if (*declarationBranch)
                                       {
-                                          return ExternalDeclaration(line, column, std::move(*declaration));
+                                          return ExternalDeclaration(start, begin, std::move(*declaration));
                                       }
                                       else
                                       {
@@ -161,8 +160,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     {
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     while (begin < end && isDeclarationSpecifier(*begin, context))
     {
@@ -175,7 +173,8 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     }
     if (declarationSpecifiers.empty())
     {
-        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER,begin,findSemicolonOrEOL(begin,end),{Modifier(begin,begin+1,Modifier::PointAtBeginning)}});
+        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER, begin, findSemicolonOrEOL(begin, end),
+                          {Modifier(begin, begin + 1, Modifier::PointAtBeginning)}});
     }
     if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
     {
@@ -187,7 +186,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         {
             context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION});
         }
-        return Declaration(line, column, std::move(declarationSpecifiers), {});
+        return Declaration(start, begin, std::move(declarationSpecifiers), {});
     }
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
     bool first = true;
@@ -237,7 +236,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         begin++;
     }
     if (auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifiers.front());
-        storage && *storage == StorageClassSpecifier::Typedef)
+        storage && storage->getSpecifier() == StorageClassSpecifier::Typedef)
     {
         for (auto&[declator, init] : initDeclarators)
         {
@@ -245,28 +244,28 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
             auto visitor = [](auto self, auto&& value) -> std::string
             {
                 using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<std::string, T>)
+                if constexpr (std::is_same_v<T, DirectDeclaratorIdentifier>)
                 {
                     (void)self;
-                    return value;
+                    return value.getIdentifier();
                 }
-                else if constexpr (std::is_same_v<T, std::unique_ptr<Declarator>>)
+                else if constexpr (std::is_same_v<T, DirectDeclaratorParenthese>)
                 {
                     return std::visit([&](auto&& value) -> std::string
                                       { return self(value); },
-                                      value->getDirectDeclarator().getVariant());
+                                      value.getDeclarator().getDirectDeclarator());
                 }
                 else
                 {
                     return std::visit([&](auto&& value) -> std::string
                                       { return self(value); },
-                                      value.getDirectDeclarator().getVariant());
+                                      value.getDirectDeclarator());
                 }
             };
-            context.addTypedef(std::visit(Y{visitor}, declator->getDirectDeclarator().getVariant()));
+            context.addTypedef(std::visit(Y{visitor}, declator->getDirectDeclarator()));
         }
     }
-    return Declaration(line, column, std::move(declarationSpecifiers), std::move(initDeclarators));
+    return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
 std::optional<Syntax::DeclarationSpecifier>
@@ -275,11 +274,9 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto currToken = *begin;
     switch (begin->getTokenType())
     {
@@ -306,42 +303,49 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
     }
     switch (currToken.getTokenType())
     {
-    case TokenType::TypedefKeyword: return DeclarationSpecifier{StorageClassSpecifier::Typedef};
-    case TokenType::ExternKeyword: return DeclarationSpecifier{StorageClassSpecifier::Extern};
-    case TokenType::StaticKeyword: return DeclarationSpecifier{StorageClassSpecifier::Static};
-    case TokenType::AutoKeyword: return DeclarationSpecifier{StorageClassSpecifier::Auto};
-    case TokenType::RegisterKeyword: return DeclarationSpecifier{StorageClassSpecifier::Register};
-    case TokenType::ConstKeyword: return DeclarationSpecifier{TypeQualifier::Const};
-    case TokenType::RestrictKeyword: return DeclarationSpecifier{TypeQualifier::Restrict};
-    case TokenType::VolatileKeyword: return DeclarationSpecifier{TypeQualifier::Volatile};
-    case TokenType::InlineKeyword: return DeclarationSpecifier{FunctionSpecifier{}};
+    case TokenType::TypedefKeyword:
+        return DeclarationSpecifier{StorageClassSpecifier(start, start + 1, StorageClassSpecifier::Typedef)};
+    case TokenType::ExternKeyword:
+        return DeclarationSpecifier{StorageClassSpecifier(start, start + 1, StorageClassSpecifier::Extern)};
+    case TokenType::StaticKeyword:
+        return DeclarationSpecifier{StorageClassSpecifier(start, start + 1, StorageClassSpecifier::Static)};
+    case TokenType::AutoKeyword:
+        return DeclarationSpecifier{StorageClassSpecifier(start, start + 1, StorageClassSpecifier::Auto)};
+    case TokenType::RegisterKeyword:
+        return DeclarationSpecifier{StorageClassSpecifier(start, start + 1, StorageClassSpecifier::Register)};
+    case TokenType::ConstKeyword: return DeclarationSpecifier{TypeQualifier(start, start + 1, TypeQualifier::Const)};
+    case TokenType::RestrictKeyword:
+        return DeclarationSpecifier{TypeQualifier(start, start + 1, TypeQualifier::Restrict)};
+    case TokenType::VolatileKeyword:
+        return DeclarationSpecifier{TypeQualifier(start, start + 1, TypeQualifier::Volatile)};
+    case TokenType::InlineKeyword: return DeclarationSpecifier{FunctionSpecifier{start, start + 1}};
     case TokenType::VoidKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Void)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Void)};
     case TokenType::CharKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Char)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Char)};
     case TokenType::ShortKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Short)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Short)};
     case TokenType::IntKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Int)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Int)};
     case TokenType::LongKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Long)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Long)};
     case TokenType::FloatKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Float)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Float)};
     case TokenType::DoubleKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
     case TokenType::SignedKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Signed)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Signed)};
     case TokenType::UnsignedKeyword:
         return Syntax::DeclarationSpecifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
     case TokenType::UnionKeyword:
     case TokenType::StructKeyword:
     {
@@ -351,7 +355,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
             auto name = expected->getIdentifier();
             auto isDefinition = !expected->getStructDeclarations().empty();
             auto result =
-                TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
+                TypeSpecifier(start, begin, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
             if (isDefinition)
             {
                 auto type = Semantics::declaratorsToType({std::cref(result)});
@@ -374,7 +378,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
         if (expected)
         {
             return DeclarationSpecifier{
-                TypeSpecifier(line, column, std::make_unique<EnumSpecifier>(std::move(*expected)))};
+                TypeSpecifier(start, begin, std::make_unique<EnumSpecifier>(std::move(*expected)))};
         }
         else
         {
@@ -386,7 +390,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
         auto name = std::get<std::string>(currToken.getValue());
         if (!context.isInScope(name) && context.isTypedef(name))
         {
-            return Syntax::DeclarationSpecifier{TypeSpecifier(line, column, name)};
+            return Syntax::DeclarationSpecifier{TypeSpecifier(start, begin, name)};
         }
         else if (context.isTypedef(name))
         {
@@ -411,8 +415,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
     {
 
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     bool isUnion;
     if (begin->getTokenType() == TokenType::StructKeyword)
     {
@@ -431,13 +434,13 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
     if (begin >= end || begin->getTokenType() != TokenType::Identifier)
     {
         context.logError({std::string("Expected identifier after ") + (isUnion ? "union" : "struct")});
-        return StructOrUnionSpecifier(line, column, isUnion, "", {});
+        return StructOrUnionSpecifier(start, begin, isUnion, "", {});
     }
     const auto& name = std::get<std::string>(begin->getValue());
     begin++;
     if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
-        return StructOrUnionSpecifier(line, column, isUnion, name, {});
+        return StructOrUnionSpecifier(start, begin, isUnion, name, {});
     }
     begin++;
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
@@ -561,7 +564,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
     {
         begin++;
     }
-    return StructOrUnionSpecifier(line, column, isUnion, name, std::move(structDeclarations));
+    return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations));
 }
 
 std::optional<OpenCL::Syntax::SpecifierQualifier>
@@ -570,9 +573,9 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
 {
     if (begin >= end)
     {
-
         return {};
     }
+    auto start = begin;
     auto currToken = *begin;
     switch (currToken.getTokenType())
     {
@@ -588,40 +591,37 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
     case TokenType::FloatKeyword:
     case TokenType::DoubleKeyword:
     case TokenType::SignedKeyword:
-    case TokenType::UnsignedKeyword: begin++; [[fallthrough]];
-    case TokenType::Identifier: begin++;
+    case TokenType::UnsignedKeyword: begin++;
     default: break;
     }
-    auto line = currToken.getLine();
-    auto column = currToken.getColumn();
     switch (currToken.getTokenType())
     {
-    case TokenType::ConstKeyword: return SpecifierQualifier{TypeQualifier::Const};
-    case TokenType::RestrictKeyword: return SpecifierQualifier{TypeQualifier::Restrict};
-    case TokenType::VolatileKeyword: return SpecifierQualifier{TypeQualifier::Volatile};
+    case TokenType::ConstKeyword: return SpecifierQualifier{TypeQualifier(start, start + 1, TypeQualifier::Const)};
+    case TokenType::RestrictKeyword:return SpecifierQualifier{TypeQualifier(start, start + 1, TypeQualifier::Restrict)};
+    case TokenType::VolatileKeyword:return SpecifierQualifier{TypeQualifier(start, start + 1, TypeQualifier::Volatile)};
     case TokenType::VoidKeyword:
-        return Syntax::SpecifierQualifier{TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Void)};
+        return Syntax::SpecifierQualifier{TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Void)};
     case TokenType::CharKeyword:
-        return Syntax::SpecifierQualifier{TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Char)};
+        return Syntax::SpecifierQualifier{TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Char)};
     case TokenType::ShortKeyword:
         return Syntax::SpecifierQualifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Short)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Short)};
     case TokenType::IntKeyword:
-        return Syntax::SpecifierQualifier{TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Int)};
+        return Syntax::SpecifierQualifier{TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Int)};
     case TokenType::LongKeyword:
-        return Syntax::SpecifierQualifier{TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Long)};
+        return Syntax::SpecifierQualifier{TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Long)};
     case TokenType::FloatKeyword:
         return Syntax::SpecifierQualifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Float)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Float)};
     case TokenType::DoubleKeyword:
         return Syntax::SpecifierQualifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
     case TokenType::SignedKeyword:
         return Syntax::SpecifierQualifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Signed)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Signed)};
     case TokenType::UnsignedKeyword:
         return Syntax::SpecifierQualifier{
-            TypeSpecifier(line, column, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
+            TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
     case TokenType::UnionKeyword:
     case TokenType::StructKeyword:
     {
@@ -631,7 +631,7 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
             auto name = expected->getIdentifier();
             bool isDefinition = !expected->getStructDeclarations().empty();
             auto result =
-                TypeSpecifier(line, column, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
+                TypeSpecifier(start, begin, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
             if (isDefinition)
             {
                 auto type = Semantics::declaratorsToType({std::cref(result)});
@@ -654,7 +654,7 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
         if (expected)
         {
             return SpecifierQualifier{
-                TypeSpecifier(line, column, std::make_unique<EnumSpecifier>(std::move(*expected)))};
+                TypeSpecifier(start, begin, std::make_unique<EnumSpecifier>(std::move(*expected)))};
         }
         else
         {
@@ -666,7 +666,7 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
         auto name = std::get<std::string>(currToken.getValue());
         if (!context.isInScope(name) && context.isTypedef(name))
         {
-            return Syntax::SpecifierQualifier{TypeSpecifier(line, column, name)};
+            return Syntax::SpecifierQualifier{TypeSpecifier(start, begin, name)};
         }
         else if (context.isTypedef(name))
         {
@@ -689,11 +689,9 @@ OpenCL::Parser::parseDeclarator(Tokens::const_iterator& begin, Tokens::const_ite
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == TokenType::Asterisk)
     {
@@ -709,22 +707,21 @@ OpenCL::Parser::parseDeclarator(Tokens::const_iterator& begin, Tokens::const_ite
     {
         return {};
     }
-    return Declarator(line, column, std::move(pointers), std::move(*directDeclarator));
+    return Declarator(start, begin, std::move(pointers), std::move(*directDeclarator));
 }
 
 namespace
 {
+
     std::optional<DirectDeclaratorNoStaticOrAsterisk> parseDirectDeclaratorNoStaticOrAsterisk(
         DirectDeclarator& declarator, OpenCL::Parser::Tokens::const_iterator& begin,
         OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
     {
         if (begin >= end)
         {
-
             return {};
         }
-        auto line = begin->getLine();
-        auto column = begin->getColumn();
+        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
         if (begin >= end || begin->getTokenType() != TokenType::OpenSquareBracket)
         {
             context.logError({"Expected ["});
@@ -740,11 +737,11 @@ namespace
         {
             switch (begin->getTokenType())
             {
-            case TokenType::ConstKeyword: typeQualifiers.push_back(TypeQualifier::Const);
+            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
                 break;
-            case TokenType::RestrictKeyword: typeQualifiers.push_back(TypeQualifier::Restrict);
+            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
                 break;
-            case TokenType::VolatileKeyword: typeQualifiers.push_back(TypeQualifier::Volatile);
+            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
                 break;
             default: break;
             }
@@ -760,7 +757,7 @@ namespace
             begin++;
         }
         return DirectDeclaratorNoStaticOrAsterisk(
-            line, column, std::make_unique<DirectDeclarator>(std::move(declarator)), std::move(typeQualifiers),
+            start, begin, std::make_unique<DirectDeclarator>(std::move(declarator)), std::move(typeQualifiers),
             assignment ? std::make_unique<AssignmentExpression>(std::move(*assignment)) : nullptr);
     }
 
@@ -770,11 +767,9 @@ namespace
     {
         if (begin >= end)
         {
-
             return {};
         }
-        auto line = begin->getLine();
-        auto column = begin->getColumn();
+        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
         if (begin >= end || begin->getTokenType() != TokenType::OpenSquareBracket)
         {
             context.logError({"Expected ["});
@@ -796,11 +791,11 @@ namespace
         {
             switch (begin->getTokenType())
             {
-            case TokenType::ConstKeyword: typeQualifiers.push_back(TypeQualifier::Const);
+            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
                 break;
-            case TokenType::RestrictKeyword: typeQualifiers.push_back(TypeQualifier::Restrict);
+            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
                 break;
-            case TokenType::VolatileKeyword: typeQualifiers.push_back(TypeQualifier::Volatile);
+            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
                 break;
             default: break;
             }
@@ -827,7 +822,7 @@ namespace
         {
             begin++;
         }
-        return DirectDeclaratorStatic(line, column, std::make_unique<DirectDeclarator>(std::move(declarator)),
+        return DirectDeclaratorStatic(start, begin, std::make_unique<DirectDeclarator>(std::move(declarator)),
                                       std::move(typeQualifiers), std::move(*assignmentExpression));
     }
 
@@ -839,8 +834,7 @@ namespace
         {
             context.logError({"Expected ["});
         }
-        auto line = begin < end ? begin->getLine() : 0;
-        auto column = begin < end ? begin->getColumn() : 0;
+        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
         begin++;
         std::vector<TypeQualifier> typeQualifiers;
         while (begin < end
@@ -849,11 +843,11 @@ namespace
         {
             switch (begin->getTokenType())
             {
-            case TokenType::ConstKeyword: typeQualifiers.push_back(TypeQualifier::Const);
+            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
                 break;
-            case TokenType::RestrictKeyword: typeQualifiers.push_back(TypeQualifier::Restrict);
+            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
                 break;
-            case TokenType::VolatileKeyword: typeQualifiers.push_back(TypeQualifier::Volatile);
+            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
                 break;
             default: break;
             }
@@ -871,7 +865,7 @@ namespace
         {
             begin++;
         }
-        return DirectDeclaratorAsterisk(line, column, std::move(declarator), std::move(typeQualifiers));
+        return DirectDeclaratorAsterisk(start, begin, std::move(declarator), std::move(typeQualifiers));
     }
 } // namespace
 
@@ -881,7 +875,6 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
 {
     if (begin >= end)
     {
-
         return {};
     }
     std::unique_ptr<DirectDeclarator> directDeclarator;
@@ -893,18 +886,19 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
         {
         case TokenType::Identifier:
         {
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
+            auto start = begin;
             auto currToken = *begin;
             begin++;
             directDeclarator =
-                std::make_unique<DirectDeclarator>(line, column, std::get<std::string>(currToken.getValue()));
+                std::make_unique<DirectDeclarator>(DirectDeclaratorIdentifier(start,
+                                                                              begin,
+                                                                              std::get<std::string>(currToken
+                                                                                                        .getValue())));
             break;
         }
         case TokenType::OpenParenthese:
         {
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
+            auto start = begin;
             begin++;
             if (directDeclarator)
             {
@@ -916,8 +910,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         return {};
                     }
                     directDeclarator = std::make_unique<DirectDeclarator>(
-                        line, column,
-                        DirectDeclaratorParentheseParameters(line, column, std::move(*directDeclarator),
+                        DirectDeclaratorParentheseParameters(start, begin, std::move(*directDeclarator),
                                                              std::move(*parameterTypeList)));
                 }
                 else
@@ -937,8 +930,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         }
                     }
                     directDeclarator = std::make_unique<DirectDeclarator>(
-                        line, column,
-                        DirectDeclaratorParentheseIdentifiers(line, column, std::move(*directDeclarator),
+                        DirectDeclaratorParentheseIdentifiers(start, begin, std::move(*directDeclarator),
                                                               std::move(identifiers)));
                 }
             }
@@ -949,8 +941,8 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(
-                    line, column, std::make_unique<Declarator>(std::move(*declarator)));
+                directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthese(
+                    start, begin, std::make_unique<Declarator>(std::move(*declarator))));
             }
             if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
             {
@@ -969,8 +961,6 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 context.logError({"Expected declarator before ["});
                 return {};
             }
-            auto line = directDeclarator->getLine();
-            auto column = directDeclarator->getColumn();
             begin++;
             if (begin >= end)
             {
@@ -988,7 +978,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*asterisk));
+                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*asterisk));
             }
             else if (std::any_of(begin, std::find_if(begin, end, [](const auto& token)
             { return token.getTokenType() == TokenType::CloseSquareBracket; }), [](const auto& token)
@@ -1001,7 +991,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*staticDecl));
+                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*staticDecl));
             }
             else
             {
@@ -1010,7 +1000,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(line, column, std::move(*noStaticDecl));
+                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*noStaticDecl));
             }
             break;
         }
@@ -1031,11 +1021,9 @@ OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator& begin, Tokens::co
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto parameterList = parseParameterList(begin, end, context);
     if (!parameterList)
     {
@@ -1055,7 +1043,7 @@ OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator& begin, Tokens::co
             hasEllipse = true;
         }
     }
-    return ParameterTypeList(line, column, std::move(*parameterList), hasEllipse);
+    return ParameterTypeList(start, begin, std::move(*parameterList), hasEllipse);
 }
 
 std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::Tokens::const_iterator& begin,
@@ -1064,11 +1052,9 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<ParameterDeclaration> parameterDeclarations;
     bool first = true;
     while (begin < end)
@@ -1150,7 +1136,6 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                     auto declarator = parseDeclarator(begin, end, context);
                     if (!declarator)
                     {
-                        declarationSpecifiers.pop_back();
                         return {};
                     }
                     parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
@@ -1162,7 +1147,6 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                     auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                     if (!abstractDeclarator)
                     {
-                        declarationSpecifiers.pop_back();
                         return {};
                     }
                     parameterDeclarations.emplace_back(
@@ -1181,7 +1165,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
     {
         context.logError({"Expected at least one parameter declaration"});
     }
-    return ParameterList(line, column, std::move(parameterDeclarations));
+    return ParameterList(start, begin, std::move(parameterDeclarations));
 }
 
 std::optional<Pointer> OpenCL::Parser::parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end,
@@ -1189,15 +1173,13 @@ std::optional<Pointer> OpenCL::Parser::parsePointer(Tokens::const_iterator& begi
 {
     if (begin >= end)
     {
-
         return {};
     }
     if (begin->getTokenType() != TokenType::Asterisk)
     {
         context.logError({"Expected * at the beginning of pointer"});
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     begin++;
     std::vector<TypeQualifier> typeQualifier;
     while (begin < end
@@ -1206,17 +1188,17 @@ std::optional<Pointer> OpenCL::Parser::parsePointer(Tokens::const_iterator& begi
     {
         switch (begin->getTokenType())
         {
-        case TokenType::ConstKeyword: typeQualifier.push_back(TypeQualifier::Const);
+        case TokenType::ConstKeyword: typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Const);
             break;
-        case TokenType::RestrictKeyword: typeQualifier.push_back(TypeQualifier::Restrict);
+        case TokenType::RestrictKeyword: typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
             break;
-        case TokenType::VolatileKeyword: typeQualifier.push_back(TypeQualifier::Volatile);
+        case TokenType::VolatileKeyword: typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
             break;
         default: break;
         }
         begin++;
     }
-    return Pointer(line, column, std::move(typeQualifier));
+    return Pointer(start, begin, std::move(typeQualifier));
 }
 
 std::optional<AbstractDeclarator>
@@ -1225,11 +1207,9 @@ OpenCL::Parser::parseAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& 
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == TokenType::Asterisk)
     {
@@ -1245,7 +1225,7 @@ OpenCL::Parser::parseAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& 
     {
         return {};
     }
-    return AbstractDeclarator(line, column, std::move(pointers), std::move(*result));
+    return AbstractDeclarator(start, begin, std::move(pointers), std::move(*result));
 }
 
 std::optional<DirectAbstractDeclarator>
@@ -1254,7 +1234,6 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
 {
     if (begin >= end)
     {
-
         return {};
     }
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
@@ -1264,8 +1243,8 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
         {
         case TokenType::OpenParenthese:
         {
-            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : begin->getLine();
-            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : begin->getColumn();
+            auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin()
+                                                  : begin;
             begin++;
             if (begin < end && isDeclarationSpecifier(*begin, context))
             {
@@ -1275,9 +1254,8 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                     return {};
                 }
                 directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                    line, colunn,
                     DirectAbstractDeclaratorParameterTypeList(
-                        line, colunn, std::move(directAbstractDeclarator),
+                        start, begin, std::move(directAbstractDeclarator),
                         std::make_unique<ParameterTypeList>(std::move(*parameterTypeList))));
             }
             else if (begin < end && (begin->getTokenType() == TokenType::OpenParenthese
@@ -1289,14 +1267,14 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                 {
                     return {};
                 }
-                directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                    line, colunn, std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
+                directAbstractDeclarator
+                    = std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParenthese(
+                    start, begin, std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator))));
             }
             else
             {
                 directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                    line, colunn,
-                    DirectAbstractDeclaratorParameterTypeList(line, colunn, std::move(directAbstractDeclarator),
+                    DirectAbstractDeclaratorParameterTypeList(start, begin, std::move(directAbstractDeclarator),
                                                               nullptr));
             }
             if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
@@ -1311,14 +1289,17 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
         }
         case TokenType::OpenSquareBracket:
         {
-            auto line = directAbstractDeclarator ? directAbstractDeclarator->getLine() : begin->getLine();
-            auto colunn = directAbstractDeclarator ? directAbstractDeclarator->getColumn() : begin->getColumn();
+            auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin()
+                                                  : begin;
             begin++;
             if (begin < end && begin->getTokenType() == TokenType::Asterisk)
             {
                 begin++;
                 directAbstractDeclarator =
-                    std::make_unique<DirectAbstractDeclarator>(line, colunn, std::move(directAbstractDeclarator));
+                    std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAsterisk(start,
+                                                                                                begin,
+                                                                                                std::move(
+                                                                                                    directAbstractDeclarator)));
             }
             else
             {
@@ -1330,16 +1311,14 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                         return {};
                     }
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                        line, colunn,
                         DirectAbstractDeclaratorAssignmentExpression(
-                            line, colunn, std::move(directAbstractDeclarator),
+                            start, begin, std::move(directAbstractDeclarator),
                             std::make_unique<AssignmentExpression>(std::move(*assignment))));
                 }
                 else
                 {
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                        line, colunn,
-                        DirectAbstractDeclaratorAssignmentExpression(line, colunn,
+                        DirectAbstractDeclaratorAssignmentExpression(start, begin,
                                                                      std::move(directAbstractDeclarator), nullptr));
                 }
             }
@@ -1367,11 +1346,9 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto colunn = begin->getColumn();
+    auto start = begin;
     if (begin->getTokenType() != TokenType::EnumKeyword)
     {
         context.logError({"Expected enum keyword at begin of enum specifier"});
@@ -1385,7 +1362,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         {
             return {};
         }
-        return EnumSpecifier(line, colunn, std::move(*declaration));
+        return EnumSpecifier(start, begin, std::move(*declaration));
     }
     else if (begin >= end || begin->getTokenType() != TokenType::Identifier)
     {
@@ -1402,7 +1379,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         {
             return {};
         }
-        return EnumSpecifier(line, colunn, std::move(*declaration));
+        return EnumSpecifier(start, begin, std::move(*declaration));
     }
     begin++;
     auto name = std::string();
@@ -1415,7 +1392,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         context.logError({"Expected name for enum specifier"});
     }
     begin++;
-    return EnumSpecifier(line, colunn, std::move(name));
+    return EnumSpecifier(start, begin, std::move(name));
 }
 
 std::optional<EnumDeclaration> OpenCL::Parser::parseEnumDeclaration(Tokens::const_iterator& begin,
@@ -1427,8 +1404,7 @@ std::optional<EnumDeclaration> OpenCL::Parser::parseEnumDeclaration(Tokens::cons
 
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     begin++;
     std::string name;
     if (begin < end && begin->getTokenType() == TokenType::Identifier)
@@ -1507,7 +1483,7 @@ std::optional<EnumDeclaration> OpenCL::Parser::parseEnumDeclaration(Tokens::cons
     {
         context.logError({"Expected } at the end of enum definition"});
     }
-    return EnumDeclaration(line, column, std::move(name), values);
+    return EnumDeclaration(start, begin, std::move(name), values);
 }
 
 std::optional<Syntax::FunctionDefinition>
@@ -1518,8 +1494,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
     {
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     while (begin < end && isDeclarationSpecifier(*begin, context))
     {
@@ -1553,7 +1528,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
     context.addToScope(Semantics::declaratorToName(*declarator));
     context.pushScope();
     if (auto* paramters =
-        std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator().getVariant()))
+        std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()))
     {
         auto& parameterDeclarations = paramters->getParameterTypeList().getParameterList().getParameterDeclarations();
         for (auto&[specifier, paramDeclarator] :
@@ -1580,16 +1555,16 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
             auto visitor = [](auto self, auto&& value) -> std::string
             {
                 using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<std::string, T>)
+                if constexpr (std::is_same_v<T, DirectDeclaratorIdentifier>)
                 {
                     (void)self;
-                    return value;
+                    return value.getIdentifier();
                 }
-                else if constexpr (std::is_same_v<T, std::unique_ptr<Declarator>>)
+                else if constexpr (std::is_same_v<T, DirectDeclaratorParenthese>)
                 {
                     return std::visit([&](auto&& value) -> std::string
                                       { return self(value); },
-                                      value->getDirectDeclarator().getVariant());
+                                      value.getDeclarator().getDirectDeclarator());
                 }
                 else if constexpr (
                     !std::is_same_v<
@@ -1599,7 +1574,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
                 {
                     return std::visit([&](auto&& value) -> std::string
                                       { return self(value); },
-                                      value.getDirectDeclarator().getVariant());
+                                      value.getDirectDeclarator());
                 }
                 else
                 {
@@ -1607,7 +1582,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
                     return "";
                 }
             };
-            auto result = std::visit(Y{visitor}, decl->getDirectDeclarator().getVariant());
+            auto result = std::visit(Y{visitor}, decl->getDirectDeclarator());
             if (!result.empty())
             {
                 context.addToScope(result);
@@ -1615,7 +1590,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
         }
     }
     else if (auto* identifierList =
-        std::get_if<DirectDeclaratorParentheseIdentifiers>(&declarator->getDirectDeclarator().getVariant()))
+        std::get_if<DirectDeclaratorParentheseIdentifiers>(&declarator->getDirectDeclarator()))
     {
         for (auto& iter : identifierList->getIdentifiers())
         {
@@ -1629,7 +1604,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
         return {};
     }
 
-    return FunctionDefinition(line, column, std::move(declarationSpecifiers), std::move(*declarator),
+    return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));
 }
 
@@ -1639,11 +1614,9 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
         context.logError({"Expected { at start of Compound Statement"});
@@ -1672,7 +1645,7 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
     {
         begin++;
     }
-    return CompoundStatement(line, column, std::move(items));
+    return CompoundStatement(start, begin, std::move(items));
 }
 
 std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iterator& begin,
@@ -1681,18 +1654,15 @@ std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iter
 {
     if (begin >= end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
     if (isDeclarationSpecifier(*begin, context) && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end
         && (begin + 1)->getTokenType() == TokenType::Colon))
     {
         auto declaration = parseDeclaration(begin, end, context);
         if (declaration)
         {
-            return CompoundItem(line, column, std::move(*declaration));
+            return CompoundItem(std::move(*declaration));
         }
     }
     else
@@ -1700,7 +1670,7 @@ std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iter
         auto statement = parseStatement(begin, end, context);
         if (statement)
         {
-            return CompoundItem(line, column, std::move(*statement));
+            return CompoundItem(std::move(*statement));
         }
     }
     return {};
@@ -1711,9 +1681,9 @@ OpenCL::Parser::parseInitializer(Tokens::const_iterator& begin, Tokens::const_it
 {
     if (begin == end)
     {
-
         return {};
     }
+    auto start = begin;
     if (begin->getTokenType() != TokenType::OpenBrace)
     {
         auto assignment = parseAssignmentExpression(begin, end, context);
@@ -1721,7 +1691,7 @@ OpenCL::Parser::parseInitializer(Tokens::const_iterator& begin, Tokens::const_it
         {
             return {};
         }
-        return Initializer(begin->getLine(), begin->getColumn(), std::move(*assignment));
+        return Initializer(start, begin, std::move(*assignment));
     }
     else
     {
@@ -1747,7 +1717,7 @@ OpenCL::Parser::parseInitializer(Tokens::const_iterator& begin, Tokens::const_it
             return {};
         }
         begin++;
-        return Initializer{begin->getLine(), begin->getColumn(), std::move(*initializerList)};
+        return Initializer{start, begin, std::move(*initializerList)};
     }
 }
 
@@ -1757,11 +1727,9 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     typename OpenCL::Syntax::InitializerList::vector vector;
     bool first = true;
     while (true)
@@ -1886,7 +1854,7 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
         vector.push_back({std::move(*initializer), variants});
     }
 Exit:
-    return InitializerList{line, column, std::move(vector)};
+    return InitializerList{start, begin, std::move(vector)};
 }
 
 std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& begin,
@@ -1894,15 +1862,12 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
 {
     if (begin == end)
     {
-
         return {};
     }
-
+    auto start = begin;
     auto result = [&]() -> std::optional<Statement>
     {
         auto curentToken = *begin;
-        auto line = curentToken.getLine();
-        auto column = curentToken.getColumn();
         switch (curentToken.getTokenType())
         {
         case TokenType::ReturnKeyword:
@@ -1913,9 +1878,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return {};
             }
-            return Statement{
-                line, column,
-                ReturnStatement(curentToken.getLine(), curentToken.getColumn(), std::move(*expression))};
+            return Statement{ReturnStatement(start, begin, std::move(*expression))};
         }
         case TokenType::IfKeyword:
         {
@@ -1952,15 +1915,13 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 {
                     return statement;
                 }
-                return Statement{line, column,
-                                 IfStatement(line, column, std::move(*expression),
+                return Statement{IfStatement(start, begin, std::move(*expression),
                                              std::make_unique<Statement>(std::move(*statement)),
                                              std::make_unique<Statement>(std::move(*elseStatement)))};
             }
             else
             {
-                return Statement{line, column,
-                                 IfStatement(line, column, std::move(*expression),
+                return Statement{IfStatement(start, begin, std::move(*expression),
                                              std::make_unique<Statement>(std::move(*statement)))};
             }
         }
@@ -1971,7 +1932,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return {};
             }
-            return Statement{line, column, std::move(*compoundStatement)};
+            return Statement{std::move(*compoundStatement)};
         }
         case TokenType::ForKeyword:
         {
@@ -1991,7 +1952,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
 
             std::unique_ptr<Expression> control;
             {
-                if (std::holds_alternative<Declaration>(blockitem->getVariant())
+                if (std::holds_alternative<Declaration>(*blockitem)
                     || begin->getTokenType() != TokenType::SemiColon)
                 {
                     auto expression = parseExpression(begin, end, context);
@@ -2039,20 +2000,19 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return statement;
             }
-            if (auto declaration = std::get_if<Declaration>(&blockitem->getVariant()))
+            if (auto declaration = std::get_if<Declaration>(&*blockitem))
             {
                 return Statement(
-                    line, column,
-                    ForDeclarationStatement(line, column, std::make_unique<Statement>(std::move(*statement)),
+                    ForDeclarationStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
                                             std::move(*declaration), std::move(control), std::move(post)));
             }
             else if (auto expressionStatement = std::get_if<ExpressionStatement>(
-                &std::get<Statement>(blockitem->getVariant()).getVariant()))
+                &std::get<Statement>(*blockitem)))
             {
-                return Statement(line, column,
-                                 ForStatement(line, column, std::make_unique<Statement>(std::move(*statement)),
-                                              expressionStatement->moveOptionalExpression(), std::move(control),
-                                              std::move(post)));
+                return Statement(
+                    ForStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
+                                 expressionStatement->moveOptionalExpression(), std::move(control),
+                                 std::move(post)));
             }
             else
             {
@@ -2085,8 +2045,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return statement;
             }
-            return Statement(line, column,
-                             HeadWhileStatement(line, column, std::move(*expression),
+            return Statement(HeadWhileStatement(start, begin, std::move(*expression),
                                                 std::make_unique<Statement>(std::move(*statement))));
         }
         case TokenType::DoKeyword:
@@ -2120,19 +2079,18 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 context.logError({"Expected ) after expression in while"});
             }
-            return Statement(line, column,
-                             FootWhileStatement(line, column, std::make_unique<Statement>(std::move(*statement)),
+            return Statement(FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
                                                 std::move(*expression)));
         }
         case TokenType::BreakKeyword:
         {
             begin++;
-            return Statement(line, column, BreakStatement(line, column));
+            return Statement(BreakStatement(start, begin));
         }
         case TokenType::ContinueKeyword:
         {
             begin++;
-            return Statement(line, column, ContinueStatement(line, column));
+            return Statement(ContinueStatement(start, begin));
         }
         case TokenType::SwitchKeyword:
         {
@@ -2159,8 +2117,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return statement;
             }
-            return Statement(line, column,
-                             SwitchStatement(line, column, std::move(*expression),
+            return Statement(SwitchStatement(start, begin, std::move(*expression),
                                              std::make_unique<Statement>(std::move(*statement))));
         }
         case TokenType::DefaultKeyword:
@@ -2177,8 +2134,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 return {};
             }
-            return Statement(line, column,
-                             DefaultStatement(line, column, std::make_unique<Statement>(std::move(*statement))));
+            return Statement(DefaultStatement(start, begin, std::make_unique<Statement>(std::move(*statement))));
         }
         case TokenType::CaseKeyword:
         {
@@ -2206,8 +2162,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 return {};
             }
             return Statement(
-                line, column,
-                CaseStatement(line, column, *constValue, std::make_unique<Statement>(std::move(*statement))));
+                CaseStatement(start, begin, *constValue, std::make_unique<Statement>(std::move(*statement))));
         }
         case TokenType::GotoKeyword:
         {
@@ -2219,7 +2174,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             }
             const auto& name = std::get<std::string>(begin->getValue());
             begin++;
-            return Statement(line, column, GotoStatement(line, column, name));
+            return Statement(GotoStatement(start, begin, name));
         }
         case TokenType::Identifier:
         {
@@ -2227,7 +2182,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             {
                 const auto& name = std::get<std::string>(begin->getValue());
                 begin += 2;
-                return Statement(line, column, LabelStatement(line, column, name));
+                return Statement(LabelStatement(start, begin, name));
             }
             [[fallthrough]];
         }
@@ -2241,12 +2196,11 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                     return {};
                 }
                 return Statement(
-                    line, column,
-                    ExpressionStatement(line, column, std::make_unique<Expression>(std::move(*expression))));
+                    ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(*expression))));
             }
             else
             {
-                return Statement(line, column, ExpressionStatement(line, column));
+                return Statement(ExpressionStatement(start, begin));
             }
         }
         }
@@ -2256,22 +2210,22 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         return result;
     }
 
-    if ((std::holds_alternative<ExpressionStatement>(result->getVariant())
-        || std::holds_alternative<ReturnStatement>(result->getVariant())
-        || std::holds_alternative<FootWhileStatement>(result->getVariant())
-        || std::holds_alternative<BreakStatement>(result->getVariant())
-        || std::holds_alternative<ContinueStatement>(result->getVariant())
-        || std::holds_alternative<GotoStatement>(result->getVariant()))
+    if ((std::holds_alternative<ExpressionStatement>(*result)
+        || std::holds_alternative<ReturnStatement>(*result)
+        || std::holds_alternative<FootWhileStatement>(*result)
+        || std::holds_alternative<BreakStatement>(*result)
+        || std::holds_alternative<ContinueStatement>(*result)
+        || std::holds_alternative<GotoStatement>(*result))
         && (begin == end || begin->getTokenType() != TokenType::SemiColon))
     {
         context.logError({"Statement not terminated with ;"});
     }
-    else if (std::holds_alternative<ExpressionStatement>(result->getVariant())
-        || std::holds_alternative<ReturnStatement>(result->getVariant())
-        || std::holds_alternative<FootWhileStatement>(result->getVariant())
-        || std::holds_alternative<BreakStatement>(result->getVariant())
-        || std::holds_alternative<ContinueStatement>(result->getVariant())
-        || std::holds_alternative<GotoStatement>(result->getVariant()))
+    else if (std::holds_alternative<ExpressionStatement>(*result)
+        || std::holds_alternative<ReturnStatement>(*result)
+        || std::holds_alternative<FootWhileStatement>(*result)
+        || std::holds_alternative<BreakStatement>(*result)
+        || std::holds_alternative<ContinueStatement>(*result)
+        || std::holds_alternative<GotoStatement>(*result))
     {
         begin++;
     }
@@ -2283,11 +2237,9 @@ std::optional<Expression> OpenCL::Parser::parseExpression(Tokens::const_iterator
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<AssignmentExpression> expressions;
     auto assignment = parseAssignmentExpression(begin, end, context);
     if (!assignment)
@@ -2311,7 +2263,7 @@ std::optional<Expression> OpenCL::Parser::parseExpression(Tokens::const_iterator
             expressions.push_back(std::move(*assignment));
         }
     }
-    return Expression(line, column, std::move(expressions));
+    return Expression(start, begin, std::move(expressions));
 }
 
 std::optional<Syntax::AssignmentExpression>
@@ -2323,9 +2275,7 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
 
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
-
+    auto start = begin;
     return context.doBacktracking([&]() -> std::optional<Syntax::AssignmentExpression>
                                   {
                                       auto assignmentBranch = context.createBranch(begin);
@@ -2345,9 +2295,9 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
                                                   return {};
                                               }
                                               return AssignmentExpression(
-                                                  line, column,
+                                                  start, begin,
                                                   AssignmentExpressionAssignment(
-                                                      line, column, std::move(*unary),
+                                                      start, begin, std::move(*unary),
                                                       [assignment = currentToken.getTokenType()]
                                                       {
                                                           switch (assignment)
@@ -2377,7 +2327,7 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
                                       {
                                           return {};
                                       }
-                                      return AssignmentExpression(line, column, std::move(*cond));
+                                      return AssignmentExpression(start, begin, std::move(*cond));
                                   });
 }
 
@@ -2387,11 +2337,9 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto logicalOrExperssion = parseLogicalOrExpression(begin, end, context);
     if (!logicalOrExperssion)
     {
@@ -2418,12 +2366,12 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
             {
                 return optionalConditional;
             }
-            return ConditionalExpression(line, column, std::move(*logicalOrExperssion),
+            return ConditionalExpression(start, begin, std::move(*logicalOrExperssion),
                                          std::make_unique<Expression>(std::move(*optionalExpression)),
                                          std::make_unique<ConditionalExpression>(std::move(*optionalConditional)));
         }
     }
-    return ConditionalExpression(line, column, std::move(*logicalOrExperssion));
+    return ConditionalExpression(start, begin, std::move(*logicalOrExperssion));
 }
 
 std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin,
@@ -2432,11 +2380,9 @@ std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Toke
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto logicalAnd = parseLogicalAndExpression(begin, end, context);
     if (!logicalAnd)
     {
@@ -2457,7 +2403,7 @@ std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Toke
         optionalLogicalAnds.push_back(std::move(*newAnd));
     }
 
-    return LogicalOrExpression(line, column, std::move(*logicalAnd), std::move(optionalLogicalAnds));
+    return LogicalOrExpression(start, begin, std::move(*logicalAnd), std::move(optionalLogicalAnds));
 }
 
 std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin,
@@ -2466,11 +2412,9 @@ std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(To
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseBitOrExpression(begin, end, context);
     if (!result)
     {
@@ -2491,7 +2435,7 @@ std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(To
         list.push_back(std::move(*newOr));
     }
 
-    return LogicalAndExpression(line, column, std::move(*result), std::move(list));
+    return LogicalAndExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin,
@@ -2500,12 +2444,10 @@ std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::cons
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseBitXorExpression(begin, end, context);
     if (!result)
     {
@@ -2526,7 +2468,7 @@ std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::cons
         list.push_back(std::move(*newXor));
     }
 
-    return BitOrExpression(line, column, std::move(*result), std::move(list));
+    return BitOrExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin,
@@ -2535,12 +2477,10 @@ std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::co
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseBitAndExpression(begin, end, context);
     if (!result)
     {
@@ -2561,7 +2501,7 @@ std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::co
         list.push_back(std::move(*newAnd));
     }
 
-    return BitXorExpression(line, column, std::move(*result), std::move(list));
+    return BitXorExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin,
@@ -2570,12 +2510,10 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseEqualityExpression(begin, end, context);
     if (!result)
     {
@@ -2596,7 +2534,7 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
         list.push_back(std::move(*newEqual));
     }
 
-    return BitAndExpression(line, column, std::move(*result), std::move(list));
+    return BitAndExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens::const_iterator& begin,
@@ -2605,12 +2543,10 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseRelationalExpression(begin, end, context);
     if (!result)
     {
@@ -2634,7 +2570,7 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
                                            std::move(*newRelational));
     }
 
-    return EqualityExpression(line, column, std::move(*result), std::move(relationalExpressions));
+    return EqualityExpression(start, begin, std::move(*result), std::move(relationalExpressions));
 }
 
 std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(Tokens::const_iterator& begin,
@@ -2643,12 +2579,10 @@ std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(To
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseShiftExpression(begin, end, context);
     if (!result)
     {
@@ -2686,7 +2620,7 @@ std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(To
             std::move(*newShift));
     }
 
-    return RelationalExpression(line, column, std::move(*result), std::move(list));
+    return RelationalExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::const_iterator& begin,
@@ -2695,12 +2629,10 @@ std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::cons
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseAdditiveExpression(begin, end, context);
     if (!result)
     {
@@ -2725,7 +2657,7 @@ std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::cons
                           std::move(*newAdd));
     }
 
-    return ShiftExpression(line, column, std::move(*result), std::move(list));
+    return ShiftExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens::const_iterator& begin,
@@ -2734,12 +2666,10 @@ std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseTerm(begin, end, context);
     if (!result)
     {
@@ -2763,7 +2693,7 @@ std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens
                           std::move(*newTerm));
     }
 
-    return AdditiveExpression(line, column, std::move(*result), std::move(list));
+    return AdditiveExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
@@ -2771,12 +2701,10 @@ std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tok
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto result = parseCastExpression(begin, end, context);
     if (!result)
     {
@@ -2811,7 +2739,7 @@ std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tok
             std::move(*newCast));
     }
 
-    return Term(line, column, std::move(*result), std::move(list));
+    return Term(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& begin,
@@ -2820,12 +2748,10 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     std::vector<SpecifierQualifier> specifierQualifiers;
     while (auto result = parseSpecifierQualifier(begin, end, context))
     {
@@ -2840,11 +2766,11 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
     if (auto abstractDec = parseAbstractDeclarator(begin, end, context))
     {
 
-        return TypeName(line, column, std::move(specifierQualifiers),
+        return TypeName(start, begin, std::move(specifierQualifiers),
                         std::make_unique<AbstractDeclarator>(std::move(*abstractDec)));
     }
 
-    return TypeName(line, column, std::move(specifierQualifiers), nullptr);
+    return TypeName(start, begin, std::move(specifierQualifiers), nullptr);
 }
 
 std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_iterator& begin,
@@ -2853,12 +2779,10 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
 {
     if (begin == end)
     {
-
         return {};
     }
 
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     auto before = begin;
     if (before->getTokenType() == TokenType::OpenParenthese)
     {
@@ -2874,7 +2798,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                 {
                     begin = before;
                     return CastExpression(
-                        line, column,
+                        start, begin,
                         std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
                 }
             }
@@ -2886,7 +2810,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
         return {};
     }
 
-    return CastExpression(line, column, std::move(*unary));
+    return CastExpression(start, begin, std::move(*unary));
 }
 
 std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::const_iterator& begin,
@@ -2895,11 +2819,9 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
 {
     if (begin == end)
     {
-
         return {};
     }
-    auto line = begin->getLine();
-    auto column = begin->getColumn();
+    auto start = begin;
     if (begin->getTokenType() == TokenType::SizeofKeyword)
     {
         begin++;
@@ -2917,8 +2839,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
                 return {};
             }
             begin++;
-            return UnaryExpression(line, column,
-                                   UnaryExpressionSizeOf(line, column, std::make_unique<TypeName>(std::move(*type))));
+            return UnaryExpression(UnaryExpressionSizeOf(start, begin, std::make_unique<TypeName>(std::move(*type))));
         }
         else
         {
@@ -2927,9 +2848,9 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
             {
                 return {};
             }
-            return UnaryExpression(
-                line, column,
-                UnaryExpressionSizeOf(line, column, std::make_unique<UnaryExpression>(std::move(*unary))));
+            return UnaryExpression(UnaryExpressionSizeOf(start,
+                                                         begin,
+                                                         std::make_unique<UnaryExpression>(std::move(*unary))));
         }
     }
     else if (begin->getTokenType() == TokenType::Increment || begin->getTokenType() == TokenType::Decrement
@@ -2961,8 +2882,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
             return {};
         }
         return UnaryExpression(
-            line, column,
-            UnaryExpressionUnaryOperator(line, column, op, std::make_unique<UnaryExpression>(std::move(*unary))));
+            UnaryExpressionUnaryOperator(start, begin, op, std::make_unique<UnaryExpression>(std::move(*unary))));
     }
 
     auto postFix = parsePostFixExpression(begin, end, context);
@@ -2970,7 +2890,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     {
         return {};
     }
-    return UnaryExpression(line, column, UnaryExpressionPostFixExpression(line, column, std::move(*postFix)));
+    return UnaryExpression(UnaryExpressionPostFixExpression(start, begin, std::move(*postFix)));
 }
 
 namespace
@@ -2999,43 +2919,33 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
 {
     if (begin == end)
     {
-
         return {};
     }
     std::stack<std::unique_ptr<PostFixExpression>> stack;
     while (begin != end && isPostFixExpression(*begin))
     {
-        auto before = begin;
         if (begin->getTokenType() == TokenType::Identifier || begin->getTokenType() == TokenType::Literal)
         {
-            if (!stack.empty())
-            {
-                begin = before;
-                break;
-            }
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
+            auto start = begin;
             auto newPrimary = parsePrimaryExpression(begin, end, context);
             if (!newPrimary)
             {
-                if (!stack.empty())
-                {
-                    begin = before;
-                    break;
-                }
-                else
-                {
-                    return {};
-                }
+                return {};
             }
-            stack.push(std::make_unique<PostFixExpression>(
-                line, column, PostFixExpressionPrimaryExpression(line, column, std::move(*newPrimary))));
+            stack.push(std::make_unique<PostFixExpression>(PostFixExpressionPrimaryExpression(start,
+                                                                                              begin,
+                                                                                              std::move(*newPrimary))));
         }
         else if (begin->getTokenType() == TokenType::OpenParenthese && stack.empty())
         {
-            begin++;
-            if (auto type = parseTypeName(begin, end, context))
+            auto start = begin;
+            if (begin + 1 < end && isDeclarationSpecifier(*(begin + 1), context))
             {
+                auto type = parseTypeName(begin, end, context);
+                if (!type)
+                {
+                    return {};
+                }
                 if (begin->getTokenType() != TokenType::CloseParenthese)
                 {
                     context.logError({"Expected ) after type name in type initializer"});
@@ -3044,8 +2954,8 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 begin++;
                 if (begin->getTokenType() != TokenType::OpenBrace)
                 {
-                    return {};
                     context.logError({"Expected { after type around parenthesis"});
+                    return {};
                 }
                 begin++;
                 auto initializer = parseInitializerList(begin, end, context);
@@ -3063,28 +2973,24 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                     return {};
                 }
                 begin++;
-                auto line = type->getLine();
-                auto column = type->getColumn();
                 stack.push(std::make_unique<PostFixExpression>(
-                    line, column,
-                    PostFixExpressionTypeInitializer(line, column, std::move(*type), std::move(*initializer))));
+                    PostFixExpressionTypeInitializer(start, begin, std::move(*type), std::move(*initializer))));
             }
             else
             {
-                begin = before;
-                auto line = begin->getLine();
-                auto column = begin->getColumn();
-                auto primary = parsePrimaryExpression(begin, end, context);
-                if (!primary)
+                auto newPrimary = parsePrimaryExpression(begin, end, context);
+                if (!newPrimary)
                 {
                     return {};
                 }
-                stack.push(std::make_unique<PostFixExpression>(
-                    line, column, PostFixExpressionPrimaryExpression(line, column, std::move(*primary))));
+                stack.push(std::make_unique<PostFixExpression>(PostFixExpressionPrimaryExpression(start,
+                                                                                                  begin,
+                                                                                                  std::move(*newPrimary))));
             }
         }
         else if (begin->getTokenType() == TokenType::OpenParenthese)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             begin++;
             std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
             while (begin->getTokenType() != TokenType::CloseParenthese)
@@ -3092,106 +2998,97 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 auto assignment = parseAssignmentExpression(begin, end, context);
                 if (!assignment)
                 {
-                    begin = before;
-                    break;
+                    return {};
                 }
                 nonCommaExpressions.push_back(std::make_unique<AssignmentExpression>(std::move(*assignment)));
                 if (begin->getTokenType() == TokenType::CloseParenthese)
                 {
-                    break;
+                    return {};
                 }
                 else if (begin->getTokenType() != TokenType::Comma)
                 {
-                    begin = before;
-                    break;
+                    return {};
                 }
                 begin++;
             }
             begin++;
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
             stack.push(std::make_unique<PostFixExpression>(
-                line, column,
-                PostFixExpressionFunctionCall(line, column, std::move(postExpression),
+                PostFixExpressionFunctionCall(start, begin, std::move(postExpression),
                                               std::move(nonCommaExpressions))));
         }
         else if (begin->getTokenType() == TokenType::OpenSquareBracket)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             begin++;
             auto expression = parseExpression(begin, end, context);
             if (!expression)
             {
-                begin = before;
-                break;
+                return {};
             }
             if (begin->getTokenType() != TokenType::CloseSquareBracket)
             {
-                begin = before;
-                break;
+                return {};
             }
             begin++;
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
             stack.push(std::make_unique<PostFixExpression>(
-                line, column,
-                PostFixExpressionSubscript(line, column, std::move(postExpression), std::move(*expression))));
+                PostFixExpressionSubscript(start, begin, std::move(postExpression), std::move(*expression))));
         }
         else if (begin->getTokenType() == TokenType::Increment)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             begin++;
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
-            stack.push(std::make_unique<PostFixExpression>(
-                line, column, PostFixExpressionIncrement(line, column, std::move(postExpression))));
+            stack.push(std::make_unique<PostFixExpression>(PostFixExpressionIncrement(start,
+                                                                                      begin,
+                                                                                      std::move(postExpression))));
         }
         else if (begin->getTokenType() == TokenType::Decrement)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
-            stack.push(std::make_unique<PostFixExpression>(
-                line, column, PostFixExpressionDecrement(line, column, std::move(postExpression))));
+            stack.push(std::make_unique<PostFixExpression>(PostFixExpressionDecrement(start,
+                                                                                      begin,
+                                                                                      std::move(postExpression))));
         }
         else if (begin->getTokenType() == TokenType::Dot)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             begin++;
             if (begin->getTokenType() != TokenType::Identifier)
             {
-                begin = before;
-                break;
+                return {};
             }
             const auto& name = std::get<std::string>(begin->getValue());
             begin++;
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
-            stack.push(std::make_unique<PostFixExpression>(
-                line, column, PostFixExpressionDot(line, column, std::move(postExpression), name)));
+            stack.push(std::make_unique<PostFixExpression>(PostFixExpressionDot(start,
+                                                                                begin,
+                                                                                std::move(postExpression),
+                                                                                name)));
         }
         else if (begin->getTokenType() == TokenType::Arrow)
         {
+            auto start = nodeFromNodeDerivedVariant(*stack.top()).begin();
             begin++;
             if (begin->getTokenType() != TokenType::Identifier)
             {
-                begin = before;
-                break;
+                return {};
             }
             const auto& name = std::get<std::string>(begin->getValue());
             begin++;
             auto postExpression = std::move(stack.top());
             stack.pop();
-            auto line = begin->getLine();
-            auto column = begin->getColumn();
-            stack.push(std::make_unique<PostFixExpression>(
-                line, column, PostFixExpressionArrow(line, column, std::move(postExpression), name)));
+            stack.push(std::make_unique<PostFixExpression>(PostFixExpressionArrow(start,
+                                                                                  begin,
+                                                                                  std::move(postExpression),
+                                                                                  name)));
         }
     }
 
@@ -3215,22 +3112,20 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
         return {};
     }
 
+    auto start = begin;
     auto currToken = *begin;
     begin++;
-    auto line = currToken.getLine();
-    auto column = currToken.getColumn();
     if (currToken.getTokenType() == TokenType::Identifier)
     {
-        return PrimaryExpression(line, column, PrimaryExpressionIdentifier(line, column,
-                                                                           std::get<std::string>(currToken
-                                                                                                     .getValue())));
+        return PrimaryExpression(PrimaryExpressionIdentifier(start,
+                                                             begin,
+                                                             std::get<std::string>(currToken.getValue())));
     }
     else if (currToken.getTokenType() == TokenType::Literal)
     {
         return PrimaryExpression(
-            line, column,
             PrimaryExpressionConstant(
-                line, column,
+                start, begin,
                 std::visit([](auto&& value) -> typename PrimaryExpressionConstant::variant
                            {
                                using T = std::decay_t<decltype(value)>;
@@ -3252,7 +3147,7 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
         {
             result += std::get<std::string>(begin->getValue());
         }
-        return PrimaryExpression(line, column, PrimaryExpressionConstant(line, column, result));
+        return PrimaryExpression(PrimaryExpressionConstant(start, begin, result));
     }
     else if (currToken.getTokenType() == TokenType::OpenParenthese)
     {
@@ -3267,7 +3162,7 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
         }
         begin++;
 
-        return PrimaryExpression(line, column, PrimaryExpressionParenthese(line, column, std::move(*expression)));
+        return PrimaryExpression(PrimaryExpressionParenthese(start, begin, std::move(*expression)));
     }
     else
     {

@@ -1208,8 +1208,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     return std::visit(overload{[this](auto&& value) -> ConstRetType { return visit(value); },
                                [](const Syntax::PrimaryExpressionIdentifier&) -> ConstRetType {
                                    return FailureReason("Identifier not allowed in constant expression");
-                               }},
-                      node.getVariant());
+                               }}, node);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
@@ -1226,15 +1225,13 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                                },
                                [](const Syntax::PostFixExpressionTypeInitializer&) -> ConstRetType {
                                    return FailureReason("Type initializer not allowed in constant expression");
-                               }},
-                      node.getVariant());
+                               }}, node);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
 {
     return std::visit([this](auto&& value) -> OpenCL::Semantics::ConstRetType
-                      { return visit(value); },
-                      node.getVariant());
+                      { return visit(value); }, node);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)

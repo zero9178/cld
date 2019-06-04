@@ -71,5 +71,7 @@ TEST_CASE("External definitions", "[parser]")
 {
     sourceProducesError("i;", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
     sourceProducesError("i{}", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
-    sourceProducesError("int i", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1))
+    sourceProducesError("int i",
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                            && ProducesNErrors(1));
 }

@@ -511,7 +511,7 @@ namespace
                     },
                     [](const OpenCL::Syntax::StorageClassSpecifier& storageClassSpecifier) -> std::optional<OpenCL::FailureReason>
                     {
-                        if (storageClassSpecifier != OpenCL::Syntax::StorageClassSpecifier::Register)
+                        if (storageClassSpecifier.getSpecifier() != OpenCL::Syntax::StorageClassSpecifier::Register)
                         {
                             return OpenCL::FailureReason(
                                 "No storage class specifiers except register allowed for function argument");
@@ -582,59 +582,59 @@ namespace
             Signed = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
             Unsigned = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
         };
-        std::array<std::size_t,9> primitivesCount = {0};
-        for(auto &iter : primitives)
+        std::array<std::size_t, 9> primitivesCount = {0};
+        for (auto& iter : primitives)
         {
             primitivesCount[static_cast<std::size_t>(iter)]++;
         }
-        if(primitivesCount[Void] > 1)
+        if (primitivesCount[Void] > 1)
         {
             return OpenCL::FailureReason("void appearing more than once");
         }
-        if(primitivesCount[Char] > 1)
+        if (primitivesCount[Char] > 1)
         {
             return OpenCL::FailureReason("char appearing more than once");
         }
-        if(primitivesCount[Short] > 1)
+        if (primitivesCount[Short] > 1)
         {
             return OpenCL::FailureReason("short appearing more than once");
         }
-        if(primitivesCount[Int] > 1)
+        if (primitivesCount[Int] > 1)
         {
             return OpenCL::FailureReason("int appearing more than once");
         }
-        if(primitivesCount[Float] > 1)
+        if (primitivesCount[Float] > 1)
         {
             return OpenCL::FailureReason("float appearing more than once");
         }
-        if(primitivesCount[Double] > 1)
+        if (primitivesCount[Double] > 1)
         {
             return OpenCL::FailureReason("double appearing more than once");
         }
-        if(primitivesCount[Signed] > 1)
+        if (primitivesCount[Signed] > 1)
         {
             return OpenCL::FailureReason("signed appearing more than once");
         }
-        if(primitivesCount[Unsigned] > 1)
+        if (primitivesCount[Unsigned] > 1)
         {
             return OpenCL::FailureReason("unsigned appearing more than once");
         }
-        if(primitivesCount[Long] > 2)
+        if (primitivesCount[Long] > 2)
         {
             return OpenCL::FailureReason("long appearing more than twice");
         }
         bool hasSigned = primitivesCount[Signed];
         bool hasUnsigned = primitivesCount[Unsigned];
-        if(hasSigned && hasUnsigned)
+        if (hasSigned && hasUnsigned)
         {
             return OpenCL::FailureReason("Can't have both signed and unsigned");
         }
-        if(primitivesCount[Void])
+        if (primitivesCount[Void])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i++ == Void)
+                if (i++ == Void)
                 {
                     return false;
                 }
@@ -643,14 +643,14 @@ namespace
             {
                 return OpenCL::FailureReason("Can't combine void with any other primitives");
             }
-            return OpenCL::Semantics::PrimitiveType::createVoid(isConst,isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
         }
-        if(primitivesCount[Float])
+        if (primitivesCount[Float])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i++ == Float)
+                if (i++ == Float)
                 {
                     return false;
                 }
@@ -659,14 +659,14 @@ namespace
             {
                 return OpenCL::FailureReason("Can't combine float with any other primitives");
             }
-            return OpenCL::Semantics::PrimitiveType::createFloat(isConst,isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
         }
-        if(primitivesCount[Double])
+        if (primitivesCount[Double])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i++ == Double)
+                if (i++ == Double)
                 {
                     return false;
                 }
@@ -675,14 +675,14 @@ namespace
             {
                 return OpenCL::FailureReason("Can't combine double with any other primitives");
             }
-            return OpenCL::Semantics::PrimitiveType::createDouble(isConst,isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
         }
-        if(primitivesCount[Char])
+        if (primitivesCount[Char])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i == Char || i == Signed || i == Unsigned)
+                if (i == Char || i == Signed || i == Unsigned)
                 {
                     i++;
                     return false;
@@ -693,21 +693,21 @@ namespace
             {
                 return OpenCL::FailureReason("Can only combine char with signed or unsigned");
             }
-            if(hasUnsigned)
+            if (hasUnsigned)
             {
-                return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile);
             }
             else
             {
-                return OpenCL::Semantics::PrimitiveType::createChar(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createChar(isConst, isVolatile);
             }
         }
-        if(primitivesCount[Short])
+        if (primitivesCount[Short])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i == Short || i == Signed || i == Unsigned || i == Int)
+                if (i == Short || i == Signed || i == Unsigned || i == Int)
                 {
                     i++;
                     return false;
@@ -718,21 +718,21 @@ namespace
             {
                 return OpenCL::FailureReason("Can only combine short with signed,unsigned or int");
             }
-            if(hasUnsigned)
+            if (hasUnsigned)
             {
-                return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile);
             }
             else
             {
-                return OpenCL::Semantics::PrimitiveType::createShort(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createShort(isConst, isVolatile);
             }
         }
-        if(primitivesCount[Long] == 1)
+        if (primitivesCount[Long] == 1)
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i == Signed || i == Unsigned || i == Int || i == Long)
+                if (i == Signed || i == Unsigned || i == Int || i == Long)
                 {
                     i++;
                     return false;
@@ -743,21 +743,21 @@ namespace
             {
                 return OpenCL::FailureReason("Can only combine long with long, signed, unsigned and int");
             }
-            if(hasUnsigned)
+            if (hasUnsigned)
             {
-                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
             }
             else
             {
-                return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
             }
         }
-        if(primitivesCount[Long] == 2)
+        if (primitivesCount[Long] == 2)
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i == Signed || i == Unsigned || i == Int || i == Long)
+                if (i == Signed || i == Unsigned || i == Int || i == Long)
                 {
                     i++;
                     return false;
@@ -768,21 +768,21 @@ namespace
             {
                 return OpenCL::FailureReason("Can only combine long with long, signed, unsigned and int");
             }
-            if(hasUnsigned)
+            if (hasUnsigned)
             {
-                return OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
             }
             else
             {
-                return OpenCL::Semantics::PrimitiveType::createLongLong(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createLongLong(isConst, isVolatile);
             }
         }
-        if(primitivesCount[Int])
+        if (primitivesCount[Int])
         {
             std::size_t i = 0;
-            if(std::any_of(primitivesCount.begin(),primitivesCount.end(),[&i](std::size_t count)->bool
+            if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
             {
-                if(i == Signed || i == Unsigned || i == Int)
+                if (i == Signed || i == Unsigned || i == Int)
                 {
                     i++;
                     return false;
@@ -793,22 +793,22 @@ namespace
             {
                 return OpenCL::FailureReason("Can only combine int with signed or unsigned");
             }
-            if(hasUnsigned)
+            if (hasUnsigned)
             {
-                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
             }
             else
             {
-                return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+                return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
             }
         }
-        if(hasSigned)
+        if (hasSigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(isConst,isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
         }
-        else if(hasUnsigned)
+        else if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst,isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
         }
         return OpenCL::FailureReason("Internal compiler error");
     }
@@ -829,7 +829,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
     {
         if (auto* typeQualifier = std::get_if<std::reference_wrapper<const Syntax::TypeQualifier>>(&iter))
         {
-            switch (*typeQualifier)
+            switch (typeQualifier->get().getQualifier())
             {
             case Syntax::TypeQualifier::Const:
             {
@@ -989,7 +989,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
         bool isRestricted = false;
         for (auto& typeQual : typeQualifiers)
         {
-            switch (typeQual)
+            switch (typeQual.getQualifier())
             {
             case Syntax::TypeQualifier::Const: isConst = true;
                 break;
@@ -1018,11 +1018,11 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                        }
                        return std::visit(
                            Y{overload{
-                               [&](auto&&, const std::unique_ptr<Syntax::AbstractDeclarator>& abstractDeclarator)
+                               [&](auto&&, const Syntax::DirectAbstractDeclaratorParenthese& abstractDeclarator)
                                    -> std::optional<FailureReason>
                                {
                                    // Might need to watch out for 6.7.5.3.11 not sure yet
-                                   return self(abstractDeclarator.get());
+                                   return self(&abstractDeclarator.getAbstractDeclarator());
                                },
                                [&](auto&& directSelf,
                                    const Syntax::DirectAbstractDeclaratorAssignmentExpression&
@@ -1069,24 +1069,23 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                            {
                                                return directSelf(value);
                                            },
-                                           directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator()
-                                                                                       ->getVariant());
+                                           *directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator());
                                    }
                                    return {};
                                },
                                [&](auto&& directSelf,
-                                   const std::unique_ptr<Syntax::DirectAbstractDeclarator>& directAbstractDeclarator)
+                                   const Syntax::DirectAbstractDeclaratorAsterisk& directAbstractDeclarator)
                                    -> std::optional<FailureReason>
                                {
                                    baseType = ValArrayType::create(false, false, false, std::move(baseType));
-                                   if (directAbstractDeclarator)
+                                   if (directAbstractDeclarator.getDirectAbstractDeclarator())
                                    {
                                        return std::visit(
                                            [&directSelf](auto&& value) -> std::optional<FailureReason>
                                            {
                                                return directSelf(value);
                                            },
-                                           directAbstractDeclarator->getVariant());
+                                           *directAbstractDeclarator.getDirectAbstractDeclarator());
                                    }
                                    return {};
                                },
@@ -1122,11 +1121,11 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                            {
                                                return directSelf(value);
                                            },
-                                           parameterTypeList.getDirectAbstractDeclarator()->getVariant());
+                                           *parameterTypeList.getDirectAbstractDeclarator());
                                    }
                                    return {};
                                }}},
-                           abstractDeclarator->getDirectAbstractDeclarator().getVariant());
+                           abstractDeclarator->getDirectAbstractDeclarator());
                    },
                    [&](auto&& self, std::reference_wrapper<const Syntax::Declarator> declarator) -> std::optional<
                        FailureReason>
@@ -1140,16 +1139,16 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                           std::move(baseType));
                        }
                        return std::visit(Y{overload{
-                                             [&](auto&&, const std::string&) -> std::optional<FailureReason>
+                                             [&](auto&&, const Syntax::DirectDeclaratorIdentifier&) -> std::optional<FailureReason>
                                              {
                                                  return {};
                                              },
-                                             [&](auto&&, const std::unique_ptr<Syntax::Declarator>& declarator)
+                                             [&](auto&&, const Syntax::DirectDeclaratorParenthese& declarator)
                                                  -> std::optional<FailureReason>
                                              {
                                                  // Might need to watch out
                                                  // for 6.7.5.3.11 not sure yet
-                                                 return self(std::cref(*declarator));
+                                                 return self(std::cref(declarator.getDeclarator()));
                                              },
                                              [&](auto&& directSelf,
                                                  const Syntax::DirectDeclaratorNoStaticOrAsterisk& dirWithoutStaticOrAsterisk)
@@ -1200,7 +1199,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                    {
                                                                        return directSelf(value);
                                                                    },
-                                                                   dirWithoutStaticOrAsterisk.getDirectDeclarator().getVariant());
+                                                                   dirWithoutStaticOrAsterisk.getDirectDeclarator());
                                              },
                                              [&](auto&& directSelf,
                                                  const Syntax::DirectDeclaratorStatic& directDeclaratorStatic) ->
@@ -1244,7 +1243,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                    {
                                                                        return directSelf(value);
                                                                    },
-                                                                   directDeclaratorStatic.getDirectDeclarator().getVariant());
+                                                                   directDeclaratorStatic.getDirectDeclarator());
                                              },
                                              [&](auto&& directSelf, const Syntax::DirectDeclaratorAsterisk& directDeclaratorAsterisk)
                                                  -> std::optional<FailureReason>
@@ -1256,7 +1255,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                    {
                                                                        return directSelf(value);
                                                                    },
-                                                                   directDeclaratorAsterisk.getDirectDeclarator().getVariant());
+                                                                   directDeclaratorAsterisk.getDirectDeclarator());
                                              },
                                              [&](auto&& directSelf,
                                                  const Syntax::DirectDeclaratorParentheseParameters& parentheseParameters)
@@ -1284,7 +1283,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                    {
                                                                        return directSelf(value);
                                                                    },
-                                                                   parentheseParameters.getDirectDeclarator().getVariant());
+                                                                   parentheseParameters.getDirectDeclarator());
                                              },
                                              [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers)
                                                  -> std::optional<FailureReason>
@@ -1306,7 +1305,7 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                                  [](Syntax::StorageClassSpecifier storageClassSpecifier)
                                                                      -> std::optional<FailureReason>
                                                                  {
-                                                                     if (storageClassSpecifier
+                                                                     if (storageClassSpecifier.getSpecifier()
                                                                          != Syntax::StorageClassSpecifier::Register)
                                                                      {
                                                                          return OpenCL::FailureReason(
@@ -1408,9 +1407,9 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
                                                  }
 
                                                  baseType = FunctionType::create(std::move(baseType), std::move(arguments), false, false);
-                                                 return std::visit(directSelf, identifiers.getDirectDeclarator().getVariant());
+                                                 return std::visit(directSelf, identifiers.getDirectDeclarator());
                                              }}},
-                                         declarator.get().getDirectDeclarator().getVariant());
+                                         declarator.get().getDirectDeclarator());
                    }}}, declarator);
     if (result)
     {
@@ -1422,21 +1421,21 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
 std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
 {
     return std::visit(
-        Y{overload{[](auto&&, const std::string& name) -> std::string
-                   { return name; },
-                   [](auto&& self, const std::unique_ptr<OpenCL::Syntax::Declarator>& declarator) -> std::string
+        Y{overload{[](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string
+                   { return name.getIdentifier(); },
+                   [](auto&& self, const Syntax::DirectDeclaratorParenthese& declarator) -> std::string
                    {
                        return std::visit([&self](auto&& value) -> std::string
                                          { return self(value); },
-                                         declarator->getDirectDeclarator().getVariant());
+                                         declarator.getDeclarator().getDirectDeclarator());
                    },
                    [](auto&& self, auto&& value) -> std::string
                    {
                        return std::visit([&self](auto&& value) -> std::string
                                          { return self(value); },
-                                         value.getDirectDeclarator().getVariant());
+                                         value.getDirectDeclarator());
                    }}},
-        declarator.getDirectDeclarator().getVariant());
+        declarator.getDirectDeclarator());
 }
 
 OpenCL::Semantics::RecordType::RecordType(std::string name, bool isUnion,
