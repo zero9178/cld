@@ -1,7 +1,7 @@
 #include "Message.hpp"
 #include <utility>
 #include <optional>
-#include "rang.hpp"
+#include "termcolor.hpp"
 
 OpenCL::Message::Message(std::string message,
                          std::vector<Lexer::Token>::const_iterator begin,
@@ -15,30 +15,54 @@ OpenCL::Message::Message(std::string message,
 
 std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
 {
-    os << rang::fg::reset;
+    #ifdef NDEBUG
+    auto normalColour = termcolor::white;
+    #else
+    auto normalColour = termcolor::grey;
+    #endif
     if (message.getBegin() != message.getAnEnd())
     {
-        os << message.getBegin()->getLine() << ':' << message.getBegin()->getColumn() << ": ";
+        os << normalColour << message.getBegin()->getLine() << ':' << message.getBegin()->getColumn() << ": ";
     }
-    os << rang::fg::red << rang::style::bold << "error: " << rang::fg::blue << rang::style::reset
-       << message.getMessage() << '\n';
+    os << termcolor::red << "error: " << normalColour << message.getMessage() << '\n';
 
     auto numSize = std::to_string(message.getAnEnd()->getLine()).size();
     auto remainder = numSize % 4;
-    if(remainder != 0)
+    if (remainder != 0)
     {
         numSize += 4 - remainder;
     }
+    auto modifierBegin = message.getModifier() ? message.getModifier()->getBegin()
+                                               : std::vector<Lexer::Token>::const_iterator{};
     for (auto curr = message.getBegin(); curr != message.getAnEnd();)
     {
         auto next = findEOL(curr, message.getAnEnd());
         auto text = Lexer::reconstruct(curr, next);
         auto line = std::to_string(curr->getLine());
-        os << std::string(numSize - line.size(),' ') << line << '|';
-        if(message.getModifier() && message.getModifier()->getBegin()->getLine() == curr->getLine())
+        os << normalColour << std::string(numSize - line.size(), ' ') << line << '|';
+        if (message.getModifier() && modifierBegin->getLine() == curr->getLine())
         {
-            auto highlitedEOL = findEOL(message.getModifier()->getBegin(),message.getModifier()->getAnEnd());
-            os << text.substr(0,message.getModifier()->getBegin()->getColumn()) << rang::fg::red ;
+            auto highlitedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
+            auto highlitedSectionLength = highlitedEOL->getColumn() - modifierBegin->getColumn();
+            os << text.substr(0, modifierBegin->getColumn()) << termcolor::red
+               << text.substr(modifierBegin->getColumn(), highlitedSectionLength)
+               << normalColour << text.substr(highlitedEOL->getColumn()) << '\n';
+            os << normalColour << std::string(numSize,' ')<<'|'<<std::string(modifierBegin->getColumn(),' ');
+            os << termcolor::red;
+            switch(message.getModifier()->getAction())
+            {
+            case Modifier::Underline:
+                os <<std::string(highlitedSectionLength, '~');
+                break;
+            case Modifier::PointAtBeginning:
+                os <<'^'<<std::string(highlitedSectionLength-1, '~');
+                break;
+            case Modifier::PointAtEnd:
+                os <<std::string(highlitedSectionLength-1, '~')<<'^';
+                break;
+            }
+            os << normalColour;
+            modifierBegin = highlitedEOL;
         }
         else
         {
@@ -51,12 +75,11 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
     {
         if (noteBegin != noteEnd)
         {
-            os << rang::fg::blue;
-            os << noteBegin->getLine() << ':' << noteBegin->getColumn() << ": ";
+            os << normalColour << noteBegin->getLine() << ':' << noteBegin->getColumn() << ": ";
         }
-        os << rang::fg::cyan << "note: " << noteMessage << '\n';
+        os << termcolor::cyan << "note: " << normalColour << noteMessage << '\n';
     }
-    return os << std::flush;
+    return os << termcolor::reset << std::flush;
 }
 
 const std::string& OpenCL::Message::getMessage() const
@@ -124,7 +147,7 @@ std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findSemicolon(std::vec
     {
         if (curr->getTokenType() == Lexer::TokenType::SemiColon)
         {
-            return curr;
+            return curr + 1;
         }
     }
     return end;
@@ -137,7 +160,7 @@ std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findSemicolonOrEOL(std
     {
         if (curr->getTokenType() == Lexer::TokenType::SemiColon || curr->getLine() != begin->getLine())
         {
-            return curr;
+            return curr + 1;
         }
     }
     return end;

@@ -14,9 +14,7 @@ namespace OpenCL::Parser
 
     namespace ErrorMessages
     {
-        constexpr auto UNEXPECTED_ENDS_OF_TOKENS = "Unexpected end of tokens";
-
-        constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename";
+        constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename before name";
 
         constexpr auto MISSING_SEMICOLON_AT_END_OF_DECLARATION = "Expected ; at the end of declaration";
 

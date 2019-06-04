@@ -11,6 +11,8 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/TargetSelect.h>
 
+#include <windows.h>
+
 int main()
 {
     std::ifstream file("../src/input.c", std::ios_base::binary);
@@ -35,14 +37,9 @@ int main()
     LLVMLinkInMCJIT();
 
     OpenCL::Codegen::Context context;
-    auto result = OpenCL::Lexer::tokenize(OpenCL::PP::preprocess(std::move(source)));
-    auto node = OpenCL::Parser::buildTree(result);
-    if (!node)
-    {
-        std::cerr << node.error().getText();
-        return -1;
-    }
-    context.visit(*node);
+    auto result = OpenCL::Lexer::tokenize("i;");//OpenCL::PP::preprocess(std::move(source))
+    OpenCL::Parser::buildTree(result,&std::cerr);
+    return 0;
 
     context.module->print(llvm::outs(), nullptr);
 

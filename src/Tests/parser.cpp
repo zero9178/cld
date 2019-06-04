@@ -26,8 +26,9 @@ namespace
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);
         CHECK_FALSE(tree.second);
-        CHECK_THAT(ss.str(), matches);
-        INFO(ss.str());
+        auto string = ss.str();
+        CHECK_THAT(string, matches);
+        INFO(string);
     }
 
     class ProducesNErrors : public Catch::MatcherBase<std::string>
@@ -70,4 +71,5 @@ TEST_CASE("External definitions", "[parser]")
 {
     sourceProducesError("i;", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
     sourceProducesError("i{}", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
+    sourceProducesError("int i", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1))
 }

@@ -4,9 +4,9 @@
 #include <cassert>
 #include <utility>
 
-OpenCL::Syntax::Expression::Expression(std::uint64_t line, std::uint64_t column,
+OpenCL::Syntax::Expression::Expression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                        std::vector<OpenCL::Syntax::AssignmentExpression> assignmanetExpressions)
-    : Node(line, column), m_assignmentExpressions(std::move(assignmanetExpressions))
+    : Node(begin, end), m_assignmentExpressions(std::move(assignmanetExpressions))
 {
     assert(!m_assignmentExpressions.empty());
 }
@@ -16,9 +16,10 @@ const std::vector<OpenCL::Syntax::AssignmentExpression>& OpenCL::Syntax::Express
     return m_assignmentExpressions;
 }
 
-OpenCL::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::uint64_t line, std::uint64_t column,
+OpenCL::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<
+    Lexer::Token>::const_iterator end,
                                                                          std::string identifier)
-    : Node(line, column), m_identifier(std::move(identifier))
+    : Node(begin, end), m_identifier(std::move(identifier))
 {
 }
 
@@ -28,8 +29,8 @@ const std::string& OpenCL::Syntax::PrimaryExpressionIdentifier::getIdentifier() 
 }
 
 OpenCL::Syntax::PrimaryExpressionConstant::PrimaryExpressionConstant(
-    std::uint64_t line, std::uint64_t column, OpenCL::Syntax::PrimaryExpressionConstant::variant value)
-    : Node(line, column), m_value(std::move(value))
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, OpenCL::Syntax::PrimaryExpressionConstant::variant value)
+    : Node(begin, end), m_value(std::move(value))
 {
 }
 
@@ -49,9 +50,9 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::PrimaryExpressionParenthese::g
     return m_expression;
 }
 
-OpenCL::Syntax::PrimaryExpression::PrimaryExpression(std::uint64_t line, std::uint64_t column,
+OpenCL::Syntax::PrimaryExpression::PrimaryExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                                      OpenCL::Syntax::PrimaryExpression::variant&& variant)
-    : Node(line, column), m_variant(std::move(variant))
+    : Node(begin, end), m_variant(std::move(variant))
 {
 }
 
@@ -61,8 +62,8 @@ const OpenCL::Syntax::PrimaryExpression::variant& OpenCL::Syntax::PrimaryExpress
 }
 
 OpenCL::Syntax::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(
-    std::uint64_t line, std::uint64_t column, OpenCL::Syntax::PrimaryExpression&& primaryExpression)
-    : Node(line, column), m_primaryExpression(std::move(primaryExpression))
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, OpenCL::Syntax::PrimaryExpression&& primaryExpression)
+    : Node(begin, end), m_primaryExpression(std::move(primaryExpression))
 {
 }
 
@@ -73,9 +74,9 @@ const OpenCL::Syntax::PrimaryExpression&
 }
 
 OpenCL::Syntax::PostFixExpressionSubscript::PostFixExpressionSubscript(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
     OpenCL::Syntax::Expression&& expression)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
 {
     assert(m_postFixExpression);
 }
@@ -91,8 +92,8 @@ const OpenCL::Syntax::Expression& OpenCL::Syntax::PostFixExpressionSubscript::ge
 }
 
 OpenCL::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
     assert(m_postFixExpression);
 }
@@ -103,8 +104,8 @@ const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionIncrem
 }
 
 OpenCL::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
     assert(m_postFixExpression);
 }
@@ -115,9 +116,9 @@ const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionDecrem
 }
 
 OpenCL::Syntax::PostFixExpressionDot::PostFixExpressionDot(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
     std::string identifier)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {
     assert(m_postFixExpression);
 }
@@ -133,9 +134,9 @@ const std::string& OpenCL::Syntax::PostFixExpressionDot::getIdentifier() const
 }
 
 OpenCL::Syntax::PostFixExpressionArrow::PostFixExpressionArrow(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
     std::string identifier)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {
 }
 
@@ -150,17 +151,17 @@ const std::string& OpenCL::Syntax::PostFixExpressionArrow::getIdentifier() const
 }
 
 OpenCL::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
-    std::uint64_t line, std::uint64_t column, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression,
     std::vector<std::unique_ptr<OpenCL::Syntax::AssignmentExpression>>&& optionalAssignmanetExpressions)
-    : Node(line, column),
+    : Node(begin, end),
       m_postFixExpression(std::move(postFixExpression)),
       m_optionalAssignmanetExpressions(std::move(optionalAssignmanetExpressions))
 {
 }
 
 OpenCL::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(
-    std::uint64_t line, std::uint64_t column, TypeName&& typeName, OpenCL::Syntax::InitializerList&& initializerList)
-    : Node(line, column),
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, TypeName&& typeName, OpenCL::Syntax::InitializerList&& initializerList)
+    : Node(begin, end),
       m_typeName(std::make_unique<TypeName>(std::move(typeName))),
       m_initializerList(std::make_unique<InitializerList>(std::move(initializerList)))
 {
@@ -176,9 +177,9 @@ const OpenCL::Syntax::TypeName& OpenCL::Syntax::PostFixExpressionTypeInitializer
     return *m_typeName;
 }
 
-OpenCL::Syntax::PostFixExpression::PostFixExpression(std::uint64_t line, std::uint64_t column,
+OpenCL::Syntax::PostFixExpression::PostFixExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                                      OpenCL::Syntax::PostFixExpression::variant&& variant)
-    : Node(line, column), m_variant(std::move(variant))
+    : Node(begin, end), m_variant(std::move(variant))
 {
 }
 
@@ -188,8 +189,8 @@ const OpenCL::Syntax::PostFixExpression::variant& OpenCL::Syntax::PostFixExpress
 }
 
 OpenCL::Syntax::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(
-    std::uint64_t line, std::uint64_t column, OpenCL::Syntax::PostFixExpression&& postFixExpression)
-    : Node(line, column), m_postFixExpression(std::move(postFixExpression))
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, OpenCL::Syntax::PostFixExpression&& postFixExpression)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
 }
 
@@ -1228,4 +1229,18 @@ OpenCL::Syntax::DirectAbstractDeclarator::DirectAbstractDeclarator(
 const OpenCL::Syntax::DirectAbstractDeclarator::variant& OpenCL::Syntax::DirectAbstractDeclarator::getVariant() const
 {
     return m_variant;
+}
+
+OpenCL::Syntax::Node::Node(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                           std::vector<OpenCL::Lexer::Token>::const_iterator end) : m_begin(begin), m_end(end)
+{}
+
+std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Syntax::Node::begin() const
+{
+    return m_begin;
+}
+
+std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Syntax::Node::end() const
+{
+    return m_end;
 }

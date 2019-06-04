@@ -161,12 +161,11 @@ namespace OpenCL::Syntax
 
     class Node
     {
-        std::uint64_t m_line;
-        std::uint64_t m_column;
+        std::vector<Lexer::Token>::const_iterator m_begin;
+        std::vector<Lexer::Token>::const_iterator m_end;
 
     public:
-        Node(std::uint64_t line, std::uint64_t column) : m_line(line), m_column(column)
-        {}
+        Node(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end);
 
         virtual ~Node() = default;
 
@@ -178,15 +177,9 @@ namespace OpenCL::Syntax
 
         Node& operator=(Node&&) noexcept = default;
 
-        std::uint64_t getLine() const
-        {
-            return m_line;
-        }
+        std::vector<OpenCL::Lexer::Token>::const_iterator begin() const;
 
-        std::uint64_t getColumn() const
-        {
-            return m_column;
-        }
+        std::vector<OpenCL::Lexer::Token>::const_iterator end() const;
     };
 
     /**
@@ -197,7 +190,7 @@ namespace OpenCL::Syntax
         std::vector<AssignmentExpression> m_assignmentExpressions;
 
     public:
-        Expression(std::uint64_t line, std::uint64_t column, std::vector<AssignmentExpression> assignmanetExpressions);
+        Expression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::vector<AssignmentExpression> assignmanetExpressions);
 
         const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
     };
@@ -210,7 +203,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-        PrimaryExpressionIdentifier(std::uint64_t line, std::uint64_t column, std::string identifier);
+        PrimaryExpressionIdentifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::string identifier);
 
         const std::string& getIdentifier() const;
     };
@@ -229,7 +222,7 @@ namespace OpenCL::Syntax
         variant m_value;
 
     public:
-        PrimaryExpressionConstant(std::uint64_t line, std::uint64_t column, variant value);
+        PrimaryExpressionConstant(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, variant value);
 
         const variant& getValue() const;
     };
@@ -259,7 +252,7 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        PrimaryExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
+        PrimaryExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, variant&& variant);
 
         const variant& getVariant() const;
     };
@@ -272,7 +265,7 @@ namespace OpenCL::Syntax
         PrimaryExpression m_primaryExpression;
 
     public:
-        PostFixExpressionPrimaryExpression(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionPrimaryExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                            PrimaryExpression&& primaryExpression);
 
         const PrimaryExpression& getPrimaryExpression() const;
@@ -288,7 +281,7 @@ namespace OpenCL::Syntax
         Expression m_expression;
 
     public:
-        PostFixExpressionSubscript(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionSubscript(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                    std::unique_ptr<PostFixExpression>&& postFixExpression, Expression&& expression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -304,7 +297,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
     public:
-        PostFixExpressionIncrement(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionIncrement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -318,7 +311,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<PostFixExpression> m_postFixExpression;
 
     public:
-        PostFixExpressionDecrement(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionDecrement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                    std::unique_ptr<PostFixExpression>&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -333,7 +326,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-        PostFixExpressionDot(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionDot(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                              std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -350,7 +343,7 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-        PostFixExpressionArrow(std::uint64_t line, std::uint64_t column,
+        PostFixExpressionArrow(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -370,7 +363,7 @@ namespace OpenCL::Syntax
 
     public:
         PostFixExpressionFunctionCall(
-            std::uint64_t line, std::uint64_t column, std::unique_ptr<PostFixExpression>&& postFixExpression,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
             std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
 
         const PostFixExpression& getPostFixExpression() const;
@@ -389,7 +382,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<InitializerList> m_initializerList;
 
     public:
-        PostFixExpressionTypeInitializer(std::uint64_t line, std::uint64_t column, TypeName&& typeName,
+        PostFixExpressionTypeInitializer(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, TypeName&& typeName,
                                          InitializerList&& initializerList);
 
         const InitializerList& getInitializerList() const;
@@ -417,7 +410,7 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        PostFixExpression(std::uint64_t line, std::uint64_t column, variant&& variant);
+        PostFixExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end, variant&& variant);
 
         const variant& getVariant() const;
     };
@@ -430,7 +423,7 @@ namespace OpenCL::Syntax
         PostFixExpression m_postFixExpression;
 
     public:
-        UnaryExpressionPostFixExpression(std::uint64_t line, std::uint64_t column,
+        UnaryExpressionPostFixExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                                          PostFixExpression&& postFixExpression);
 
         const PostFixExpression& getPostFixExpression() const;
