@@ -21,14 +21,19 @@ namespace
     template <class Matcher>
     void sourceProducesError(const std::string& source, const Matcher& matches)
     {
-        std::ostringstream ss;
-        std::vector<OpenCL::Lexer::Token> tokens;
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
-        auto tree = OpenCL::Parser::buildTree(tokens, &ss);
-        CHECK_FALSE(tree.second);
-        auto string = ss.str();
-        CHECK_THAT(string, matches);
-        INFO(string);
+        DYNAMIC_SECTION(source)
+        {
+            std::ostringstream ss;
+            std::vector<OpenCL::Lexer::Token> tokens;
+            REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
+            {
+                auto tree = OpenCL::Parser::buildTree(tokens, &ss);
+                auto string = ss.str();
+                REQUIRE_FALSE(tree.second);
+                CHECK_THAT(string, matches);
+            }
+            OpenCL::Parser::buildTree(tokens);
+        }
     }
 
     class ProducesNErrors : public Catch::MatcherBase<std::string>
@@ -42,8 +47,8 @@ namespace
 
         bool match(const std::string& arg) const override
         {
-            std::size_t occurrences = 0,pos = 0;
-            while((pos = arg.find("error: ",pos)) != std::string::npos)
+            std::size_t occurrences = 0, pos = 0;
+            while ((pos = arg.find("error: ", pos)) != std::string::npos)
             {
                 occurrences++;
                 pos += 7;
@@ -54,7 +59,7 @@ namespace
     protected:
         std::string describe() const override
         {
-            return " has " + std::to_string(m_allowedErrors) + " errors ";
+            return " has " + std::to_string(m_allowedErrors) + " error" + (m_allowedErrors == 1 ? " " : "s ");
         }
     };
 
@@ -65,13 +70,55 @@ namespace
         ProducesNoErrors() : ProducesNErrors(0)
         {}
     };
+
+    class ProducesNNotes : public Catch::MatcherBase<std::string>
+    {
+        std::size_t m_allowedNotes;
+
+    public:
+
+        explicit ProducesNNotes(std::size_t n) : m_allowedNotes(n)
+        {}
+
+        bool match(const std::string& arg) const override
+        {
+            std::size_t occurrences = 0, pos = 0;
+            while ((pos = arg.find("note: ", pos)) != std::string::npos)
+            {
+                occurrences++;
+                pos += 7;
+            }
+            return occurrences == m_allowedNotes;
+        }
+
+    protected:
+        std::string describe() const override
+        {
+            return " has " + std::to_string(m_allowedNotes) + " note" + (m_allowedNotes == 1 ? " " : "s ");
+        }
+    };
+
+    class ProducesNoNotes : public ProducesNNotes
+    {
+    public:
+
+        ProducesNoNotes() : ProducesNNotes(0)
+        {}
+    };
 }
 
 TEST_CASE("External definitions", "[parser]")
 {
-    sourceProducesError("i;", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
-    sourceProducesError("i{}", Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER) && ProducesNErrors(1));
-    sourceProducesError("int i",
+    sourceProducesError("i;",
                         Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
-                            && ProducesNErrors(1));
+                            && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProducesError("i{}",
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                            && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProducesError("int i",
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION)
+                            && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProducesError("int i ft",
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION)
+                            && ProducesNErrors(1) && ProducesNoNotes());
 }

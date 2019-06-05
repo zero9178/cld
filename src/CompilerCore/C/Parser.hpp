@@ -5,6 +5,7 @@
 #include "Syntax.hpp"
 #include "Message.hpp"
 
+#include <functional>
 
 namespace OpenCL::Parser
 {
@@ -48,7 +49,9 @@ namespace OpenCL::Parser
             std::vector<Lexer::Token>::const_iterator& getCurrent();
         };
 
-        std::vector<std::vector<Branch*>> m_branches;
+        using CriteriaFunctions = std::vector<std::function<bool(Tokens::const_iterator, Tokens::const_iterator)>>;
+
+        std::vector<std::pair<std::vector<Branch*>,CriteriaFunctions>> m_branches;
 
         friend class Branch;
 
@@ -84,15 +87,15 @@ namespace OpenCL::Parser
 
         bool isErrorsOccured() const;
 
-        template<class F>
-        auto doBacktracking(F&& f)
+        template <class F,class...Args>
+        auto doBacktracking(F&& f,Args&&...args)
         {
-            m_branches.emplace_back();
+            m_branches.push_back({{},{std::forward<Args>(args)...}});
             auto deleter = [this](void*)
             {
                 m_branches.pop_back();
             };
-            std::unique_ptr<void, decltype(deleter)> ptr((void*)1,deleter);
+            std::unique_ptr<void, decltype(deleter)> ptr((void*)1, deleter);
             return std::forward<F>(f)();
         }
 

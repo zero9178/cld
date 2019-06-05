@@ -37,7 +37,7 @@ int main()
     LLVMLinkInMCJIT();
 
     OpenCL::Codegen::Context context;
-    auto result = OpenCL::Lexer::tokenize("i;");//OpenCL::PP::preprocess(std::move(source))
+    auto result = OpenCL::Lexer::tokenize("int i ft");//OpenCL::PP::preprocess(std::move(source))
     OpenCL::Parser::buildTree(result,&std::cerr);
     return 0;
 

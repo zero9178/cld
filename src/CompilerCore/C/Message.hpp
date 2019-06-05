@@ -30,8 +30,8 @@ namespace OpenCL
 
     public:
 
-        Modifier(const std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                 const std::vector<OpenCL::Lexer::Token>::const_iterator& anEnd,
+        Modifier(std::vector<Lexer::Token>::const_iterator begin,
+                 std::vector<Lexer::Token>::const_iterator anEnd,
                  Action action);
 
         const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;

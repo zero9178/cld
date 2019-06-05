@@ -26,7 +26,8 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
     }
     os << termcolor::red << "error: " << normalColour << message.getMessage() << '\n';
 
-    auto numSize = std::to_string(message.getAnEnd()->getLine()).size();
+    auto numSize = message.getBegin() != message.getAnEnd() ? std::to_string((message.getAnEnd() - 1)->getLine()).size()
+                                                            : 0;
     auto remainder = numSize % 4;
     if (remainder != 0)
     {
@@ -42,27 +43,25 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
         os << normalColour << std::string(numSize - line.size(), ' ') << line << '|';
         if (message.getModifier() && modifierBegin->getLine() == curr->getLine())
         {
-            auto highlitedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
-            auto highlitedSectionLength = highlitedEOL->getColumn() - modifierBegin->getColumn();
+            auto highlightedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
+            auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
+                - modifierBegin->getColumn();
             os << text.substr(0, modifierBegin->getColumn()) << termcolor::red
-               << text.substr(modifierBegin->getColumn(), highlitedSectionLength)
-               << normalColour << text.substr(highlitedEOL->getColumn()) << '\n';
-            os << normalColour << std::string(numSize,' ')<<'|'<<std::string(modifierBegin->getColumn(),' ');
+               << text.substr(modifierBegin->getColumn(), highlightedSectionLength)
+               << normalColour << (highlightedEOL != next ? text.substr(highlightedEOL->getColumn()) : "") << '\n';
+            os << normalColour << std::string(numSize, ' ') << '|' << std::string(modifierBegin->getColumn(), ' ');
             os << termcolor::red;
-            switch(message.getModifier()->getAction())
+            switch (message.getModifier()->getAction())
             {
-            case Modifier::Underline:
-                os <<std::string(highlitedSectionLength, '~');
+            case Modifier::Underline:os << std::string(highlightedSectionLength, '~');
                 break;
-            case Modifier::PointAtBeginning:
-                os <<'^'<<std::string(highlitedSectionLength-1, '~');
+            case Modifier::PointAtBeginning:os << '^' << std::string(highlightedSectionLength - 1, '~');
                 break;
-            case Modifier::PointAtEnd:
-                os <<std::string(highlitedSectionLength-1, '~')<<'^';
+            case Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
                 break;
             }
-            os << normalColour;
-            modifierBegin = highlitedEOL;
+            os << normalColour<<'\n';
+            modifierBegin = highlightedEOL;
         }
         else
         {
@@ -107,8 +106,8 @@ const std::optional<OpenCL::Modifier>& OpenCL::Message::getModifier() const
     return m_modifier;
 }
 
-OpenCL::Modifier::Modifier(const std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                           const std::vector<OpenCL::Lexer::Token>::const_iterator& anEnd,
+OpenCL::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
+                           std::vector<Lexer::Token>::const_iterator anEnd,
                            OpenCL::Modifier::Action action) : m_begin(begin), m_end(anEnd), m_action(action)
 {}
 
