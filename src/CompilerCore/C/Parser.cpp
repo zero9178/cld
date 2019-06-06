@@ -28,6 +28,37 @@ namespace
             || type == TokenType::ShiftRightAssign || type == TokenType::BitAndAssign
             || type == TokenType::BitOrAssign || type == TokenType::BitXorAssign;
     }
+
+    bool expect(TokenType expected,
+                OpenCL::Parser::Tokens::const_iterator begin,
+                std::vector<OpenCL::Lexer::Token>::const_iterator& curr,
+                OpenCL::Parser::Tokens::const_iterator end,
+                OpenCL::Parser::ParsingContext& context)
+    {
+        if (curr >= end || curr->getTokenType() != expected)
+        {
+            if (curr >= end)
+            {
+                context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N.args(Token(0, 0, 0, expected).emitBack()),
+                                  begin, findEOL(begin, end),
+                                  Modifier{end - 1, end, Modifier::PointAtEnd}});
+            }
+            else
+            {
+                context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                      .args(Token(0, 0, 0, expected).emitBack(), curr->emitBack()), begin,
+                                  findEOL(begin, end),
+                                  Modifier{curr, curr + 1, Modifier::PointAtBeginning}});
+            }
+            curr++;
+            return false;
+        }
+        else
+        {
+            curr++;
+            return true;
+        }
+    }
 } // namespace
 
 OpenCL::Syntax::TranslationUnit
@@ -163,10 +194,6 @@ namespace
 std::optional<Syntax::Declaration>
 OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     auto start = begin;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     while (begin < end && isDeclarationSpecifier(*begin, context))
@@ -180,7 +207,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     }
     if (declarationSpecifiers.empty())
     {
-        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER, begin, findSemicolonOrEOL(begin, end),
+        context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER, start, findSemicolonOrEOL(start, end),
                           Modifier{begin, begin + 1, Modifier::PointAtBeginning}});
     }
     if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
@@ -191,7 +218,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
         else
         {
-            context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION, start, end,
+            context.logError({ErrorMessages::EXPECTED_N.args(';'), start, findSemicolonOrEOL(start, end),
                               Modifier{end - 1, end, Modifier::PointAtEnd}});
         }
         return Declaration(start, begin, std::move(declarationSpecifiers), {});
@@ -235,23 +262,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
     }
     while (true);
-    if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
-    {
-        if (begin >= end)
-        {
-            context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION, start, findEOL(start, end),
-                              Modifier{end - 1, end, Modifier::PointAtEnd}});
-        }
-        else
-        {
-            context.logError({ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION, start, findEOL(start, end),
-                              Modifier{begin, begin + 1, Modifier::PointAtBeginning}});
-        }
-    }
-    else
-    {
-        begin++;
-    }
+    expect(TokenType::SemiColon, start, begin, end, context);
     if (auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifiers.front());
         storage && storage->getSpecifier() == StorageClassSpecifier::Typedef)
     {
@@ -3284,9 +3295,10 @@ Parser::ParsingContext::Branch::~Branch()
                                                context.m_branches.back().first.end(),
                                                [](Branch* const lhs, Branch* const rhs)
                                                {
-                                                   return std::tuple(std::distance(lhs->m_begin, lhs->m_curr),
-                                                                     std::numeric_limits<std::size_t>::max()
-                                                                         - lhs->m_errors.size(), [lhs, rhs]() -> bool
+                                                   return std::tuple(std::numeric_limits<std::size_t>::max()
+                                                                         - lhs->m_errors.size(),
+                                                                     std::distance(lhs->m_begin, lhs->m_curr),
+                                                                     [lhs, rhs]() -> bool
                                                                      {
                                                                          for (auto& iter : lhs->context.m_branches
                                                                                               .back().second)
@@ -3302,9 +3314,11 @@ Parser::ParsingContext::Branch::~Branch()
                                                                          }
                                                                          return false;
                                                                      }())
-                                                       < std::tuple(std::distance(rhs->m_begin, rhs->m_curr),
-                                                                    std::numeric_limits<std::size_t>::max()
-                                                                        - rhs->m_errors.size(), false);
+                                                       < std::tuple(
+                                                           std::numeric_limits<std::size_t>::max()
+                                                               - rhs->m_errors.size(),
+                                                           std::distance(rhs->m_begin, rhs->m_curr),
+                                                           false);
                                                });
             context.m_branches.back().first.clear();
             m_begin = result->m_curr;

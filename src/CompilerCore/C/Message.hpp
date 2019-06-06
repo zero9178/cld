@@ -5,10 +5,46 @@
 #include <vector>
 #include <optional>
 #include <iostream>
+#include <sstream>
 #include "Lexer.hpp"
 
 namespace OpenCL
 {
+    class Format
+    {
+        const char* m_format;
+
+        std::string format(std::vector<std::string> args) const;
+
+    public:
+
+        constexpr explicit Format(const char* format) : m_format(format)
+        {}
+
+        template <class...Args>
+        std::string args(Args&& ...args) const
+        {
+            auto toString = [](auto&& value) -> std::string
+            {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr(std::is_convertible_v<T, std::string>)
+                {
+                    return value;
+                }
+                else if constexpr(std::is_same_v<T, char>)
+                {
+                    return std::string(1, value);
+                }
+                else
+                {
+                    return std::to_string(value);
+                }
+                return "";
+            };
+            return format({toString(args)...});
+        }
+    };
+
     class Modifier
     {
 

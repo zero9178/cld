@@ -1,21 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
 project(OpenCLParser)
 list(APPEND CMAKE_PREFIX_PATH C:/MGPKG/LLVM-7.0.0)
-list(APPEND CMAKE_PREFIX_PATH C:/MGPKG/gtest-1.8.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 99)
 
 find_package(LLVM REQUIRED)
 find_package(Threads REQUIRED)
 
-if(MINGW)
+if (MINGW)
     add_compile_options("-Wa,-mbig-obj")
-endif()
+endif ()
 
-if(UNIX)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
-    set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
-endif()
+if (UNIX AND DEFINED SANITIZER)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZER}")
+endif ()
 
 if (WIN32)
     add_compile_definitions(_WIN32_WINNT=0x0600 WINVER=0x0600)
@@ -40,6 +38,6 @@ target_compile_definitions(OpenCLParser PUBLIC __STDC_FORMAT_MACROS)
 
 add_executable(DemoC src/input.c)
 
-if(${BUILD_TESTS})
+if (${BUILD_TESTS})
     add_subdirectory(src/Tests)
-endif()
+endif ()

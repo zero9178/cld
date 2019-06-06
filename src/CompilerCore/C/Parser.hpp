@@ -17,7 +17,9 @@ namespace OpenCL::Parser
     {
         constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename before name";
 
-        constexpr auto MISSING_SEMICOLON_AT_END_OF_DECLARATION = "Expected ; at the end of declaration";
+        constexpr auto EXPECTED_N = Format("Expected '{}'");
+
+        constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected '{}' instead of '{}'");
 
         constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
     }

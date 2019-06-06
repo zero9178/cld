@@ -1,0 +1,9 @@
+# Project exclude paths
+/cmake-build-debug-clang/
+/cmake-build-debug-wsl/
+/cmake-build-debug/
+/cmake-build-memorysanitizer/
+/cmake-build-undefinedsanitizer/
+/cmake-build-addresssanitizer/
+/cmake-build-leaksanitizer/
+/cmake-build-debug-wsl-clang/

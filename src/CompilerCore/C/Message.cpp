@@ -1,6 +1,6 @@
 #include "Message.hpp"
 #include <utility>
-#include <optional>
+#include <regex>
 #include "termcolor.hpp"
 
 OpenCL::Message::Message(std::string message,
@@ -46,10 +46,12 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
             auto highlightedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
             auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
                 - modifierBegin->getColumn();
-            os << text.substr(0, modifierBegin->getColumn()) << termcolor::red
-               << text.substr(modifierBegin->getColumn(), highlightedSectionLength)
+            os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << termcolor::red
+               << text.substr(modifierBegin->getColumn() - curr->getColumn(),
+                              modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
                << normalColour << (highlightedEOL != next ? text.substr(highlightedEOL->getColumn()) : "") << '\n';
-            os << normalColour << std::string(numSize, ' ') << '|' << std::string(modifierBegin->getColumn(), ' ');
+            os << normalColour << std::string(numSize, ' ') << '|'
+               << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
             os << termcolor::red;
             switch (message.getModifier()->getAction())
             {
@@ -60,7 +62,7 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
             case Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
                 break;
             }
-            os << normalColour<<'\n';
+            os << normalColour << '\n';
             modifierBegin = highlightedEOL;
         }
         else
@@ -78,7 +80,7 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
         }
         os << termcolor::cyan << "note: " << normalColour << noteMessage << '\n';
     }
-    return os << termcolor::reset << std::flush;
+    return os << termcolor::reset << std::endl;
 }
 
 const std::string& OpenCL::Message::getMessage() const
@@ -163,4 +165,37 @@ std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findSemicolonOrEOL(std
         }
     }
     return end;
+}
+
+std::string OpenCL::Format::format(std::vector<std::string> args) const
+{
+    static std::regex brackets(R"(\\*\{\})");
+    std::reverse(args.begin(), args.end());
+    std::smatch matches;
+    std::string result = m_format;
+    auto start = result.cbegin();
+    while (start < result.cend() && std::regex_search(start, result.cend(), matches, brackets))
+    {
+        auto size = matches.suffix().first - result.cbegin()
+            - (matches[0].second - matches[0].first) + 1;
+        auto pos = matches[0].str().find_first_not_of('\\');
+        if (pos != std::string::npos && pos % 2 == 1)
+        {
+            start = result.cbegin() + size;
+            continue;
+        }
+        if (args.empty())
+        {
+            throw std::runtime_error("Not enough arguments specified to substitute in format");
+        }
+        result = std::string(result.cbegin(), matches[0].first + pos) + args.back() +
+            std::string(matches[0].second, result.cend());
+        args.pop_back();
+        start = result.cbegin() + size;
+    }
+    if (!args.empty())
+    {
+        throw std::runtime_error("More arguments specified than needed to substitute");
+    }
+    return result;
 }

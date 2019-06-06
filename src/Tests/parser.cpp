@@ -26,12 +26,10 @@ namespace
             std::ostringstream ss;
             std::vector<OpenCL::Lexer::Token> tokens;
             REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
-            {
-                auto tree = OpenCL::Parser::buildTree(tokens, &ss);
-                auto string = ss.str();
-                REQUIRE_FALSE(tree.second);
-                CHECK_THAT(string, matches);
-            }
+            auto tree = OpenCL::Parser::buildTree(tokens, &ss);
+            auto string = ss.str();
+            REQUIRE_FALSE(tree.second);
+            CHECK_THAT(string, matches);
             OpenCL::Parser::buildTree(tokens);
         }
     }
@@ -59,7 +57,7 @@ namespace
     protected:
         std::string describe() const override
         {
-            return " has " + std::to_string(m_allowedErrors) + " error" + (m_allowedErrors == 1 ? " " : "s ");
+            return "has " + std::to_string(m_allowedErrors) + " error" + (m_allowedErrors == 1 ? " " : "s ");
         }
     };
 
@@ -94,7 +92,7 @@ namespace
     protected:
         std::string describe() const override
         {
-            return " has " + std::to_string(m_allowedNotes) + " note" + (m_allowedNotes == 1 ? " " : "s ");
+            return "has " + std::to_string(m_allowedNotes) + " note" + (m_allowedNotes == 1 ? " " : "s ");
         }
     };
 
@@ -116,9 +114,9 @@ TEST_CASE("External definitions", "[parser]")
                         Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
                             && ProducesNErrors(1) && ProducesNoNotes());
     sourceProducesError("int i",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION)
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args(";"))
                             && ProducesNErrors(1) && ProducesNoNotes());
     sourceProducesError("int i ft",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_SEMICOLON_AT_END_OF_DECLARATION)
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args(";", "ft"))
                             && ProducesNErrors(1) && ProducesNoNotes());
 }
