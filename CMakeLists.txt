@@ -26,7 +26,11 @@ include_directories(SYSTEM 3rdParty)
 include_directories(src)
 message(STATUS ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-list(APPEND CMAKE_CXX_FLAGS "-pedantic -Wall -Wextra -fdiagnostics-color=always")
+if (NOT MSVC)
+    list(APPEND CMAKE_CXX_FLAGS "-pedantic -Wall -Wextra -fdiagnostics-color=always")
+else ()
+    add_compile_options(/w)
+endif ()
 
 llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)
 
