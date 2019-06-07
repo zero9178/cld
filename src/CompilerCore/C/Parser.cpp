@@ -59,6 +59,436 @@ namespace
             return true;
         }
     }
+
+    template <typename G>
+    struct Y
+    {
+        template <typename... X>
+        decltype(auto) operator()(X&& ... x) const&
+        {
+            return g(*this, std::forward<X>(x)...);
+        }
+
+        G g;
+    };
+
+    template <typename G>
+    Y(G)->Y<G>;
+
+    //firstIsInTranslationUnit not needed
+
+    //firstIsInExternalDeclaration not needed
+
+    bool firstIsInFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInDeclarationSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInSpecifierQualifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInDirectDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInParameterTypeList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInDirectAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInParameterList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInPointer(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInStructOrUnionSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInEnumSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInEnumDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInCompoundStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInCompoundItem(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInInitializer(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInInitializerList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInAssignmentExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInConditionalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInLogicalOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInLogicalAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInBitOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInBitXorExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInBitAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInEqualityExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInRelationalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInShiftExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInAdditiveExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInTerm(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInTypeName(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInCastExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInUnaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInPostFixExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInPrimaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInDeclarationSpecifier(token, context);
+    }
+
+    bool firstIsInDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInDeclarationSpecifier(token, context);
+    }
+
+    bool firstIsInDeclarationSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        switch (token.getTokenType())
+        {
+        case TokenType::TypedefKeyword:
+        case TokenType::ExternKeyword:
+        case TokenType::StaticKeyword:
+        case TokenType::AutoKeyword:
+        case TokenType::RegisterKeyword:
+        case TokenType::VoidKeyword:
+        case TokenType::CharKeyword:
+        case TokenType::ShortKeyword:
+        case TokenType::IntKeyword:
+        case TokenType::LongKeyword:
+        case TokenType::FloatKeyword:
+        case TokenType::DoubleKeyword:
+        case TokenType::SignedKeyword:
+        case TokenType::UnsignedKeyword:
+        case TokenType::EnumKeyword:
+        case TokenType::StructKeyword:
+        case TokenType::UnionKeyword:
+        case TokenType::ConstKeyword:
+        case TokenType::RestrictKeyword:
+        case TokenType::VolatileKeyword:
+        case TokenType::InlineKeyword: return true;
+        case TokenType::Identifier:
+            return !context.isInScope(std::get<std::string>(token.getValue()))
+                && context.isTypedef(std::get<std::string>(token.getValue()));
+        default: return false;
+        }
+    }
+
+    bool firstIsInSpecifierQualifier(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        switch (token.getTokenType())
+        {
+        case TokenType::VoidKeyword:
+        case TokenType::CharKeyword:
+        case TokenType::ShortKeyword:
+        case TokenType::IntKeyword:
+        case TokenType::LongKeyword:
+        case TokenType::FloatKeyword:
+        case TokenType::DoubleKeyword:
+        case TokenType::SignedKeyword:
+        case TokenType::UnsignedKeyword:
+        case TokenType::EnumKeyword:
+        case TokenType::StructKeyword:
+        case TokenType::UnionKeyword:
+        case TokenType::ConstKeyword:
+        case TokenType::RestrictKeyword:
+        case TokenType::VolatileKeyword:return true;
+        case TokenType::Identifier:
+            return !context.isInScope(std::get<std::string>(token.getValue()))
+                && context.isTypedef(std::get<std::string>(token.getValue()));
+        default: return false;
+        }
+    }
+
+    bool firstIsInDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInPointer(token, context) || firstIsInDirectDeclarator(token, context);
+    }
+
+    bool firstIsInDirectDeclarator(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::Identifier || token.getTokenType() == TokenType::OpenParenthese;
+    }
+
+    bool firstIsInParameterTypeList(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInParameterList(token, context);
+    }
+
+    bool firstIsInAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInPointer(token, context) || firstIsInDirectAbstractDeclarator(token, context);
+    }
+
+    bool firstIsInDirectAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::OpenParenthese
+            || token.getTokenType() == TokenType::OpenSquareBracket;
+    }
+
+    bool firstIsInParameterList(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInDeclarationSpecifier(token, context);
+    }
+
+    bool firstIsInPointer(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::Asterisk;
+    }
+
+    bool firstIsInStructOrUnionSpecifier(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::StructKeyword || token.getTokenType() == TokenType::UnionKeyword;
+    }
+
+    bool firstIsInEnumSpecifier(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::EnumKeyword;
+    }
+
+    bool firstIsInEnumDeclaration(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::EnumKeyword;
+    }
+
+    bool firstIsInCompoundStatement(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::OpenBrace;
+    }
+
+    bool firstIsInCompoundItem(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInDeclaration(token, context) || firstIsInStatement(token, context);
+    }
+
+    bool firstIsInInitializer(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInAssignmentExpression(token, context) || token.getTokenType() == TokenType::OpenBrace;
+    }
+
+    bool firstIsInInitializerList(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return token.getTokenType() == TokenType::OpenSquareBracket || token.getTokenType() == TokenType::Dot
+            || firstIsInInitializer(token, context);
+    }
+
+    bool firstIsInStatement(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return token.getTokenType() == TokenType::IfKeyword || token.getTokenType() == TokenType::ForKeyword
+            || token.getTokenType() == TokenType::SwitchKeyword || token.getTokenType() == TokenType::ContinueKeyword
+            || token.getTokenType() == TokenType::BreakKeyword || token.getTokenType() == TokenType::CaseKeyword
+            || token.getTokenType() == TokenType::DefaultKeyword || token.getTokenType() == TokenType::Identifier
+            || token.getTokenType() == TokenType::DoKeyword || token.getTokenType() == TokenType::WhileKeyword
+            || token.getTokenType() == TokenType::ReturnKeyword || token.getTokenType() == TokenType::GotoKeyword
+            || firstIsInExpression(token, context);
+    }
+
+    bool firstIsInExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInAssignmentExpression(token, context);
+    }
+
+    bool firstIsInAssignmentExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInUnaryExpression(token, context) || firstIsInConditionalExpression(token, context);
+    }
+
+    bool firstIsInConditionalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInLogicalOrExpression(token, context);
+    }
+
+    bool firstIsInLogicalOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInLogicalAndExpression(token, context);
+    }
+
+    bool firstIsInLogicalAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInBitOrExpression(token, context);
+    }
+
+    bool firstIsInBitOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInBitXorExpression(token, context);
+    }
+
+    bool firstIsInBitXorExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInBitAndExpression(token, context);
+    }
+
+    bool firstIsInBitAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInEqualityExpression(token, context);
+    }
+
+    bool firstIsInEqualityExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInRelationalExpression(token, context);
+    }
+
+    bool firstIsInRelationalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInShiftExpression(token, context);
+    }
+
+    bool firstIsInShiftExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInAdditiveExpression(token, context);
+    }
+
+    bool firstIsInAdditiveExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInTerm(token, context);
+    }
+
+    bool firstIsInTerm(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInCastExpression(token, context);
+    }
+
+    bool firstIsInTypeName(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInSpecifierQualifier(token, context);
+    }
+
+    bool firstIsInCastExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return token.getTokenType() == TokenType::OpenParenthese || firstIsInUnaryExpression(token, context);
+    }
+
+    bool firstIsInUnaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInPostFixExpression(token, context) || token.getTokenType() == TokenType::Increment
+            || token.getTokenType() == TokenType::Decrement || token.getTokenType() == TokenType::Ampersand
+            || token.getTokenType() == TokenType::Plus || token.getTokenType() == TokenType::Minus
+            || token.getTokenType() == TokenType::BitWiseNegation || token.getTokenType() == TokenType::LogicalNegation
+            || token.getTokenType() == TokenType::SizeofKeyword;
+    }
+
+    bool firstIsInPostFixExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return token.getTokenType() == TokenType::OpenParenthese || firstIsInPrimaryExpression(token, context);
+    }
+
+    bool firstIsInPrimaryExpression(const Token& token, const OpenCL::Parser::ParsingContext&)
+    {
+        return token.getTokenType() == TokenType::OpenParenthese || token.getTokenType() == TokenType::Identifier
+            || token.getTokenType() == TokenType::Literal || token.getTokenType() == TokenType::StringLiteral;
+    }
+
+    bool followsFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsDeclarationSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsSpecifierQualifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsDirectDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsParameterTypeList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsDirectAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsParameterList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsPointer(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsStructOrUnionSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsEnumSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsEnumDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsCompoundStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsCompoundItem(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsInitializer(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsInitializerList(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsAssignmentExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsConditionalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsLogicalOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsLogicalAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsBitOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsBitXorExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsBitAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsEqualityExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsRelationalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsShiftExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsAdditiveExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsTerm(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsTypeName(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsCastExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsUnaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsPostFixExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool followsPrimaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool isPostFixOperator(const Token& token)
+    {
+        switch (token.getTokenType())
+        {
+        case TokenType::Arrow:
+        case TokenType::Dot:
+        case TokenType::OpenSquareBracket:
+        case TokenType::Identifier:
+        case TokenType::OpenParenthese:
+        case TokenType::Literal:
+        case TokenType::Increment:
+        case TokenType::Decrement: return true;
+        default: break;
+        }
+        return false;
+    }
 } // namespace
 
 OpenCL::Syntax::TranslationUnit
@@ -115,88 +545,12 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                   });
 }
 
-namespace
-{
-    bool isDeclarationSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context)
-    {
-        switch (token.getTokenType())
-        {
-        case TokenType::TypedefKeyword:
-        case TokenType::ExternKeyword:
-        case TokenType::StaticKeyword:
-        case TokenType::AutoKeyword:
-        case TokenType::RegisterKeyword:
-        case TokenType::VoidKeyword:
-        case TokenType::CharKeyword:
-        case TokenType::ShortKeyword:
-        case TokenType::IntKeyword:
-        case TokenType::LongKeyword:
-        case TokenType::FloatKeyword:
-        case TokenType::DoubleKeyword:
-        case TokenType::SignedKeyword:
-        case TokenType::UnsignedKeyword:
-        case TokenType::EnumKeyword:
-        case TokenType::StructKeyword:
-        case TokenType::UnionKeyword:
-        case TokenType::ConstKeyword:
-        case TokenType::RestrictKeyword:
-        case TokenType::VolatileKeyword:
-        case TokenType::InlineKeyword: return true;
-        case TokenType::Identifier:
-            return !context.isInScope(std::get<std::string>(token.getValue()))
-                && context.isTypedef(std::get<std::string>(token.getValue()));
-        default: return false;
-        }
-    }
-
-    bool isSpecifierQualifier(const Token& token, const OpenCL::Parser::ParsingContext& context)
-    {
-        switch (token.getTokenType())
-        {
-        case TokenType::VoidKeyword:
-        case TokenType::CharKeyword:
-        case TokenType::ShortKeyword:
-        case TokenType::IntKeyword:
-        case TokenType::LongKeyword:
-        case TokenType::FloatKeyword:
-        case TokenType::DoubleKeyword:
-        case TokenType::SignedKeyword:
-        case TokenType::UnsignedKeyword:
-        case TokenType::EnumKeyword:
-        case TokenType::StructKeyword:
-        case TokenType::UnionKeyword:
-        case TokenType::ConstKeyword:
-        case TokenType::RestrictKeyword:
-        case TokenType::VolatileKeyword:return true;
-        case TokenType::Identifier:
-            return !context.isInScope(std::get<std::string>(token.getValue()))
-                && context.isTypedef(std::get<std::string>(token.getValue()));
-        default: return false;
-        }
-    }
-
-    template <typename G>
-    struct Y
-    {
-        template <typename... X>
-        decltype(auto) operator()(X&& ... x) const&
-        {
-            return g(*this, std::forward<X>(x)...);
-        }
-
-        G g;
-    };
-
-    template <typename G>
-    Y(G)->Y<G>;
-} // namespace
-
 std::optional<Syntax::Declaration>
 OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context)
 {
     auto start = begin;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
-    while (begin < end && isDeclarationSpecifier(*begin, context))
+    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
     {
         auto result = parseDeclarationSpecifier(begin, end, context);
         if (!result)
@@ -475,7 +829,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
     do
     {
         std::vector<SpecifierQualifier> specifierQualifiers;
-        while (begin < end && isSpecifierQualifier(*begin, context))
+        while (begin < end && firstIsInSpecifierQualifier(*begin, context))
         {
             auto result = parseSpecifierQualifier(begin, end, context);
             if (!result)
@@ -927,7 +1281,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
             begin++;
             if (directDeclarator)
             {
-                if (begin < end && isDeclarationSpecifier(*begin, context))
+                if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
                     auto parameterTypeList = parseParameterTypeList(begin, end, context);
                     if (!parameterTypeList)
@@ -1098,7 +1452,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
             break;
         }
         std::vector<DeclarationSpecifier> declarationSpecifiers;
-        while (begin < end && isDeclarationSpecifier(*begin, context))
+        while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
         {
             auto result = parseDeclarationSpecifier(begin, end, context);
             if (!result)
@@ -1271,7 +1625,7 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
             auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin()
                                                   : begin;
             begin++;
-            if (begin < end && isDeclarationSpecifier(*begin, context))
+            if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
             {
                 auto parameterTypeList = parseParameterTypeList(begin, end, context);
                 if (!parameterTypeList)
@@ -1517,7 +1871,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
 {
     auto start = begin;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
-    while (begin < end && isDeclarationSpecifier(*begin, context))
+    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
     {
         auto result = parseDeclarationSpecifier(begin, end, context);
         if (!result)
@@ -1536,7 +1890,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
         return {};
     }
     std::vector<Declaration> declarations;
-    while (begin < end && isDeclarationSpecifier(*begin, context))
+    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
     {
         auto result = parseDeclaration(begin, end, context);
         if (!result)
@@ -1673,8 +2027,9 @@ std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iter
     {
         return {};
     }
-    if (isDeclarationSpecifier(*begin, context) && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end
-        && (begin + 1)->getTokenType() == TokenType::Colon))
+    if (firstIsInDeclarationSpecifier(*begin, context)
+        && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end
+            && (begin + 1)->getTokenType() == TokenType::Colon))
     {
         auto declaration = parseDeclaration(begin, end, context);
         if (declaration)
@@ -2910,26 +3265,6 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     return UnaryExpression(UnaryExpressionPostFixExpression(start, begin, std::move(*postFix)));
 }
 
-namespace
-{
-    bool isPostFixExpression(const Token& token)
-    {
-        switch (token.getTokenType())
-        {
-        case TokenType::Arrow:
-        case TokenType::Dot:
-        case TokenType::OpenSquareBracket:
-        case TokenType::Identifier:
-        case TokenType::OpenParenthese:
-        case TokenType::Literal:
-        case TokenType::Increment:
-        case TokenType::Decrement: return true;
-        default: break;
-        }
-        return false;
-    }
-} // namespace
-
 std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::const_iterator& begin,
                                                                         Tokens::const_iterator end,
                                                                         ParsingContext& context)
@@ -2939,7 +3274,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         return {};
     }
     std::stack<std::unique_ptr<PostFixExpression>> stack;
-    while (begin != end && isPostFixExpression(*begin))
+    while (begin != end && isPostFixOperator(*begin))
     {
         if (begin->getTokenType() == TokenType::Identifier || begin->getTokenType() == TokenType::Literal)
         {
@@ -2956,7 +3291,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         else if (begin->getTokenType() == TokenType::OpenParenthese && stack.empty())
         {
             auto start = begin;
-            if (begin + 1 < end && isDeclarationSpecifier(*(begin + 1), context))
+            if (begin + 1 < end && firstIsInDeclarationSpecifier(*(begin + 1), context))
             {
                 auto type = parseTypeName(begin, end, context);
                 if (!type)

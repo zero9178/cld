@@ -444,8 +444,8 @@ namespace OpenCL::Syntax
      *                                  | <TokenType::Decrement> <UnaryExpression>
      *                                  | <TokenType::Ampersand> <UnaryExpression>
      *                                  | <TokenType::Asterisk> <UnaryExpression>
-     *                                  | <TokenType::Addition> <UnaryExpression>
-     *                                  | <TokenType::Negation> <UnaryExpression>
+     *                                  | <TokenType::Plus> <UnaryExpression>
+     *                                  | <TokenType::Minus> <UnaryExpression>
      *                                  | <TokenType::BitWiseNegation> <UnaryExpression>
      *                                  | <TokenType::LogicalNegation> <UnaryExpression>
      */
@@ -893,7 +893,7 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <NonCommaExpression> ::= <AssignmentExpression> | <ConditionalExpression>
+     * <AssignmentExpression> ::= <AssignmentExpressionAssignment> | <ConditionalExpression>
      */
     class AssignmentExpression final : public Node
     {
@@ -1147,7 +1147,6 @@ namespace OpenCL::Syntax
     using DeclarationSpecifier = std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier>;
 
     /**
-     *
      * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
      *
      * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
@@ -1172,7 +1171,7 @@ namespace OpenCL::Syntax
 
     /**
      * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration>
-     * <TokenType::SemiColon> [<Expression>] <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese>
+     * [<Expression>] <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese>
      * <Statement>
      */
     class ForDeclarationStatement final : public Node
