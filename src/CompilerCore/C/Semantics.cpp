@@ -1,19 +1,14 @@
-#include <utility>
-
-#include <utility>
-
-#include <utility>
-
 #include "Semantics.hpp"
 
 #include "ConstantEvaluator.hpp"
 #include "Syntax.hpp"
-
 #include <algorithm>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <utility>
 #include <cassert>
+#include <array>
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {

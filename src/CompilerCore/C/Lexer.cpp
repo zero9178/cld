@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <regex>
+#include <sstream>
+#include <cctype>
 
 namespace
 {
