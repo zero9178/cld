@@ -171,6 +171,22 @@ namespace OpenCL::Parser
     std::optional<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                     ParsingContext& context);
 
+    std::optional<Syntax::ReturnStatement> parseReturnStatement(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end,
+                                                                ParsingContext& context);
+
+    std::optional<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin,
+                                                        Tokens::const_iterator end,
+                                                        ParsingContext& context);
+
+    std::optional<Syntax::SwitchStatement> parseSwitchStatement(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end,
+                                                                ParsingContext& context);
+
+    std::optional<Syntax::ForStatement> parseForStatement(Tokens::const_iterator& begin,
+                                                          Tokens::const_iterator end,
+                                                          ParsingContext& context);
+
     std::optional<Syntax::Expression> parseExpression(Tokens::const_iterator& begin,
                                                       Tokens::const_iterator end, ParsingContext& context);
 

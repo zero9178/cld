@@ -268,6 +268,7 @@ namespace
             && lastText.find('p') == std::string::npos && lastText.find('P') == std::string::npos)
         {
             static std::regex numbers("(0x)?[0-9a-fA-F]+");
+            bool isHexOrOctal = lastText[0] == '0';
             std::smatch match;
             std::regex_search(lastText, match, numbers);
             std::string filtered = match[0];
@@ -315,7 +316,7 @@ namespace
             else
             {
                 char* endptr = nullptr;
-                std::int64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
+                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
                 if (endptr != filtered.c_str() + filtered.size())
                 {
                     throw std::runtime_error("Invalid constant " + filtered);
@@ -324,7 +325,7 @@ namespace
                 {
                     if (number > std::numeric_limits<std::int32_t>::max())
                     {
-                        if (number <= std::numeric_limits<std::uint32_t>::max())
+                        if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
                         {
                             return OpenCL::Lexer::Token(line,
                                                         column,
@@ -333,13 +334,22 @@ namespace
                                                         static_cast<std::uint32_t>(number),
                                                         lastText);
                         }
-                        else
+                        else if (isHexOrOctal && number > std::numeric_limits<std::int64_t>::max())
                         {
                             return OpenCL::Lexer::Token(line,
                                                         column,
                                                         lastText.size(),
                                                         OpenCL::Lexer::TokenType::Literal,
                                                         number,
+                                                        lastText);
+                        }
+                        else
+                        {
+                            return OpenCL::Lexer::Token(line,
+                                                        column,
+                                                        lastText.size(),
+                                                        OpenCL::Lexer::TokenType::Literal,
+                                                        static_cast<std::int64_t>(number),
                                                         lastText);
                         }
                     }
@@ -351,8 +361,24 @@ namespace
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    return OpenCL::Lexer::Token(line, column,
-                                                lastText.size(), OpenCL::Lexer::TokenType::Literal, number, lastText);
+                    if (isHexOrOctal && number > std::numeric_limits<std::int64_t>::max())
+                    {
+                        return OpenCL::Lexer::Token(line,
+                                                    column,
+                                                    lastText.size(),
+                                                    OpenCL::Lexer::TokenType::Literal,
+                                                    number,
+                                                    lastText);
+                    }
+                    else
+                    {
+                        return OpenCL::Lexer::Token(line,
+                                                    column,
+                                                    lastText.size(),
+                                                    OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::int64_t>(number),
+                                                    lastText);
+                    }
                 }
                 else
                 {
@@ -503,6 +529,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     characters.clear();
                     continue;
                 }
+                if (iter == '\n')
+                {
+                    throw std::runtime_error("Newline in character literal, use \\n instead");
+                }
                 characters += iter;
                 break;
             }
@@ -535,6 +565,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                                         '\"' + characters + '\"');
                     characters.clear();
                     continue;
+                }
+                if (iter == '\n')
+                {
+                    throw std::runtime_error("Newline in string literal, use \\n instead");
                 }
                 characters += iter;
                 break;
@@ -827,14 +861,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
             if (currentState == State::LineComment)
             {
                 currentState = State::Start;
-            }
-            else if (currentState == State::CharacterLiteral)
-            {
-                throw std::runtime_error("Newline in character literal, use \\n instead");
-            }
-            else if (currentState == State::StringLiteral)
-            {
-                throw std::runtime_error("Newline in string literal, use \\n instead");
             }
             line++;
             column = 0;

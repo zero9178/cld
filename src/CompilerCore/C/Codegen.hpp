@@ -209,8 +209,6 @@ namespace OpenCL::Codegen
 
         std::optional<FailureReason> visit(const Syntax::Declaration& node);
 
-        std::optional<FailureReason> visit(const Syntax::ForDeclarationStatement& node);
-
         std::optional<FailureReason> visit(const Syntax::HeadWhileStatement& node);
 
         std::optional<FailureReason> visit(const Syntax::FootWhileStatement& node);

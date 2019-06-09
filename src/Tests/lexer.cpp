@@ -113,6 +113,7 @@ TEST_CASE("Number Literals", "[lexer]")
 
             CHECK_THROWS(OpenCL::Lexer::tokenize("5u5"));
         }
+        CHECK_THROWS(OpenCL::Lexer::tokenize("5x3"));
     }
     SECTION("Floating point")
     {
@@ -144,6 +145,8 @@ TEST_CASE("Number Literals", "[lexer]")
             CHECK(std::get<double>(result[0].getValue()) == 0.5);
         }
         CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3"));
+        CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3F"));
+        CHECK_THROWS(OpenCL::Lexer::tokenize("0.53fF"));
         std::array results = {
             std::pair{"1e-19", 1e-19},
             std::pair{"2e32", 2e32},
@@ -185,30 +188,29 @@ TEST_CASE("Number Literals", "[lexer]")
     }
     SECTION("Integer type selection")
     {
-        SECTION("int32 to uint32")
+        auto test = [](const std::string& text, auto result)
         {
-            std::ostringstream ss;
-            ss << static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + 1;
-            auto result = OpenCL::Lexer::tokenize(ss.str());
-            REQUIRE_FALSE(result.empty());
-            CHECK(result.size() == 1);
-            REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<std::uint32_t>(result[0].getValue()));
-            CHECK(std::get<std::uint32_t>(result[0].getValue()) ==
-                static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()) + 1);
-        }
-        SECTION("uint32 to int64")
-        {
-            std::ostringstream ss;
-            ss << static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1;
-            auto result = OpenCL::Lexer::tokenize(ss.str());
-            REQUIRE_FALSE(result.empty());
-            CHECK(result.size() == 1);
-            REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<std::int64_t>(result[0].getValue()));
-            CHECK(std::get<std::int64_t>(result[0].getValue()) ==
-                static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1);
-        }
+            using ResultingType = std::decay_t<decltype(result)>;
+            DYNAMIC_SECTION(text)
+            {
+                std::ostringstream ss(text);
+                auto tokens = OpenCL::Lexer::tokenize(ss.str());
+                REQUIRE_FALSE(tokens.empty());
+                CHECK(tokens.size() == 1);
+                REQUIRE(tokens[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<ResultingType>(tokens[0].getValue()));
+                CHECK(std::get<ResultingType>(tokens[0].getValue()) == result);
+            }
+        };
+        test("5", std::int32_t(5));
+        auto overUInt32 = static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max()) * 2 + 6;
+        test(std::to_string(overUInt32), std::int64_t(overUInt32));
+        test("0x5", std::int32_t(5));
+        test("0xFFFFFFFF", std::uint32_t(0xFFFFFFFF));
+        test(dynamic_cast<std::stringstream&>(std::stringstream{} << "0x" << std::hex << overUInt32).str(), overUInt32);
+        auto overInt64 = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 6;
+        test(dynamic_cast<std::stringstream&>(std::stringstream{} << "0x" << std::hex << overInt64).str(),
+             std::uint64_t(overInt64));
     }
     SECTION("Long longs")
     {
@@ -218,12 +220,20 @@ TEST_CASE("Number Literals", "[lexer]")
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::int64_t>(result[0].getValue()));
         CHECK(std::get<std::int64_t>(result[0].getValue()) == 534534);
+
         result = OpenCL::Lexer::tokenize("534534LL");
         REQUIRE_FALSE(result.empty());
         CHECK(result.size() == 1);
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::int64_t>(result[0].getValue()));
         CHECK(std::get<std::int64_t>(result[0].getValue()) == 534534);
+
+        result = OpenCL::Lexer::tokenize("534534uLL");
+        REQUIRE_FALSE(result.empty());
+        CHECK(result.size() == 1);
+        REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::uint64_t>(result[0].getValue()));
+        CHECK(std::get<std::uint64_t>(result[0].getValue()) == 534534);
 
         CHECK_THROWS(OpenCL::Lexer::tokenize("534534lL"));
         CHECK_THROWS(OpenCL::Lexer::tokenize("534534Ll"));
@@ -265,6 +275,14 @@ TEST_CASE("AmbiguousOperators", "[lexer]")
     CHECK(result.at(27).getTokenType() == OpenCL::Lexer::TokenType::BitXorAssign);
     CHECK(result.at(28).getTokenType() == OpenCL::Lexer::TokenType::ShiftLeftAssign);
     CHECK(result.at(29).getTokenType() == OpenCL::Lexer::TokenType::ShiftRightAssign);
+    result = OpenCL::Lexer::tokenize("=>");
+    REQUIRE(result.size() == 2);
+    CHECK(result[0].getTokenType() == OpenCL::Lexer::TokenType::Assignment);
+    CHECK(result[1].getTokenType() == OpenCL::Lexer::TokenType::GreaterThan);
+    result = OpenCL::Lexer::tokenize("&&=");
+    REQUIRE(result.size() == 2);
+    CHECK(result[0].getTokenType() == OpenCL::Lexer::TokenType::LogicAnd);
+    CHECK(result[1].getTokenType() == OpenCL::Lexer::TokenType::Assignment);
 }
 
 TEST_CASE("Comments", "[lexer]")
@@ -336,7 +354,8 @@ TEST_CASE("Character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\x070');
     }
-    CHECK_THROWS(OpenCL::Lexer::tokenize("'\'\n"));
+    CHECK_THROWS_WITH(OpenCL::Lexer::tokenize("'\n'"),
+                      Catch::Contains("Newline in character literal, use \\n instead"));
 }
 
 TEST_CASE("String literals", "[lexer]")
@@ -357,7 +376,7 @@ TEST_CASE("String literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
     }
-    CHECK_THROWS(OpenCL::Lexer::tokenize("\"\n"));
+    CHECK_THROWS_WITH(OpenCL::Lexer::tokenize("\"\n\""), "Newline in string literal, use \\n instead");
 }
 
 TEST_CASE("Positions", "[lexer]")

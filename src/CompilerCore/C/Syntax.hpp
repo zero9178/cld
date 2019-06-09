@@ -91,8 +91,6 @@ namespace OpenCL::Syntax
 
     class Declaration;
 
-    class ForDeclarationStatement;
-
     class HeadWhileStatement;
 
     class FootWhileStatement;
@@ -956,7 +954,7 @@ namespace OpenCL::Syntax
      *               | <JumpStatement>
      */
     using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-                                   ForDeclarationStatement, HeadWhileStatement, FootWhileStatement, BreakStatement,
+                                   HeadWhileStatement, FootWhileStatement, BreakStatement,
                                    ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement, GotoStatement,
                                    LabelStatement>;
 
@@ -1072,32 +1070,6 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> [<Expression>] <TokenType::SemiColon>
-     *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParenthese> <Statement>
-     */
-    class ForStatement final : public Node
-    {
-        std::unique_ptr<Statement> m_statement;
-        std::unique_ptr<Expression> m_initial;
-        std::unique_ptr<Expression> m_controlling;
-        std::unique_ptr<Expression> m_post;
-
-    public:
-        ForStatement(std::vector<Lexer::Token>::const_iterator begin,
-                     std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<Statement>&& statement,
-                     std::unique_ptr<Expression>&& initial = nullptr,
-                     std::unique_ptr<Expression>&& controlling = nullptr, std::unique_ptr<Expression>&& post = nullptr);
-
-        const Statement& getStatement() const;
-
-        const Expression* getInitial() const;
-
-        const Expression* getControlling() const;
-
-        const Expression* getPost() const;
-    };
-
-    /**
      * <StorageClassSpecifiers> ::= <TokenType::TypedefKeyword>
      *                            | <TokenType::ExternKeyword>
      *                            | <TokenType::StaticKeyword>
@@ -1170,26 +1142,27 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <ForDeclarationStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <Declaration>
-     * [<Expression>] <TokenType::SemiColon>  [<Expression>] <TokenType::CloseParenthese>
-     * <Statement>
+     * <ExpressionOrDeclaration> ::= <Declaration> | [<Expression>] <TokenType::SemiColon>
+     *
+     * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <ExpressionOrDeclaration>
+     *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParenthese> <Statement>
      */
-    class ForDeclarationStatement final : public Node
+    class ForStatement final : public Node
     {
         std::unique_ptr<Statement> m_statement;
-        Declaration m_initial;
+        std::variant<Declaration, std::unique_ptr<Expression>> m_initial;
         std::unique_ptr<Expression> m_controlling;
         std::unique_ptr<Expression> m_post;
 
     public:
-        ForDeclarationStatement(std::vector<Lexer::Token>::const_iterator begin,
-                                std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<Statement>&& statement,
-                                Declaration&& initial, std::unique_ptr<Expression>&& controlling = nullptr,
-                                std::unique_ptr<Expression>&& post = nullptr);
+        ForStatement(std::vector<Lexer::Token>::const_iterator begin,
+                     std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<Statement>&& statement,
+                     std::variant<Declaration, std::unique_ptr<Expression>>&& initial,
+                     std::unique_ptr<Expression>&& controlling, std::unique_ptr<Expression>&& post);
 
         const Statement& getStatement() const;
 
-        const Declaration& getInitial() const;
+        const std::variant<Declaration, std::unique_ptr<Expression>>& getInitial() const;
 
         const Expression* getControlling() const;
 
@@ -1441,7 +1414,7 @@ namespace OpenCL::Syntax
 
         DirectDeclaratorIdentifier(std::vector<Lexer::Token>::const_iterator begin,
                                    std::vector<Lexer::Token>::const_iterator end,
-                                   const std::string& identifier);
+                                   std::string identifier);
 
         const std::string& getIdentifier() const;
     };

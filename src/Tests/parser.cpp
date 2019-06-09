@@ -1,6 +1,7 @@
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 #include <sstream>
+#include <termcolor.hpp>
 #include "catch.hpp"
 
 TEST_CASE("Declaration parsing", "[parser]")
@@ -105,12 +106,9 @@ namespace
     };
 }
 
-TEST_CASE("External definitions", "[parser]")
+TEST_CASE("Global Declarations", "[parser]")
 {
     sourceProducesError("i;",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
-                            && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProducesError("i{}",
                         Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
                             && ProducesNErrors(1) && ProducesNoNotes());
     sourceProducesError("int i",
@@ -118,5 +116,13 @@ TEST_CASE("External definitions", "[parser]")
                             && ProducesNErrors(1) && ProducesNoNotes());
     sourceProducesError("int i ft",
                         Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args(";", "ft"))
+                            && ProducesNErrors(1) && ProducesNoNotes());
+}
+
+TEST_CASE("Function definitions", "[parser]")
+{
+
+    sourceProducesError("i{}",
+                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
                             && ProducesNErrors(1) && ProducesNoNotes());
 }

@@ -50,7 +50,6 @@ namespace
                                   findEOL(begin, end),
                                   Modifier{curr, curr + 1, Modifier::PointAtBeginning}});
             }
-            curr++;
             return false;
         }
         else
@@ -77,7 +76,7 @@ namespace
 
     //firstIsInTranslationUnit not needed
 
-    //firstIsInExternalDeclaration not needed
+    bool firstIsInExternalDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
 
     bool firstIsInFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context);
 
@@ -152,6 +151,11 @@ namespace
     bool firstIsInPostFixExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
 
     bool firstIsInPrimaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
+
+    bool firstIsInExternalDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context)
+    {
+        return firstIsInDeclaration(token, context) || firstIsInFunctionDefinition(token, context);
+    }
 
     bool firstIsInFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context)
     {
@@ -301,7 +305,7 @@ namespace
             || token.getTokenType() == TokenType::DefaultKeyword || token.getTokenType() == TokenType::Identifier
             || token.getTokenType() == TokenType::DoKeyword || token.getTokenType() == TokenType::WhileKeyword
             || token.getTokenType() == TokenType::ReturnKeyword || token.getTokenType() == TokenType::GotoKeyword
-            || firstIsInExpression(token, context);
+            || token.getTokenType() == TokenType::SemiColon || firstIsInExpression(token, context);
     }
 
     bool firstIsInExpression(const Token& token, const OpenCL::Parser::ParsingContext& context)
@@ -399,80 +403,6 @@ namespace
             || token.getTokenType() == TokenType::Literal || token.getTokenType() == TokenType::StringLiteral;
     }
 
-    bool followsFunctionDefinition(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsDeclarationSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsSpecifierQualifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsDirectDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsParameterTypeList(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsDirectAbstractDeclarator(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsParameterList(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsPointer(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsStructOrUnionSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsEnumSpecifier(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsEnumDeclaration(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsCompoundStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsCompoundItem(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsInitializer(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsInitializerList(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsStatement(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsAssignmentExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsConditionalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsLogicalOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsLogicalAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsBitOrExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsBitXorExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsBitAndExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsEqualityExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsRelationalExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsShiftExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsAdditiveExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsTerm(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsTypeName(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsCastExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsUnaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsPostFixExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
-    bool followsPrimaryExpression(const Token& token, const OpenCL::Parser::ParsingContext& context);
-
     bool isPostFixOperator(const Token& token)
     {
         switch (token.getTokenType())
@@ -489,6 +419,29 @@ namespace
         }
         return false;
     }
+
+    std::vector<Syntax::DeclarationSpecifier> parseDeclarationSpecifierList(OpenCL::Parser::Tokens::const_iterator& begin,
+                                                                            OpenCL::Parser::Tokens::const_iterator end,
+                                                                            OpenCL::Parser::ParsingContext& context)
+    {
+        bool seenTypeSpecifier = false;
+        std::vector<DeclarationSpecifier> declarationSpecifiers;
+        while (begin < end && firstIsInDeclarationSpecifier(*begin, context)
+            && (begin->getTokenType() != TokenType::Identifier || !seenTypeSpecifier))
+        {
+            auto result = parseDeclarationSpecifier(begin, end, context);
+            if (!result)
+            {
+                return {};
+            }
+            if (!seenTypeSpecifier && std::holds_alternative<Syntax::TypeSpecifier>(*result))
+            {
+                seenTypeSpecifier = true;
+            }
+            declarationSpecifiers.push_back(std::move(*result));
+        }
+        return declarationSpecifiers;
+    }
 } // namespace
 
 OpenCL::Syntax::TranslationUnit
@@ -496,12 +449,19 @@ OpenCL::Parser::parseTranslationUnit(Tokens::const_iterator& begin, Tokens::cons
                                      ParsingContext& context)
 {
     std::vector<ExternalDeclaration> global;
-    while (begin != end)
+    while (begin < end)
     {
         auto result = parseExternalDeclaration(begin, end, context);
         if (result)
         {
             global.push_back(std::move(*result));
+        }
+        else
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExternalDeclaration(token, context);
+            });
         }
     }
     return TranslationUnit(std::move(global));
@@ -549,16 +509,9 @@ std::optional<Syntax::Declaration>
 OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context)
 {
     auto start = begin;
-    std::vector<DeclarationSpecifier> declarationSpecifiers;
-    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
-    {
-        auto result = parseDeclarationSpecifier(begin, end, context);
-        if (!result)
-        {
-            return {};
-        }
-        declarationSpecifiers.push_back(std::move(*result));
-    }
+
+    std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
+
     if (declarationSpecifiers.empty())
     {
         context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER, start, findSemicolonOrEOL(start, end),
@@ -1451,16 +1404,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
         {
             break;
         }
-        std::vector<DeclarationSpecifier> declarationSpecifiers;
-        while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
-        {
-            auto result = parseDeclarationSpecifier(begin, end, context);
-            if (!result)
-            {
-                return {};
-            }
-            declarationSpecifiers.push_back(std::move(*result));
-        }
+        std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
         if (declarationSpecifiers.empty())
         {
             begin = before;
@@ -1870,16 +1814,7 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
                                         ParsingContext& context)
 {
     auto start = begin;
-    std::vector<DeclarationSpecifier> declarationSpecifiers;
-    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
-    {
-        auto result = parseDeclarationSpecifier(begin, end, context);
-        if (!result)
-        {
-            return {};
-        }
-        declarationSpecifiers.push_back(std::move(*result));
-    }
+    std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
     if (declarationSpecifiers.empty())
     {
         context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER});
@@ -2244,58 +2179,22 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         {
         case TokenType::ReturnKeyword:
         {
-            begin++;
-            auto expression = parseExpression(begin, end, context);
-            if (!expression)
-            {
-                return {};
-            }
-            return Statement{ReturnStatement(start, begin, std::move(*expression))};
+            auto ret = parseReturnStatement(begin, end, context);
+            return ret ? Statement(std::move(*ret)) : std::optional<Statement>{};
         }
         case TokenType::IfKeyword:
         {
-            begin++;
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::OpenParenthese)
+            auto ifStat = parseIfStatement(begin, end, context);
+            return ifStat ? Statement(std::move(*ifStat)) : std::optional<Statement>{};
+        }
+        case TokenType::SwitchKeyword:
+        {
+            auto switchStat = parseSwitchStatement(begin, end, context);
+            if (switchStat)
             {
-                context.logError({"Expected ( after if"});
+                return Statement(std::move(*switchStat));
             }
-            auto expression = parseExpression(begin, end, context);
-            if (!expression)
-            {
-                return {};
-            }
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::CloseParenthese)
-            {
-                context.logError({"Expected ) at the end of if statement"});
-                return {};
-            }
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            curentToken = *begin;
-            if (begin != end && curentToken.getTokenType() == TokenType::ElseKeyword)
-            {
-                begin++;
-                auto elseStatement = parseStatement(begin, end, context);
-                if (!elseStatement)
-                {
-                    return statement;
-                }
-                return Statement{IfStatement(start, begin, std::move(*expression),
-                                             std::make_unique<Statement>(std::move(*statement)),
-                                             std::make_unique<Statement>(std::move(*elseStatement)))};
-            }
-            else
-            {
-                return Statement{IfStatement(start, begin, std::move(*expression),
-                                             std::make_unique<Statement>(std::move(*statement)))};
-            }
+            return {};
         }
         case TokenType::OpenBrace:
         {
@@ -2308,89 +2207,13 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         }
         case TokenType::ForKeyword:
         {
-            begin++;
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::OpenParenthese)
+            auto forStat = parseForStatement(begin, end, context);
+            if (!forStat)
             {
-                context.logError({"Expected ( after for"});
+                //TODO:Error
                 return {};
             }
-            auto blockitem = parseCompoundItem(begin, end, context);
-            if (!blockitem)
-            {
-                return {};
-            }
-
-            std::unique_ptr<Expression> control;
-            {
-                if (std::holds_alternative<Declaration>(*blockitem)
-                    || begin->getTokenType() != TokenType::SemiColon)
-                {
-                    auto expression = parseExpression(begin, end, context);
-                    if (!expression)
-                    {
-                        return {};
-                    }
-                    if (begin == end || begin->getTokenType() != TokenType::SemiColon)
-                    {
-                        context.logError({"Expected ; after control part of for loop header"});
-                    }
-                    begin++;
-                    control = std::make_unique<Expression>(std::move(*expression));
-                }
-                else
-                {
-                    begin++;
-                }
-            }
-
-            std::unique_ptr<Expression> post;
-            {
-                if (begin->getTokenType() != TokenType::CloseParenthese)
-                {
-                    auto expression = parseExpression(begin, end, context);
-                    if (!expression)
-                    {
-                        return {};
-                    }
-                    if (begin == end || begin->getTokenType() != TokenType::CloseParenthese)
-                    {
-                        context.logError({"Expected ) after control part of for loop header"});
-                    }
-                    begin++;
-                    post = std::make_unique<Expression>(std::move(*expression));
-                }
-                else
-                {
-                    begin++;
-                }
-            }
-
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            if (auto declaration = std::get_if<Declaration>(&*blockitem))
-            {
-                return Statement(
-                    ForDeclarationStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
-                                            std::move(*declaration), std::move(control), std::move(post)));
-            }
-            else if (auto expressionStatement = std::get_if<ExpressionStatement>(
-                &std::get<Statement>(*blockitem)))
-            {
-                return Statement(
-                    ForStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
-                                 expressionStatement->moveOptionalExpression(), std::move(control),
-                                 std::move(post)));
-            }
-            else
-            {
-                context.logError({"Invalid expression or declaration for initial part of for loop header"});
-                return {};
-            }
+            return Statement(std::move(*forStat));
         }
         case TokenType::WhileKeyword:
         {
@@ -2463,34 +2286,6 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         {
             begin++;
             return Statement(ContinueStatement(start, begin));
-        }
-        case TokenType::SwitchKeyword:
-        {
-            begin++;
-            curentToken = *begin;
-            if (curentToken.getTokenType() != TokenType::OpenParenthese)
-            {
-                context.logError({"Expected ( after switch keyword"});
-            }
-            begin++;
-            auto expression = parseExpression(begin, end, context);
-            if (!expression)
-            {
-                return {};
-            }
-            curentToken = *begin;
-            if (curentToken.getTokenType() != TokenType::CloseParenthese)
-            {
-                context.logError({"Expected ) after expression in switch "});
-            }
-            begin++;
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            return Statement(SwitchStatement(start, begin, std::move(*expression),
-                                             std::make_unique<Statement>(std::move(*statement))));
         }
         case TokenType::DefaultKeyword:
         {
@@ -2602,6 +2397,231 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         begin++;
     }
     return result;
+}
+
+std::optional<ReturnStatement> OpenCL::Parser::parseReturnStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                                                    std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                    OpenCL::Parser::ParsingContext& context)
+{
+    auto start = begin;
+    if (begin >= end || begin->getTokenType() != TokenType::ReturnKeyword)
+    {
+        //TODO:Error
+        return {};
+    }
+    begin++;
+    auto expression = parseExpression(begin, end, context);
+    if (!expression)
+    {
+        return {};
+    }
+    return ReturnStatement(start, begin, std::move(*expression));
+}
+
+std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                                            std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                            OpenCL::Parser::ParsingContext& context)
+{
+    auto start = begin;
+    if (begin >= end || begin->getTokenType() != TokenType::IfKeyword)
+    {
+        //TODO:Error
+        return {};
+    }
+    begin++;
+    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    {
+        context.logError({"Expected ( after if"});
+    }
+    auto expression = parseExpression(begin, end, context);
+    if (!expression)
+    {
+        return {};
+    }
+    if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+    {
+        context.logError({"Expected ) at the end of if statement"});
+        return {};
+    }
+    auto statement = parseStatement(begin, end, context);
+    if (!statement)
+    {
+        return {};
+    }
+    if (begin < end && begin->getTokenType() == TokenType::ElseKeyword)
+    {
+        begin++;
+        auto elseStatement = parseStatement(begin, end, context);
+        if (!elseStatement)
+        {
+            return {};
+        }
+        return IfStatement(start, begin, std::move(*expression),
+                           std::make_unique<Statement>(std::move(*statement)),
+                           std::make_unique<Statement>(std::move(*elseStatement)));
+    }
+    else
+    {
+        return IfStatement(start, begin, std::move(*expression),
+                           std::make_unique<Statement>(std::move(*statement)));
+    }
+}
+
+std::optional<Syntax::SwitchStatement> OpenCL::Parser::parseSwitchStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                                                            std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                            OpenCL::Parser::ParsingContext& context)
+{
+    auto start = begin;
+    if (begin >= end || begin->getTokenType() != TokenType::SwitchKeyword)
+    {
+        //TODO: Error
+        return {};
+    }
+    begin++;
+    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    {
+        context.logError({"Expected ( after switch keyword"});
+    }
+    begin++;
+    auto expression = parseExpression(begin, end, context);
+    if (!expression)
+    {
+        return {};
+    }
+    if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+    {
+        context.logError({"Expected ) after expression in switch "});
+    }
+    begin++;
+    auto statement = parseStatement(begin, end, context);
+    if (!statement)
+    {
+        return {};
+    }
+    return SwitchStatement(start, begin, std::move(*expression),
+                           std::make_unique<Statement>(std::move(*statement)));
+}
+
+std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                      OpenCL::Parser::ParsingContext& context)
+{
+    auto start = begin;
+    if (begin >= end || begin->getTokenType() != TokenType::ForKeyword)
+    {
+        //TODO:Error
+        return {};
+    }
+    begin++;
+    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    {
+        //TODO:Error
+        return {};
+    }
+    begin++;
+    if (begin >= end)
+    {
+        //TODO:Error
+        return {};
+    }
+    std::variant<Declaration, std::unique_ptr<Expression>> initial{nullptr};
+    if (firstIsInDeclaration(*begin, context))
+    {
+        auto decl = parseDeclaration(begin, end, context);
+        if (!decl)
+        {
+            //TODO:Error
+            return {};
+        }
+        initial = std::move(*decl);
+    }
+    else if (begin->getTokenType() != TokenType::SemiColon)
+    {
+        auto exp = parseExpression(begin, end, context);
+        if (!exp)
+        {
+            //TODO:Error
+            return {};
+        }
+        if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
+        {
+            //TODO:Error
+            return {};
+        }
+        begin++;
+        initial = std::make_unique<Expression>(std::move(*exp));
+    }
+    else
+    {
+        begin++;
+    }
+
+    std::unique_ptr<Expression> controlling;
+    if (begin >= end)
+    {
+        //TODO:Error
+        return {};
+    }
+    else if (begin->getTokenType() != TokenType::SemiColon)
+    {
+        auto exp = parseExpression(begin, end, context);
+        if (!exp)
+        {
+            //TODO:Error
+            return {};
+        }
+        if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
+        {
+            //TODO:Error
+            return {};
+        }
+        begin++;
+        controlling = std::make_unique<Expression>(std::move(*exp));
+    }
+    else
+    {
+        begin++;
+    }
+
+    std::unique_ptr<Expression> post;
+    if (begin >= end)
+    {
+        //TODO:Error
+        return {};
+    }
+    else if (begin->getTokenType() != TokenType::CloseParenthese)
+    {
+        auto exp = parseExpression(begin, end, context);
+        if (!exp)
+        {
+            //TODO:Error
+            return {};
+        }
+        if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+        {
+            //TODO:Error
+            return {};
+        }
+        begin++;
+        post = std::make_unique<Expression>(std::move(*exp));
+    }
+    else
+    {
+        begin++;
+    }
+
+    auto stat = parseStatement(begin, end, context);
+    if (!stat)
+    {
+        //TODO:Error
+        return {};
+    }
+    return ForStatement(start,
+                        begin,
+                        std::make_unique<Statement>(std::move(*stat)),
+                        std::move(initial),
+                        std::move(controlling),
+                        std::move(post));
 }
 
 std::optional<Expression> OpenCL::Parser::parseExpression(Tokens::const_iterator& begin,

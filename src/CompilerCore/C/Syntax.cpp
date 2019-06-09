@@ -414,7 +414,7 @@ const std::vector<OpenCL::Syntax::CompoundItem>& OpenCL::Syntax::CompoundStateme
 OpenCL::Syntax::ForStatement::ForStatement(std::vector<Lexer::Token>::const_iterator begin,
                                            std::vector<Lexer::Token>::const_iterator end,
                                            std::unique_ptr<Statement>&& statement,
-                                           std::unique_ptr<Expression>&& initial,
+                                           std::variant<Declaration, std::unique_ptr<Expression>>&& initial,
                                            std::unique_ptr<Expression>&& controlling,
                                            std::unique_ptr<Expression>&& post)
     : Node(begin, end),
@@ -426,9 +426,10 @@ OpenCL::Syntax::ForStatement::ForStatement(std::vector<Lexer::Token>::const_iter
     assert(m_statement);
 }
 
-const OpenCL::Syntax::Expression* OpenCL::Syntax::ForStatement::getInitial() const
+const std::variant<OpenCL::Syntax::Declaration,
+                   std::unique_ptr<OpenCL::Syntax::Expression>>& OpenCL::Syntax::ForStatement::getInitial() const
 {
-    return m_initial.get();
+    return m_initial;
 }
 
 const OpenCL::Syntax::Expression* OpenCL::Syntax::ForStatement::getControlling() const
@@ -437,36 +438,6 @@ const OpenCL::Syntax::Expression* OpenCL::Syntax::ForStatement::getControlling()
 }
 
 const OpenCL::Syntax::Expression* OpenCL::Syntax::ForStatement::getPost() const
-{
-    return m_post.get();
-}
-
-OpenCL::Syntax::ForDeclarationStatement::ForDeclarationStatement(std::vector<Lexer::Token>::const_iterator begin,
-                                                                 std::vector<Lexer::Token>::const_iterator end,
-                                                                 std::unique_ptr<Statement>&& statement,
-                                                                 Declaration&& initial,
-                                                                 std::unique_ptr<Expression>&& controlling,
-                                                                 std::unique_ptr<Expression>&& post)
-    : Node(begin, end),
-      m_statement(std::move(statement)),
-      m_initial(std::move(initial)),
-      m_controlling(std::move(controlling)),
-      m_post(std::move(post))
-{
-    assert(m_statement);
-}
-
-const OpenCL::Syntax::Declaration& OpenCL::Syntax::ForDeclarationStatement::getInitial() const
-{
-    return m_initial;
-}
-
-const OpenCL::Syntax::Expression* OpenCL::Syntax::ForDeclarationStatement::getControlling() const
-{
-    return m_controlling.get();
-}
-
-const OpenCL::Syntax::Expression* OpenCL::Syntax::ForDeclarationStatement::getPost() const
 {
     return m_post.get();
 }
@@ -630,11 +601,6 @@ OpenCL::Syntax::ConditionalExpression::getOptionalConditionalExpression() const
 }
 
 const OpenCL::Syntax::Statement& OpenCL::Syntax::ForStatement::getStatement() const
-{
-    return *m_statement;
-}
-
-const OpenCL::Syntax::Statement& OpenCL::Syntax::ForDeclarationStatement::getStatement() const
 {
     return *m_statement;
 }
@@ -1283,8 +1249,8 @@ OpenCL::Syntax::FunctionSpecifier::FunctionSpecifier(const std::vector<OpenCL::L
 
 OpenCL::Syntax::DirectDeclaratorIdentifier::DirectDeclaratorIdentifier(std::vector<Lexer::Token>::const_iterator begin,
                                                                        std::vector<Lexer::Token>::const_iterator end,
-                                                                       const std::string& identifier)
-    : Node(begin, end), m_identifier(identifier)
+                                                                       std::string identifier)
+    : Node(begin, end), m_identifier(std::move(identifier))
 {}
 
 const std::string& OpenCL::Syntax::DirectDeclaratorIdentifier::getIdentifier() const

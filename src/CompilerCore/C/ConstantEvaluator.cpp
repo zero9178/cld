@@ -1,6 +1,7 @@
 #include "ConstantEvaluator.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace
 {
