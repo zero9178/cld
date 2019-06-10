@@ -20,7 +20,7 @@ TEST_CASE("Declaration parsing", "[parser]")
 namespace
 {
     template <class Matcher>
-    void sourceProducesError(const std::string& source, const Matcher& matches)
+    void sourceProduces(const std::string& source, const Matcher& matches)
     {
         DYNAMIC_SECTION(source)
         {
@@ -108,21 +108,23 @@ namespace
 
 TEST_CASE("Global Declarations", "[parser]")
 {
-    sourceProducesError("i;",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
-                            && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProducesError("int i",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args(";"))
-                            && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProducesError("int i ft",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args(";", "ft"))
-                            && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("i;",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args(";"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i ft",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args(";", "ft"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("typedef int aa;"
+                   "aa aa;", ProducesNoErrors());
 }
 
 TEST_CASE("Function definitions", "[parser]")
 {
 
-    sourceProducesError("i{}",
-                        Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
-                            && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("i{}",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                       && ProducesNErrors(1) && ProducesNoNotes());
 }

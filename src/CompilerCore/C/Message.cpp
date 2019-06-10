@@ -47,9 +47,10 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
             auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
                 - modifierBegin->getColumn();
             os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << termcolor::red
-               << text.substr(modifierBegin->getColumn() - curr->getColumn(),
-                              modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
-               << normalColour << (highlightedEOL != next ? text.substr(highlightedEOL->getColumn()) : "") << '\n';
+               << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
+               << normalColour << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
+               << '\n';
+
             os << normalColour << std::string(numSize, ' ') << '|'
                << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
             os << termcolor::red;

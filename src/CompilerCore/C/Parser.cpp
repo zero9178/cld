@@ -517,6 +517,19 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         context.logError({ErrorMessages::MISSING_DECLARATION_SPECIFIER, start, findSemicolonOrEOL(start, end),
                           Modifier{begin, begin + 1, Modifier::PointAtBeginning}});
     }
+
+    bool isTypedef = std::any_of(declarationSpecifiers.begin(),
+                                 declarationSpecifiers.end(),
+                                 [](const DeclarationSpecifier& declarationSpecifier)
+                                 {
+                                     auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
+                                     if (!storage)
+                                     {
+                                         return false;
+                                     }
+                                     return storage->getSpecifier() == StorageClassSpecifier::Typedef;
+                                 });
+
     if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
     {
         if (begin < end)
@@ -551,7 +564,10 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         {
             return {};
         }
-        context.addToScope(Semantics::declaratorToName(*declarator));
+        if (!isTypedef)
+        {
+            context.addToScope(Semantics::declaratorToName(*declarator));
+        }
         if (begin >= end || begin->getTokenType() != TokenType::Assignment)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
@@ -570,8 +586,8 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     }
     while (true);
     expect(TokenType::SemiColon, start, begin, end, context);
-    if (auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifiers.front());
-        storage && storage->getSpecifier() == StorageClassSpecifier::Typedef)
+
+    if (isTypedef)
     {
         for (auto&[declator, init] : initDeclarators)
         {
@@ -600,6 +616,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
             context.addTypedef(std::visit(Y{visitor}, declator->getDirectDeclarator()));
         }
     }
+
     return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
@@ -1835,7 +1852,6 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
         declarations.push_back(std::move(*result));
     }
 
-    context.addToScope(Semantics::declaratorToName(*declarator));
     context.pushScope();
     if (auto* paramters =
         std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()))
@@ -1907,20 +1923,23 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
             context.addToScope(iter);
         }
     }
-    auto compoundStatement = parseCompoundStatement(begin, end, context);
+    auto compoundStatement = parseCompoundStatement(begin, end, context, false);
     context.popScope();
     if (!compoundStatement)
     {
         return {};
     }
 
+    context.addToScope(Semantics::declaratorToName(*declarator));
     return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
                               std::move(declarations), std::move(*compoundStatement));
 }
 
 std::optional<CompoundStatement>
-OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                       OpenCL::Parser::ParsingContext& context)
+OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
+                                       Tokens::const_iterator end,
+                                       OpenCL::Parser::ParsingContext& context,
+                                       bool pushScope)
 {
     auto start = begin;
     if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
@@ -1932,17 +1951,27 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
         begin++;
     }
     std::vector<CompoundItem> items;
-    context.pushScope();
+    if (pushScope)
+    {
+        context.pushScope();
+    }
     while (begin < end && begin->getTokenType() != TokenType::CloseBrace)
     {
         auto result = parseCompoundItem(begin, end, context);
         if (!result)
         {
+            if (pushScope)
+            {
+                context.popScope();
+            }
             return {};
         }
         items.push_back(std::move(*result));
     }
-    context.popScope();
+    if (pushScope)
+    {
+        context.popScope();
+    }
     if (begin >= end || begin->getTokenType() != TokenType::CloseBrace)
     {
         context.logError({"Expected } at end of Compound Statement"});
@@ -3652,7 +3681,6 @@ Parser::ParsingContext::Branch::~Branch()
                                                {
                                                    return std::tuple(std::numeric_limits<std::size_t>::max()
                                                                          - lhs->m_errors.size(),
-                                                                     std::distance(lhs->m_begin, lhs->m_curr),
                                                                      [lhs, rhs]() -> bool
                                                                      {
                                                                          for (auto& iter : lhs->context.m_branches
@@ -3672,7 +3700,6 @@ Parser::ParsingContext::Branch::~Branch()
                                                        < std::tuple(
                                                            std::numeric_limits<std::size_t>::max()
                                                                - rhs->m_errors.size(),
-                                                           std::distance(rhs->m_begin, rhs->m_curr),
                                                            false);
                                                });
             context.m_branches.back().first.clear();

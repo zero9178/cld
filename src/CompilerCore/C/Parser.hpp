@@ -157,7 +157,10 @@ namespace OpenCL::Parser
     parseEnumDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
 
     std::optional<Syntax::CompoundStatement>
-    parseCompoundStatement(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
+                           Tokens::const_iterator end,
+                           OpenCL::Parser::ParsingContext& context,
+                           bool pushScope = true);
 
     std::optional<Syntax::CompoundItem>
     parseCompoundItem(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
