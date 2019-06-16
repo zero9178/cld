@@ -39,14 +39,16 @@ namespace
         {
             if (curr >= end)
             {
-                context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N.args(Token(0, 0, 0, expected).emitBack()),
+                context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N
+                                      .args('\'' + Token(0, 0, 0, expected).emitBack() + '\''),
                                   begin, findEOL(begin, end),
                                   Modifier{end - 1, end, Modifier::PointAtEnd}});
             }
             else
             {
                 context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
-                                      .args(Token(0, 0, 0, expected).emitBack(), curr->emitBack()), begin,
+                                      .args('\'' + Token(0, 0, 0, expected).emitBack() + '\'', '\'' + curr->emitBack())
+                                      + '\'', begin,
                                   findEOL(begin, end),
                                   Modifier{curr, curr + 1, Modifier::PointAtBeginning}});
             }
@@ -475,7 +477,19 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
     //backtracking
     return context.doBacktracking([&]() -> std::optional<Syntax::ExternalDeclaration>
                                   {
-                                      auto functionBranch = context.createBranch(begin);
+                                      auto functionBranch = context.createBranch(begin,
+                                                                                 [](Tokens::const_iterator begin,
+                                                                                    Tokens::const_iterator end)
+                                                                                 {
+                                                                                     return std::any_of(begin,
+                                                                                                        end,
+                                                                                                        [](const Token& token)
+                                                                                                        {
+                                                                                                            return token
+                                                                                                                .getTokenType()
+                                                                                                                == TokenType::OpenBrace;
+                                                                                                        });
+                                                                                 });
                                       auto function = parseFunctionDefinition(functionBranch->getCurrent(),
                                                                               end,
                                                                               context);
@@ -495,13 +509,6 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                       {
                                           return {};
                                       }
-                                  }, [](Tokens::const_iterator begin, Tokens::const_iterator end) -> bool
-                                  {
-                                      return std::any_of(begin, end, [](const Token& token)
-                                      {
-                                          return token.getTokenType() == TokenType::OpenParenthese
-                                              || token.getTokenType() == TokenType::CloseParenthese;
-                                      });
                                   });
 }
 
@@ -538,7 +545,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
         else
         {
-            context.logError({ErrorMessages::EXPECTED_N.args(';'), start, findSemicolonOrEOL(start, end),
+            context.logError({ErrorMessages::EXPECTED_N.args("';'"), start, findSemicolonOrEOL(start, end),
                               Modifier{end - 1, end, Modifier::PointAtEnd}});
         }
         return Declaration(start, begin, std::move(declarationSpecifiers), {});
@@ -562,7 +569,15 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         auto declarator = parseDeclarator(begin, end, context);
         if (!declarator)
         {
-            return {};
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::Comma || token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+            continue;
         }
         if (!isTypedef)
         {
@@ -1039,10 +1054,6 @@ std::optional<OpenCL::Syntax::Declarator>
 OpenCL::Parser::parseDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                 OpenCL::Parser::ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     auto start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == TokenType::Asterisk)
@@ -1358,7 +1369,17 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
     }
     if (!directDeclarator)
     {
-        context.logError({"Expected declarator"});
+        if (begin == end)
+        {
+            context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N
+                                  .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")), begin, end});
+        }
+        else
+        {
+            context.logError({OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                  .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), begin->emitBack()),
+                              begin, end});
+        }
         return {};
     }
     return std::move(*directDeclarator);
@@ -1945,6 +1966,7 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
     if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
         context.logError({"Expected { at start of Compound Statement"});
+        return {};
     }
     else
     {
@@ -1975,6 +1997,7 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
     if (begin >= end || begin->getTokenType() != TokenType::CloseBrace)
     {
         context.logError({"Expected } at end of Compound Statement"});
+        return {};
     }
     else
     {
@@ -2699,7 +2722,19 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
     auto start = begin;
     return context.doBacktracking([&]() -> std::optional<Syntax::AssignmentExpression>
                                   {
-                                      auto assignmentBranch = context.createBranch(begin);
+                                      auto assignmentBranch = context.createBranch(begin,
+                                                                                   [](Tokens::const_iterator begin,
+                                                                                      Tokens::const_iterator end)
+                                                                                   {
+                                                                                       return std::any_of(begin,
+                                                                                                          end,
+                                                                                                          [](const Token& token)
+                                                                                                          {
+                                                                                                              return isAssignment(
+                                                                                                                  token
+                                                                                                                      .getTokenType());
+                                                                                                          });
+                                                                                   });
                                       auto unary = parseUnaryExpression(assignmentBranch->getCurrent(), end, context);
                                       if (*assignmentBranch)
                                       {
@@ -3591,7 +3626,7 @@ bool Parser::ParsingContext::isTypedef(const std::string& name) const
 
 void Parser::ParsingContext::logError(const ErrorReporter& errorReporter)
 {
-    if (m_branches.empty() || (m_branches.size() == 1 && m_branches.back().first.empty()))
+    if (m_branches.empty() || (m_branches.size() == 1 && m_branches.back().empty()))
     {
         m_errorsOccured = true;
         if (m_reporter)
@@ -3599,13 +3634,13 @@ void Parser::ParsingContext::logError(const ErrorReporter& errorReporter)
             *m_reporter << errorReporter;
         }
     }
-    else if (m_branches.back().first.empty())
+    else if (m_branches.back().empty())
     {
-        m_branches[m_branches.size() - 2].first.back()->m_errors.push_back(errorReporter);
+        m_branches[m_branches.size() - 2].back()->m_errors.push_back(errorReporter);
     }
     else
     {
-        m_branches.back().first.back()->m_errors.push_back(errorReporter);
+        m_branches.back().back()->m_errors.push_back(errorReporter);
     }
 }
 
@@ -3643,15 +3678,18 @@ bool Parser::ParsingContext::isErrorsOccured() const
     return m_errorsOccured;
 }
 
-std::unique_ptr<Parser::ParsingContext::Branch> Parser::ParsingContext::createBranch(Tokens::const_iterator& begin)
+std::unique_ptr<Parser::ParsingContext::Branch> Parser::ParsingContext::createBranch(Tokens::const_iterator& begin,
+                                                                                     Branch::CriteriaFunction&& criteria)
 {
-    return std::make_unique<Branch>(*this, begin);
+    return std::make_unique<Branch>(*this, begin, std::move(criteria));
 }
 
-Parser::ParsingContext::Branch::Branch(ParsingContext& context, std::vector<Lexer::Token>::const_iterator& begin)
-    : context(context), m_begin(begin), m_curr(begin)
+Parser::ParsingContext::Branch::Branch(ParsingContext& context,
+                                       std::vector<Lexer::Token>::const_iterator& begin,
+                                       CriteriaFunction&& criteria)
+    : context(context), m_begin(begin), m_curr(begin), m_criteria(std::move(criteria))
 {
-    context.m_branches.back().first.push_back(this);
+    context.m_branches.back().push_back(this);
 }
 
 std::vector<Token>::const_iterator& Parser::ParsingContext::Branch::getCurrent()
@@ -3666,43 +3704,36 @@ Parser::ParsingContext::Branch::operator bool() const
 
 Parser::ParsingContext::Branch::~Branch()
 {
-    if (!context.m_branches.back().first.empty())
+    if (!context.m_branches.back().empty())
     {
         if (*this)
         {
             m_begin = m_curr;
-            context.m_branches.back().first.clear();
+            context.m_branches.back().clear();
         }
         else
         {
-            Branch* result = *std::max_element(context.m_branches.back().first.begin(),
-                                               context.m_branches.back().first.end(),
-                                               [](Branch* const lhs, Branch* const rhs)
-                                               {
-                                                   return std::tuple(std::numeric_limits<std::size_t>::max()
-                                                                         - lhs->m_errors.size(),
-                                                                     [lhs, rhs]() -> bool
-                                                                     {
-                                                                         for (auto& iter : lhs->context.m_branches
-                                                                                              .back().second)
-                                                                         {
-                                                                             bool leftSat = iter(lhs->m_begin,
-                                                                                                 lhs->m_curr);
-                                                                             bool rightSat = iter(rhs->m_begin,
-                                                                                                  rhs->m_curr);
-                                                                             if (leftSat != rightSat)
-                                                                             {
-                                                                                 return leftSat;
-                                                                             }
-                                                                         }
-                                                                         return false;
-                                                                     }())
-                                                       < std::tuple(
-                                                           std::numeric_limits<std::size_t>::max()
-                                                               - rhs->m_errors.size(),
-                                                           false);
-                                               });
-            context.m_branches.back().first.clear();
+            Branch* result = nullptr;
+            for (auto& iter : context.m_branches.back())
+            {
+                if (iter->m_criteria && iter->m_criteria(iter->m_begin, iter->m_curr))
+                {
+                    result = iter;
+                    break;
+                }
+            }
+            if (!result)
+            {
+                auto alternative = std::find_if(context.m_branches.back().begin(),
+                                                context.m_branches.back().end(),
+                                                [](const Branch* ptr)
+                                                {
+                                                    return !ptr->m_criteria;
+                                                });
+                result = alternative != context.m_branches.back().end() ? *alternative : context.m_branches.back()
+                                                                                                .front();
+            }
+            context.m_branches.back().clear();
             m_begin = result->m_curr;
             for (auto& iter : result->m_errors)
             {

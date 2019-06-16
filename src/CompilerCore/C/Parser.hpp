@@ -17,9 +17,9 @@ namespace OpenCL::Parser
     {
         constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename before name";
 
-        constexpr auto EXPECTED_N = Format("Expected '{}'");
+        constexpr auto EXPECTED_N = Format("Expected {}");
 
-        constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected '{}' instead of '{}'");
+        constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
 
         constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
     }
@@ -37,12 +37,17 @@ namespace OpenCL::Parser
             Tokens::const_iterator& m_begin;
             Tokens::const_iterator m_curr;
             std::vector<ErrorReporter> m_errors;
+            using CriteriaFunction = std::function<bool(std::vector<Lexer::Token>::const_iterator,
+                                                        std::vector<Lexer::Token>::const_iterator)>;
+            CriteriaFunction m_criteria;
 
             friend class ParsingContext;
 
         public:
 
-            Branch(ParsingContext& context, std::vector<Lexer::Token>::const_iterator& begin);
+            Branch(ParsingContext& context,
+                   std::vector<Lexer::Token>::const_iterator& begin,
+                   CriteriaFunction&& criteria);
 
             ~Branch();
 
@@ -51,9 +56,7 @@ namespace OpenCL::Parser
             std::vector<Lexer::Token>::const_iterator& getCurrent();
         };
 
-        using CriteriaFunctions = std::vector<std::function<bool(Tokens::const_iterator, Tokens::const_iterator)>>;
-
-        std::vector<std::pair<std::vector<Branch*>,CriteriaFunctions>> m_branches;
+        std::vector<std::vector<Branch*>> m_branches;
 
         friend class Branch;
 
@@ -89,10 +92,10 @@ namespace OpenCL::Parser
 
         bool isErrorsOccured() const;
 
-        template <class F,class...Args>
-        auto doBacktracking(F&& f,Args&&...args)
+        template <class F>
+        auto doBacktracking(F&& f)
         {
-            m_branches.push_back({{},{std::forward<Args>(args)...}});
+            m_branches.emplace_back();
             auto deleter = [this](void*)
             {
                 m_branches.pop_back();
@@ -101,7 +104,8 @@ namespace OpenCL::Parser
             return std::forward<F>(f)();
         }
 
-        std::unique_ptr<Branch> createBranch(Tokens::const_iterator& begin);
+        std::unique_ptr<Parser::ParsingContext::Branch> createBranch(Tokens::const_iterator& begin,
+                                                                     Branch::CriteriaFunction&& criteria = {});
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,

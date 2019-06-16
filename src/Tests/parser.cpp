@@ -29,7 +29,6 @@ namespace
             REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
             auto tree = OpenCL::Parser::buildTree(tokens, &ss);
             auto string = ss.str();
-            REQUIRE_FALSE(tree.second);
             CHECK_THAT(string, matches);
             OpenCL::Parser::buildTree(tokens);
         }
@@ -112,13 +111,17 @@ TEST_CASE("Global Declarations", "[parser]")
                    Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args(";"))
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i ft",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args(";", "ft"))
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("';'", "'ft'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("typedef int aa;"
-                   "aa aa;", ProducesNoErrors());
+                   "aa aa;", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int i,",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N
+                                       .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")))
+                       && ProducesNErrors(1) && ProducesNoNotes());
 }
 
 TEST_CASE("Function definitions", "[parser]")
