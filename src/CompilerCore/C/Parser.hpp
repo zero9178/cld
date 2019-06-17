@@ -4,14 +4,13 @@
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 #include "Message.hpp"
+#include "../Common/UniqueResource.hpp"
 
 #include <functional>
 
 namespace OpenCL::Parser
 {
     using Tokens = std::vector<OpenCL::Lexer::Token>;
-
-    using ErrorReporter = Message;
 
     namespace ErrorMessages
     {
@@ -30,13 +29,14 @@ namespace OpenCL::Parser
         bool m_errorsOccured = false;
         std::vector<std::set<std::string>> m_currentScope{1};
         std::vector<std::set<std::string>> m_typedefs{1};
+        std::vector<Tokens::const_iterator> m_start{};
 
         class Branch
         {
             ParsingContext& context;
             Tokens::const_iterator& m_begin;
             Tokens::const_iterator m_curr;
-            std::vector<ErrorReporter> m_errors;
+            std::vector<Message> m_errors;
             using CriteriaFunction = std::function<bool(std::vector<Lexer::Token>::const_iterator,
                                                         std::vector<Lexer::Token>::const_iterator)>;
             CriteriaFunction m_criteria;
@@ -60,6 +60,8 @@ namespace OpenCL::Parser
 
         friend class Branch;
 
+        void logImpl(Message&& error);
+
     public:
         std::map<std::string, Semantics::RecordType> structOrUnions;
 
@@ -67,7 +69,10 @@ namespace OpenCL::Parser
 
         bool isTypedef(const std::string& name) const;
 
-        void logError(const ErrorReporter& error);
+        void logError(std::string message,
+                      Tokens::const_iterator end,
+                      std::optional<Modifier> modifier = {},
+                      std::vector<Message::Note> notes = {});
 
         explicit ParsingContext(std::ostream* reporter = &std::cerr) : m_reporter(reporter)
         {}
@@ -91,6 +96,16 @@ namespace OpenCL::Parser
         void popScope();
 
         bool isErrorsOccured() const;
+
+        [[nodiscard]]
+        UniqueResource setDiagnosticStart(Tokens::const_iterator start)
+        {
+            m_start.push_back(start);
+            return UniqueResource([this]
+                                  {
+                                      m_start.pop_back();
+                                  });
+        }
 
         template <class F>
         auto doBacktracking(F&& f)

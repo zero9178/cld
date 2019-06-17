@@ -105,7 +105,9 @@ namespace OpenCL
         {
             Underline,
             PointAtBeginning,
-            PointAtEnd
+            PointAtEnd,
+            InbetweenLeftAligned,
+            InbetweenRightAligned
         };
 
     private:
@@ -155,8 +157,8 @@ namespace OpenCL
         };
 
         Message(std::string message,
-                std::vector<Lexer::Token>::const_iterator begin = {},
-                std::vector<Lexer::Token>::const_iterator end = {},
+                std::vector<Lexer::Token>::const_iterator begin,
+                std::vector<Lexer::Token>::const_iterator end,
                 std::optional<Modifier> modifier = {},
                 std::vector<Note> notes = {});
 

@@ -44,26 +44,51 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
         if (message.getModifier() && modifierBegin->getLine() == curr->getLine())
         {
             auto highlightedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
-            auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
-                - modifierBegin->getColumn();
-            os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << termcolor::red
-               << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
-               << normalColour << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
-               << '\n';
-
-            os << normalColour << std::string(numSize, ' ') << '|'
-               << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
-            os << termcolor::red;
             switch (message.getModifier()->getAction())
             {
-            case Modifier::Underline:os << std::string(highlightedSectionLength, '~');
-                break;
-            case Modifier::PointAtBeginning:os << '^' << std::string(highlightedSectionLength - 1, '~');
-                break;
-            case Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
+            case Modifier::Underline:
+            case Modifier::PointAtBeginning:
+            case Modifier::PointAtEnd:
+            {
+                auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
+                    - modifierBegin->getColumn();
+                os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << termcolor::red
+                   << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
+                   << normalColour
+                   << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
+                   << '\n';
+
+                os << normalColour << std::string(numSize, ' ') << '|'
+                   << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
+                os << termcolor::red;
+                switch (message.getModifier()->getAction())
+                {
+                case Modifier::Underline:os << std::string(highlightedSectionLength, '~');
+                    break;
+                case Modifier::PointAtBeginning:os << '^' << std::string(highlightedSectionLength - 1, '~');
+                    break;
+                case Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
+                    break;
+                default:break;
+                }
+                os << normalColour << '\n';
                 break;
             }
-            os << normalColour << '\n';
+            default:
+            {
+                auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
+                if (start >= text.size() || std::isspace(text[start]))
+                {
+                    os << text << '\n';
+                }
+                else
+                {
+                    os << text.substr(0, start)
+                       << termcolor::red << text.substr(start, (modifierBegin + 1)->getLength()) << normalColour
+                       << text.substr(start + (modifierBegin + 1)->getLength()) << '\n';
+                }
+            }
+            }
             modifierBegin = highlightedEOL;
         }
         else

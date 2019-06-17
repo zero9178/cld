@@ -122,6 +122,14 @@ TEST_CASE("Global Declarations", "[parser]")
                    Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")))
                        && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i,+=",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                       .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'+='"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i, +=",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                       .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'+='"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
 }
 
 TEST_CASE("Function definitions", "[parser]")
