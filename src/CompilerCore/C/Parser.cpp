@@ -41,7 +41,7 @@ namespace
                 context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
                                      .args('\'' + Token(0, 0, 0, expected).emitBack() + '\''),
                                  findSemicolonOrEOL(curr, end),
-                                 Modifier{end - 1, end, Modifier::PointAtEnd});
+                                 Modifier{end - 1, end, Modifier::InsertAtEnd, Token(0, 0, 0, expected).emitBack()});
             }
             else
             {
@@ -784,41 +784,60 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
 {
     if (begin >= end)
     {
-
+        return {};
     }
     auto start = begin;
-    bool isUnion;
+    bool isUnion = false;
     if (begin->getTokenType() == TokenType::StructKeyword)
     {
+        begin++;
         isUnion = false;
     }
     else if (begin->getTokenType() == TokenType::UnionKeyword)
     {
+        begin++;
         isUnion = true;
     }
     else
     {
-        context.logError({"Expected struct or union keyword at beginning of struct or union specifier"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        context.logError(ErrorMessages::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
+                         begin + 1,
+                         Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::Identifier || token.getTokenType() == TokenType::OpenBrace;
+        });
+        if (begin >= end)
+        {
+            return {};
+        }
+    }
+
+    if (begin >= end)
+    {
+        context.logError(ErrorMessages::EXPECTED_N_AFTER_N
+                             .args(Format::List(", ", " or ", "identifier", "'{'"), isUnion ? "union" : "struct"),
+                         end,
+                         Modifier(end - 1, end, Modifier::Action::InsertAtEnd));
         return {};
     }
-    begin++;
-    if (begin >= end || begin->getTokenType() != TokenType::Identifier)
+
+    auto name = begin->getTokenType() == TokenType::Identifier ? std::get<std::string>(begin->getValue()) : "";
+    if (!name.empty())
     {
-        context.logError({std::string("Expected identifier after ") + (isUnion ? "union" : "struct")},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
-        return StructOrUnionSpecifier(start, begin, isUnion, "", {});
+        begin++;
     }
-    const auto& name = std::get<std::string>(begin->getValue());
-    begin++;
-    if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
+
+    if (begin->getTokenType() != TokenType::OpenBrace)
     {
+        if (name.empty())
+        {
+            expect(TokenType::Identifier, begin, end, context);
+        }
         return StructOrUnionSpecifier(start, begin, isUnion, name, {});
     }
+
+    auto dslock = context.setDiagnosticStart(begin);
     begin++;
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     do
@@ -1435,13 +1454,14 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
             context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
                                  .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")),
                              begin,
-                             Modifier(begin - 1, end, Modifier::Action::InbetweenLeftAligned));
+                             Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
         }
         else
         {
             context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
-                                 .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), begin->emitBack()),
-                             end, Modifier(begin, end, Modifier::Action::InbetweenLeftAligned));
+                                 .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"),
+                                       '\'' + begin->emitBack() + '\''),
+                             end, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
         }
         return {};
     }

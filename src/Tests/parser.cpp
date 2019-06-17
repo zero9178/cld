@@ -116,8 +116,6 @@ TEST_CASE("Global Declarations", "[parser]")
     sourceProduces("int i ft",
                    Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("';'", "'ft'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProduces("typedef int aa;"
-                   "aa aa;", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int i,",
                    Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")))
@@ -130,6 +128,37 @@ TEST_CASE("Global Declarations", "[parser]")
                    Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'+='"))
                        && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i,,f",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                       .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "','"))
+                       && Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+                       && ProducesNErrors(2) && ProducesNoNotes());
+}
+
+TEST_CASE("Declaration Specifiers", "[paser]")
+{
+    sourceProduces("typedef int aa;"
+                   "aa aa;", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces(
+        "typedef int aa; typedef extern static auto register const restrict volatile inline void char short "
+        "int long float double signed unsigned f;", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces(
+        "struct", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_AFTER_N
+                                      .args(OpenCL::Format::List(", ", " or ", "identifier", "'{'"), "struct")) &&
+            ProducesNErrors(1) && ProducesNoNotes()
+    );
+    sourceProduces(
+        "struct;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_AFTER_N
+                                       .args(OpenCL::Format::List(", ", " or ", "identifier", "'{'"), "struct")) &&
+            ProducesNErrors(1) && ProducesNoNotes()
+    );
+    sourceProduces(
+        "struct i;", ProducesNoErrors() && ProducesNoNotes()
+    );
+    sourceProduces(
+        "struct i", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+            && ProducesNErrors(1) && ProducesNoNotes()
+    );
 }
 
 TEST_CASE("Function definitions", "[parser]")

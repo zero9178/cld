@@ -8,7 +8,8 @@ OpenCL::Message::Message(std::string message,
                          std::vector<Lexer::Token>::const_iterator end,
                          std::optional<Modifier> modifier,
                          std::vector<Note> notes)
-    : m_message(std::move(message)), m_begin(begin), m_end(end), m_modifier(modifier), m_notes(std::move(notes))
+    : m_message(std::move(message)), m_begin(begin), m_end(end), m_modifier(std::move(modifier)),
+      m_notes(std::move(notes))
 {
 
 }
@@ -76,6 +77,10 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
             }
             default:
             {
+                if (modifierBegin + 1 != highlightedEOL)
+                {
+                    throw std::runtime_error("End must be one higher than begin when using in between actions");
+                }
                 auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
                 if (start >= text.size() || std::isspace(text[start]))
                 {
@@ -86,6 +91,31 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
                     os << text.substr(0, start)
                        << termcolor::red << text.substr(start, (modifierBegin + 1)->getLength()) << normalColour
                        << text.substr(start + (modifierBegin + 1)->getLength()) << '\n';
+                }
+
+                os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << termcolor::red;
+                switch (message.getModifier()->getAction())
+                {
+                case Modifier::InsertAtEnd:os << '^';
+                    if (start < text.size() && !std::isspace(text[start]))
+                    {
+                        os << std::string(
+                            highlightedEOL->getColumn() - modifierBegin->getColumn() + modifierBegin->getLength() - 1,
+                            '~');
+                    }
+                    else if (start < text.size())
+                    {
+                        os << std::string(modifierBegin->getLength() - 1, '~');
+                    }
+                    break;
+                default:break;
+                }
+                os << normalColour << '\n';
+
+                if (!message.getModifier()->getActionArgument().empty())
+                {
+                    os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << termcolor::red
+                       << message.getModifier()->getActionArgument() << normalColour << '\n';
                 }
             }
             }
@@ -136,7 +166,8 @@ const std::optional<OpenCL::Modifier>& OpenCL::Message::getModifier() const
 
 OpenCL::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
                            std::vector<Lexer::Token>::const_iterator anEnd,
-                           OpenCL::Modifier::Action action) : m_begin(begin), m_end(anEnd), m_action(action)
+                           OpenCL::Modifier::Action action, std::string actionArgument)
+    : m_begin(begin), m_end(anEnd), m_action(action), m_actionArgument(std::move(actionArgument))
 {}
 
 const std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Modifier::getBegin() const
@@ -152,6 +183,11 @@ const std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Modifier::getAn
 OpenCL::Modifier::Action OpenCL::Modifier::getAction() const
 {
     return m_action;
+}
+
+const std::string& OpenCL::Modifier::getActionArgument() const
+{
+    return m_actionArgument;
 }
 
 std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findEOL(std::vector<OpenCL::Lexer::Token>::const_iterator begin,

@@ -18,6 +18,8 @@ namespace OpenCL::Parser
 
         constexpr auto EXPECTED_N = Format("Expected {}");
 
+        constexpr auto EXPECTED_N_AFTER_N = Format("Expected {} after {}");
+
         constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
 
         constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";

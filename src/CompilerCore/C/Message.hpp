@@ -106,25 +106,27 @@ namespace OpenCL
             Underline,
             PointAtBeginning,
             PointAtEnd,
-            InbetweenLeftAligned,
-            InbetweenRightAligned
+            InsertAtEnd
         };
 
     private:
 
         Action m_action;
+        std::string m_actionArgument;
 
     public:
 
         Modifier(std::vector<Lexer::Token>::const_iterator begin,
                  std::vector<Lexer::Token>::const_iterator anEnd,
-                 Action action);
+                 Action action, std::string actionArgument = {});
 
         const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
 
         const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
 
         Action getAction() const;
+
+        const std::string& getActionArgument() const;
     };
 
     class Message
