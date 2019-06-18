@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <stack>
+#include <utility>
 
 using namespace OpenCL;
 using namespace OpenCL::Lexer;
@@ -39,14 +40,14 @@ namespace
             if (curr >= end)
             {
                 context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
-                                     .args('\'' + Token(0, 0, 0, expected).emitBack() + '\''),
+                                     .args(Lexer::tokenName(expected)),
                                  findSemicolonOrEOL(curr, end),
                                  Modifier{end - 1, end, Modifier::InsertAtEnd, Token(0, 0, 0, expected).emitBack()});
             }
             else
             {
                 context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
-                                     .args('\'' + Token(0, 0, 0, expected).emitBack() + '\'', '\'' + curr->emitBack())
+                                     .args(Lexer::tokenName(expected), '\'' + curr->emitBack())
                                      + '\'', findSemicolonOrEOL(curr, end),
                                  Modifier{curr, curr + 1, Modifier::PointAtBeginning});
             }
@@ -420,9 +421,9 @@ namespace
         return false;
     }
 
-    std::vector<Syntax::DeclarationSpecifier> parseDeclarationSpecifierList(OpenCL::Parser::Tokens::const_iterator& begin,
-                                                                            OpenCL::Parser::Tokens::const_iterator end,
-                                                                            OpenCL::Parser::ParsingContext& context)
+    std::optional<std::vector<Syntax::DeclarationSpecifier>> parseDeclarationSpecifierList(OpenCL::Parser::Tokens::const_iterator& begin,
+                                                                                           OpenCL::Parser::Tokens::const_iterator end,
+                                                                                           OpenCL::Parser::ParsingContext& context)
     {
         bool seenTypeSpecifier = false;
         std::vector<DeclarationSpecifier> declarationSpecifiers;
@@ -432,7 +433,16 @@ namespace
             auto result = parseDeclarationSpecifier(begin, end, context);
             if (!result)
             {
-                return {};
+                begin = std::find_if(begin, end, [&context](const Token& token)
+                {
+                    return firstIsInDeclarationSpecifier(token, context) || firstIsInDeclarator(token, context)
+                        || token.getTokenType() == TokenType::SemiColon || firstIsInAbstractDeclarator(token, context);
+                });
+                if (begin == end)
+                {
+                    return {};
+                }
+                continue;
             }
             if (!seenTypeSpecifier && std::holds_alternative<Syntax::TypeSpecifier>(*result))
             {
@@ -441,6 +451,39 @@ namespace
             declarationSpecifiers.push_back(std::move(*result));
         }
         return declarationSpecifiers;
+    }
+
+    std::optional<std::vector<Syntax::SpecifierQualifier>> parseSpecifierQualifierList(OpenCL::Parser::Tokens::const_iterator& begin,
+                                                                                       OpenCL::Parser::Tokens::const_iterator end,
+                                                                                       OpenCL::Parser::ParsingContext& context)
+    {
+        bool seenTypeSpecifier = false;
+        std::vector<SpecifierQualifier> specifierQualifiers;
+        while (begin < end && firstIsInSpecifierQualifier(*begin, context)
+            && (begin->getTokenType() != TokenType::Identifier || !seenTypeSpecifier))
+        {
+            auto result = parseSpecifierQualifier(begin, end, context);
+            if (!result)
+            {
+                begin = std::find_if(begin, end, [&context](const Token& token)
+                {
+                    return firstIsInSpecifierQualifier(token, context) || firstIsInDeclarator(token, context)
+                        || token.getTokenType() == TokenType::Colon || firstIsInAbstractDeclarator(token, context)
+                        || token.getTokenType() == TokenType::CloseParenthese;
+                });
+                if (begin == end)
+                {
+                    return {};
+                }
+                continue;
+            }
+            if (!seenTypeSpecifier && std::holds_alternative<Syntax::TypeSpecifier>(*result))
+            {
+                seenTypeSpecifier = true;
+            }
+            specifierQualifiers.push_back(std::move(*result));
+        }
+        return specifierQualifiers;
     }
 } // namespace
 
@@ -515,25 +558,39 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
 {
     auto start = begin;
     auto dslock = context.setDiagnosticStart(start);
-    std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
 
-    if (declarationSpecifiers.empty())
+    bool isTypedef = false;
+    auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
+    if (!declarationSpecifiers)
+    {
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInDeclarator(token, context) || token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    else if (declarationSpecifiers->empty())
     {
         context.logError(ErrorMessages::MISSING_DECLARATION_SPECIFIER, findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
     }
-
-    bool isTypedef = std::any_of(declarationSpecifiers.begin(),
-                                 declarationSpecifiers.end(),
-                                 [](const DeclarationSpecifier& declarationSpecifier)
-                                 {
-                                     auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
-                                     if (!storage)
-                                     {
-                                         return false;
-                                     }
-                                     return storage->getSpecifier() == StorageClassSpecifier::Typedef;
-                                 });
+    else
+    {
+        isTypedef = std::any_of(declarationSpecifiers->begin(),
+                                declarationSpecifiers->end(),
+                                [](const DeclarationSpecifier& declarationSpecifier)
+                                {
+                                    auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
+                                    if (!storage)
+                                    {
+                                        return false;
+                                    }
+                                    return storage->getSpecifier() == StorageClassSpecifier::Typedef;
+                                });
+    }
 
     if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
     {
@@ -543,10 +600,13 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
         else
         {
-            context.logError(ErrorMessages::EXPECTED_N.args("';'"), begin,
-                             Modifier{end - 1, end, Modifier::PointAtEnd});
+            expect(TokenType::SemiColon, begin, end, context);
         }
-        return Declaration(start, begin, std::move(declarationSpecifiers), {});
+        return Declaration(start,
+                           begin,
+                           declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                 : std::vector<Syntax::DeclarationSpecifier>{},
+                           {});
     }
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
     bool first = true;
@@ -630,7 +690,11 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
     }
 
-    return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
+    return Declaration(start,
+                       begin,
+                       declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                             : std::vector<Syntax::DeclarationSpecifier>{},
+                       std::move(initDeclarators));
 }
 
 std::optional<Syntax::DeclarationSpecifier>
@@ -837,27 +901,33 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
         return StructOrUnionSpecifier(start, begin, isUnion, name, {});
     }
 
-    auto dslock = context.setDiagnosticStart(begin);
+    auto dslock = context.setDiagnosticStart(start);
     begin++;
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     do
     {
-        std::vector<SpecifierQualifier> specifierQualifiers;
-        while (begin < end && firstIsInSpecifierQualifier(*begin, context))
+        auto specifierQualifiers = parseSpecifierQualifierList(begin, end, context);
+        if (specifierQualifiers && specifierQualifiers->empty())
         {
-            auto result = parseSpecifierQualifier(begin, end, context);
-            if (!result)
+            std::vector<Message::Note> notes;
+            if (begin < end && begin->getTokenType() == TokenType::CloseBrace && structDeclarations.empty())
             {
-                return {};
+                notes.push_back({isUnion ? Notes::UNION_CANT_BE_EMPTY : Notes::STRUCT_CANT_BE_EMPTY, start,
+                                 findEOL(begin, end),
+                                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning)});
             }
-            specifierQualifiers.push_back(std::move(*result));
-        }
-        if (specifierQualifiers.empty())
-        {
-            context.logError({"Expected Specifier Qualifiers at beginning of struct declarations"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
+            if (begin < end)
+            {
+                context.logError(ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
+                                 findEOL(begin, end),
+                                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning), std::move(notes));
+            }
+            else
+            {
+                context.logError(ErrorMessages::EXPECTED_N.args("typename"),
+                                 begin,
+                                 Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd), std::move(notes));
+            }
         }
         std::vector<std::pair<std::unique_ptr<Declarator>, std::int64_t>> declarators;
         bool first = true;
@@ -955,7 +1025,9 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
                              std::vector<Message::Note>());
         }
         begin++;
-        structDeclarations.push_back({std::move(specifierQualifiers), std::move(declarators)});
+        structDeclarations
+            .push_back({specifierQualifiers ? std::move(*specifierQualifiers) : std::vector<SpecifierQualifier>{},
+                        std::move(declarators)});
     }
     while (begin < end && begin->getTokenType() != TokenType::CloseBrace);
     if (begin >= end || begin->getTokenType() != TokenType::CloseBrace)
@@ -1528,8 +1600,8 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
         {
             break;
         }
-        std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
-        if (declarationSpecifiers.empty())
+        auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
+        if (!declarationSpecifiers || declarationSpecifiers->empty())
         {
             begin = before;
             break;
@@ -1548,7 +1620,8 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
         });
         if (result == end)
         {
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
+            parameterDeclarations
+                .emplace_back(std::move(*declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
             continue;
         }
 
@@ -1559,7 +1632,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
             {
                 return {};
             }
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
+            parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
                                                std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
         }
         else if (result->getTokenType() == TokenType::Identifier)
@@ -1569,7 +1642,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
             {
                 return {};
             }
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
+            parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
                                                std::make_unique<Declarator>(std::move(*declarator)));
         }
         else if (result->getTokenType() == TokenType::OpenParenthese)
@@ -1585,7 +1658,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                     {
                         return {};
                     }
-                    parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
+                    parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
                                                        std::make_unique<Declarator>(std::move(*declarator)));
                     break;
                 }
@@ -1597,7 +1670,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                         return {};
                     }
                     parameterDeclarations.emplace_back(
-                        std::move(declarationSpecifiers),
+                        std::move(*declarationSpecifiers),
                         std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
                     break;
                 }
@@ -1605,7 +1678,8 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
         }
         else
         {
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
+            parameterDeclarations
+                .emplace_back(std::move(*declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
         }
     }
     if (parameterDeclarations.empty())
@@ -1975,8 +2049,8 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
 {
     auto start = begin;
     auto dslock = context.setDiagnosticStart(start);
-    std::vector<DeclarationSpecifier> declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
-    if (declarationSpecifiers.empty())
+    auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
+    if (declarationSpecifiers && declarationSpecifiers->empty())
     {
         context.logError(ErrorMessages::MISSING_DECLARATION_SPECIFIER, findSemicolonOrEOL(begin, end));
     }
@@ -2078,8 +2152,13 @@ OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::c
     }
 
     context.addToScope(Semantics::declaratorToName(*declarator));
-    return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
-                              std::move(declarations), std::move(*compoundStatement));
+    return FunctionDefinition(start,
+                              begin,
+                              declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                    : std::vector<Syntax::DeclarationSpecifier>{},
+                              std::move(*declarator),
+                              std::move(declarations),
+                              std::move(*compoundStatement));
 }
 
 std::optional<CompoundStatement>
@@ -3822,7 +3901,7 @@ void Parser::ParsingContext::logError(std::string message,
                                       std::optional<Modifier> modifier,
                                       std::vector<Message::Note> notes)
 {
-    logImpl(Message(std::move(message), m_start.back(), end, modifier, std::move(notes)));
+    logImpl(Message(std::move(message), m_start.back(), end, std::move(modifier), std::move(notes)));
 }
 
 void Parser::ParsingContext::logImpl(Message&& error)

@@ -148,8 +148,8 @@ TEST_CASE("Declaration Specifiers", "[paser]")
             ProducesNErrors(1) && ProducesNoNotes()
     );
     sourceProduces(
-        "struct;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_AFTER_N
-                                       .args(OpenCL::Format::List(", ", " or ", "identifier", "'{'"), "struct")) &&
+        "struct;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                       .args("identifier", "';'")) &&
             ProducesNErrors(1) && ProducesNoNotes()
     );
     sourceProduces(
@@ -159,6 +159,13 @@ TEST_CASE("Declaration Specifiers", "[paser]")
         "struct i", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
             && ProducesNErrors(1) && ProducesNoNotes()
     );
+    sourceProduces("struct i;", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("struct i{i;};",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", "'i'"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("struct i{};",
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", "'}'"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
 }
 
 TEST_CASE("Function definitions", "[parser]")

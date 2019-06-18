@@ -157,6 +157,8 @@ namespace OpenCL::Lexer
         std::string emitBack() const;
     };
 
+    std::string tokenName(TokenType tokenType);
+
     std::string reconstruct(std::vector<Token>::const_iterator begin,std::vector<Token>::const_iterator end);
 } // namespace OpenCL::Lexer
 

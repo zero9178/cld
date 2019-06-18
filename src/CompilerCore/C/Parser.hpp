@@ -18,11 +18,20 @@ namespace OpenCL::Parser
 
         constexpr auto EXPECTED_N = Format("Expected {}");
 
+        constexpr auto EXPECTED_N_BEFORE_N = Format("Expected {} before {}");
+
         constexpr auto EXPECTED_N_AFTER_N = Format("Expected {} after {}");
 
         constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
 
         constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
+    }
+
+    namespace Notes
+    {
+        constexpr auto STRUCT_CANT_BE_EMPTY = "struct must have at least one field";
+
+        constexpr auto UNION_CANT_BE_EMPTY = "union must have at least one field";
     }
 
     class ParsingContext final
