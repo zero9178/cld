@@ -515,42 +515,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                          ParsingContext& context)
 {
     auto start = begin;
-    //backtracking
-    return context.doBacktracking([&]() -> std::optional<Syntax::ExternalDeclaration>
-                                  {
-                                      auto functionBranch = context.createBranch(begin,
-                                                                                 [](Tokens::const_iterator begin,
-                                                                                    Tokens::const_iterator end)
-                                                                                 {
-                                                                                     return std::any_of(begin,
-                                                                                                        end,
-                                                                                                        [](const Token& token)
-                                                                                                        {
-                                                                                                            return token
-                                                                                                                .getTokenType()
-                                                                                                                == TokenType::OpenBrace;
-                                                                                                        });
-                                                                                 });
-                                      auto function = parseFunctionDefinition(functionBranch->getCurrent(),
-                                                                              end,
-                                                                              context);
-                                      if (*functionBranch)
-                                      {
-                                          return ExternalDeclaration(start, begin, std::move(*function));
-                                      }
 
-                                      auto declarationBranch = context.createBranch(begin);
-                                      auto
-                                          declaration = parseDeclaration(declarationBranch->getCurrent(), end, context);
-                                      if (*declarationBranch)
-                                      {
-                                          return ExternalDeclaration(start, begin, std::move(*declaration));
-                                      }
-                                      else
-                                      {
-                                          return {};
-                                      }
-                                  });
 }
 
 std::optional<Syntax::Declaration>
@@ -778,6 +743,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
     case TokenType::UnionKeyword:
     case TokenType::StructKeyword:
     {
+        auto prevErrorCount = context.getCurrentErrorCount();
         auto expected = parseStructOrUnionSpecifier(begin, end, context);
         if (expected)
         {
@@ -785,7 +751,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
             auto isDefinition = !expected->getStructDeclarations().empty();
             auto result =
                 TypeSpecifier(start, begin, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
-            if (isDefinition)
+            if (isDefinition && prevErrorCount == context.getCurrentErrorCount())
             {
                 auto type = Semantics::declaratorsToType({std::cref(result)});
                 if (!type)
@@ -3909,6 +3875,7 @@ void Parser::ParsingContext::logImpl(Message&& error)
     if (this->m_branches.empty() || (this->m_branches.size() == 1 && this->m_branches.back().empty()))
     {
         this->m_errorsOccured = true;
+        m_errorCount++;
         if (this->m_reporter)
         {
             *this->m_reporter << error;
@@ -3962,6 +3929,18 @@ std::unique_ptr<Parser::ParsingContext::Branch> Parser::ParsingContext::createBr
                                                                                      Branch::CriteriaFunction&& criteria)
 {
     return std::make_unique<Branch>(*this, begin, std::move(criteria));
+}
+
+std::size_t Parser::ParsingContext::getCurrentErrorCount() const
+{
+    if (!m_branches.empty())
+    {
+        if (!m_branches.back().empty())
+        {
+            return m_branches.back().back()->m_errors.size();
+        }
+    }
+    return m_errorCount;
 }
 
 Parser::ParsingContext::Branch::Branch(ParsingContext& context,

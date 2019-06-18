@@ -41,6 +41,7 @@ namespace OpenCL::Parser
         std::vector<std::set<std::string>> m_currentScope{1};
         std::vector<std::set<std::string>> m_typedefs{1};
         std::vector<Tokens::const_iterator> m_start{};
+        std::size_t m_errorCount = 0;
 
         class Branch
         {
@@ -130,8 +131,10 @@ namespace OpenCL::Parser
             return std::forward<F>(f)();
         }
 
-        std::unique_ptr<Parser::ParsingContext::Branch> createBranch(Tokens::const_iterator& begin,
-                                                                     Branch::CriteriaFunction&& criteria = {});
+        std::unique_ptr<Branch> createBranch(Tokens::const_iterator& begin,
+                                             Branch::CriteriaFunction&& criteria = {});
+
+        std::size_t getCurrentErrorCount() const;
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
