@@ -14,8 +14,6 @@ namespace OpenCL::Parser
 
     namespace ErrorMessages
     {
-        constexpr auto MISSING_DECLARATION_SPECIFIER = "Expected Storage specifier or typename before name";
-
         constexpr auto EXPECTED_N = Format("Expected {}");
 
         constexpr auto EXPECTED_N_BEFORE_N = Format("Expected {} before {}");
@@ -145,9 +143,6 @@ namespace OpenCL::Parser
 
     std::optional<Syntax::ExternalDeclaration>
     parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
-
-    std::optional<Syntax::FunctionDefinition>
-    parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
 
     std::optional<Syntax::Declaration> parseDeclaration(Tokens::const_iterator& begin,
                                                         Tokens::const_iterator end, ParsingContext& context);

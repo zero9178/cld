@@ -562,7 +562,7 @@ OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> Open
                 globals.insert(globals.end(), result->begin(), result->end());
                 return std::optional<TranslationUnit::variant>{};
             }
-        }, iter.getVariant());
+        }, iter);
         if (!result)
         {
             return result;

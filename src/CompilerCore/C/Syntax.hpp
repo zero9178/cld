@@ -103,8 +103,6 @@ namespace OpenCL::Syntax
 
     class FunctionDefinition;
 
-    class ExternalDeclaration;
-
     class TranslationUnit;
 
     class TypeName;
@@ -1773,17 +1771,7 @@ namespace OpenCL::Syntax
     /**
      * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
      */
-    class ExternalDeclaration final : public Node
-    {
-        using variant = std::variant<Declaration, FunctionDefinition>;
-        variant m_variant;
-
-    public:
-        ExternalDeclaration(std::vector<Lexer::Token>::const_iterator begin,
-                            std::vector<Lexer::Token>::const_iterator end, variant&& variant);
-
-        const variant& getVariant() const;
-    };
+    using ExternalDeclaration = std::variant<Declaration, FunctionDefinition>;
 
     /**
      * <TranslationUnit> ::= <ExternalDeclaration> {<ExternalDeclaration>}

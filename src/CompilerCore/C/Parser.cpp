@@ -515,7 +515,304 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                          ParsingContext& context)
 {
     auto start = begin;
+    auto dslock = context.setDiagnosticStart(start);
 
+    bool isTypedef = false;
+    auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
+    if (!declarationSpecifiers)
+    {
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInDeclarator(token, context) || token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    else if (declarationSpecifiers->empty())
+    {
+        context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+                             .args("storage specifier or typename", '\'' + begin->emitBack() + '\''),
+                         findSemicolonOrEOL(start, end),
+                         Modifier{begin, begin + 1, Modifier::PointAtBeginning});
+    }
+    else
+    {
+        isTypedef = std::any_of(declarationSpecifiers->begin(),
+                                declarationSpecifiers->end(),
+                                [](const DeclarationSpecifier& declarationSpecifier)
+                                {
+                                    auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
+                                    if (!storage)
+                                    {
+                                        return false;
+                                    }
+                                    return storage->getSpecifier() == StorageClassSpecifier::Typedef;
+                                });
+    }
+
+    if (begin >= end || begin->getTokenType() == TokenType::SemiColon)
+    {
+        if (begin < end)
+        {
+            begin++;
+        }
+        else if (declarationSpecifiers && std::any_of(declarationSpecifiers->begin(),
+                                                      declarationSpecifiers->end(),
+                                                      [](const DeclarationSpecifier& specifier)
+                                                      {
+                                                          auto* typeSpecifier = std::get_if<TypeSpecifier>(&specifier);
+                                                          if (!typeSpecifier)
+                                                          {
+                                                              return false;
+                                                          }
+                                                          return !std::holds_alternative<std::string>(typeSpecifier
+                                                                                                          ->getVariant())
+                                                              && !std::holds_alternative<TypeSpecifier::PrimitiveTypeSpecifier>(
+                                                                  typeSpecifier->getVariant());
+                                                      }))
+        {
+            expect(TokenType::SemiColon, begin, end, context);
+        }
+        else
+        {
+            expect(TokenType::Identifier, begin, end, context);
+        }
+        return Declaration(start,
+                           begin,
+                           declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                 : std::vector<Syntax::DeclarationSpecifier>{},
+                           {});
+    }
+
+    auto declarator = parseDeclarator(begin, end, context);
+    if (!declarator)
+    {
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::Comma || token.getTokenType() == TokenType::SemiColon
+                || token.getTokenType() == TokenType::OpenBrace;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    if (begin >= end)
+    {
+        expect(TokenType::SemiColon, begin, end, context);
+        std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initializer;
+        initializer.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+        return Declaration(start,
+                           begin,
+                           declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                 : std::vector<Syntax::DeclarationSpecifier>{},
+                           std::move(initializer));
+    }
+    else if (begin->getTokenType() == TokenType::OpenBrace || firstIsInDeclarationSpecifier(*begin, context))
+    {
+        std::vector<Declaration> declarations;
+        while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
+        {
+            auto result = parseDeclaration(begin, end, context);
+            if (!result)
+            {
+                return {};
+            }
+            declarations.push_back(std::move(*result));
+        }
+
+        context.pushScope();
+        if (auto* paramters =
+            std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()))
+        {
+            auto& parameterDeclarations = paramters->getParameterTypeList().getParameterList()
+                                                   .getParameterDeclarations();
+            for (auto&[specifier, paramDeclarator] :
+                parameterDeclarations)
+            {
+                if (parameterDeclarations.size() == 1 && specifier.size() == 1
+                    && std::holds_alternative<TypeSpecifier>(specifier[0]))
+                {
+                    auto* primitive
+                        = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(&std::get<TypeSpecifier>(specifier[0])
+                            .getVariant());
+                    if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
+                    {
+                        break;
+                    }
+                }
+
+                if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
+                {
+                    context.logError({ErrorMessages::MISSING_PARAMETER_NAME},
+                                     std::vector<OpenCL::Lexer::Token>::const_iterator(),
+                                     std::optional<Modifier>(),
+                                     std::vector<Message::Note>());
+                    return {};
+                }
+                auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
+                auto visitor = [](auto self, auto&& value) -> std::string
+                {
+                    using T = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_same_v<T, DirectDeclaratorIdentifier>)
+                    {
+                        (void)self;
+                        return value.getIdentifier();
+                    }
+                    else if constexpr (std::is_same_v<T, DirectDeclaratorParenthese>)
+                    {
+                        return std::visit([&](auto&& value) -> std::string
+                                          { return self(value); },
+                                          value.getDeclarator().getDirectDeclarator());
+                    }
+                    else if constexpr (
+                        !std::is_same_v<
+                            T,
+                            DirectDeclaratorParentheseIdentifiers>
+                            && !std::is_same_v<T, DirectDeclaratorParentheseParameters>)
+                    {
+                        return std::visit([&](auto&& value) -> std::string
+                                          { return self(value); },
+                                          value.getDirectDeclarator());
+                    }
+                    else
+                    {
+                        (void)self;
+                        return "";
+                    }
+                };
+                auto result = std::visit(Y{visitor}, decl->getDirectDeclarator());
+                if (!result.empty())
+                {
+                    context.addToScope(result);
+                }
+            }
+        }
+        else if (auto* identifierList =
+            std::get_if<DirectDeclaratorParentheseIdentifiers>(&declarator->getDirectDeclarator()))
+        {
+            for (auto& iter : identifierList->getIdentifiers())
+            {
+                context.addToScope(iter);
+            }
+        }
+        auto compoundStatement = parseCompoundStatement(begin, end, context, false);
+        context.popScope();
+        if (!compoundStatement)
+        {
+            return {};
+        }
+
+        context.addToScope(Semantics::declaratorToName(*declarator));
+        return FunctionDefinition(start,
+                                  begin,
+                                  declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                        : std::vector<Syntax::DeclarationSpecifier>{},
+                                  std::move(*declarator),
+                                  std::move(declarations),
+                                  std::move(*compoundStatement));
+    }
+    else
+    {
+        std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
+        if (begin->getTokenType() == TokenType::Assignment)
+        {
+            begin++;
+            auto initializer = parseInitializer(begin, end, context);
+            if (!initializer)
+            {
+                return {};
+            }
+            initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                         std::make_unique<Initializer>(std::move(*initializer)));
+        }
+        else
+        {
+            initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+        }
+
+        while (begin < end && begin->getTokenType() == TokenType::Comma)
+        {
+            begin++;
+            declarator = parseDeclarator(begin, end, context);
+            if (!declarator)
+            {
+                begin = std::find_if(begin, end, [](const Token& token)
+                {
+                    return token.getTokenType() == TokenType::Comma || token.getTokenType() == TokenType::SemiColon;
+                });
+                if (begin == end)
+                {
+                    return {};
+                }
+                continue;
+            }
+            if (!isTypedef)
+            {
+                context.addToScope(Semantics::declaratorToName(*declarator));
+            }
+            if (begin >= end || begin->getTokenType() != TokenType::Assignment)
+            {
+                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+            }
+            else
+            {
+                begin++;
+                auto initializer = parseInitializer(begin, end, context);
+                if (!initializer)
+                {
+                    return {};
+                }
+                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                             std::make_unique<Initializer>(std::move(*initializer)));
+            }
+        }
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::SemiColon;
+            });
+        }
+
+        if (isTypedef)
+        {
+            for (auto&[declator, init] : initDeclarators)
+            {
+                (void)init;
+                auto visitor = [](auto self, auto&& value) -> std::string
+                {
+                    using T = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_same_v<T, DirectDeclaratorIdentifier>)
+                    {
+                        (void)self;
+                        return value.getIdentifier();
+                    }
+                    else if constexpr (std::is_same_v<T, DirectDeclaratorParenthese>)
+                    {
+                        return std::visit([&](auto&& value) -> std::string
+                                          { return self(value); },
+                                          value.getDeclarator().getDirectDeclarator());
+                    }
+                    else
+                    {
+                        return std::visit([&](auto&& value) -> std::string
+                                          { return self(value); },
+                                          value.getDirectDeclarator());
+                    }
+                };
+                context.addTypedef(std::visit(Y{visitor}, declator->getDirectDeclarator()));
+            }
+        }
+
+        return Declaration(start,
+                           begin,
+                           declarationSpecifiers ? std::move(*declarationSpecifiers)
+                                                 : std::vector<Syntax::DeclarationSpecifier>{},
+                           std::move(initDeclarators));
+    }
 }
 
 std::optional<Syntax::Declaration>
@@ -539,7 +836,8 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
     }
     else if (declarationSpecifiers->empty())
     {
-        context.logError(ErrorMessages::MISSING_DECLARATION_SPECIFIER, findSemicolonOrEOL(start, end),
+        context.logError(ErrorMessages::EXPECTED_N_BEFORE_N.args("storage specifier or typename", begin->emitBack()),
+                         findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
     }
     else
@@ -573,6 +871,7 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
                                                  : std::vector<Syntax::DeclarationSpecifier>{},
                            {});
     }
+
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
     bool first = true;
     do
@@ -623,7 +922,13 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
     }
     while (true);
-    expect(TokenType::SemiColon, begin, end, context);
+    if (!expect(TokenType::SemiColon, begin, end, context))
+    {
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::SemiColon;
+        });
+    }
 
     if (isTypedef)
     {
@@ -2007,124 +2312,6 @@ std::optional<EnumDeclaration> OpenCL::Parser::parseEnumDeclaration(Tokens::cons
                          std::vector<Message::Note>());
     }
     return EnumDeclaration(start, begin, std::move(name), values);
-}
-
-std::optional<Syntax::FunctionDefinition>
-OpenCL::Parser::parseFunctionDefinition(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                        ParsingContext& context)
-{
-    auto start = begin;
-    auto dslock = context.setDiagnosticStart(start);
-    auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
-    if (declarationSpecifiers && declarationSpecifiers->empty())
-    {
-        context.logError(ErrorMessages::MISSING_DECLARATION_SPECIFIER, findSemicolonOrEOL(begin, end));
-    }
-    auto declarator = parseDeclarator(begin, end, context);
-    if (!declarator)
-    {
-        return {};
-    }
-    std::vector<Declaration> declarations;
-    while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
-    {
-        auto result = parseDeclaration(begin, end, context);
-        if (!result)
-        {
-            return {};
-        }
-        declarations.push_back(std::move(*result));
-    }
-
-    context.pushScope();
-    if (auto* paramters =
-        std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()))
-    {
-        auto& parameterDeclarations = paramters->getParameterTypeList().getParameterList().getParameterDeclarations();
-        for (auto&[specifier, paramDeclarator] :
-            parameterDeclarations)
-        {
-            if (parameterDeclarations.size() == 1 && specifier.size() == 1
-                && std::holds_alternative<TypeSpecifier>(specifier[0]))
-            {
-                auto* primitive
-                    = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(&std::get<TypeSpecifier>(specifier[0])
-                        .getVariant());
-                if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
-                {
-                    break;
-                }
-            }
-
-            if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
-            {
-                context.logError({ErrorMessages::MISSING_PARAMETER_NAME},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-                return {};
-            }
-            auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
-            auto visitor = [](auto self, auto&& value) -> std::string
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<T, DirectDeclaratorIdentifier>)
-                {
-                    (void)self;
-                    return value.getIdentifier();
-                }
-                else if constexpr (std::is_same_v<T, DirectDeclaratorParenthese>)
-                {
-                    return std::visit([&](auto&& value) -> std::string
-                                      { return self(value); },
-                                      value.getDeclarator().getDirectDeclarator());
-                }
-                else if constexpr (
-                    !std::is_same_v<
-                        T,
-                        DirectDeclaratorParentheseIdentifiers>
-                        && !std::is_same_v<T, DirectDeclaratorParentheseParameters>)
-                {
-                    return std::visit([&](auto&& value) -> std::string
-                                      { return self(value); },
-                                      value.getDirectDeclarator());
-                }
-                else
-                {
-                    (void)self;
-                    return "";
-                }
-            };
-            auto result = std::visit(Y{visitor}, decl->getDirectDeclarator());
-            if (!result.empty())
-            {
-                context.addToScope(result);
-            }
-        }
-    }
-    else if (auto* identifierList =
-        std::get_if<DirectDeclaratorParentheseIdentifiers>(&declarator->getDirectDeclarator()))
-    {
-        for (auto& iter : identifierList->getIdentifiers())
-        {
-            context.addToScope(iter);
-        }
-    }
-    auto compoundStatement = parseCompoundStatement(begin, end, context, false);
-    context.popScope();
-    if (!compoundStatement)
-    {
-        return {};
-    }
-
-    context.addToScope(Semantics::declaratorToName(*declarator));
-    return FunctionDefinition(start,
-                              begin,
-                              declarationSpecifiers ? std::move(*declarationSpecifiers)
-                                                    : std::vector<Syntax::DeclarationSpecifier>{},
-                              std::move(*declarator),
-                              std::move(declarations),
-                              std::move(*compoundStatement));
 }
 
 std::optional<CompoundStatement>

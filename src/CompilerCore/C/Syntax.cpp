@@ -1148,18 +1148,6 @@ OpenCL::Syntax::LabelStatement::LabelStatement(std::vector<Lexer::Token>::const_
 {
 }
 
-OpenCL::Syntax::ExternalDeclaration::ExternalDeclaration(std::vector<Lexer::Token>::const_iterator begin,
-                                                         std::vector<Lexer::Token>::const_iterator end,
-                                                         OpenCL::Syntax::ExternalDeclaration::variant&& variant)
-    : Node(begin, end), m_variant(std::move(variant))
-{
-}
-
-const OpenCL::Syntax::ExternalDeclaration::variant& OpenCL::Syntax::ExternalDeclaration::getVariant() const
-{
-    return m_variant;
-}
-
 OpenCL::Syntax::TranslationUnit::TranslationUnit(std::vector<OpenCL::Syntax::ExternalDeclaration>&& globals) noexcept
     : m_globals(std::move(globals))
 {

@@ -108,7 +108,8 @@ namespace
 TEST_CASE("Global Declarations", "[parser]")
 {
     sourceProduces("i;",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N
+                                       .args("storage specifier or typename", "'i'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i",
                    Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
@@ -170,8 +171,8 @@ TEST_CASE("Declaration Specifiers", "[paser]")
 
 TEST_CASE("Function definitions", "[parser]")
 {
-
     sourceProduces("i{}",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::MISSING_DECLARATION_SPECIFIER)
+                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N
+                                       .args("storage specifier or typename", "'i'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
 }
