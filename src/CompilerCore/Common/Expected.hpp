@@ -115,12 +115,12 @@ namespace OpenCL
         /**
          * @copydoc operator bool()
          */
-        constexpr bool hasValue() const noexcept;
+        [[nodiscard]] constexpr bool hasValue() const noexcept;
 
         /**
          * @return True if this contains ErrorType
          */
-        constexpr bool hasError() const noexcept;
+        [[nodiscard]] constexpr bool hasError() const noexcept;
 
         /**
          * @throws std::bad_variant_access if this does not contain ErrorType

@@ -116,7 +116,7 @@ namespace OpenCL::Lexer
         using ValueType = variant;
 
         Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType) noexcept
-            : Token(line, column, length, tokenType, std::monostate{},"")
+            : Token(line, column, length, tokenType, std::monostate{}, "")
         {
         }
 
@@ -132,34 +132,34 @@ namespace OpenCL::Lexer
         {
         }
 
-        TokenType getTokenType() const
+        [[nodiscard]] TokenType getTokenType() const
         {
             return m_tokenType;
         }
 
-        const variant& getValue() const
+        [[nodiscard]] const variant& getValue() const
         {
             return m_value;
         }
 
-        std::uint64_t getLine() const
+        [[nodiscard]] std::uint64_t getLine() const
         {
             return m_line;
         }
 
-        std::uint64_t getColumn() const
+        [[nodiscard]] std::uint64_t getColumn() const
         {
             return m_column;
         }
 
-        std::uint64_t getLength() const;
+        [[nodiscard]] std::uint64_t getLength() const;
 
-        std::string emitBack() const;
+        [[nodiscard]] std::string emitBack() const;
     };
 
     std::string tokenName(TokenType tokenType);
 
-    std::string reconstruct(std::vector<Token>::const_iterator begin,std::vector<Token>::const_iterator end);
+    std::string reconstruct(std::vector<Token>::const_iterator begin, std::vector<Token>::const_iterator end);
 } // namespace OpenCL::Lexer
 
 #endif // OPENCLPARSER_LEXER_HPP

@@ -204,7 +204,7 @@ namespace OpenCL::Syntax
 
     /**
      * <PrimaryExpressionConstant> ::= <TokenType::Literal>
-     *                               | <TokenType::StringLiteral> {<TokenType::StringLiteral>
+     *                               | <TokenType::StringLiteral> {<TokenType::StringLiteral>}
      */
     class PrimaryExpressionConstant final : public Node
     {
@@ -1407,14 +1407,18 @@ namespace OpenCL::Syntax
     class DirectDeclaratorIdentifier final : public Node
     {
         std::string m_identifier;
+        std::vector<Lexer::Token>::const_iterator m_identifierLoc;
 
     public:
 
         DirectDeclaratorIdentifier(std::vector<Lexer::Token>::const_iterator begin,
                                    std::vector<Lexer::Token>::const_iterator end,
-                                   std::string identifier);
+                                   std::string identifier,
+                                   std::vector<Lexer::Token>::const_iterator identifierLoc);
 
         const std::string& getIdentifier() const;
+
+        std::vector<OpenCL::Lexer::Token>::const_iterator getIdentifierLoc() const;
     };
 
     /**
@@ -1460,17 +1464,18 @@ namespace OpenCL::Syntax
     class DirectDeclaratorParentheseIdentifiers final : public Node
     {
         std::unique_ptr<DirectDeclarator> m_directDeclarator;
-        std::vector<std::string> m_identifiers;
+        std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>> m_identifiers;
 
     public:
         DirectDeclaratorParentheseIdentifiers(std::vector<Lexer::Token>::const_iterator begin,
                                               std::vector<Lexer::Token>::const_iterator end,
                                               DirectDeclarator&& directDeclarator,
-                                              std::vector<std::string>&& identifiers);
+                                              std::vector<std::pair<std::string,
+                                                                    std::vector<Lexer::Token>::const_iterator>>&& identifiers);
 
         const DirectDeclarator& getDirectDeclarator() const;
 
-        const std::vector<std::string>& getIdentifiers() const;
+        const std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>>& getIdentifiers() const;
     };
 
     /**
@@ -1635,7 +1640,7 @@ namespace OpenCL::Syntax
         EnumSpecifier(std::vector<Lexer::Token>::const_iterator begin,
                       std::vector<Lexer::Token>::const_iterator end, variant&& variant);
 
-        const variant& getVariant() const;
+        [[nodiscard]] const variant& getVariant() const;
     };
 
     /**

@@ -344,6 +344,8 @@ namespace OpenCL::Semantics
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 
+    std::vector<Lexer::Token>::const_iterator declaratorToLoc(const OpenCL::Syntax::Declarator& declarator);
+
     Expected<std::size_t, FailureReason> sizeOf(const Type& type);
 
     Expected<std::size_t, FailureReason> alignmentOf(const Type& type);

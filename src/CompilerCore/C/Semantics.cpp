@@ -1354,7 +1354,8 @@ OpenCL::Expected<OpenCL::Semantics::Type, OpenCL::FailureReason> OpenCL::Semanti
 
                                                  for (std::size_t i = 0; i < identifiers.getIdentifiers().size(); i++)
                                                  {
-                                                     auto result = declarationMap.find(identifiers.getIdentifiers()[i]);
+                                                     auto result = declarationMap
+                                                         .find(identifiers.getIdentifiers()[i].first);
                                                      if (result == declarationMap.end())
                                                      {
                                                          continue;
@@ -1427,6 +1428,28 @@ std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator
                    [](auto&& self, auto&& value) -> std::string
                    {
                        return std::visit([&self](auto&& value) -> std::string
+                                         { return self(value); },
+                                         value.getDirectDeclarator());
+                   }}},
+        declarator.getDirectDeclarator());
+}
+
+std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Semantics::declaratorToLoc(const OpenCL::Syntax::Declarator& declarator)
+{
+    return std::visit(
+        Y{overload{[](auto&&,
+                      const Syntax::DirectDeclaratorIdentifier& name) -> std::vector<OpenCL::Lexer::Token>::const_iterator
+                   { return name.getIdentifierLoc(); },
+                   [](auto&& self,
+                      const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<OpenCL::Lexer::Token>::const_iterator
+                   {
+                       return std::visit([&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
+                                         { return self(value); },
+                                         declarator.getDeclarator().getDirectDeclarator());
+                   },
+                   [](auto&& self, auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
+                   {
+                       return std::visit([&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
                                          { return self(value); },
                                          value.getDirectDeclarator());
                    }}},

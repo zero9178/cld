@@ -1009,7 +1009,7 @@ OpenCL::Syntax::DirectDeclaratorParentheseParameters::getParameterTypeList() con
 OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers::DirectDeclaratorParentheseIdentifiers(
     std::vector<Lexer::Token>::const_iterator begin,
     std::vector<Lexer::Token>::const_iterator end, OpenCL::Syntax::DirectDeclarator&& directDeclarator,
-    std::vector<std::string>&& identifiers)
+    std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>>&& identifiers)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
       m_identifiers(std::move(identifiers))
@@ -1022,7 +1022,8 @@ OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers::getDirectDeclarator() con
     return *m_directDeclarator;
 }
 
-const std::vector<std::string>& OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers::getIdentifiers() const
+const std::vector<std::pair<std::string,
+                            std::vector<OpenCL::Lexer::Token>::const_iterator>>& OpenCL::Syntax::DirectDeclaratorParentheseIdentifiers::getIdentifiers() const
 {
     return m_identifiers;
 }
@@ -1237,13 +1238,19 @@ OpenCL::Syntax::FunctionSpecifier::FunctionSpecifier(const std::vector<OpenCL::L
 
 OpenCL::Syntax::DirectDeclaratorIdentifier::DirectDeclaratorIdentifier(std::vector<Lexer::Token>::const_iterator begin,
                                                                        std::vector<Lexer::Token>::const_iterator end,
-                                                                       std::string identifier)
-    : Node(begin, end), m_identifier(std::move(identifier))
+                                                                       std::string identifier,
+                                                                       std::vector<Lexer::Token>::const_iterator identifierLoc)
+    : Node(begin, end), m_identifier(std::move(identifier)), m_identifierLoc(identifierLoc)
 {}
 
 const std::string& OpenCL::Syntax::DirectDeclaratorIdentifier::getIdentifier() const
 {
     return m_identifier;
+}
+
+std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Syntax::DirectDeclaratorIdentifier::getIdentifierLoc() const
+{
+    return m_identifierLoc;
 }
 
 OpenCL::Syntax::DirectDeclaratorParenthese::DirectDeclaratorParenthese(std::vector<Lexer::Token>::const_iterator begin,

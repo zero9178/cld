@@ -2,6 +2,7 @@
 #include <utility>
 #include <regex>
 #include "termcolor.hpp"
+#include "Parser.hpp"
 
 OpenCL::Message::Message(std::string message,
                          std::vector<Lexer::Token>::const_iterator begin,
@@ -14,129 +15,151 @@ OpenCL::Message::Message(std::string message,
 
 }
 
+namespace
+{
+    void renderSection(std::ostream& os,
+                       const std::string& message,
+                       std::ostream& (& colour)(std::ostream&),
+                       const std::string& prefix,
+                       OpenCL::Parser::Tokens::const_iterator begin,
+                       OpenCL::Parser::Tokens::const_iterator end,
+                       const std::optional<OpenCL::Modifier>& modifier)
+    {
+        #ifdef NDEBUG
+        auto normalColour = termcolor::white;
+        #else
+        auto normalColour = termcolor::grey;
+        #endif
+
+        if (begin != end)
+        {
+            os << normalColour << begin->getLine() << ':' << begin->getColumn() << ": ";
+            if (modifier && modifier->getAnEnd() > end)
+            {
+                throw std::runtime_error("Trying to apply action to text not rendered");
+            }
+        }
+        os << colour << prefix << normalColour << message << '\n';
+
+        auto numSize = begin != end ? std::to_string((end - 1)->getLine()).size() : 0;
+        auto remainder = numSize % 4;
+        if (remainder != 0)
+        {
+            numSize += 4 - remainder;
+        }
+        auto modifierBegin = modifier ? modifier->getBegin()
+                                      : std::vector<OpenCL::Lexer::Token>::const_iterator{};
+        for (auto curr = begin; curr != end;)
+        {
+            auto next = OpenCL::findEOL(curr, end);
+            auto text = OpenCL::Lexer::reconstruct(curr, next);
+            auto line = std::to_string(curr->getLine());
+            os << normalColour << std::string(numSize - line.size(), ' ') << line << '|';
+            if (modifier && modifierBegin->getLine() == curr->getLine())
+            {
+                auto highlightedEOL = OpenCL::findEOL(modifierBegin, modifier->getAnEnd());
+                switch (modifier->getAction())
+                {
+                case OpenCL::Modifier::Underline:
+                case OpenCL::Modifier::PointAtBeginning:
+                case OpenCL::Modifier::PointAtEnd:
+                {
+                    auto
+                        highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
+                        - modifierBegin->getColumn();
+                    os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << colour
+                       << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
+                       << normalColour
+                       << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
+                       << '\n';
+
+                    os << normalColour << std::string(numSize, ' ') << '|'
+                       << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
+                    os << colour;
+                    switch (modifier->getAction())
+                    {
+                    case OpenCL::Modifier::Underline:os << std::string(highlightedSectionLength, '~');
+                        break;
+                    case OpenCL::Modifier::PointAtBeginning:os << '^' << std::string(highlightedSectionLength - 1, '~');
+                        break;
+                    case OpenCL::Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
+                        break;
+                    default:break;
+                    }
+                    os << normalColour << '\n';
+                    break;
+                }
+                default:
+                {
+                    if (modifierBegin + 1 != highlightedEOL)
+                    {
+                        throw std::runtime_error("End must be one higher than begin when using in between actions");
+                    }
+                    auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
+                    if (start >= text.size() || std::isspace(text[start]))
+                    {
+                        os << text << '\n';
+                    }
+                    else
+                    {
+                        os << text.substr(0, start)
+                           << colour << text.substr(start, (modifierBegin + 1)->getLength()) << normalColour
+                           << text.substr(start + (modifierBegin + 1)->getLength()) << '\n';
+                    }
+
+                    os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << colour;
+                    switch (modifier->getAction())
+                    {
+                    case OpenCL::Modifier::InsertAtEnd:os << '^';
+                        if (start < text.size() && !std::isspace(text[start]))
+                        {
+                            os << std::string(
+                                highlightedEOL->getColumn() - modifierBegin->getColumn() + modifierBegin->getLength()
+                                    - 1,
+                                '~');
+                        }
+                        else if (start < text.size())
+                        {
+                            os << std::string(modifierBegin->getLength() - 1, '~');
+                        }
+                        break;
+                    default:break;
+                    }
+                    os << normalColour << '\n';
+
+                    if (!modifier->getActionArgument().empty())
+                    {
+                        os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << colour
+                           << modifier->getActionArgument() << normalColour << '\n';
+                    }
+                }
+                }
+                modifierBegin = highlightedEOL;
+            }
+            else
+            {
+                os << text << '\n';
+            }
+            curr = next;
+        }
+    }
+}
+
 std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
 {
-    #ifdef NDEBUG
-    auto normalColour = termcolor::white;
-    #else
-    auto normalColour = termcolor::grey;
-    #endif
-    if (message.getBegin() != message.getAnEnd())
-    {
-        os << normalColour << message.getBegin()->getLine() << ':' << message.getBegin()->getColumn() << ": ";
-    }
-    os << termcolor::red << "error: " << normalColour << message.getMessage() << '\n';
-
-    auto numSize = message.getBegin() != message.getAnEnd() ? std::to_string((message.getAnEnd() - 1)->getLine()).size()
-                                                            : 0;
-    auto remainder = numSize % 4;
-    if (remainder != 0)
-    {
-        numSize += 4 - remainder;
-    }
-    auto modifierBegin = message.getModifier() ? message.getModifier()->getBegin()
-                                               : std::vector<Lexer::Token>::const_iterator{};
-    for (auto curr = message.getBegin(); curr != message.getAnEnd();)
-    {
-        auto next = findEOL(curr, message.getAnEnd());
-        auto text = Lexer::reconstruct(curr, next);
-        auto line = std::to_string(curr->getLine());
-        os << normalColour << std::string(numSize - line.size(), ' ') << line << '|';
-        if (message.getModifier() && modifierBegin->getLine() == curr->getLine())
-        {
-            auto highlightedEOL = findEOL(modifierBegin, message.getModifier()->getAnEnd());
-            switch (message.getModifier()->getAction())
-            {
-            case Modifier::Underline:
-            case Modifier::PointAtBeginning:
-            case Modifier::PointAtEnd:
-            {
-                auto highlightedSectionLength = (highlightedEOL - 1)->getColumn() + (highlightedEOL - 1)->getLength()
-                    - modifierBegin->getColumn();
-                os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << termcolor::red
-                   << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
-                   << normalColour
-                   << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
-                   << '\n';
-
-                os << normalColour << std::string(numSize, ' ') << '|'
-                   << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
-                os << termcolor::red;
-                switch (message.getModifier()->getAction())
-                {
-                case Modifier::Underline:os << std::string(highlightedSectionLength, '~');
-                    break;
-                case Modifier::PointAtBeginning:os << '^' << std::string(highlightedSectionLength - 1, '~');
-                    break;
-                case Modifier::PointAtEnd:os << std::string(highlightedSectionLength - 1, '~') << '^';
-                    break;
-                default:break;
-                }
-                os << normalColour << '\n';
-                break;
-            }
-            default:
-            {
-                if (modifierBegin + 1 != highlightedEOL)
-                {
-                    throw std::runtime_error("End must be one higher than begin when using in between actions");
-                }
-                auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
-                if (start >= text.size() || std::isspace(text[start]))
-                {
-                    os << text << '\n';
-                }
-                else
-                {
-                    os << text.substr(0, start)
-                       << termcolor::red << text.substr(start, (modifierBegin + 1)->getLength()) << normalColour
-                       << text.substr(start + (modifierBegin + 1)->getLength()) << '\n';
-                }
-
-                os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << termcolor::red;
-                switch (message.getModifier()->getAction())
-                {
-                case Modifier::InsertAtEnd:os << '^';
-                    if (start < text.size() && !std::isspace(text[start]))
-                    {
-                        os << std::string(
-                            highlightedEOL->getColumn() - modifierBegin->getColumn() + modifierBegin->getLength() - 1,
-                            '~');
-                    }
-                    else if (start < text.size())
-                    {
-                        os << std::string(modifierBegin->getLength() - 1, '~');
-                    }
-                    break;
-                default:break;
-                }
-                os << normalColour << '\n';
-
-                if (!message.getModifier()->getActionArgument().empty())
-                {
-                    os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << termcolor::red
-                       << message.getModifier()->getActionArgument() << normalColour << '\n';
-                }
-            }
-            }
-            modifierBegin = highlightedEOL;
-        }
-        else
-        {
-            os << text << '\n';
-        }
-        curr = next;
-    }
+    renderSection(os,
+                  message.getMessage(),
+                  termcolor::red,
+                  "error: ",
+                  message.getBegin(),
+                  message.getAnEnd(),
+                  message.getModifier());
 
     for (auto&[noteMessage, noteBegin, noteEnd, noteModifiers] : message.getNotes())
     {
-        if (noteBegin != noteEnd)
-        {
-            os << normalColour << noteBegin->getLine() << ':' << noteBegin->getColumn() << ": ";
-        }
-        os << termcolor::cyan << "note: " << normalColour << noteMessage << '\n';
+        renderSection(os, noteMessage, termcolor::cyan, "note: ", noteBegin, noteEnd, noteModifiers);
     }
-    return os << termcolor::reset << std::endl;
+    return os;
 }
 
 const std::string& OpenCL::Message::getMessage() const

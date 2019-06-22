@@ -161,7 +161,7 @@ namespace
             sourceType.get());
     }
 
-    OpenCL::Semantics::Type integerPromotion(const OpenCL::Semantics::Type& type)
+    [[maybe_unused]] OpenCL::Semantics::Type integerPromotion(const OpenCL::Semantics::Type& type)
     {
         if (auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(&type.get()))
         {
@@ -756,7 +756,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
         }
         else
         {
-            auto result = declarationMap.find(identifierList->getIdentifiers()[i]);
+            auto result = declarationMap.find(identifierList->getIdentifiers()[i].first);
             if (result == declarationMap.end())
             {
                 declarations.emplace_back(functionRP.getArguments()[i].first,

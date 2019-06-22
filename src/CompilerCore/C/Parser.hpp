@@ -27,16 +27,21 @@ namespace OpenCL::Parser
 
     namespace Notes
     {
-        constexpr auto STRUCT_CANT_BE_EMPTY = "struct must have at least one field";
-
-        constexpr auto UNION_CANT_BE_EMPTY = "union must have at least one field";
+        constexpr auto
+            TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is typdef but overshadowed by declaration here:");
     }
 
     class ParsingContext final
     {
         std::ostream* m_reporter;
         bool m_errorsOccured = false;
-        std::vector<std::set<std::string>> m_currentScope{1};
+        struct DeclarationLocation
+        {
+            Tokens::const_iterator begin;
+            Tokens::const_iterator end;
+            Tokens::const_iterator identifier;
+        };
+        std::vector<std::map<std::string, DeclarationLocation>> m_currentScope{1};
         std::vector<std::set<std::string>> m_typedefs{1};
         std::vector<Tokens::const_iterator> m_start{};
         std::size_t m_errorCount = 0;
@@ -97,7 +102,9 @@ namespace OpenCL::Parser
 
         ParsingContext& operator=(ParsingContext&&) = delete;
 
-        void addToScope(std::string name);
+        void addToScope(std::string name, DeclarationLocation declarator);
+
+        const Parser::ParsingContext::DeclarationLocation* getLocationOf(const std::string& name) const;
 
         bool isInScope(const std::string& name) const;
 
@@ -180,9 +187,6 @@ namespace OpenCL::Parser
 
     std::optional<Syntax::EnumSpecifier>
     parseEnumSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
-
-    std::optional<Syntax::EnumDeclaration>
-    parseEnumDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
 
     std::optional<Syntax::CompoundStatement>
     parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
