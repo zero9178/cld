@@ -908,18 +908,18 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <ReturnStatement> ::= <TokenType::ReturnKeyword> <Expression> <TokenType::SemiColon>
+     * <ReturnStatement> ::= <TokenType::ReturnKeyword> [<Expression>] <TokenType::SemiColon>
      */
     class ReturnStatement final : public Node
     {
-        Expression m_expression;
+        std::unique_ptr<Expression> m_expression;
 
     public:
         ReturnStatement(std::vector<Lexer::Token>::const_iterator begin,
                         std::vector<Lexer::Token>::const_iterator end,
-                        Expression&& expression);
+                        std::unique_ptr<Expression>&& expression);
 
-        [[nodiscard]] const Expression& getExpression() const;
+        [[nodiscard]] const Expression* getExpression() const;
     };
 
     /**

@@ -71,7 +71,7 @@ namespace
             while ((pos = arg.find("note: ", pos)) != std::string::npos)
             {
                 occurrences++;
-                pos += 7;
+                pos += 6;
             }
             return occurrences == m_allowedNotes;
         }
@@ -278,3 +278,75 @@ TEST_CASE("Declarator", "[parser]")
     sourceProduces("int foo(int());", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int foo(int[*]);", ProducesNoErrors() && ProducesNoNotes());
 }
+
+TEST_CASE("Statements", "[parser]")
+{
+    sourceProduces(R"(
+void foo()
+{
+    return;
+}
+)", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces(R"(
+void foo()
+{
+    return 5;
+}
+)", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces(R"(
+void foo()
+{
+    return
+}
+)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces(R"(
+void foo()
+{
+    return 5
+}
+)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces(R"(
+void foo()
+{
+    return 5
+
+)", Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces(R"(
+void foo()
+{
+    if 5);
+}
+)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces(R"(
+void foo()
+{
+    if(5;
+    int i
+}
+)",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
+                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(1));
+        sourceProduces(R"(
+void foo()
+{
+    if(5);else;
+}
+)", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces(R"(
+void foo()
+{
+    switch 5);
+}
+)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces(R"(
+void foo()
+{
+    switch(5;
+    int i
+}
+)",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
+                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(1));
+    }

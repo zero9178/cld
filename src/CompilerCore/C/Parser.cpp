@@ -2300,15 +2300,30 @@ OpenCL::Parser::parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& b
             {
                 context.popScope();
             }
-            return {};
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInCompoundItem(token, context) || token.getTokenType() == TokenType::CloseBrace;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
         }
-        items.push_back(std::move(*result));
+        else
+        {
+            items.push_back(std::move(*result));
+        }
     }
     if (pushScope)
     {
         context.popScope();
     }
-    if (!expect(TokenType::CloseBrace, begin, end, context))
+    if (!expect(TokenType::CloseBrace,
+                begin,
+                end,
+                context,
+                {{Notes::TO_MATCH_N_HERE.args("'{'"), start, begin,
+                  Modifier(start, start + 1, Modifier::PointAtBeginning)}}))
     {
         return {};
     }
@@ -2324,7 +2339,7 @@ std::optional<CompoundItem> OpenCL::Parser::parseCompoundItem(Tokens::const_iter
         return {};
     }
     if (firstIsInDeclarationSpecifier(*begin, context)
-        && !(begin->getTokenType() == TokenType::Identifier && begin + 1 < end
+        && !(begin < end && begin->getTokenType() == TokenType::Identifier && begin + 1 < end
             && (begin + 1)->getTokenType() == TokenType::Colon))
     {
         auto declaration = parseDeclaration(begin, end, context);
@@ -2543,251 +2558,303 @@ Exit:
 std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& begin,
                                                         Tokens::const_iterator end, ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
     auto dslock = context.setDiagnosticStart(start);
-    auto result = [&]() -> std::optional<Statement>
+    switch (begin->getTokenType())
     {
-        auto curentToken = *begin;
-        switch (curentToken.getTokenType())
+    case TokenType::ReturnKeyword:
+    {
+        auto ret = parseReturnStatement(begin, end, context);
+        return ret ? Statement(std::move(*ret)) : std::optional<Statement>{};
+    }
+    case TokenType::IfKeyword:
+    {
+        auto ifStat = parseIfStatement(begin, end, context);
+        return ifStat ? Statement(std::move(*ifStat)) : std::optional<Statement>{};
+    }
+    case TokenType::SwitchKeyword:
+    {
+        auto switchStat = parseSwitchStatement(begin, end, context);
+        return switchStat ? Statement(std::move(*switchStat)) : std::optional<Statement>{};
+    }
+    case TokenType::OpenBrace:
+    {
+        auto compoundStatement = parseCompoundStatement(begin, end, context);
+        return compoundStatement ? Statement{std::move(*compoundStatement)} : std::optional<Statement>{};
+    }
+    case TokenType::ForKeyword:
+    {
+        auto forStat = parseForStatement(begin, end, context);
+        return forStat ? Statement(std::move(*forStat)) : std::optional<Statement>{};
+    }
+    case TokenType::WhileKeyword:
+    {
+        begin++;
+        auto openPpos = begin;
+        if (!expect(TokenType::OpenParenthese, begin, end, context))
         {
-        case TokenType::ReturnKeyword:
-        {
-            auto ret = parseReturnStatement(begin, end, context);
-            return ret ? Statement(std::move(*ret)) : std::optional<Statement>{};
-        }
-        case TokenType::IfKeyword:
-        {
-            auto ifStat = parseIfStatement(begin, end, context);
-            return ifStat ? Statement(std::move(*ifStat)) : std::optional<Statement>{};
-        }
-        case TokenType::SwitchKeyword:
-        {
-            auto switchStat = parseSwitchStatement(begin, end, context);
-            return switchStat ? Statement(std::move(*switchStat)) : std::optional<Statement>{};
-        }
-        case TokenType::OpenBrace:
-        {
-            auto compoundStatement = parseCompoundStatement(begin, end, context);
-            return compoundStatement ? Statement{std::move(*compoundStatement)} : std::optional<Statement>{};
-        }
-        case TokenType::ForKeyword:
-        {
-            auto forStat = parseForStatement(begin, end, context);
-            return forStat ? Statement(std::move(*forStat)) : std::optional<Statement>{};
-        }
-        case TokenType::WhileKeyword:
-        {
-            begin++;
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::OpenParenthese)
+            begin = std::find_if(begin, end, [&context](const Token& token)
             {
-                context.logError({"Expected ( after while"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
+                return firstIsInExpression(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
             }
+        }
+        auto expression = parseExpression(begin, end, context);
+        if (!expression)
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::CloseParenthese;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::CloseParenthese, begin, end, context, {
+            {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+              Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}
+        }))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInStatement(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        auto statement = parseStatement(begin, end, context);
+        if (!statement)
+        {
+            return statement;
+        }
+        return Statement(HeadWhileStatement(start, begin, std::move(*expression),
+                                            std::make_unique<Statement>(std::move(*statement))));
+    }
+    case TokenType::DoKeyword:
+    {
+        begin++;
+        auto statement = parseStatement(begin, end, context);
+        if (!statement)
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::WhileKeyword;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::WhileKeyword, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::OpenParenthese;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        auto openPpos = begin;
+        if (!expect(TokenType::OpenParenthese, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        auto expression = parseExpression(begin, end, context);
+        if (!expression)
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::CloseParenthese;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::CloseParenthese, begin, end, context, {
+            {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+              Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}
+        }))
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            return {};
+        }
+
+        if (!statement)
+        {
+            return {};
+        }
+        return Statement(FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
+                                            std::move(*expression)));
+    }
+    case TokenType::BreakKeyword:
+    {
+        begin++;
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            return {};
+        }
+        return Statement(BreakStatement(start, begin));
+    }
+    case TokenType::ContinueKeyword:
+    {
+        begin++;
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            return {};
+        }
+        return Statement(ContinueStatement(start, begin));
+    }
+    case TokenType::DefaultKeyword:
+    {
+        begin++;
+        if (!expect(TokenType::Colon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInStatement(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        auto statement = parseStatement(begin, end, context);
+        if (!statement)
+        {
+            return {};
+        }
+        return Statement(DefaultStatement(start, begin, std::make_unique<Statement>(std::move(*statement))));
+    }
+    case TokenType::CaseKeyword:
+    {
+        begin++;
+        auto expression = parseAssignmentExpression(begin, end, context);
+        if (!expression)
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::Colon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::Colon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInStatement(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        Semantics::ConstantEvaluator evaluator(context.structOrUnions);
+        auto statement = parseStatement(begin, end, context);
+        if (!statement || !expression)
+        {
+            return {};
+        }
+        auto constValue = evaluator.visit(*expression);
+        if (!constValue)
+        {
+            return {};
+        }
+        return Statement(
+            CaseStatement(start, begin, *constValue, std::make_unique<Statement>(std::move(*statement))));
+    }
+    case TokenType::GotoKeyword:
+    {
+        begin++;
+        std::string name;
+        if (!expect(TokenType::Identifier, begin, end, context, {}, &name))
+        {
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            return {};
+        }
+        return Statement(GotoStatement(start, begin, name));
+    }
+    case TokenType::Identifier:
+    {
+        if (begin + 1 < end && (begin + 1)->getTokenType() == TokenType::Colon)
+        {
+            const auto& name = std::get<std::string>(begin->getValue());
+            begin += 2;
+            return Statement(LabelStatement(start, begin, name));
+        }
+        [[fallthrough]];
+    }
+    default:
+    {
+        if (begin != end && begin->getTokenType() != TokenType::SemiColon)
+        {
             auto expression = parseExpression(begin, end, context);
             if (!expression)
             {
-                return {};
+                begin = std::find_if(begin, end, [](const Token& token)
+                {
+                    return token.getTokenType() == TokenType::SemiColon;
+                });
+                if (begin == end)
+                {
+                    return {};
+                }
             }
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::CloseParenthese)
-            {
-                context.logError({"Expected ) after expression in while"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            return Statement(HeadWhileStatement(start, begin, std::move(*expression),
-                                                std::make_unique<Statement>(std::move(*statement))));
-        }
-        case TokenType::DoKeyword:
-        {
-            begin++;
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::WhileKeyword)
-            {
-                context.logError({"Expected while after do"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::OpenParenthese)
-            {
-                context.logError({"Expected ( after while"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            auto expression = parseExpression(begin, end, context);
-            if (!expression)
-            {
-                return {};
-            }
-            curentToken = *begin;
-            begin++;
-            if (curentToken.getTokenType() != TokenType::CloseParenthese)
-            {
-                context.logError({"Expected ) after expression in while"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            return Statement(FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)),
-                                                std::move(*expression)));
-        }
-        case TokenType::BreakKeyword:
-        {
-            begin++;
-            return Statement(BreakStatement(start, begin));
-        }
-        case TokenType::ContinueKeyword:
-        {
-            begin++;
-            return Statement(ContinueStatement(start, begin));
-        }
-        case TokenType::DefaultKeyword:
-        {
-            begin++;
-            curentToken = *begin;
-            if (curentToken.getTokenType() != TokenType::Colon)
-            {
-                context.logError({"Expected : after default"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            begin++;
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return {};
-            }
-            return Statement(DefaultStatement(start, begin, std::make_unique<Statement>(std::move(*statement))));
-        }
-        case TokenType::CaseKeyword:
-        {
-            begin++;
-            auto expression = parseAssignmentExpression(begin, end, context);
-            if (!expression)
-            {
-                return {};
-            }
-            curentToken = *begin;
-            if (curentToken.getTokenType() != TokenType::Colon)
-            {
-                context.logError({"Expected : after constant expression of case"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            begin++;
-            Semantics::ConstantEvaluator evaluator(context.structOrUnions);
-            auto statement = parseStatement(begin, end, context);
-            if (!statement)
-            {
-                return statement;
-            }
-            auto constValue = evaluator.visit(*expression);
-            if (!constValue)
+            if (!expect(TokenType::SemiColon, begin, end, context))
             {
                 return {};
             }
             return Statement(
-                CaseStatement(start, begin, *constValue, std::make_unique<Statement>(std::move(*statement))));
+                ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(*expression))));
         }
-        case TokenType::GotoKeyword:
+        else
         {
-            begin++;
-            if (begin->getTokenType() != TokenType::Identifier)
+            if (!expect(TokenType::SemiColon, begin, end, context))
             {
-                context.logError({"Expected identifier following goto keyword"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
                 return {};
             }
-            const auto& name = std::get<std::string>(begin->getValue());
-            begin++;
-            return Statement(GotoStatement(start, begin, name));
+            return Statement(ExpressionStatement(start, begin));
         }
-        case TokenType::Identifier:
-        {
-            if (begin + 1 < end && (begin + 1)->getTokenType() == TokenType::Colon)
-            {
-                const auto& name = std::get<std::string>(begin->getValue());
-                begin += 2;
-                return Statement(LabelStatement(start, begin, name));
-            }
-            [[fallthrough]];
-        }
-        default:
-        {
-            if (begin != end && begin->getTokenType() != TokenType::SemiColon)
-            {
-                auto expression = parseExpression(begin, end, context);
-                if (!expression)
-                {
-                    return {};
-                }
-                return Statement(
-                    ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(*expression))));
-            }
-            else
-            {
-                return Statement(ExpressionStatement(start, begin));
-            }
-        }
-        }
-    }();
-    if (!result)
-    {
-        return result;
     }
-
-    if ((std::holds_alternative<ExpressionStatement>(*result)
-        || std::holds_alternative<ReturnStatement>(*result)
-        || std::holds_alternative<FootWhileStatement>(*result)
-        || std::holds_alternative<BreakStatement>(*result)
-        || std::holds_alternative<ContinueStatement>(*result)
-        || std::holds_alternative<GotoStatement>(*result))
-        && (begin == end || begin->getTokenType() != TokenType::SemiColon))
-    {
-        context.logError({"Statement not terminated with ;"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
     }
-    else if (std::holds_alternative<ExpressionStatement>(*result)
-        || std::holds_alternative<ReturnStatement>(*result)
-        || std::holds_alternative<FootWhileStatement>(*result)
-        || std::holds_alternative<BreakStatement>(*result)
-        || std::holds_alternative<ContinueStatement>(*result)
-        || std::holds_alternative<GotoStatement>(*result))
-    {
-        begin++;
-    }
-    return result;
 }
 
 std::optional<ReturnStatement> OpenCL::Parser::parseReturnStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
@@ -2795,18 +2862,47 @@ std::optional<ReturnStatement> OpenCL::Parser::parseReturnStatement(std::vector<
                                                                     OpenCL::Parser::ParsingContext& context)
 {
     auto start = begin;
-    if (begin >= end || begin->getTokenType() != TokenType::ReturnKeyword)
+    if (!expect(TokenType::ReturnKeyword, begin, end, context))
     {
-        //TODO:Error
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInExpression(token, context) || token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    if (begin < end && begin->getTokenType() == TokenType::SemiColon)
+    {
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            return {};
+        }
+        return ReturnStatement(start, begin, nullptr);
+    }
+    else if (begin >= end || !firstIsInExpression(*begin, context))
+    {
+        expect(TokenType::SemiColon, begin, end, context);
         return {};
     }
-    begin++;
     auto expression = parseExpression(begin, end, context);
     if (!expression)
     {
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    if (!expect(TokenType::SemiColon, begin, end, context) || !expression)
+    {
         return {};
     }
-    return ReturnStatement(start, begin, std::move(*expression));
+    return ReturnStatement(start, begin, std::make_unique<Expression>(std::move(*expression)));
 }
 
 std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
@@ -2814,34 +2910,57 @@ std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::
                                                             OpenCL::Parser::ParsingContext& context)
 {
     auto start = begin;
-    if (begin >= end || begin->getTokenType() != TokenType::IfKeyword)
+    if (!expect(TokenType::IfKeyword, begin, end, context))
     {
-        //TODO:Error
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::OpenParenthese;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
-    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    auto openPpos = begin;
+    if (!expect(TokenType::OpenParenthese, begin, end, context))
     {
-        context.logError({"Expected ( after if"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInExpression(token, context);
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
     auto expression = parseExpression(begin, end, context);
     if (!expression)
     {
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::CloseParenthese;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+    if (!expect(TokenType::CloseParenthese, begin, end, context, {
+        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}
+    }))
     {
-        context.logError({"Expected ) at the end of if statement"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
     auto statement = parseStatement(begin, end, context);
-    if (!statement)
+    if ((!expression || !statement) && (begin >= end || begin->getTokenType() != TokenType::ElseKeyword))
     {
         return {};
     }
@@ -2849,7 +2968,7 @@ std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::
     {
         begin++;
         auto elseStatement = parseStatement(begin, end, context);
-        if (!elseStatement)
+        if (!elseStatement || !statement || !expression)
         {
             return {};
         }
@@ -2869,35 +2988,57 @@ std::optional<Syntax::SwitchStatement> OpenCL::Parser::parseSwitchStatement(std:
                                                                             OpenCL::Parser::ParsingContext& context)
 {
     auto start = begin;
-    if (begin >= end || begin->getTokenType() != TokenType::SwitchKeyword)
+    if (!expect(TokenType::SwitchKeyword, begin, end, context))
     {
-        //TODO: Error
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::OpenParenthese;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
-    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    auto openPpos = begin;
+    if (!expect(TokenType::OpenParenthese, begin, end, context))
     {
-        context.logError({"Expected ( after switch keyword"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInExpression(token, context);
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
     auto expression = parseExpression(begin, end, context);
     if (!expression)
     {
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::CloseParenthese;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+    if (!expect(TokenType::CloseParenthese, begin, end, context, {
+        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}
+    }))
     {
-        context.logError({"Expected ) after expression in switch "},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::SemiColon;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
     auto statement = parseStatement(begin, end, context);
-    if (!statement)
+    if (!statement || !expression)
     {
         return {};
     }
@@ -2910,21 +3051,35 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
                                                                       OpenCL::Parser::ParsingContext& context)
 {
     auto start = begin;
-    if (begin >= end || begin->getTokenType() != TokenType::ForKeyword)
+    if (!expect(TokenType::ForKeyword, begin, end, context))
     {
-        //TODO:Error
-        return {};
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return token.getTokenType() == TokenType::OpenParenthese;
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
-    if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese)
+    auto openPpos = begin;
+    if (!expect(TokenType::OpenParenthese, begin, end, context))
     {
-        //TODO:Error
-        return {};
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInExpression(token, context) || firstIsInDeclaration(token, context);
+        });
+        if (begin == end)
+        {
+            return {};
+        }
     }
-    begin++;
     if (begin >= end)
     {
-        //TODO:Error
+        context.logError(ErrorMessages::EXPECTED_N_AFTER_N
+                             .args(Format::List(", ", " or ", "expression", "declaration"), "'('"),
+                         begin,
+                         Modifier(begin - 1, begin, Modifier::PointAtEnd));
         return {};
     }
     std::variant<Declaration, std::unique_ptr<Expression>> initial{nullptr};
@@ -2933,26 +3088,49 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
         auto decl = parseDeclaration(begin, end, context);
         if (!decl)
         {
-            //TODO:Error
-            return {};
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context) || token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
         }
-        initial = std::move(*decl);
+        else
+        {
+            initial = std::move(*decl);
+        }
     }
     else if (begin->getTokenType() != TokenType::SemiColon)
     {
         auto exp = parseExpression(begin, end, context);
         if (!exp)
         {
-            //TODO:Error
-            return {};
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context) || token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
         }
-        if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
+        else
         {
-            //TODO:Error
-            return {};
+            initial = std::make_unique<Expression>(std::move(*exp));
         }
-        begin++;
-        initial = std::make_unique<Expression>(std::move(*exp));
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context) || token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
     }
     else
     {
@@ -2962,7 +3140,9 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
     std::unique_ptr<Expression> controlling;
     if (begin >= end)
     {
-        //TODO:Error
+        context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("expression", "';'"),
+                         begin,
+                         Modifier(begin - 1, begin, Modifier::PointAtEnd));
         return {};
     }
     else if (begin->getTokenType() != TokenType::SemiColon)
@@ -2970,16 +3150,30 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
         auto exp = parseExpression(begin, end, context);
         if (!exp)
         {
-            //TODO:Error
-            return {};
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context) || token.getTokenType() == TokenType::SemiColon;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
         }
-        if (begin >= end || begin->getTokenType() != TokenType::SemiColon)
+        else
         {
-            //TODO:Error
-            return {};
+            controlling = std::make_unique<Expression>(std::move(*exp));
         }
-        begin++;
-        controlling = std::make_unique<Expression>(std::move(*exp));
+        if (!expect(TokenType::SemiColon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInExpression(token, context) || token.getTokenType() == TokenType::CloseParenthese;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
     }
     else
     {
@@ -2989,7 +3183,9 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
     std::unique_ptr<Expression> post;
     if (begin >= end)
     {
-        //TODO:Error
+        context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("expression", "';'"),
+                         begin,
+                         Modifier(begin - 1, begin, Modifier::PointAtEnd));
         return {};
     }
     else if (begin->getTokenType() != TokenType::CloseParenthese)
@@ -2997,16 +3193,35 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
         auto exp = parseExpression(begin, end, context);
         if (!exp)
         {
-            //TODO:Error
-            return {};
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::CloseParenthese;
+            });
+            if (begin == end)
+            {
+                return {};
+            }
         }
-        if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+        else
         {
-            //TODO:Error
-            return {};
+            post = std::make_unique<Expression>(std::move(*exp));
         }
-        begin++;
-        post = std::make_unique<Expression>(std::move(*exp));
+        if (!expect(TokenType::CloseParenthese,
+                    begin,
+                    end,
+                    context,
+                    {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+                      Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInStatement(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
     }
     else
     {
@@ -3016,7 +3231,6 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
     auto stat = parseStatement(begin, end, context);
     if (!stat)
     {
-        //TODO:Error
         return {};
     }
     return ForStatement(start,

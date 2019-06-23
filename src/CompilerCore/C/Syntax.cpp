@@ -338,14 +338,14 @@ const OpenCL::Syntax::AdditiveExpression& OpenCL::Syntax::ShiftExpression::getAd
     return m_additiveExpression;
 }
 
-const OpenCL::Syntax::Expression& OpenCL::Syntax::ReturnStatement::getExpression() const
+const OpenCL::Syntax::Expression* OpenCL::Syntax::ReturnStatement::getExpression() const
 {
-    return m_expression;
+    return m_expression.get();
 }
 
 OpenCL::Syntax::ReturnStatement::ReturnStatement(std::vector<Lexer::Token>::const_iterator begin,
                                                  std::vector<Lexer::Token>::const_iterator end,
-                                                 Expression&& expression)
+                                                 std::unique_ptr<Expression>&& expression)
     : Node(begin, end), m_expression(std::move(expression))
 {
 }

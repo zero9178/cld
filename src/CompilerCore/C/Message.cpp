@@ -31,12 +31,20 @@ namespace
         auto normalColour = termcolor::grey;
         #endif
 
+        std::size_t sideOffset = std::numeric_limits<std::size_t>::max();
         if (begin != end)
         {
             os << normalColour << begin->getLine() << ':' << begin->getColumn() << ": ";
             if (modifier && modifier->getAnEnd() > end)
             {
                 throw std::runtime_error("Trying to apply action to text not rendered");
+            }
+
+            for (auto curr = begin; curr != end;)
+            {
+                auto next = OpenCL::findEOL(curr, end);
+                sideOffset = std::min(sideOffset, curr->getColumn());
+                curr = next;
             }
         }
         os << colour << prefix << normalColour << message << '\n';
@@ -54,7 +62,8 @@ namespace
             auto next = OpenCL::findEOL(curr, end);
             auto text = OpenCL::Lexer::reconstruct(curr, next);
             auto line = std::to_string(curr->getLine());
-            os << normalColour << std::string(numSize - line.size(), ' ') << line << '|';
+            os << normalColour << std::string(numSize - line.size(), ' ') << line << '|'
+               << std::string(curr->getColumn() - sideOffset, ' ');
             if (modifier && modifierBegin->getLine() == curr->getLine())
             {
                 auto highlightedEOL = OpenCL::findEOL(modifierBegin, modifier->getAnEnd());
@@ -74,7 +83,8 @@ namespace
                        << '\n';
 
                     os << normalColour << std::string(numSize, ' ') << '|'
-                       << std::string(modifierBegin->getColumn() - curr->getColumn(), ' ');
+                       << std::string(modifierBegin->getColumn() - curr->getColumn() + curr->getColumn() - sideOffset,
+                                      ' ');
                     os << colour;
                     switch (modifier->getAction())
                     {
@@ -107,7 +117,8 @@ namespace
                            << text.substr(start + (modifierBegin + 1)->getLength()) << '\n';
                     }
 
-                    os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << colour;
+                    os << std::string(numSize, ' ') << '|' << std::string(start + curr->getColumn() - sideOffset, ' ')
+                       << colour;
                     switch (modifier->getAction())
                     {
                     case OpenCL::Modifier::InsertAtEnd:os << '^';
@@ -129,7 +140,8 @@ namespace
 
                     if (!modifier->getActionArgument().empty())
                     {
-                        os << std::string(numSize, ' ') << '|' << std::string(start, ' ') << colour
+                        os << std::string(numSize, ' ') << '|'
+                           << std::string(start + curr->getColumn() - sideOffset, ' ') << colour
                            << modifier->getActionArgument() << normalColour << '\n';
                     }
                 }
