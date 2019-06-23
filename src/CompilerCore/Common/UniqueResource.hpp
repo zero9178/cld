@@ -11,7 +11,7 @@ namespace OpenCL
 
     public:
 
-        UniqueResource(std::function<void()>&& function) : m_function(std::move(function))
+        explicit UniqueResource(std::function<void()>&& function) : m_function(std::move(function))
         {}
 
         ~UniqueResource()

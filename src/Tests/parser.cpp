@@ -13,8 +13,11 @@ do\
         auto string = ss.str();\
         CHECK_THAT(string, matches);\
         OpenCL::Parser::buildTree(tokens);\
+        if(!string.empty())\
+        {\
+            std::cerr<<std::endl;\
+        }\
 }while(0)
-
 
 namespace
 {
@@ -89,34 +92,37 @@ namespace
     };
 }
 
+using namespace OpenCL::Parser::ErrorMessages;
+using namespace OpenCL::Parser::Notes;
+
 TEST_CASE("Global Declarations", "[parser]")
 {
     sourceProduces("i;",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N
+                   Catch::Contains(EXPECTED_N_BEFORE_N
                                        .args("storage specifier or typename", "'i'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+                   Catch::Contains(EXPECTED_N.args("';'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i ft",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("';'", "'ft'"))
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'ft'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i,",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N
+                   Catch::Contains(EXPECTED_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i,+=",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'+='"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i, +=",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'+='"))
                        && ProducesNErrors(1) && ProducesNoNotes());
     sourceProduces("int i,,f",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                        .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "','"))
-                       && Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+                       && Catch::Contains(EXPECTED_N.args("';'"))
                        && ProducesNErrors(2) && ProducesNoNotes());
 }
 
@@ -127,17 +133,17 @@ TEST_CASE("Declaration Specifiers", "[paser]")
         sourceProduces("typedef int aa;"
                        "aa aa;", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("typedef int aa;"
-                       "aa aa;aa bb;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N
+                       "aa aa;aa bb;", Catch::Contains(EXPECTED_N_BEFORE_N
                                                            .args("storage specifier or typename", "'aa'"))
-                           && Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                                   .args("';'", "'bb'"))
-                           && Catch::Contains(OpenCL::Parser::Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
+                           && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
                            && ProducesNErrors(2) && ProducesNNotes(1));
 
         sourceProduces("typedef int aa;"
-                       "aa\n aa;const aa bb;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                       "aa\n aa;const aa bb;", Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                                                    .args("';'", "'bb'"))
-                           && Catch::Contains(OpenCL::Parser::Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
+                           && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
                            && ProducesNErrors(1) && ProducesNNotes(1));
     }
     sourceProduces(
@@ -146,12 +152,12 @@ TEST_CASE("Declaration Specifiers", "[paser]")
     SECTION("Structs and unions")
     {
         sourceProduces(
-            "struct", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_AFTER_N
+            "struct", Catch::Contains(EXPECTED_N_AFTER_N
                                           .args(OpenCL::Format::List(", ", " or ", "identifier", "'{'"), "struct")) &&
             ProducesNErrors(1) && ProducesNoNotes()
         );
         sourceProduces(
-            "struct;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+            "struct;", Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                            .args("identifier", "';'")) &&
             ProducesNErrors(1) && ProducesNoNotes()
         );
@@ -159,34 +165,34 @@ TEST_CASE("Declaration Specifiers", "[paser]")
             "struct i;", ProducesNoErrors() && ProducesNoNotes()
         );
         sourceProduces(
-            "struct i", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+            "struct i", Catch::Contains(EXPECTED_N.args("';'"))
             && ProducesNErrors(1) && ProducesNoNotes()
         );
         sourceProduces("union i;", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("struct i{i;};",
-                       Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", "'i'"))
+                       Catch::Contains(EXPECTED_N_BEFORE_N.args("typename", "'i'"))
                            && ProducesNErrors(1) && ProducesNoNotes());
         sourceProduces("struct i{};", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("struct i{unsigned int:5;};", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("struct i{unsigned int r:5;};", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("struct i{unsigned int:5};",
-                       Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
                            && ProducesNErrors(1) && ProducesNoNotes());
         sourceProduces("struct i{unsigned int:5",
-                       Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
-                           && Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("'}'"))
-                           && Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+                       Catch::Contains(EXPECTED_N.args("';'"))
+                           && Catch::Contains(EXPECTED_N.args("'}'"))
+                           && Catch::Contains(EXPECTED_N.args("';'"))
                            && ProducesNErrors(3) && ProducesNoNotes());
     }
     SECTION("Enums")
     {
         sourceProduces(
-            "enum", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_AFTER_N
+            "enum", Catch::Contains(EXPECTED_N_AFTER_N
                                         .args("identifier", "enum")) &&
             ProducesNErrors(1) && ProducesNoNotes()
         );
         sourceProduces(
-            "enum;", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+            "enum;", Catch::Contains(EXPECTED_N_INSTEAD_OF_N
                                          .args("identifier", "';'")) &&
             ProducesNErrors(1) && ProducesNoNotes()
         );
@@ -194,7 +200,7 @@ TEST_CASE("Declaration Specifiers", "[paser]")
             "enum i;", ProducesNoErrors() && ProducesNoNotes()
         );
         sourceProduces(
-            "enum i", Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N.args("';'"))
+            "enum i", Catch::Contains(EXPECTED_N.args("';'"))
             && ProducesNErrors(1) && ProducesNoNotes()
         );
         sourceProduces("enum i{i};", ProducesNoErrors() && ProducesNoNotes());
@@ -204,10 +210,10 @@ TEST_CASE("Declaration Specifiers", "[paser]")
         sourceProduces("enum {test,ft};", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("enum {test,ft,};", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("enum i{test ft};",
-                       Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("','", "'ft'"))
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'ft'"))
                            && ProducesNErrors(1) && ProducesNoNotes());
         sourceProduces("enum {test,,ft};",
-                       Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("identifier", "','"))
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "','"))
                            && ProducesNErrors(1) && ProducesNoNotes());
     }
 }
@@ -215,7 +221,60 @@ TEST_CASE("Declaration Specifiers", "[paser]")
 TEST_CASE("Function definitions", "[parser]")
 {
     sourceProduces("i{}",
-                   Catch::Contains(OpenCL::Parser::ErrorMessages::EXPECTED_N_BEFORE_N
+                   Catch::Contains(EXPECTED_N_BEFORE_N
                                        .args("storage specifier or typename", "'i'"))
                        && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int i() int f{}",
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                       .args("';'", "'{'"))
+                       && ProducesNErrors(1) && ProducesNoNotes());
+    sourceProduces("int foo(int,int[5]){}",
+                   Catch::Contains(MISSING_PARAMETER_NAME)
+                       && ProducesNErrors(2) && ProducesNoNotes());
+}
+
+TEST_CASE("Declarator", "[parser]")
+{
+    sourceProduces("int * const * volatile *i;", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int * const * volatile *(i;",
+                   Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int * const * volatile *i(int f;",
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                       && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int foo(int,int[5]);", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo(int i,int f[5],);",
+                   Catch::Contains(EXPECTED_N_AFTER_N.args("parameter", "','")) && ProducesNErrors(1)
+                       && ProducesNoNotes());
+    sourceProduces("int foo(i,f e);",
+                   Catch::Contains(EXPECTED_N_BEFORE_N.args("','", "'e'")) && ProducesNErrors(1)
+                       && ProducesNoNotes());
+    sourceProduces("int foo(i,f e,r)",
+                   Catch::Contains(EXPECTED_N_BEFORE_N.args("','", "'e'")) && ProducesNErrors(2)
+                       && Catch::Contains(EXPECTED_N.args("';'"))
+                       && ProducesNoNotes());
+    sourceProduces("int foo(i,f",
+                   Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int foo[",
+                   Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int foo[static 5];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[static const 5];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[const static 5];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[const *];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[*];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[5];", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo[*[];",
+                   Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int foo(int();",
+                   Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                       && ProducesNErrors(1) && ProducesNNotes(1));
+    sourceProduces("int foo(int(int));", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo(int([5]));", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo(int());", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo(int[*]);", ProducesNoErrors() && ProducesNoNotes());
 }

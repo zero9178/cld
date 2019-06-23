@@ -14,9 +14,9 @@ namespace OpenCL::Semantics
         std::vector<std::map<std::string, Semantics::Declaration>> m_typesOfNamedValues{1};
         std::set<std::string> m_definedFunctions;
 
-        std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
+        [[nodiscard]] std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
 
-        std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
+        [[nodiscard]] std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
 
         void popScope()
         {

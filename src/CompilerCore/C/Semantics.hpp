@@ -54,11 +54,11 @@ namespace OpenCL::Semantics
 
         static Type createVoid(bool isConst, bool isVolatile);
 
-        bool isFloatingPoint() const;
+        [[nodiscard]] bool isFloatingPoint() const;
 
-        bool isSigned() const;
+        [[nodiscard]] bool isSigned() const;
 
-        std::uint8_t getBitCount() const;
+        [[nodiscard]] std::uint8_t getBitCount() const;
 
         bool operator==(const PrimitiveType& rhs) const;
 
@@ -76,11 +76,11 @@ namespace OpenCL::Semantics
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type, std::size_t size);
 
-        const Type& getType() const;
+        [[nodiscard]] const Type& getType() const;
 
-        std::size_t getSize() const;
+        [[nodiscard]] std::size_t getSize() const;
 
-        bool isRestricted() const;
+        [[nodiscard]] bool isRestricted() const;
 
         bool operator==(const ArrayType& rhs) const;
 
@@ -97,9 +97,9 @@ namespace OpenCL::Semantics
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
-        const Type& getType() const;
+        [[nodiscard]] const Type& getType() const;
 
-        bool isRestricted() const;
+        [[nodiscard]] bool isRestricted() const;
 
         bool operator==(const AbstractArrayType& rhs) const;
 
@@ -116,9 +116,9 @@ namespace OpenCL::Semantics
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
-        const Type& getType() const;
+        [[nodiscard]] const Type& getType() const;
 
-        bool isRestricted() const;
+        [[nodiscard]] bool isRestricted() const;
 
         bool operator==(const ValArrayType& rhs) const;
 
@@ -142,13 +142,13 @@ namespace OpenCL::Semantics
                            std::vector<std::pair<Type,std::string>>&& arguments, bool lastIsVararg,
                            bool hasPrototype);
 
-        const Type& getReturnType() const;
+        [[nodiscard]] const Type& getReturnType() const;
 
-        const std::vector<std::pair<Type,std::string>>& getArguments() const;
+        [[nodiscard]] const std::vector<std::pair<Type, std::string>>& getArguments() const;
 
-        bool isLastVararg() const;
+        [[nodiscard]] bool isLastVararg() const;
 
-        bool hasPrototype() const;
+        [[nodiscard]] bool hasPrototype() const;
 
         bool operator==(const FunctionType& rhs) const;
 
@@ -167,13 +167,13 @@ namespace OpenCL::Semantics
         static Type create(bool isConst, bool isVolatile, bool isUnion, const std::string& name,
                            std::vector<std::tuple<Type, std::string, std::int64_t>>&& members = {});
 
-        const std::string& getName() const;
+        [[nodiscard]] const std::string& getName() const;
 
-        bool isUnion() const;
+        [[nodiscard]] bool isUnion() const;
 
-        const std::vector<std::tuple<Type, std::string, std::int64_t>>& getMembers() const;
+        [[nodiscard]] const std::vector<std::tuple<Type, std::string, std::int64_t>>& getMembers() const;
 
-        bool isDefinition() const;
+        [[nodiscard]] bool isDefinition() const;
 
         bool operator==(const RecordType& rhs) const;
 
@@ -191,13 +191,13 @@ namespace OpenCL::Semantics
         static Type create(bool isConst, bool isVolatile, const std::string& name,
                            std::vector<std::pair<std::string, std::int32_t>> values);
 
-        const std::vector<std::pair<std::string, int32_t>>& getValues() const;
+        [[nodiscard]] const std::vector<std::pair<std::string, int32_t>>& getValues() const;
 
-        bool isDefinition() const;
+        [[nodiscard]] bool isDefinition() const;
 
-        bool isAnonymous() const;
+        [[nodiscard]] bool isAnonymous() const;
 
-        const std::string& getName() const;
+        [[nodiscard]] const std::string& getName() const;
 
         bool operator==(const EnumType& rhs) const;
 
@@ -214,9 +214,9 @@ namespace OpenCL::Semantics
     public:
         static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& elementType);
 
-        const Type& getElementType() const;
+        [[nodiscard]] const Type& getElementType() const;
 
-        bool isRestricted() const;
+        [[nodiscard]] bool isRestricted() const;
 
         bool operator==(const PointerType& rhs) const;
 
@@ -236,13 +236,13 @@ namespace OpenCL::Semantics
     public:
         Type(bool isConst, bool isVolatile, std::string name, variant&& type);
 
-        const variant& get() const;
+        [[nodiscard]] const variant& get() const;
 
-        bool isConst() const;
+        [[nodiscard]] bool isConst() const;
 
-        bool isVolatile() const;
+        [[nodiscard]] bool isVolatile() const;
 
-        const std::string& getName() const;
+        [[nodiscard]] const std::string& getName() const;
 
         void setName(const std::string& name);
 
@@ -250,7 +250,7 @@ namespace OpenCL::Semantics
 
         bool operator!=(const Type& rhs) const;
 
-        bool isCompatibleWith(const Type& rhs) const;
+        [[nodiscard]] bool isCompatibleWith(const Type& rhs) const;
     };
 
     class CompoundStatement final
@@ -278,13 +278,13 @@ namespace OpenCL::Semantics
 
         Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name);
 
-        const Type& getType() const;
+        [[nodiscard]] const Type& getType() const;
 
-        Linkage getLinkage() const;
+        [[nodiscard]] Linkage getLinkage() const;
 
-        Lifetime getLifetime() const;
+        [[nodiscard]] Lifetime getLifetime() const;
 
-        const std::string& getName() const;
+        [[nodiscard]] const std::string& getName() const;
     };
 
     class FunctionDefinition final
@@ -302,15 +302,15 @@ namespace OpenCL::Semantics
                            std::vector<Declaration> parameterDeclarations,
                            Linkage linkage);
 
-        const std::string& getName() const;
+        [[nodiscard]] const std::string& getName() const;
 
-        const FunctionType& getType() const;
+        [[nodiscard]] const FunctionType& getType() const;
 
-        const std::vector<Declaration>& getParameterDeclarations() const;
+        [[nodiscard]] const std::vector<Declaration>& getParameterDeclarations() const;
 
-        bool hasPrototype() const;
+        [[nodiscard]] bool hasPrototype() const;
 
-        Linkage getLinkage() const;
+        [[nodiscard]] Linkage getLinkage() const;
     };
 
     class TranslationUnit final
@@ -326,7 +326,7 @@ namespace OpenCL::Semantics
 
         explicit TranslationUnit(std::vector<variant> globals);
 
-        const std::vector<variant>& getGlobals() const;
+        [[nodiscard]] const std::vector<variant>& getGlobals() const;
     };
 
     using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,

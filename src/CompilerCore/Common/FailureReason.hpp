@@ -12,7 +12,7 @@ namespace OpenCL
     public:
         explicit FailureReason(std::string text);
 
-        const std::string& getText() const;
+        [[nodiscard]] const std::string& getText() const;
     };
 } // namespace OpenCL
 

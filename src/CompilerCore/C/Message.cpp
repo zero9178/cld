@@ -226,6 +226,20 @@ std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findEOL(std::vector<Op
     return end;
 }
 
+std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                                                    std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                    OpenCL::Lexer::TokenType tokenType)
+{
+    for (auto curr = begin; curr != end; curr++)
+    {
+        if (curr->getLine() != begin->getLine() || curr->getTokenType() == tokenType)
+        {
+            return curr;
+        }
+    }
+    return end;
+}
+
 std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::findSemicolon(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                                                         std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {

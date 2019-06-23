@@ -1,4 +1,5 @@
 #include <utility>
+
 #ifndef OPENCLPARSER_MESSAGE_HPP
 #define OPENCLPARSER_MESSAGE_HPP
 
@@ -25,7 +26,7 @@ namespace OpenCL
         {
         };
 
-        std::string format(std::vector<std::string> args) const;
+        [[nodiscard]] std::string format(std::vector<std::string> args) const;
 
         template <class T>
         static std::string toString(T&& value)
@@ -121,13 +122,13 @@ namespace OpenCL
                  std::vector<Lexer::Token>::const_iterator anEnd,
                  Action action, std::string actionArgument = {});
 
-        const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
+        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
 
-        const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
+        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
 
-        Action getAction() const;
+        [[nodiscard]] Action getAction() const;
 
-        const std::string& getActionArgument() const;
+        [[nodiscard]] const std::string& getActionArgument() const;
     };
 
     class Message
@@ -165,21 +166,41 @@ namespace OpenCL
                 std::optional<Modifier> modifier = {},
                 std::vector<Note> notes = {});
 
-        const std::string& getMessage() const;
+        [[nodiscard]] const std::string& getMessage() const;
 
-        const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
+        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
 
-        const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
+        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
 
-        const std::vector<Note>& getNotes() const;
+        [[nodiscard]] const std::vector<Note>& getNotes() const;
 
-        const std::optional<Modifier>& getModifier() const;
+        [[nodiscard]] const std::optional<Modifier>& getModifier() const;
     };
 
     std::ostream& operator<<(std::ostream& os, const Message& message);
 
     std::vector<Lexer::Token>::const_iterator findEOL(std::vector<Lexer::Token>::const_iterator begin,
                                                       std::vector<Lexer::Token>::const_iterator end);
+
+    template <class F>
+    std::enable_if_t<!std::is_same_v<std::decay_t<F>, Lexer::TokenType>,
+                     std::vector<OpenCL::Lexer::Token>::const_iterator> findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                                                                  std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                                  F&& functor)
+    {
+        for (auto curr = begin; curr != end; curr++)
+        {
+            if (curr->getLine() != begin->getLine() || functor(*curr))
+            {
+                return curr;
+            }
+        }
+        return end;
+    }
+
+    std::vector<OpenCL::Lexer::Token>::const_iterator findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                                                std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                                Lexer::TokenType tokenType);
 
     std::vector<Lexer::Token>::const_iterator findSemicolon(std::vector<Lexer::Token>::const_iterator begin,
                                                             std::vector<Lexer::Token>::const_iterator end);

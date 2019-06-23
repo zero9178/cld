@@ -644,17 +644,27 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                                  : std::vector<Syntax::DeclarationSpecifier>{},
                            std::move(initializer));
     }
-    else if (begin->getTokenType() == TokenType::OpenBrace || firstIsInDeclarationSpecifier(*begin, context))
+    else if (begin->getTokenType() == TokenType::OpenBrace || firstIsInDeclaration(*begin, context))
     {
         std::vector<Declaration> declarations;
-        while (begin < end && firstIsInDeclarationSpecifier(*begin, context))
+        while (begin < end && firstIsInDeclaration(*begin, context))
         {
             auto result = parseDeclaration(begin, end, context);
             if (!result)
             {
-                return {};
+                begin = std::find_if(begin, end, [&context](const Token& token)
+                {
+                    return token.getTokenType() == TokenType::OpenBrace || firstIsInDeclaration(token, context);
+                });
+                if (begin == end)
+                {
+                    return {};
+                }
             }
-            declarations.push_back(std::move(*result));
+            else
+            {
+                declarations.push_back(std::move(*result));
+            }
         }
 
         context.pushScope();
@@ -678,12 +688,15 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                     }
                 }
 
-                if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(paramDeclarator))
+                if (auto* abstractDecl = std::get_if<std::unique_ptr<AbstractDeclarator>>(&paramDeclarator))
                 {
-                    context.logError({ErrorMessages::MISSING_PARAMETER_NAME},
-                                     std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                     std::optional<Modifier>(),
-                                     std::vector<Message::Note>());
+                    context.logError(ErrorMessages::MISSING_PARAMETER_NAME,
+                                     begin,
+                                     Modifier(nodeFromNodeDerivedVariant(specifier.back()).begin(),
+                                              *abstractDecl ? (*abstractDecl)->end() : nodeFromNodeDerivedVariant(
+                                                  specifier.back()).end(),
+                                              Modifier::Underline));
+                    continue;
                 }
                 auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
                 auto result = Semantics::declaratorToName(*decl);
@@ -933,13 +946,6 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         }
     }
     while (true);
-    if (!expect(TokenType::SemiColon, begin, end, context))
-    {
-        begin = std::find_if(begin, end, [](const Token& token)
-        {
-            return token.getTokenType() == TokenType::SemiColon;
-        });
-    }
 
     if (isTypedef)
     {
@@ -947,6 +953,11 @@ OpenCL::Parser::parseDeclaration(Tokens::const_iterator& begin, Tokens::const_it
         {
             context.addTypedef(Semantics::declaratorToName(*declator));
         }
+    }
+
+    if (!expect(TokenType::SemiColon, begin, end, context))
+    {
+        return {};
     }
 
     return Declaration(start,
@@ -1450,189 +1461,6 @@ OpenCL::Parser::parseDeclarator(Tokens::const_iterator& begin, Tokens::const_ite
     return Declarator(start, begin, std::move(pointers), std::move(*directDeclarator));
 }
 
-namespace
-{
-
-    std::optional<DirectDeclaratorNoStaticOrAsterisk> parseDirectDeclaratorNoStaticOrAsterisk(
-        DirectDeclarator& declarator, OpenCL::Parser::Tokens::const_iterator& begin,
-        OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
-    {
-        if (begin >= end)
-        {
-            return {};
-        }
-        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
-        if (begin >= end || begin->getTokenType() != TokenType::OpenSquareBracket)
-        {
-            context.logError({"Expected ["},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        else
-        {
-            begin++;
-        }
-        std::vector<TypeQualifier> typeQualifiers;
-        while (begin < end
-            && (begin->getTokenType() == TokenType::ConstKeyword || begin->getTokenType() == TokenType::RestrictKeyword
-                || begin->getTokenType() == TokenType::VolatileKeyword))
-        {
-            switch (begin->getTokenType())
-            {
-            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
-                break;
-            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
-                break;
-            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
-                break;
-            default: break;
-            }
-            begin++;
-        }
-        auto assignment = OpenCL::Parser::parseAssignmentExpression(begin, end, context);
-        if (begin >= end || begin->getTokenType() != TokenType::CloseSquareBracket)
-        {
-            context.logError({"Expected ] to close [ in direct declarator"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        else
-        {
-            begin++;
-        }
-        return DirectDeclaratorNoStaticOrAsterisk(
-            start, begin, std::make_unique<DirectDeclarator>(std::move(declarator)), std::move(typeQualifiers),
-            assignment ? std::make_unique<AssignmentExpression>(std::move(*assignment)) : nullptr);
-    }
-
-    std::optional<DirectDeclaratorStatic>
-    parseDirectDeclaratorStatic(DirectDeclarator& declarator, OpenCL::Parser::Tokens::const_iterator& begin,
-                                OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
-    {
-        if (begin >= end)
-        {
-            return {};
-        }
-        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
-        if (begin >= end || begin->getTokenType() != TokenType::OpenSquareBracket)
-        {
-            context.logError({"Expected ["},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        else
-        {
-            begin++;
-        }
-        bool wasStatic = false;
-        if (begin < end && begin->getTokenType() == TokenType::StaticKeyword)
-        {
-            wasStatic = true;
-            begin++;
-        }
-        std::vector<TypeQualifier> typeQualifiers;
-        while (begin < end
-            && (begin->getTokenType() == TokenType::ConstKeyword || begin->getTokenType() == TokenType::RestrictKeyword
-                || begin->getTokenType() == TokenType::VolatileKeyword))
-        {
-            switch (begin->getTokenType())
-            {
-            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
-                break;
-            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
-                break;
-            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
-                break;
-            default: break;
-            }
-            begin++;
-        }
-        if (begin < end && begin->getTokenType() == TokenType::StaticKeyword)
-        {
-            if (wasStatic)
-            {
-                context.logError({"static appearing twice in direct declarator"},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            begin++;
-        }
-        auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(begin, end, context);
-        if (!assignmentExpression)
-        {
-            return {};
-        }
-        if (begin >= end || begin->getTokenType() != TokenType::CloseSquareBracket)
-        {
-            context.logError({"Expected ]"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        else
-        {
-            begin++;
-        }
-        return DirectDeclaratorStatic(start, begin, std::make_unique<DirectDeclarator>(std::move(declarator)),
-                                      std::move(typeQualifiers), std::move(*assignmentExpression));
-    }
-
-    std::optional<DirectDeclaratorAsterisk>
-    parseDirectDeclaratorAsterisk(DirectDeclarator& declarator, OpenCL::Parser::Tokens::const_iterator& begin,
-                                  OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
-    {
-        if (begin >= end || begin->getTokenType() != TokenType::OpenSquareBracket)
-        {
-            context.logError({"Expected ["},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        auto start = Syntax::nodeFromNodeDerivedVariant(declarator).begin();
-        begin++;
-        std::vector<TypeQualifier> typeQualifiers;
-        while (begin < end
-            && (begin->getTokenType() == TokenType::ConstKeyword || begin->getTokenType() == TokenType::RestrictKeyword
-                || begin->getTokenType() == TokenType::VolatileKeyword))
-        {
-            switch (begin->getTokenType())
-            {
-            case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
-                break;
-            case TokenType::RestrictKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
-                break;
-            case TokenType::VolatileKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
-                break;
-            default: break;
-            }
-            begin++;
-        }
-        if (begin >= end || begin->getTokenType() != TokenType::Asterisk)
-        {
-            context.logError({"Expected *"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        if (begin >= end || begin->getTokenType() != TokenType::CloseSquareBracket)
-        {
-            context.logError({"Expected ]"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
-        }
-        else
-        {
-            begin++;
-        }
-        return DirectDeclaratorAsterisk(start, begin, std::move(declarator), std::move(typeQualifiers));
-    }
-} // namespace
-
 std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::const_iterator& begin,
                                                                       Tokens::const_iterator end,
                                                                       ParsingContext& context)
@@ -1643,11 +1471,11 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
             || begin->getTokenType() == TokenType::OpenParenthese
             || (begin->getTokenType() == TokenType::OpenSquareBracket && directDeclarator)))
     {
+        auto start = directDeclarator ? nodeFromNodeDerivedVariant(*directDeclarator).begin() : begin;
         switch (begin->getTokenType())
         {
         case TokenType::Identifier:
         {
-            auto start = begin;
             auto currToken = begin;
             begin++;
             directDeclarator =
@@ -1660,20 +1488,30 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
         }
         case TokenType::OpenParenthese:
         {
-            auto start = begin;
+            auto openPpos = begin;
             begin++;
             if (directDeclarator)
             {
-                if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
+                if (begin < end && firstIsInParameterTypeList(*begin, context))
                 {
                     auto parameterTypeList = parseParameterTypeList(begin, end, context);
                     if (!parameterTypeList)
                     {
-                        return {};
+                        begin = std::find_if(begin, end, [](const Token& token)
+                        {
+                            return token.getTokenType() == TokenType::CloseParenthese;
+                        });
+                        if (begin == end)
+                        {
+                            return {};
+                        }
                     }
-                    directDeclarator = std::make_unique<DirectDeclarator>(
-                        DirectDeclaratorParentheseParameters(start, begin, std::move(*directDeclarator),
-                                                             std::move(*parameterTypeList)));
+                    else
+                    {
+                        directDeclarator = std::make_unique<DirectDeclarator>(
+                            DirectDeclaratorParentheseParameters(start, begin, std::move(*directDeclarator),
+                                                                 std::move(*parameterTypeList)));
+                    }
                 }
                 else
                 {
@@ -1688,10 +1526,19 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         }
                         else if (begin < end && begin->getTokenType() != TokenType::CloseParenthese)
                         {
-                            context.logError({"Expected , to separate identifiers"},
-                                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                             std::optional<Modifier>(),
-                                             std::vector<Message::Note>());
+                            context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+                                                 .args("','", '\'' + begin->emitBack() + '\''),
+                                             findEOLor(begin, end, TokenType::CloseParenthese),
+                                             Modifier(begin, begin + 1, Modifier::PointAtBeginning));
+                            begin = std::find_if(begin, end, [](const Token& token)
+                            {
+                                return token.getTokenType() == TokenType::CloseParenthese
+                                    || token.getTokenType() == TokenType::Identifier;
+                            });
+                            if (begin == end)
+                            {
+                                return {};
+                            }
                         }
                     }
                     directDeclarator = std::make_unique<DirectDeclarator>(
@@ -1704,77 +1551,207 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 auto declarator = parseDeclarator(begin, end, context);
                 if (!declarator)
                 {
+                    begin = std::find_if(begin, end, [](const Token& token)
+                    {
+                        return token.getTokenType() == TokenType::CloseParenthese;
+                    });
+                    if (begin == end)
+                    {
+                        return {};
+                    }
+                }
+                else
+                {
+                    directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthese(
+                        start, begin, std::make_unique<Declarator>(std::move(*declarator))));
+                }
+            }
+            if (!expect(TokenType::CloseParenthese,
+                        begin,
+                        end,
+                        context,
+                        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+            {
+                if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese
+                    || begin->getTokenType() != TokenType::OpenSquareBracket)
+                {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthese(
-                    start, begin, std::make_unique<Declarator>(std::move(*declarator))));
-            }
-            if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
-            {
-                context.logError({"Expected ) "},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            else
-            {
-                begin++;
             }
             break;
         }
         case TokenType::OpenSquareBracket:
         {
-            if (!directDeclarator)
-            {
-                context.logError({"Expected declarator before ["},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-                return {};
-            }
+            auto openPpos = begin;
             begin++;
             if (begin >= end)
             {
-                context.logError({"Expected ] to match ["},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
+                expect(TokenType::CloseSquareBracket,
+                       begin,
+                       end,
+                       context,
+                       {{Notes::TO_MATCH_N_HERE.args("'['"), start, findSemicolonOrEOL(begin, end),
+                         Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}});
                 return {};
             }
-            if (std::any_of(begin, std::find_if(begin, end, [](const auto& token)
-            { return token.getTokenType() == TokenType::CloseSquareBracket; }), [](const auto& token)
-                            {
-                                return token.getTokenType() == TokenType::Asterisk;
-                            }))
+
+            if (begin->getTokenType() == TokenType::StaticKeyword)
             {
-                auto asterisk = parseDirectDeclaratorAsterisk(*directDeclarator, begin, end, context);
-                if (!asterisk)
+                begin++;
+                std::vector<TypeQualifier> typeQualifiers;
+                while (begin < end
+                    && (begin->getTokenType() == TokenType::ConstKeyword
+                        || begin->getTokenType() == TokenType::RestrictKeyword
+                        || begin->getTokenType() == TokenType::VolatileKeyword))
                 {
-                    return {};
+                    switch (begin->getTokenType())
+                    {
+                    case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                        break;
+                    case TokenType::RestrictKeyword:
+                        typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                        break;
+                    case TokenType::VolatileKeyword:
+                        typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                        break;
+                    default: break;
+                    }
+                    begin++;
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*asterisk));
-            }
-            else if (std::any_of(begin, std::find_if(begin, end, [](const auto& token)
-            { return token.getTokenType() == TokenType::CloseSquareBracket; }), [](const auto& token)
-                                 {
-                                     return token.getTokenType() == TokenType::StaticKeyword;
-                                 }))
-            {
-                auto staticDecl = parseDirectDeclaratorStatic(*directDeclarator, begin, end, context);
-                if (!staticDecl)
+                auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(begin, end, context);
+                if (!assignmentExpression)
                 {
-                    return {};
+                    begin = std::find_if(begin, end, [](const Token& token)
+                    {
+                        return token.getTokenType() == TokenType::CloseSquareBracket;
+                    });
+                    if (begin == end)
+                    {
+                        return {};
+                    }
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*staticDecl));
+                else
+                {
+                    directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorStatic(start,
+                                                                                                 begin,
+                                                                                                 std::move(
+                                                                                                     directDeclarator),
+                                                                                                 std::move(
+                                                                                                     typeQualifiers),
+                                                                                                 std::move(*assignmentExpression)));
+                }
             }
             else
             {
-                auto noStaticDecl = parseDirectDeclaratorNoStaticOrAsterisk(*directDeclarator, begin, end, context);
-                if (!noStaticDecl)
+                std::vector<TypeQualifier> typeQualifiers;
+                while (begin < end
+                    && (begin->getTokenType() == TokenType::ConstKeyword
+                        || begin->getTokenType() == TokenType::RestrictKeyword
+                        || begin->getTokenType() == TokenType::VolatileKeyword))
+                {
+                    switch (begin->getTokenType())
+                    {
+                    case TokenType::ConstKeyword: typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                        break;
+                    case TokenType::RestrictKeyword:
+                        typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                        break;
+                    case TokenType::VolatileKeyword:
+                        typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                        break;
+                    default: break;
+                    }
+                    begin++;
+                }
+                if (begin < end)
+                {
+                    if (begin->getTokenType() == TokenType::CloseSquareBracket)
+                    {
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(start,
+                                                                                                                 begin,
+                                                                                                                 std::move(
+                                                                                                                     directDeclarator),
+                                                                                                                 std::move(
+                                                                                                                     typeQualifiers),
+                                                                                                                 nullptr));
+                    }
+                    else if (begin->getTokenType() == TokenType::StaticKeyword)
+                    {
+                        begin++;
+                        auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(begin, end, context);
+                        if (!assignmentExpression)
+                        {
+                            begin = std::find_if(begin, end, [](const Token& token)
+                            {
+                                return token.getTokenType() == TokenType::CloseSquareBracket;
+                            });
+                            if (begin == end)
+                            {
+                                return {};
+                            }
+                        }
+                        else
+                        {
+                            directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorStatic(start,
+                                                                                                         begin,
+                                                                                                         std::move(
+                                                                                                             directDeclarator),
+                                                                                                         std::move(
+                                                                                                             typeQualifiers),
+                                                                                                         std::move(*assignmentExpression)));
+                        }
+                    }
+                    else if (begin->getTokenType() == TokenType::Asterisk)
+                    {
+                        begin++;
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorAsterisk(start,
+                                                                                                       begin,
+                                                                                                       std::move(
+                                                                                                           *directDeclarator),
+                                                                                                       std::move(
+                                                                                                           typeQualifiers)));
+
+                    }
+                    else
+                    {
+                        auto assignment = OpenCL::Parser::parseAssignmentExpression(begin, end, context);
+                        if (!assignment)
+                        {
+                            begin = std::find_if(begin, end, [](const Token& token)
+                            {
+                                return token.getTokenType() == TokenType::CloseSquareBracket;
+                            });
+                            if (begin == end)
+                            {
+                                return {};
+                            }
+                        }
+                        else
+                        {
+                            directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
+                                start,
+                                begin,
+                                std::move(directDeclarator),
+                                std::move(typeQualifiers),
+                                std::make_unique<AssignmentExpression>(std::move(*assignment))));
+                        }
+                    }
+                }
+            }
+
+            if (!expect(TokenType::CloseSquareBracket,
+                        begin,
+                        end,
+                        context,
+                        {{Notes::TO_MATCH_N_HERE.args("'['"), start, findSemicolonOrEOL(begin, end),
+                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+            {
+                if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese
+                    || begin->getTokenType() != TokenType::OpenSquareBracket)
                 {
                     return {};
                 }
-                directDeclarator = std::make_unique<DirectDeclarator>(std::move(*noStaticDecl));
             }
             break;
         }
@@ -1806,32 +1783,27 @@ std::optional<ParameterTypeList>
 OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                        OpenCL::Parser::ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     auto start = begin;
     auto parameterList = parseParameterList(begin, end, context);
-    if (!parameterList)
-    {
-        return {};
-    }
     bool hasEllipse = false;
     if (begin < end && begin->getTokenType() == TokenType::Comma)
     {
         begin++;
         if (begin >= end || begin->getTokenType() != TokenType::Ellipse)
         {
-            context.logError({"Expected another parameter after ,"},
-                             std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                             std::optional<Modifier>(),
-                             std::vector<Message::Note>());
+            context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("parameter", "','"),
+                             findEOL(begin, end),
+                             Modifier(begin - 1, begin, Modifier::PointAtEnd));
         }
         else
         {
             begin++;
             hasEllipse = true;
         }
+    }
+    if (!parameterList)
+    {
+        return {};
     }
     return ParameterTypeList(start, begin, std::move(*parameterList), hasEllipse);
 }
@@ -2021,19 +1993,16 @@ std::optional<DirectAbstractDeclarator>
 OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iterator& begin,
                                               Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
-    while (begin < end)
+    while (begin < end && (begin->getTokenType() == TokenType::OpenParenthese
+        || begin->getTokenType() == TokenType::OpenSquareBracket))
     {
+        auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin() : begin;
         switch (begin->getTokenType())
         {
         case TokenType::OpenParenthese:
         {
-            auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin()
-                                                  : begin;
+            auto openPpos = begin;
             begin++;
             if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
             {
@@ -2047,14 +2016,19 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                         start, begin, std::move(directAbstractDeclarator),
                         std::make_unique<ParameterTypeList>(std::move(*parameterTypeList))));
             }
-            else if (begin < end && (begin->getTokenType() == TokenType::OpenParenthese
-                || begin->getTokenType() == TokenType::OpenSquareBracket
-                || begin->getTokenType() == TokenType::Asterisk))
+            else if (begin < end && !directAbstractDeclarator && firstIsInAbstractDeclarator(*begin, context))
             {
                 auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                 if (!abstractDeclarator)
                 {
-                    return {};
+                    begin = std::find_if(begin, end, [](const Token& token)
+                    {
+                        return token.getTokenType() == TokenType::CloseParenthese;
+                    });
+                    if (begin == end)
+                    {
+                        return {};
+                    }
                 }
                 directAbstractDeclarator
                     = std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParenthese(
@@ -2066,23 +2040,24 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                     DirectAbstractDeclaratorParameterTypeList(start, begin, std::move(directAbstractDeclarator),
                                                               nullptr));
             }
-            if (begin >= end || begin->getTokenType() != TokenType::CloseParenthese)
+            if (!expect(TokenType::CloseParenthese,
+                        begin,
+                        end,
+                        context,
+                        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
+                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
             {
-                context.logError({"Expected ) to match ("},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
-            }
-            else
-            {
-                begin++;
+                if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese
+                    || begin->getTokenType() != TokenType::OpenSquareBracket)
+                {
+                    return {};
+                }
             }
             break;
         }
         case TokenType::OpenSquareBracket:
         {
-            auto start = directAbstractDeclarator ? nodeFromNodeDerivedVariant(*directAbstractDeclarator).begin()
-                                                  : begin;
+            auto openPpos = begin;
             begin++;
             if (begin < end && begin->getTokenType() == TokenType::Asterisk)
             {
@@ -2100,7 +2075,14 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                     auto assignment = parseAssignmentExpression(begin, end, context);
                     if (!assignment)
                     {
-                        return {};
+                        begin = std::find_if(begin, end, [](const Token& token)
+                        {
+                            return token.getTokenType() == TokenType::CloseSquareBracket;
+                        });
+                        if (begin == end)
+                        {
+                            return {};
+                        }
                     }
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                         DirectAbstractDeclaratorAssignmentExpression(
@@ -2114,25 +2096,41 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
                                                                      std::move(directAbstractDeclarator), nullptr));
                 }
             }
-            if (begin >= end || begin->getTokenType() != TokenType::CloseSquareBracket)
+
+            if (!expect(TokenType::CloseSquareBracket,
+                        begin,
+                        end,
+                        context,
+                        {{Notes::TO_MATCH_N_HERE.args("'['"), start, findSemicolonOrEOL(begin, end),
+                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
             {
-                context.logError({"Expected ] to match ["},
-                                 std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                                 std::optional<Modifier>(),
-                                 std::vector<Message::Note>());
+                if (begin >= end || begin->getTokenType() != TokenType::OpenParenthese
+                    || begin->getTokenType() != TokenType::OpenSquareBracket)
+                {
+                    return {};
+                }
             }
             break;
         }
-        default:goto Exit;
+        default:break;
         }
     }
-Exit:
     if (!directAbstractDeclarator)
     {
-        context.logError({"Invalid tokens for direct abstract declarator"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        if (begin == end)
+        {
+            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
+                                 .args(OpenCL::Format::List(", ", " or ", "'('", "'['")),
+                             begin,
+                             Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
+        }
+        else
+        {
+            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                                 .args(OpenCL::Format::List(", ", " or ", "'('", "'['"),
+                                       '\'' + begin->emitBack() + '\''),
+                             end, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
+        }
         return {};
     }
     return std::move(*directAbstractDeclarator);

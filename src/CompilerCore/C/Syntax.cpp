@@ -6,8 +6,8 @@
 
 OpenCL::Syntax::Expression::Expression(std::vector<Lexer::Token>::const_iterator begin,
                                        std::vector<Lexer::Token>::const_iterator end,
-                                       std::vector<OpenCL::Syntax::AssignmentExpression> assignmanetExpressions)
-    : Node(begin, end), m_assignmentExpressions(std::move(assignmanetExpressions))
+                                       std::vector<OpenCL::Syntax::AssignmentExpression> assignmentExpressions)
+    : Node(begin, end), m_assignmentExpressions(std::move(assignmentExpressions))
 {
     assert(!m_assignmentExpressions.empty());
 }

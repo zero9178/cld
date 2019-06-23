@@ -28,7 +28,9 @@ namespace OpenCL::Parser
     namespace Notes
     {
         constexpr auto
-            TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is typdef but overshadowed by declaration here:");
+            TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is a typedef but overshadowed by declaration here:");
+
+        constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");
     }
 
     class ParsingContext final
@@ -82,7 +84,7 @@ namespace OpenCL::Parser
 
         void addTypedef(const std::string& name);
 
-        bool isTypedef(const std::string& name) const;
+        [[nodiscard]] bool isTypedef(const std::string& name) const;
 
         void logError(std::string message,
                       Tokens::const_iterator end,
@@ -104,15 +106,15 @@ namespace OpenCL::Parser
 
         void addToScope(std::string name, DeclarationLocation declarator);
 
-        const Parser::ParsingContext::DeclarationLocation* getLocationOf(const std::string& name) const;
+        [[nodiscard]] const Parser::ParsingContext::DeclarationLocation* getLocationOf(const std::string& name) const;
 
-        bool isInScope(const std::string& name) const;
+        [[nodiscard]] bool isInScope(const std::string& name) const;
 
         void pushScope();
 
         void popScope();
 
-        bool isErrorsOccured() const;
+        [[nodiscard]] bool isErrorsOccured() const;
 
         [[nodiscard]]
         UniqueResource setDiagnosticStart(Tokens::const_iterator start)
@@ -139,7 +141,7 @@ namespace OpenCL::Parser
         std::unique_ptr<Branch> createBranch(Tokens::const_iterator& begin,
                                              Branch::CriteriaFunction&& criteria = {});
 
-        std::size_t getCurrentErrorCount() const;
+        [[nodiscard]] std::size_t getCurrentErrorCount() const;
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
