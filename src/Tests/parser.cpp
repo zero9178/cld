@@ -3,6 +3,8 @@
 #include <sstream>
 #include "catch.hpp"
 
+#if  defined(_WIN32)
+
 #define sourceProduces(source, matches)\
 do\
 {\
@@ -18,6 +20,21 @@ do\
             std::cerr<<std::endl;\
         }\
 }while(0)
+
+#else
+
+#define sourceProduces(source, matches)\
+do\
+{\
+        std::ostringstream ss;\
+        std::vector<OpenCL::Lexer::Token> tokens;\
+        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));\
+        auto tree = OpenCL::Parser::buildTree(tokens, &ss);\
+        auto string = ss.str();\
+        CHECK_THAT(string, matches);\
+}while(0)
+
+#endif
 
 namespace
 {
@@ -281,72 +298,63 @@ TEST_CASE("Declarator", "[parser]")
 
 TEST_CASE("Statements", "[parser]")
 {
-    sourceProduces(R"(
-void foo()
-{
-    return;
-}
-)", ProducesNoErrors() && ProducesNoNotes());
-    sourceProduces(R"(
-void foo()
-{
-    return 5;
-}
-)", ProducesNoErrors() && ProducesNoNotes());
-    sourceProduces(R"(
-void foo()
-{
-    return
-}
-)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProduces(R"(
-void foo()
-{
-    return 5
-}
-)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1) && ProducesNoNotes());
-    sourceProduces(R"(
-void foo()
-{
-    return 5
-
-)", Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
-        sourceProduces(R"(
-void foo()
-{
-    if 5);
-}
-)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1) && ProducesNoNotes());
-        sourceProduces(R"(
-void foo()
-{
-    if(5;
-    int i
-}
-)",
-                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
-                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
-                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(1));
-        sourceProduces(R"(
-void foo()
-{
-    if(5);else;
-}
-)", ProducesNoErrors() && ProducesNoNotes());
-        sourceProduces(R"(
-void foo()
-{
-    switch 5);
-}
-)", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1) && ProducesNoNotes());
-        sourceProduces(R"(
-void foo()
-{
-    switch(5;
-    int i
-}
-)",
-                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
-                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
-                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(1));
+    SECTION("Return")
+    {
+        sourceProduces("void foo(){return;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){return 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){return}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){return 5}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){return 5",
+                       Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
     }
+    SECTION("if")
+    {
+        sourceProduces("void foo(){if 5);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){if(5;int i}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
+                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
+                           && ProducesNNotes(1));
+        sourceProduces("void foo(){if(5);else;}", ProducesNoErrors() && ProducesNoNotes());
+    }
+    SECTION("switch")
+    {
+        sourceProduces("void foo(){switch(5);}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){switch 5);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){switch(5;int i}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
+                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
+                           && ProducesNNotes(1));
+    }
+    SECTION("for")
+    {
+        sourceProduces("void foo(){for int i = 0; i < 5; i++);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'int'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){int i;for i = 0; i < 5; i++);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'i'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){for(int i = 0 i < 5; i++);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){for(int i = 0; i < 5 i++);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){for(int i = 0 i < 5 i++);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(2)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){for(int i = 0;i < 5;i++;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                           && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
+                           && ProducesNNotes(1));
+    }
+}

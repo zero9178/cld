@@ -1159,7 +1159,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
         begin++;
     }
 
-    if (begin->getTokenType() != TokenType::OpenBrace)
+    if (begin >= end || begin->getTokenType() != TokenType::OpenBrace)
     {
         if (name.empty())
         {
@@ -3303,7 +3303,8 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
                                       auto unary = parseUnaryExpression(assignmentBranch->getCurrent(), end, context);
                                       if (*assignmentBranch)
                                       {
-                                          if (isAssignment(assignmentBranch->getCurrent()->getTokenType()))
+                                          if (assignmentBranch->getCurrent() < end
+                                              && isAssignment(assignmentBranch->getCurrent()->getTokenType()))
                                           {
                                               auto currentToken = *assignmentBranch->getCurrent();
                                               assignmentBranch->getCurrent()++;
@@ -3927,7 +3928,9 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         return {};
     }
     std::stack<std::unique_ptr<PostFixExpression>> stack;
-    while (begin != end && isPostFixOperator(*begin))
+    while (begin != end && isPostFixOperator(*begin)
+        && ((begin->getTokenType() != TokenType::Identifier && begin->getTokenType() != TokenType::Literal)
+            || stack.empty()))
     {
         if (begin->getTokenType() == TokenType::Identifier || begin->getTokenType() == TokenType::Literal)
         {

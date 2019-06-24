@@ -434,7 +434,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
     }
     State currentState = State::Start;
     std::string characters;
-    std::regex identifierMatch("[a-zA-Z_]\\w*");
+    static std::regex identifierMatch("[a-zA-Z_]\\w*");
     std::vector<Token> result;
     std::uint64_t line = 1, column = 0;
     bool lastTokenIsAmbiguous = false;

@@ -522,7 +522,7 @@ std::string OpenCL::PP::preprocess(std::string&& source)
     source = std::regex_replace(source, std::regex(R"(//.*)"), "");
 
     std::smatch blockComments;
-    std::regex blockRegex(R"(/\*(.|\n)*\*/)");
+    static std::regex blockRegex(R"(/\*(.|\n)*\*/)");
     while (std::regex_search(source, blockComments, blockRegex))
     {
         auto text = blockComments[0].str();
