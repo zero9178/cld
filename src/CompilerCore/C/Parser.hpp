@@ -230,6 +230,12 @@ namespace OpenCL::Parser
     std::optional<Syntax::AssignmentExpression>
     parseAssignmentExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
 
+    std::optional<Syntax::AssignmentExpressionAssignment>
+    parseAssignmentExpressionAssignment(Tokens::const_iterator& begin,
+                                        Tokens::const_iterator end,
+                                        ParsingContext& context,
+                                        bool* reachedAssignment);
+
     std::optional<Syntax::ConditionalExpression>
     parseConditionalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
 

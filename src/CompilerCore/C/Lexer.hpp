@@ -24,7 +24,7 @@ namespace OpenCL::Lexer
         Plus,
         Asterisk,
         Division,
-        Modulo,
+        Percent,
         LogicAnd,
         LogicOr,
         Ampersand,

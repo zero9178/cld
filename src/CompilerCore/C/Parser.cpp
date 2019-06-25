@@ -734,7 +734,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
     else
     {
         std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
-        if (!isTypedef)
+        if (!isTypedef && declarator)
         {
             context.addToScope(Semantics::declaratorToName(*declarator),
                                {start, begin, Semantics::declaratorToLoc(*declarator)});
@@ -750,7 +750,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
                                          std::make_unique<Initializer>(std::move(*initializer)));
         }
-        else
+        else if (declarator)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
         }
@@ -2638,6 +2638,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
     }
     case TokenType::DoKeyword:
     {
+        auto doPos = begin;
         begin++;
         auto statement = parseStatement(begin, end, context);
         if (!statement)
@@ -2651,7 +2652,12 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 return {};
             }
         }
-        if (!expect(TokenType::WhileKeyword, begin, end, context))
+        if (!expect(TokenType::WhileKeyword,
+                    begin,
+                    end,
+                    context,
+                    {{Notes::TO_MATCH_N_HERE.args("'do'"), start, findSemicolonOrEOL(begin, end),
+                      Modifier(doPos, doPos + 1, Modifier::PointAtBeginning)}}))
         {
             begin = std::find_if(begin, end, [](const Token& token)
             {
@@ -3244,32 +3250,32 @@ std::optional<Syntax::ForStatement> OpenCL::Parser::parseForStatement(std::vecto
 std::optional<Expression> OpenCL::Parser::parseExpression(Tokens::const_iterator& begin,
                                                           Tokens::const_iterator end, ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
     std::vector<AssignmentExpression> expressions;
     auto assignment = parseAssignmentExpression(begin, end, context);
-    if (!assignment)
+    if (!assignment && (begin >= end || begin->getTokenType() != TokenType::Comma))
     {
         return {};
     }
-    expressions.push_back(std::move(*assignment));
+    else if (assignment)
+    {
+        expressions.push_back(std::move(*assignment));
+    }
 
     if (begin != end)
     {
-        while (begin->getTokenType() == TokenType::Comma)
+        while (begin < end && begin->getTokenType() == TokenType::Comma)
         {
-            auto before = begin;
             begin++;
             assignment = parseAssignmentExpression(begin, end, context);
-            if (!assignment)
+            if (!assignment && (begin >= end || begin->getTokenType() != TokenType::Comma))
             {
-                begin = before;
-                break;
+                return {};
             }
-            expressions.push_back(std::move(*assignment));
+            else if (assignment)
+            {
+                expressions.push_back(std::move(*assignment));
+            }
         }
     }
     return Expression(start, begin, std::move(expressions));
@@ -3279,69 +3285,21 @@ std::optional<Syntax::AssignmentExpression>
 OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                           ParsingContext& context)
 {
-    if (begin == end)
-    {
-
-        return {};
-    }
     auto start = begin;
     return context.doBacktracking([&]() -> std::optional<Syntax::AssignmentExpression>
                                   {
+                                      bool reachedAssignment = false;
                                       auto assignmentBranch = context.createBranch(begin,
-                                                                                   [](Tokens::const_iterator begin,
-                                                                                      Tokens::const_iterator end)
+                                                                                   [&reachedAssignment](Tokens::const_iterator,
+                                                                                                        Tokens::const_iterator)
                                                                                    {
-                                                                                       return std::any_of(begin,
-                                                                                                          end,
-                                                                                                          [](const Token& token)
-                                                                                                          {
-                                                                                                              return isAssignment(
-                                                                                                                  token
-                                                                                                                      .getTokenType());
-                                                                                                          });
+                                                                                       return reachedAssignment;
                                                                                    });
-                                      auto unary = parseUnaryExpression(assignmentBranch->getCurrent(), end, context);
-                                      if (*assignmentBranch)
-                                      {
-                                          if (assignmentBranch->getCurrent() < end
-                                              && isAssignment(assignmentBranch->getCurrent()->getTokenType()))
-                                          {
-                                              auto currentToken = *assignmentBranch->getCurrent();
-                                              assignmentBranch->getCurrent()++;
-                                              auto
-                                                  assignment = parseAssignmentExpression(assignmentBranch->getCurrent(),
-                                                                                         end,
-                                                                                         context);
-                                              if (!assignment)
-                                              {
-                                                  return {};
-                                              }
-                                              return AssignmentExpression(
-                                                  start, begin,
-                                                  AssignmentExpressionAssignment(
-                                                      start, begin, std::move(*unary),
-                                                      [assignment = currentToken.getTokenType()]
-                                                      {
-                                                          switch (assignment)
-                                                          {
-                                                          case TokenType::Assignment:return AssignmentExpressionAssignment::AssignOperator::NoOperator;
-                                                          case TokenType::PlusAssign:return AssignmentExpressionAssignment::AssignOperator::PlusAssign;
-                                                          case TokenType::MinusAssign:return AssignmentExpressionAssignment::AssignOperator::MinusAssign;
-                                                          case TokenType::DivideAssign:return AssignmentExpressionAssignment::AssignOperator::DivideAssign;
-                                                          case TokenType::MultiplyAssign:return AssignmentExpressionAssignment::AssignOperator::MultiplyAssign;
-                                                          case TokenType::ModuloAssign:return AssignmentExpressionAssignment::AssignOperator::ModuloAssign;
-                                                          case TokenType::ShiftLeftAssign:return AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign;
-                                                          case TokenType::ShiftRightAssign:return AssignmentExpressionAssignment::AssignOperator::RightShiftAssign;
-                                                          case TokenType::BitAndAssign:return AssignmentExpressionAssignment::AssignOperator::BitAndAssign;
-                                                          case TokenType::BitOrAssign:return AssignmentExpressionAssignment::AssignOperator::BitOrAssign;
-                                                          case TokenType::BitXorAssign:return AssignmentExpressionAssignment::AssignOperator::BitXorAssign;
-                                                          default:
-                                                              throw std::runtime_error("Invalid token for assignment");
-                                                          }
-                                                      }(),
-                                                      std::make_unique<AssignmentExpression>(std::move(*assignment))));
-                                          }
-                                      }
+                                      auto assignmentAssignment = parseAssignmentExpressionAssignment(assignmentBranch
+                                                                                                          ->getCurrent(),
+                                                                                                      end,
+                                                                                                      context,
+                                                                                                      &reachedAssignment);
 
                                       auto condBranch = context.createBranch(begin);
                                       auto cond = parseConditionalExpression(condBranch->getCurrent(), end, context);
@@ -3353,43 +3311,155 @@ OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens:
                                   });
 }
 
+std::optional<Syntax::AssignmentExpressionAssignment>
+OpenCL::Parser::parseAssignmentExpressionAssignment(Tokens::const_iterator& begin,
+                                                    Tokens::const_iterator end,
+                                                    ParsingContext& context,
+                                                    bool* reachedAssignment)
+{
+    auto start = begin;
+    if (reachedAssignment)
+    {
+        *reachedAssignment = false;
+    }
+    auto unary = parseUnaryExpression(begin, end, context);
+    if (!unary)
+    {
+        begin = std::find_if(begin, end, [](const Token& token)
+        {
+            return isAssignment(token.getTokenType());
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    AssignmentExpressionAssignment::AssignOperator
+        assignOperator = AssignmentExpressionAssignment::AssignOperator::NoOperator;
+    if (begin >= end || !isAssignment(begin->getTokenType()))
+    {
+        begin = std::find_if(begin, end, [&context](const Token& token)
+        {
+            return firstIsInAssignmentExpression(token, context);
+        });
+        if (begin == end)
+        {
+            return {};
+        }
+    }
+    else
+    {
+        if (reachedAssignment)
+        {
+            *reachedAssignment = true;
+        }
+        switch (begin->getTokenType())
+        {
+        case TokenType::Assignment:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::NoOperator;
+            break;
+        case TokenType::PlusAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::PlusAssign;
+            break;
+        case TokenType::MinusAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::MinusAssign;
+            break;
+        case TokenType::DivideAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::DivideAssign;
+            break;
+        case TokenType::MultiplyAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::MultiplyAssign;
+            break;
+        case TokenType::ModuloAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::ModuloAssign;
+            break;
+        case TokenType::ShiftLeftAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign;
+            break;
+        case TokenType::ShiftRightAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::RightShiftAssign;
+            break;
+        case TokenType::BitAndAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::BitAndAssign;
+            break;
+        case TokenType::BitOrAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::BitOrAssign;
+            break;
+        case TokenType::BitXorAssign:
+            assignOperator
+                = AssignmentExpressionAssignment::AssignOperator::BitXorAssign;
+            break;
+        default:break;
+        }
+        begin++;
+    }
+
+    auto assignment = parseAssignmentExpression(begin,
+                                                end,
+                                                context);
+    if (!assignment || !unary)
+    {
+        return {};
+    }
+    return AssignmentExpressionAssignment(
+        start, begin, std::move(*unary), assignOperator,
+        std::make_unique<AssignmentExpression>(std::move(*assignment)));
+}
+
 std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin,
                                                                                 Tokens::const_iterator end,
                                                                                 ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
     auto logicalOrExperssion = parseLogicalOrExpression(begin, end, context);
-    if (!logicalOrExperssion)
+    if (!logicalOrExperssion && (begin >= end || begin->getTokenType() != TokenType::QuestionMark))
     {
         return {};
     }
-    if (begin != end)
+    if (begin != end && begin->getTokenType() == TokenType::QuestionMark)
     {
-        if (begin->getTokenType() == TokenType::QuestionMark)
+        begin++;
+        auto optionalExpression = parseExpression(begin, end, context);
+        if (!optionalExpression)
         {
-            begin++;
-            auto optionalExpression = parseExpression(begin, end, context);
-            if (!optionalExpression)
+            begin = std::find_if(begin, end, [](const Token& token)
+            {
+                return token.getTokenType() == TokenType::Colon;
+            });
+            if (begin == end)
             {
                 return {};
             }
-            if (!expect(TokenType::Colon, begin, end, context))
-            {
-                return {};
-            }
-            auto optionalConditional = parseConditionalExpression(begin, end, context);
-            if (!optionalConditional)
-            {
-                return optionalConditional;
-            }
-            return ConditionalExpression(start, begin, std::move(*logicalOrExperssion),
-                                         std::make_unique<Expression>(std::move(*optionalExpression)),
-                                         std::make_unique<ConditionalExpression>(std::move(*optionalConditional)));
         }
+        if (!expect(TokenType::Colon, begin, end, context))
+        {
+            begin = std::find_if(begin, end, [&context](const Token& token)
+            {
+                return firstIsInConditionalExpression(token, context);
+            });
+            if (begin == end)
+            {
+                return {};
+            }
+        }
+        auto optionalConditional = parseConditionalExpression(begin, end, context);
+        if (!optionalConditional || !optionalExpression || !logicalOrExperssion)
+        {
+            return optionalConditional;
+        }
+        return ConditionalExpression(start, begin, std::move(*logicalOrExperssion),
+                                     std::make_unique<Expression>(std::move(*optionalExpression)),
+                                     std::make_unique<ConditionalExpression>(std::move(*optionalConditional)));
     }
     return ConditionalExpression(start, begin, std::move(*logicalOrExperssion));
 }
@@ -3398,13 +3468,9 @@ std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Toke
                                                                             Tokens::const_iterator end,
                                                                             ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
     auto logicalAnd = parseLogicalAndExpression(begin, end, context);
-    if (!logicalAnd)
+    if (!logicalAnd && (begin >= end || begin->getTokenType() == TokenType::LogicOr))
     {
         return {};
     }
@@ -3412,17 +3478,22 @@ std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Toke
     std::vector<LogicalAndExpression> optionalLogicalAnds;
     while (begin != end && begin->getTokenType() == TokenType::LogicOr)
     {
-        auto before = begin;
         begin++;
         auto newAnd = parseLogicalAndExpression(begin, end, context);
-        if (!newAnd)
+        if (!newAnd && (begin >= end || begin->getTokenType() == TokenType::LogicOr))
         {
-            begin = before;
-            break;
+            return {};
         }
-        optionalLogicalAnds.push_back(std::move(*newAnd));
+        else if (newAnd)
+        {
+            optionalLogicalAnds.push_back(std::move(*newAnd));
+        }
     }
 
+    if (!logicalAnd)
+    {
+        return {};
+    }
     return LogicalOrExpression(start, begin, std::move(*logicalAnd), std::move(optionalLogicalAnds));
 }
 
@@ -3430,13 +3501,9 @@ std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(To
                                                                               Tokens::const_iterator end,
                                                                               ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
     auto result = parseBitOrExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end || begin->getTokenType() == TokenType::LogicAnd))
     {
         return {};
     }
@@ -3444,17 +3511,22 @@ std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(To
     std::vector<BitOrExpression> list;
     while (begin != end && begin->getTokenType() == TokenType::LogicAnd)
     {
-        auto before = begin;
         begin++;
         auto newOr = parseBitOrExpression(begin, end, context);
-        if (!newOr)
+        if (!newOr && (begin >= end || begin->getTokenType() == TokenType::LogicAnd))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.push_back(std::move(*newOr));
+        else if (newOr)
+        {
+            list.push_back(std::move(*newOr));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return LogicalAndExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3462,14 +3534,9 @@ std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::cons
                                                                     Tokens::const_iterator end,
                                                                     ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseBitXorExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end || begin->getTokenType() != TokenType::BitOr))
     {
         return {};
     }
@@ -3477,17 +3544,22 @@ std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::cons
     std::vector<BitXorExpression> list;
     while (begin != end && begin->getTokenType() == TokenType::BitOr)
     {
-        auto before = begin;
         begin++;
         auto newXor = parseBitXorExpression(begin, end, context);
-        if (!newXor)
+        if (!newXor && (begin >= end || begin->getTokenType() != TokenType::BitOr))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.push_back(std::move(*newXor));
+        else if (newXor)
+        {
+            list.push_back(std::move(*newXor));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return BitOrExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3495,14 +3567,9 @@ std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::co
                                                                       Tokens::const_iterator end,
                                                                       ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseBitAndExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end || begin->getTokenType() != TokenType::BitXor))
     {
         return {};
     }
@@ -3510,17 +3577,22 @@ std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::co
     std::vector<BitAndExpression> list;
     while (begin != end && begin->getTokenType() == TokenType::BitXor)
     {
-        auto before = begin;
         begin++;
         auto newAnd = parseBitAndExpression(begin, end, context);
-        if (!newAnd)
+        if (!newAnd && (begin >= end || begin->getTokenType() != TokenType::BitXor))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.push_back(std::move(*newAnd));
+        else if (newAnd)
+        {
+            list.push_back(std::move(*newAnd));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return BitXorExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3528,14 +3600,9 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
                                                                       Tokens::const_iterator end,
                                                                       ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseEqualityExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end || begin->getTokenType() != TokenType::Ampersand))
     {
         return {};
     }
@@ -3543,17 +3610,22 @@ std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::co
     std::vector<EqualityExpression> list;
     while (begin != end && begin->getTokenType() == TokenType::Ampersand)
     {
-        auto before = begin;
         begin++;
         auto newEqual = parseEqualityExpression(begin, end, context);
-        if (!newEqual)
+        if (!newEqual && (begin >= end || begin->getTokenType() != TokenType::Ampersand))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.push_back(std::move(*newEqual));
+        else if (newEqual)
+        {
+            list.push_back(std::move(*newEqual));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return BitAndExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3561,14 +3633,11 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
                                                                           Tokens::const_iterator end,
                                                                           ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseRelationalExpression(begin, end, context);
-    if (!result)
+    if (!result
+        && (begin >= end
+            || (begin->getTokenType() != TokenType::Equal && begin->getTokenType() != TokenType::NotEqual)))
     {
         return {};
     }
@@ -3576,20 +3645,26 @@ std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens
     std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> relationalExpressions;
     while (begin != end && (begin->getTokenType() == TokenType::Equal || begin->getTokenType() == TokenType::NotEqual))
     {
-        auto before = begin;
         auto token = begin->getTokenType();
         begin++;
         auto newRelational = parseRelationalExpression(begin, end, context);
-        if (!newRelational)
+        if (!newRelational && (begin >= end
+            || (begin->getTokenType() != TokenType::Equal && begin->getTokenType() != TokenType::NotEqual)))
         {
-            begin = before;
-            break;
+            return {};
         }
-        relationalExpressions.emplace_back(token == TokenType::Equal ? EqualityExpression::EqualityOperator::Equal :
-                                           EqualityExpression::EqualityOperator::NotEqual,
-                                           std::move(*newRelational));
+        else if (newRelational)
+        {
+            relationalExpressions.emplace_back(token == TokenType::Equal ? EqualityExpression::EqualityOperator::Equal :
+                                               EqualityExpression::EqualityOperator::NotEqual,
+                                               std::move(*newRelational));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return EqualityExpression(start, begin, std::move(*result), std::move(relationalExpressions));
 }
 
@@ -3597,14 +3672,12 @@ std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(To
                                                                               Tokens::const_iterator end,
                                                                               ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseShiftExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end
+        || (begin->getTokenType() != TokenType::LessThan && begin->getTokenType() != TokenType::LessThanOrEqual
+            && begin->getTokenType() != TokenType::GreaterThan
+            && begin->getTokenType() != TokenType::GreaterThanOrEqual)))
     {
         return {};
     }
@@ -3615,31 +3688,38 @@ std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(To
             || begin->getTokenType() == TokenType::GreaterThan
             || begin->getTokenType() == TokenType::GreaterThanOrEqual))
     {
-        auto before = begin;
         auto token = begin->getTokenType();
         begin++;
         auto newShift = parseShiftExpression(begin, end, context);
-        if (!newShift)
+        if (!newShift && (begin >= end
+            || (begin->getTokenType() != TokenType::LessThan && begin->getTokenType() != TokenType::LessThanOrEqual
+                && begin->getTokenType() != TokenType::GreaterThan
+                && begin->getTokenType() != TokenType::GreaterThanOrEqual)))
         {
-            begin = before;
-            break;
+            return {};
         }
-
-        list.emplace_back(
-            [token]() -> RelationalExpression::RelationalOperator
-            {
-                switch (token)
+        else if (newShift)
+        {
+            list.emplace_back(
+                [token]() -> RelationalExpression::RelationalOperator
                 {
-                case TokenType::LessThan: return RelationalExpression::RelationalOperator::LessThan;
-                case TokenType::LessThanOrEqual: return RelationalExpression::RelationalOperator::LessThanOrEqual;
-                case TokenType::GreaterThan: return RelationalExpression::RelationalOperator::GreaterThan;
-                case TokenType::GreaterThanOrEqual:return RelationalExpression::RelationalOperator::GreaterThanOrEqual;
-                default: throw std::runtime_error("Invalid token for relational LogicalOrExpression");
-                }
-            }(),
-            std::move(*newShift));
+                    switch (token)
+                    {
+                    case TokenType::LessThan: return RelationalExpression::RelationalOperator::LessThan;
+                    case TokenType::LessThanOrEqual: return RelationalExpression::RelationalOperator::LessThanOrEqual;
+                    case TokenType::GreaterThan: return RelationalExpression::RelationalOperator::GreaterThan;
+                    case TokenType::GreaterThanOrEqual:return RelationalExpression::RelationalOperator::GreaterThanOrEqual;
+                    default: return RelationalExpression::RelationalOperator::LessThan;
+                    }
+                }(),
+                std::move(*newShift));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return RelationalExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3647,14 +3727,10 @@ std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::cons
                                                                     Tokens::const_iterator end,
                                                                     ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseAdditiveExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end
+        || (begin->getTokenType() != TokenType::ShiftRight || begin->getTokenType() != TokenType::ShiftLeft)))
     {
         return {};
     }
@@ -3663,20 +3739,26 @@ std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::cons
     while (begin != end
         && (begin->getTokenType() == TokenType::ShiftRight || begin->getTokenType() == TokenType::ShiftLeft))
     {
-        auto before = begin;
         auto token = begin->getTokenType();
         begin++;
         auto newAdd = parseAdditiveExpression(begin, end, context);
-        if (!newAdd)
+        if (!newAdd && (begin >= end
+            || (begin->getTokenType() != TokenType::ShiftRight || begin->getTokenType() != TokenType::ShiftLeft)))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.emplace_back(token == TokenType::ShiftRight ? ShiftExpression::ShiftOperator::Right :
-                          ShiftExpression::ShiftOperator::Left,
-                          std::move(*newAdd));
+        else if (newAdd)
+        {
+            list.emplace_back(token == TokenType::ShiftRight ? ShiftExpression::ShiftOperator::Right :
+                              ShiftExpression::ShiftOperator::Left,
+                              std::move(*newAdd));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return ShiftExpression(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3684,14 +3766,10 @@ std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens
                                                                           Tokens::const_iterator end,
                                                                           ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseTerm(begin, end, context);
-    if (!result)
+    if (!result
+        && (begin >= end || (begin->getTokenType() != TokenType::Plus && begin->getTokenType() != TokenType::Minus)))
     {
         return {};
     }
@@ -3699,34 +3777,37 @@ std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens
     std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
     while (begin != end && (begin->getTokenType() == TokenType::Plus || begin->getTokenType() == TokenType::Minus))
     {
-        auto before = begin;
         auto token = begin->getTokenType();
         begin++;
         auto newTerm = parseTerm(begin, end, context);
-        if (!newTerm)
+        if (!newTerm && (begin >= end
+            || (begin->getTokenType() != TokenType::Plus && begin->getTokenType() != TokenType::Minus)))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.emplace_back(token == TokenType::Plus ? AdditiveExpression::BinaryDashOperator::BinaryPlus :
-                          AdditiveExpression::BinaryDashOperator::BinaryMinus,
-                          std::move(*newTerm));
+        else if (newTerm)
+        {
+            list.emplace_back(token == TokenType::Plus ? AdditiveExpression::BinaryDashOperator::BinaryPlus :
+                              AdditiveExpression::BinaryDashOperator::BinaryMinus,
+                              std::move(*newTerm));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return AdditiveExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                               ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     auto result = parseCastExpression(begin, end, context);
-    if (!result)
+    if (!result && (begin >= end
+        || (begin->getTokenType() != TokenType::Asterisk && begin->getTokenType() != TokenType::Division
+            && begin->getTokenType() != TokenType::Percent)))
     {
         return {};
     }
@@ -3734,31 +3815,38 @@ std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tok
     std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
     while (begin != end
         && (begin->getTokenType() == TokenType::Asterisk || begin->getTokenType() == TokenType::Division
-            || begin->getTokenType() == TokenType::Modulo))
+            || begin->getTokenType() == TokenType::Percent))
     {
-        auto before = begin;
         auto token = begin->getTokenType();
         begin++;
         auto newCast = parseCastExpression(begin, end, context);
-        if (!newCast)
+        if (!newCast && (begin >= end
+            || (begin->getTokenType() != TokenType::Asterisk && begin->getTokenType() != TokenType::Division
+                && begin->getTokenType() != TokenType::Percent)))
         {
-            begin = before;
-            break;
+            return {};
         }
-        list.emplace_back(
-            [token]
-            {
-                switch (token)
+        else if (newCast)
+        {
+            list.emplace_back(
+                [token]
                 {
-                case TokenType::Asterisk: return Term::BinaryDotOperator::BinaryMultiply;
-                case TokenType::Division: return Term::BinaryDotOperator::BinaryDivide;
-                case TokenType::Modulo: return Term::BinaryDotOperator::BinaryRemainder;
-                default: throw std::runtime_error("Invalid token");
-                }
-            }(),
-            std::move(*newCast));
+                    switch (token)
+                    {
+                    case TokenType::Asterisk: return Term::BinaryDotOperator::BinaryMultiply;
+                    case TokenType::Division: return Term::BinaryDotOperator::BinaryDivide;
+                    case TokenType::Percent: return Term::BinaryDotOperator::BinaryRemainder;
+                    default:return Term::BinaryDotOperator::BinaryMultiply;
+                    }
+                }(),
+                std::move(*newCast));
+        }
     }
 
+    if (!result)
+    {
+        return {};
+    }
     return Term(start, begin, std::move(*result), std::move(list));
 }
 
@@ -3766,29 +3854,39 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
                                                       Tokens::const_iterator end,
                                                       OpenCL::Parser::ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
     std::vector<SpecifierQualifier> specifierQualifiers;
-    while (auto result = parseSpecifierQualifier(begin, end, context))
+    while (begin < end && firstIsInSpecifierQualifier(*begin, context))
     {
-        specifierQualifiers.push_back(std::move(*result));
+        auto result = parseSpecifierQualifier(begin, end, context);
+        if (result)
+        {
+            specifierQualifiers.push_back(std::move(*result));
+        }
     }
     if (specifierQualifiers.empty())
     {
-        context.logError({"Expected at least one specifier qualifier at beginning of typename"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
-        return {};
+        if (begin < end)
+        {
+            context.logError(ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
+                             findSemicolonOrEOL(begin, end),
+                             Modifier(begin, begin + 1, Modifier::PointAtBeginning));
+        }
+        else
+        {
+            context.logError(ErrorMessages::EXPECTED_N.args("typename"),
+                             findSemicolonOrEOL(begin, end),
+                             Modifier(begin, begin + 1, Modifier::InsertAtEnd));
+        }
     }
 
-    if (auto abstractDec = parseAbstractDeclarator(begin, end, context))
+    if (firstIsInAbstractDeclarator(*begin, context))
     {
-
+        auto abstractDec = parseAbstractDeclarator(begin, end, context);
+        if (!abstractDec)
+        {
+            return {};
+        }
         return TypeName(start, begin, std::move(specifierQualifiers),
                         std::make_unique<AbstractDeclarator>(std::move(*abstractDec)));
     }
@@ -3800,34 +3898,54 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                                                                   Tokens::const_iterator end,
                                                                   ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-
     auto start = begin;
-    auto before = begin;
-    if (before->getTokenType() == TokenType::OpenParenthese)
+
+    bool isNotTypeInitializer = false;
+    auto
+        castBranch = context.createBranch(begin, [&isNotTypeInitializer](Tokens::const_iterator, Tokens::const_iterator)
     {
-        before++;
-        auto typeName = parseTypeName(before, end, context);
-        if (typeName)
+        return isNotTypeInitializer;
+    });
+    if (castBranch->getCurrent() < end && castBranch->getCurrent()->getTokenType() == TokenType::OpenParenthese)
+    {
+        castBranch->getCurrent()++;
+        auto typeName = parseTypeName(castBranch->getCurrent(), end, context);
+        if (!typeName)
         {
-            if (before->getTokenType() == TokenType::CloseParenthese)
+            castBranch->getCurrent() = std::find_if(castBranch->getCurrent(), end, [](const Token& token)
             {
-                before++;
-                auto cast = parseCastExpression(before, end, context);
-                if (cast)
+                return token.getTokenType() == TokenType::CloseParenthese;
+            });
+        }
+        if (castBranch->getCurrent() < end)
+        {
+            if (!expect(TokenType::CloseParenthese,
+                        castBranch->getCurrent(),
+                        findSemicolonOrEOL(castBranch->getCurrent(), end),
+                        context))
+            {
+                castBranch->getCurrent() = std::find_if(castBranch->getCurrent(), end, [&context](const Token& token)
                 {
-                    begin = before;
-                    return CastExpression(
-                        start, begin,
-                        std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
-                }
+                    return firstIsInCastExpression(token, context);
+                });
+            }
+            else if (typeName && (castBranch->getCurrent() >= end
+                || castBranch->getCurrent()->getTokenType() != TokenType::OpenBrace))
+            {
+                isNotTypeInitializer = true;
+            }
+            auto cast = parseCastExpression(castBranch->getCurrent(), end, context);
+            if (cast && typeName)
+            {
+                return CastExpression(
+                    start, castBranch->getCurrent(),
+                    std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
             }
         }
     }
-    auto unary = parseUnaryExpression(begin, end, context);
+
+    auto unaryBranch = context.createBranch(begin);
+    auto unary = parseUnaryExpression(unaryBranch->getCurrent(), end, context);
     if (!unary)
     {
         return {};
@@ -3840,15 +3958,15 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
                                                                     Tokens::const_iterator end,
                                                                     ParsingContext& context)
 {
-    if (begin == end)
-    {
-        return {};
-    }
     auto start = begin;
-    if (begin->getTokenType() == TokenType::SizeofKeyword)
+    if (begin < end && begin->getTokenType() == TokenType::SizeofKeyword)
     {
         begin++;
-        if (begin->getTokenType() == TokenType::OpenParenthese)
+        if (begin < end && begin + 1 >= end && begin->getTokenType() == TokenType::OpenParenthese)
+        {
+
+        }
+        if (begin < end && begin->getTokenType() == TokenType::OpenParenthese)
         {
             begin++;
             auto type = parseTypeName(begin, end, context);
@@ -3879,11 +3997,12 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
                                                          std::make_unique<UnaryExpression>(std::move(*unary))));
         }
     }
-    else if (begin->getTokenType() == TokenType::Increment || begin->getTokenType() == TokenType::Decrement
+    else if (begin < end
+        && (begin->getTokenType() == TokenType::Increment || begin->getTokenType() == TokenType::Decrement
         || begin->getTokenType() == TokenType::Ampersand || begin->getTokenType() == TokenType::Asterisk
         || begin->getTokenType() == TokenType::Plus || begin->getTokenType() == TokenType::Minus
         || begin->getTokenType() == TokenType::LogicalNegation
-        || begin->getTokenType() == TokenType::BitWiseNegation)
+            || begin->getTokenType() == TokenType::BitWiseNegation))
     {
         auto token = begin->getTokenType();
         begin++;

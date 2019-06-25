@@ -11,7 +11,6 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/TargetSelect.h>
 
-#include <windows.h>
 
 int main()
 {

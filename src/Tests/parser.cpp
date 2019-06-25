@@ -1,10 +1,9 @@
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 #include <sstream>
+#include "TestConfig.hpp"
 #include "catch.hpp"
 
-#if  defined(_WIN32)
-
 #define sourceProduces(source, matches)\
 do\
 {\
@@ -14,27 +13,15 @@ do\
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);\
         auto string = ss.str();\
         CHECK_THAT(string, matches);\
-        OpenCL::Parser::buildTree(tokens);\
-        if(!string.empty())\
+        if(OpenCL::colourConsoleOutput)\
         {\
-            std::cerr<<std::endl;\
+            OpenCL::Parser::buildTree(tokens);\
+            if(!string.empty())\
+            {\
+                std::cerr<<std::endl;\
+            }\
         }\
 }while(0)
-
-#else
-
-#define sourceProduces(source, matches)\
-do\
-{\
-        std::ostringstream ss;\
-        std::vector<OpenCL::Lexer::Token> tokens;\
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));\
-        auto tree = OpenCL::Parser::buildTree(tokens, &ss);\
-        auto string = ss.str();\
-        CHECK_THAT(string, matches);\
-}while(0)
-
-#endif
 
 namespace
 {
@@ -357,4 +344,53 @@ TEST_CASE("Statements", "[parser]")
                            && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                            && ProducesNNotes(1));
     }
+    SECTION("while, do ... while")
+    {
+        sourceProduces("void foo(){while(5);}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){do;while(5);}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){while 5);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){while(5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'('")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){do;while 5);}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){do;while(5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'('")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){do;(5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'('")) &&
+                           Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'while'", "'('")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'do'")) &&
+                           ProducesNErrors(2) && ProducesNNotes(2));
+    }
+    SECTION("break and continue")
+    {
+        sourceProduces("void foo(){break;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){continue;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){break}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+        sourceProduces("void foo(){continue}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+    }
+    SECTION("Label and goto")
+    {
+        sourceProduces("void foo(){test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){typedef int test;test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){test:;goto 0x3;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'0x3'")) && ProducesNErrors(1)
+                           && ProducesNoNotes());
+    }
+}
+
+TEST_CASE("Expressions")
+{
+
 }

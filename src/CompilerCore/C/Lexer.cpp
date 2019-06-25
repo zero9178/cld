@@ -487,7 +487,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 case '^':result.emplace_back(line, column, 1, TokenType::BitXor);
                     lastTokenIsAmbiguous = true;
                     break;
-                case '%':result.emplace_back(line, column, 1, TokenType::Modulo);
+                case '%':result.emplace_back(line, column, 1, TokenType::Percent);
                     lastTokenIsAmbiguous = true;
                     break;
                 case '!':result.emplace_back(line, column, 1, TokenType::LogicalNegation);
@@ -804,7 +804,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                         case TokenType::Asterisk:result.pop_back();
                             result.emplace_back(line, column - 1, 2, TokenType::MultiplyAssign);
                             break;
-                        case TokenType::Modulo:result.pop_back();
+                        case TokenType::Percent:result.pop_back();
                             result.emplace_back(line, column - 1, 2, TokenType::ModuloAssign);
                             break;
                         case TokenType::Ampersand:result.pop_back();
@@ -898,7 +898,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::Plus: return "+";
     case TokenType::Asterisk: return "*";
     case TokenType::Division: return "/";
-    case TokenType::Modulo: return "%";
+    case TokenType::Percent: return "%";
     case TokenType::LogicAnd: return "&&";
     case TokenType::LogicOr: return "||";
     case TokenType::Ampersand: return "&";
@@ -989,7 +989,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
     case TokenType::Plus: return "'+'";
     case TokenType::Asterisk: return "'*'";
     case TokenType::Division: return "'/'";
-    case TokenType::Modulo: return "'%'";
+    case TokenType::Percent: return "'%'";
     case TokenType::LogicAnd: return "'&&'";
     case TokenType::LogicOr: return "'||'";
     case TokenType::Ampersand: return "'&'";
