@@ -1,6 +1,7 @@
 #include <CompilerCore/C/Lexer.hpp>
 #include "catch.hpp"
 #include <sstream>
+#include <array>
 
 using namespace Catch::Matchers;
 
@@ -147,7 +148,7 @@ TEST_CASE("Number Literals", "[lexer]")
         CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3"));
         CHECK_THROWS(OpenCL::Lexer::tokenize("0.5.3F"));
         CHECK_THROWS(OpenCL::Lexer::tokenize("0.53fF"));
-        std::array results = {
+        std::array<std::pair<const char*, double>, 4> results = {
             std::pair{"1e-19", 1e-19},
             std::pair{"2e32", 2e32},
             std::pair{"01e-19", 01e-19},

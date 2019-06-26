@@ -1,4 +1,6 @@
 #include "catch.hpp"
+
+#include <array>
 #include <CompilerCore/C/SemanticAnalysis.hpp>
 #include <CompilerCore/C/Parser.hpp>
 
@@ -296,7 +298,7 @@ TEST_CASE("Function linkage","[semantics]")
 
 TEST_CASE("Function definitions and prototypes that should fail","[semantics]")
 {
-    std::array sources = {
+    std::array<const char*, 11> sources = {
         "static extern void foo(void);",
         "extern static void foo(void);",
         "void foo(void i);",

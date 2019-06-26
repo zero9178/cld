@@ -10,6 +10,7 @@
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/TargetRegistry.h>
 
 
 int main()
@@ -34,6 +35,15 @@ int main()
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     LLVMLinkInMCJIT();
+
+    llvm::LLVMContext context1;
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(llvm::sys::getProcessTriple(), error);
+    if (!target)
+    {
+        throw std::runtime_error(error);
+    }
+    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(), "generic", "", {}, {});
 
     OpenCL::Codegen::Context context;
     auto result = OpenCL::Lexer::tokenize("int i ft");//OpenCL::PP::preprocess(std::move(source))

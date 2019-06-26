@@ -4,6 +4,9 @@
 #include "termcolor.hpp"
 #include "Parser.hpp"
 
+#undef max
+#undef min
+
 OpenCL::Message::Message(std::string message,
                          std::vector<Lexer::Token>::const_iterator begin,
                          std::vector<Lexer::Token>::const_iterator end,

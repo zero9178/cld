@@ -1533,11 +1533,11 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                                    if (!recordType.isUnion())
                                    {
                                        std::size_t currentAlignment = 0;
-                                       for (auto&[type, name, bits] : recordType.getMembers())
+                                       for (auto&[subtype, name, bits] : recordType.getMembers())
                                        {
                                            (void)name;
                                            (void)bits;
-                                           auto result = alignmentOf(type);
+                                           auto result = alignmentOf(subtype);
                                            if (!result)
                                            {
                                                return result;
@@ -1624,11 +1624,11 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                                    {
                                        return FailureReason("Incomplete type in sizeof");
                                    }
-                                   for (auto&[type, name, bits] : recordType.getMembers())
+                                   for (auto&[subtype, name, bits] : recordType.getMembers())
                                    {
                                        (void)name;
                                        (void)bits;
-                                       auto alignment = alignmentOf(type);
+                                       auto alignment = alignmentOf(subtype);
                                        if (!alignment)
                                        {
                                            return alignment;
@@ -1638,7 +1638,7 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                                        {
                                            currentSize += *alignment - rest;
                                        }
-                                       auto subSize = sizeOf(type);
+                                       auto subSize = sizeOf(subtype);
                                        if (!subSize)
                                        {
                                            return subSize;

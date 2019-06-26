@@ -2,7 +2,7 @@
 add_library(Preprocessor Preprocessor/Preprocessor.cpp)
 target_link_libraries(Preprocessor Parser)
 add_library(Lexer C/Lexer.cpp)
-add_library(Parser C/Parser.cpp C/Syntax.cpp C/ConstantEvaluator.cpp Common/FailureReason.cpp C/Semantics.cpp C/SemanticAnalysis.cpp C/Message.cpp)
+add_library(Parser C/Parser.cpp C/Syntax.cpp C/ConstantEvaluator.cpp Common/FailureReason.cpp C/Semantics.cpp C/SemanticAnalysis.cpp C/Message.cpp C/ParserDeclarations.cpp C/ParserExpressions.cpp C/ParserUtil.cpp)
 target_link_libraries(Parser Lexer)
 
 add_library(CompilerCore C/Codegen.cpp)

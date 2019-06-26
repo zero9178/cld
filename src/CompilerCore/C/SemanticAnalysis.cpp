@@ -1,5 +1,6 @@
 #include <utility>
 #include <algorithm>
+#include <optional>
 
 #include "SemanticAnalysis.hpp"
 
