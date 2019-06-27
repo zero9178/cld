@@ -1741,15 +1741,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
     auto dslock = context.setDiagnosticStart(start);
     if (!expect(Lexer::TokenType::EnumKeyword, begin, end, context))
     {
-        begin = std::find_if(begin, end, [](const Lexer::Token& token)
-        {
-            return token.getTokenType() == Lexer::TokenType::OpenBrace
-                || token.getTokenType() == Lexer::TokenType::Identifier;
-        });
-        if (begin == end)
-        {
-            return {};
-        }
+        return {};
     }
     std::string name;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
