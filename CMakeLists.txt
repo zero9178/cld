@@ -44,7 +44,7 @@ llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object O
 add_subdirectory(src/CompilerCore)
 
 add_executable(OpenCLParser src/main.cpp)
-target_link_libraries(OpenCLParser CompilerCore Preprocessor)
+target_link_libraries(OpenCLParser CompilerCore Frontend)
 target_compile_definitions(OpenCLParser PUBLIC __STDC_FORMAT_MACROS)
 
 add_executable(DemoC src/input.c)

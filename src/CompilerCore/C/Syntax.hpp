@@ -7,6 +7,10 @@
 #include <set>
 #include <vector>
 
+/**
+ * This uses EBNF syntax meaning that: { <A> } means 0 to infinite amount of times and [ <A> ] 0 or 1 times
+ */
+
 namespace OpenCL::Syntax
 {
     class Expression;

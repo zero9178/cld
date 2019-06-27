@@ -8,6 +8,17 @@
 
 #include <functional>
 
+/**
+ * For error recovery we use panic mode which means that if a production fails due to a terminal not being present
+ * we return from the function. The caller is the responsible of finding the next sync token.
+ *
+ * One thing that may seem a bit unintuitive at first is that if we have a production like
+ * <E> := .... <A> ...
+ * and <A> fails we can't construct an object of type E as we have no A even after successfully syncing and parsing
+ * all tokens after A. Therefore we are forced to also return an empty optional from the parser Function for E. The caller
+ * will then try to sync but should immediately succeed so this is not seen as an issue.
+ */
+
 namespace OpenCL::Parser
 {
     using Tokens = std::vector<OpenCL::Lexer::Token>;
@@ -75,8 +86,6 @@ namespace OpenCL::Parser
 
         std::vector<std::vector<Branch*>> m_branches;
 
-        friend class Branch;
-
         void logImpl(Message&& error);
 
     public:
@@ -130,11 +139,10 @@ namespace OpenCL::Parser
         auto doBacktracking(F&& f)
         {
             m_branches.emplace_back();
-            auto deleter = [this](void*)
-            {
-                m_branches.pop_back();
-            };
-            std::unique_ptr<void, decltype(deleter)> ptr((void*)1, deleter);
+            UniqueResource resource([this]
+                                    {
+                                        m_branches.pop_back();
+                                    });
             return std::forward<F>(f)();
         }
 
