@@ -21,17 +21,14 @@ namespace
             auto result = parseDeclarationSpecifier(begin, end, context);
             if (!result)
             {
-                begin = std::find_if(begin, end, [&context](const OpenCL::Lexer::Token& token)
+                if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
-                    return firstIsInDeclarationSpecifier(token, context) || firstIsInDeclarator(token, context)
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::SemiColon
-                        || firstIsInAbstractDeclarator(token, context);
-                });
-                if (begin == end)
+                    continue;
+                }
+                else
                 {
                     return {};
                 }
-                continue;
             }
             if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
             {
@@ -1404,21 +1401,17 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                                                                 Tokens::const_iterator end,
                                                                 OpenCL::Parser::ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     auto start = begin;
     std::vector<ParameterDeclaration> parameterDeclarations;
     bool first = true;
     while (begin < end)
     {
-        auto before = begin;
         if (first)
         {
             first = false;
         }
-        else if (begin->getTokenType() == Lexer::TokenType::Comma)
+        else if (begin->getTokenType() == Lexer::TokenType::Comma
+            && (begin + 1 >= end || (begin + 1)->getTokenType() != Lexer::TokenType::Ellipse))
         {
             begin++;
         }
@@ -1427,11 +1420,16 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
             break;
         }
         auto declarationSpecifiers = parseDeclarationSpecifierList(begin, end, context);
-        if (!declarationSpecifiers || declarationSpecifiers->empty())
+        if (!declarationSpecifiers)
         {
-            begin = before;
-            break;
+            if (begin >= end
+                || (!firstIsInAbstractDeclarator(*begin, context) && !firstIsInDeclarator(*begin, context)))
+            {
+                break;
+            }
         }
+
+        //Skip past everything that is part of the pointer declaration inside of the (possibly abstract) declarator
         auto result = std::find_if(begin, end, [](const Lexer::Token& token)
         {
             switch (token.getTokenType())
@@ -1510,10 +1508,8 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
     }
     if (parameterDeclarations.empty())
     {
-        context.logError({"Expected at least one parameter declaration"},
-                         std::vector<OpenCL::Lexer::Token>::const_iterator(),
-                         std::optional<Modifier>(),
-                         std::vector<Message::Note>());
+        context.logError(ErrorMessages::EXPECTED_N.args("at least one parameter in parameter list"),
+                         findSemicolonOrEOL(begin, end), Modifier(begin, end, Modifier::PointAtBeginning));
     }
     return ParameterList(start, begin, std::move(parameterDeclarations));
 }

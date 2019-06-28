@@ -281,6 +281,7 @@ TEST_CASE("Declarator", "[parser]")
     sourceProduces("int foo(int([5]));", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int foo(int());", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int foo(int[*]);", ProducesNoErrors() && ProducesNoNotes());
+    sourceProduces("int foo(int (i)(int));", ProducesNoErrors() && ProducesNoNotes());
 }
 
 TEST_CASE("Statements", "[parser]")
