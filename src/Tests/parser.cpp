@@ -58,6 +58,12 @@ namespace
 
         ProducesNoErrors() : ProducesNErrors(0)
         {}
+
+    protected:
+        std::string describe() const override
+        {
+            return "has no errors";
+        }
     };
 
     class ProducesNNotes : public Catch::MatcherBase<std::string>
@@ -93,13 +99,19 @@ namespace
 
         ProducesNoNotes() : ProducesNNotes(0)
         {}
+
+    protected:
+        std::string describe() const override
+        {
+            return "has no notes";
+        }
     };
 }
 
 using namespace OpenCL::Parser::ErrorMessages;
 using namespace OpenCL::Parser::Notes;
 
-TEST_CASE("Global Declarations", "[parser]")
+TEST_CASE("Parse Global Declarations", "[parser]")
 {
     sourceProduces("i;",
                    Catch::Contains(EXPECTED_N_BEFORE_N
@@ -130,7 +142,7 @@ TEST_CASE("Global Declarations", "[parser]")
                        && ProducesNErrors(2) && ProducesNoNotes());
 }
 
-TEST_CASE("Declaration Specifiers", "[paser]")
+TEST_CASE("Parse Declaration Specifiers", "[paser]")
 {
     SECTION("Typedef scoping")
     {
@@ -149,6 +161,19 @@ TEST_CASE("Declaration Specifiers", "[paser]")
                                                                    .args("';'", "'bb'"))
                            && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
                            && ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("typedef int i;void foo(i){}",
+                       Catch::Contains(MISSING_PARAMETER_NAME) &&
+                           Catch::Contains(IDENTIFIER_IS_TYPDEF.args("'i'")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("typedef int i;void foo(a,i){}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "typename")) &&
+                           Catch::Contains(IDENTIFIER_IS_TYPDEF.args("'i'")) && ProducesNErrors(1)
+                           && ProducesNNotes(1));
+        sourceProduces("typedef int aa;int foo(int aa){aa i;}",
+                       ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("typedef int aa;"
+                       "enum aa; aa r;", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("typedef signed int t;t f(t (t));", ProducesNoErrors() && ProducesNoNotes());
     }
     sourceProduces(
         "typedef int aa; typedef extern static auto register const restrict volatile inline void char short "
@@ -187,8 +212,7 @@ TEST_CASE("Declaration Specifiers", "[paser]")
                            && Catch::Contains(EXPECTED_N.args("'}'"))
                            && Catch::Contains(EXPECTED_N.args("';'"))
                            && ProducesNErrors(3) && ProducesNoNotes());
-    }
-    SECTION("Enums")
+    }SECTION("Enums")
     {
         sourceProduces(
             "enum", Catch::Contains(EXPECTED_N_AFTER_N
@@ -222,7 +246,7 @@ TEST_CASE("Declaration Specifiers", "[paser]")
     }
 }
 
-TEST_CASE("Function definitions", "[parser]")
+TEST_CASE("Parse Function definitions", "[parser]")
 {
     sourceProduces("i{}",
                    Catch::Contains(EXPECTED_N_BEFORE_N
@@ -237,7 +261,7 @@ TEST_CASE("Function definitions", "[parser]")
                        && ProducesNErrors(2) && ProducesNoNotes());
 }
 
-TEST_CASE("Declarator", "[parser]")
+TEST_CASE("Parse Declarator", "[parser]")
 {
     sourceProduces("int * const * volatile *i;", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int * const * volatile *(i;",
@@ -249,13 +273,14 @@ TEST_CASE("Declarator", "[parser]")
                        && ProducesNErrors(1) && ProducesNNotes(1));
     sourceProduces("int foo(int,int[5]);", ProducesNoErrors() && ProducesNoNotes());
     sourceProduces("int foo(int i,int f[5],);",
-                   Catch::Contains(EXPECTED_N_AFTER_N.args("parameter", "','")) && ProducesNErrors(1)
+                   Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "')'"))
+                       && ProducesNErrors(1)
                        && ProducesNoNotes());
     sourceProduces("int foo(i,f e);",
-                   Catch::Contains(EXPECTED_N_BEFORE_N.args("','", "'e'")) && ProducesNErrors(1)
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(1)
                        && ProducesNoNotes());
     sourceProduces("int foo(i,f e,r)",
-                   Catch::Contains(EXPECTED_N_BEFORE_N.args("','", "'e'")) && ProducesNErrors(2)
+                   Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(2)
                        && Catch::Contains(EXPECTED_N.args("';'"))
                        && ProducesNoNotes());
     sourceProduces("int foo(i,f",
@@ -284,7 +309,7 @@ TEST_CASE("Declarator", "[parser]")
     sourceProduces("int foo(int (i)(int));", ProducesNoErrors() && ProducesNoNotes());
 }
 
-TEST_CASE("Statements", "[parser]")
+TEST_CASE("Parse Statements", "[parser]")
 {
     SECTION("Return")
     {
@@ -298,8 +323,7 @@ TEST_CASE("Statements", "[parser]")
                            && ProducesNoNotes());
         sourceProduces("void foo(){return 5",
                        Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
-    }
-    SECTION("if")
+    }SECTION("if")
     {
         sourceProduces("void foo(){if 5);}",
                        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
@@ -310,8 +334,7 @@ TEST_CASE("Statements", "[parser]")
                            && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
                            && ProducesNNotes(1));
         sourceProduces("void foo(){if(5);else;}", ProducesNoErrors() && ProducesNoNotes());
-    }
-    SECTION("switch")
+    }SECTION("switch")
     {
         sourceProduces("void foo(){switch(5);}", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("void foo(){switch 5);}",
@@ -322,8 +345,7 @@ TEST_CASE("Statements", "[parser]")
                            && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'"))
                            && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
                            && ProducesNNotes(1));
-    }
-    SECTION("for")
+    }SECTION("for")
     {
         sourceProduces("void foo(){for int i = 0; i < 5; i++);}",
                        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'int'")) && ProducesNErrors(1)
@@ -344,8 +366,7 @@ TEST_CASE("Statements", "[parser]")
                        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                            && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                            && ProducesNNotes(1));
-    }
-    SECTION("while, do ... while")
+    }SECTION("while, do ... while")
     {
         sourceProduces("void foo(){while(5);}", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("void foo(){do;while(5);}", ProducesNoErrors() && ProducesNoNotes());
@@ -369,8 +390,7 @@ TEST_CASE("Statements", "[parser]")
                            Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'while'", "'('")) &&
                            Catch::Contains(TO_MATCH_N_HERE.args("'do'")) &&
                            ProducesNErrors(2) && ProducesNNotes(2));
-    }
-    SECTION("break and continue")
+    }SECTION("break and continue")
     {
         sourceProduces("void foo(){break;}", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("void foo(){continue;}", ProducesNoErrors() && ProducesNoNotes());
@@ -380,8 +400,7 @@ TEST_CASE("Statements", "[parser]")
         sourceProduces("void foo(){continue}",
                        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'}'")) && ProducesNErrors(1)
                            && ProducesNoNotes());
-    }
-    SECTION("Label and goto")
+    }SECTION("Label and goto")
     {
         sourceProduces("void foo(){test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("void foo(){typedef int test;test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
@@ -391,7 +410,261 @@ TEST_CASE("Statements", "[parser]")
     }
 }
 
-TEST_CASE("Expressions")
+TEST_CASE("Parse Expressions", "[parser]")
 {
+    SECTION("Primary expressions")
+    {
+        sourceProduces("void foo(){i;\"string\"\"can also be concatenated\";34234;}",
+                       ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){int i =;}", Catch::Contains(
+            EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "';'")) &&
+            ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("int i =", Catch::Contains(
+            EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"))) &&
+            ProducesNErrors(1) && ProducesNoNotes());
+    }SECTION("Postfix expressions")
+    {
+        sourceProduces("void foo(){i(53,42,32);}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){i(53 42,32,53 43;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'42'")) &&
+                           Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'43'")) &&
+                           Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'('")) &&
+                           ProducesNErrors(3) && ProducesNNotes(1));
+        sourceProduces("void foo(){i(53,42,32,[5];}", Catch::Contains(
+            EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"))) &&
+            Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+            Catch::Contains(TO_MATCH_N_HERE.args("'('")) &&
+            ProducesNErrors(2) && ProducesNNotes(1));
 
+        sourceProduces("void foo(){(int){5};}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){(int){5 8};}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'}'", "'8'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'{'")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+
+        sourceProduces("void foo(){i[5;}",
+                       Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                           && ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){i[];}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                 "']'"))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){i[5];}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){i++;}",
+                       ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){i--;}",
+                       ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){i.m;}",
+                       ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){i.;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "';'")) &&
+                           ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){i.[];}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'['")) &&
+                           Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                               .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                     "']'")) &&
+                           ProducesNErrors(2) && ProducesNoNotes());
+
+        sourceProduces("void foo(){i->m;}",
+                       ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){i->;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "';'")) &&
+                           ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){i->[];}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'['")) &&
+                           Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                               .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                     "']'")) &&
+                           ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Unary expressions")
+    {
+        sourceProduces("void foo(){sizeof(int);}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){sizeof(5);}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){sizeof(int;}", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+            Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){sizeof(5;}", Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'")) &&
+            Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1) && ProducesNNotes(1));
+
+        sourceProduces("void foo(){sizeof sizeof(int);}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){++i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){--i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){&i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){*i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){+i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){-i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){!i;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){~i;}", ProducesNoErrors() && ProducesNoNotes());
+    }SECTION("Cast expression")
+    {
+        sourceProduces("void foo(){(int)5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){(int)5 8;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'8'")) &&
+                           ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){(int)",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"))) &&
+                           ProducesNErrors(1) && ProducesNoNotes());
+    }SECTION("Term")
+    {
+        sourceProduces("void foo(){5 * 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 / 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 % 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 * / 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ % / 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Additive")
+    {
+        sourceProduces("void foo(){5 + 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 - 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 + - -5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){ + + - - 5;}", ProducesNoErrors() && ProducesNoNotes());
+    }SECTION("Shift")
+    {
+        sourceProduces("void foo(){5 << 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 >> 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 << >> 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ << >> 5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                 "'<<'"))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Relational")
+    {
+        sourceProduces("void foo(){5 < 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 > 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 <= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 >= 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 < > 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ <= >= 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Equality")
+    {
+        sourceProduces("void foo(){5 == 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 != 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 == != 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ == != 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Bitand")
+    {
+        sourceProduces("void foo(){5 & 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 & &5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 & & 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){ & & 5;}", ProducesNoErrors() && ProducesNoNotes());
+    }SECTION("BitXor")
+    {
+        sourceProduces("void foo(){5 ^ 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 ^ ^ 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ ^ ^ 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("BitOr")
+    {
+        sourceProduces("void foo(){5 | 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 | | 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ | | 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("LogicalAnd")
+    {
+        sourceProduces("void foo(){5 && 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 && && 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ && && 5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                 "'&&'"))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("LogicalOr")
+    {
+        sourceProduces("void foo(){5 || 5;}", ProducesNoErrors() && ProducesNoNotes());
+
+        sourceProduces("void foo(){5 || || 5;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(1) && ProducesNoNotes());
+        sourceProduces("void foo(){ || || 5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                 "'||'"))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }SECTION("Conditional")
+    {
+        sourceProduces("void foo(){5 ? 5 : 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 ? 5  5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "'5'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'?'")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){5 ? 5 ? 5 : 5 5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "'5'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'?'")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("void foo(){5 ? 5 : 5 ? 5;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "';'")) &&
+                           Catch::Contains(TO_MATCH_N_HERE.args("'?'")) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
+    }SECTION("Assignment")
+    {
+        sourceProduces("void foo(){5 = 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 += 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 -= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 /= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 *= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 %= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 <<= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 >>= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 &= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 |= 5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 ^= 5;}", ProducesNoErrors() && ProducesNoNotes());
+    }SECTION("Expressions")
+    {
+        sourceProduces("void foo(){5,5;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("void foo(){5 +,5 +;}",
+                       Catch::Contains(EXPECTED_N
+                                           .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                           && ProducesNErrors(2) && ProducesNoNotes());
+    }
 }

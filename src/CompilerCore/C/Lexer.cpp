@@ -323,7 +323,7 @@ namespace
                 }
                 if (suffix.empty() || suffix == "l" || suffix == "L")
                 {
-                    if (number > std::numeric_limits<std::int32_t>::max())
+                    if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
                     {
                         if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
                         {
@@ -334,7 +334,8 @@ namespace
                                                         static_cast<std::uint32_t>(number),
                                                         lastText);
                         }
-                        else if (isHexOrOctal && number > std::numeric_limits<std::int64_t>::max())
+                        else if (isHexOrOctal
+                            && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                         {
                             return OpenCL::Lexer::Token(line,
                                                         column,
@@ -361,7 +362,7 @@ namespace
                 }
                 else if (suffix == "ll" || suffix == "LL")
                 {
-                    if (isHexOrOctal && number > std::numeric_limits<std::int64_t>::max())
+                    if (isHexOrOctal && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                     {
                         return OpenCL::Lexer::Token(line,
                                                     column,

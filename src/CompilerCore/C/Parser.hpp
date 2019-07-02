@@ -41,6 +41,9 @@ namespace OpenCL::Parser
         constexpr auto
             TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is a typedef but overshadowed by declaration here:");
 
+        constexpr auto
+            IDENTIFIER_IS_TYPDEF = Format("{} is a typename and not an identifier due to typedef declaration here:");
+
         constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");
     }
 
@@ -55,7 +58,7 @@ namespace OpenCL::Parser
             Tokens::const_iterator identifier;
         };
         std::vector<std::map<std::string, DeclarationLocation>> m_currentScope{1};
-        std::vector<std::set<std::string>> m_typedefs{1};
+        std::vector<std::map<std::string, DeclarationLocation>> m_typedefs{1};
         std::vector<Tokens::const_iterator> m_start{};
         std::size_t m_errorCount = 0;
 
@@ -91,7 +94,7 @@ namespace OpenCL::Parser
     public:
         std::map<std::string, Semantics::RecordType> structOrUnions;
 
-        void addTypedef(const std::string& name);
+        void addTypedef(const std::string& name, DeclarationLocation declarator);
 
         [[nodiscard]] bool isTypedef(const std::string& name) const;
 

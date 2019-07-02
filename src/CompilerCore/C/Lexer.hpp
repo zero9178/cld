@@ -91,7 +91,8 @@ namespace OpenCL::Lexer
         UnionKeyword,
         EnumKeyword,
         GotoKeyword,
-        Ellipse
+        Ellipse,
+
     };
 
     class Token;

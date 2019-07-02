@@ -10,9 +10,9 @@ std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const
     return {parseTranslationUnit(begin, tokens.cend(), context), !context.isErrorsOccured()};
 }
 
-void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name)
+void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
-    m_typedefs.back().insert(name);
+    m_typedefs.back().emplace(name, declarator);
 }
 
 bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
@@ -111,6 +111,13 @@ std::size_t OpenCL::Parser::ParsingContext::getCurrentErrorCount() const
 const OpenCL::Parser::ParsingContext::DeclarationLocation* OpenCL::Parser::ParsingContext::getLocationOf(const std::string& name) const
 {
     for (auto& iter : m_currentScope)
+    {
+        if (auto result = iter.find(name);result != iter.end())
+        {
+            return &result->second;
+        }
+    }
+    for (auto& iter : m_typedefs)
     {
         if (auto result = iter.find(name);result != iter.end())
         {
