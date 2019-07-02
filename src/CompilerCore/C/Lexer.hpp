@@ -92,7 +92,8 @@ namespace OpenCL::Lexer
         EnumKeyword,
         GotoKeyword,
         Ellipse,
-
+        Pound,
+        DoublePound
     };
 
     class Token;
@@ -156,6 +157,7 @@ namespace OpenCL::Lexer
         [[nodiscard]] std::uint64_t getLength() const;
 
         [[nodiscard]] std::string emitBack() const;
+
     };
 
     std::string tokenName(TokenType tokenType);

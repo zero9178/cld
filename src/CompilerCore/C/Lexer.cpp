@@ -478,17 +478,12 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     break;
                 case ',': result.emplace_back(line, column, 1, TokenType::Comma);
                     break;
-                case ':': result.emplace_back(line, column, 1, TokenType::Colon);
-                    break;
                 case '?': result.emplace_back(line, column, 1, TokenType::QuestionMark);
                     break;
                 case '~':result.emplace_back(line, column, 1, TokenType::BitWiseNegation);
                     lastTokenIsAmbiguous = true;
                     break;
                 case '^':result.emplace_back(line, column, 1, TokenType::BitXor);
-                    lastTokenIsAmbiguous = true;
-                    break;
-                case '%':result.emplace_back(line, column, 1, TokenType::Percent);
                     lastTokenIsAmbiguous = true;
                     break;
                 case '!':result.emplace_back(line, column, 1, TokenType::LogicalNegation);
@@ -685,6 +680,83 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     }
                     break;
                 }
+                case '#':
+                {
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::Pound)
+                    {
+                        auto representation = result.back().emitBack();
+                        result.pop_back();
+                        result.emplace_back(line,
+                                            column - representation.size(),
+                                            1 + representation.size(),
+                                            TokenType::DoublePound,
+                                            std::monostate{},
+                                            representation + '#');
+                    }
+                    else
+                    {
+                        result.emplace_back(line, column, 1, TokenType::Pound);
+                    }
+                    break;
+                }
+                case '%':
+                {
+                    if (lastTokenIsAmbiguous && !result.empty() && result.back().getTokenType() == TokenType::LessThan)
+                    {
+                        result.pop_back();
+                        result.emplace_back(line, column - 1, 2, TokenType::OpenBrace, std::monostate{}, "<%");
+                    }
+                    else
+                    {
+                        result.emplace_back(line, column, 1, TokenType::Percent);
+                    }
+                    break;
+                }
+                case ':':
+                {
+                    if (lastTokenIsAmbiguous)
+                    {
+                        if (!result.empty() && result.back().getTokenType() == TokenType::LessThan)
+                        {
+                            result.pop_back();
+                            result.emplace_back(line,
+                                                column - 1,
+                                                2,
+                                                TokenType::OpenSquareBracket,
+                                                std::monostate{},
+                                                "<:");
+                        }
+                        else if (!result.empty() && result.back().getTokenType() == TokenType::Percent)
+                        {
+                            result.pop_back();
+                            if (!result.empty() && result.back().getTokenType() == TokenType::Pound
+                                && result.back().getColumn() + result.back().getLength() == column - 1)
+                            {
+                                auto representation = result.back().emitBack();
+                                result.pop_back();
+                                result.emplace_back(line,
+                                                    column - representation.size() - 1,
+                                                    representation.size() + 2,
+                                                    TokenType::DoublePound,
+                                                    std::monostate{},
+                                                    representation + "%:");
+                            }
+                            else
+                            {
+                                result.emplace_back(line, column - 1, 2, TokenType::Pound, std::monostate{}, "%:");
+                            }
+                        }
+                        else
+                        {
+                            result.emplace_back(line, column, 1, TokenType::Colon);
+                        }
+                    }
+                    else
+                    {
+                        result.emplace_back(line, column, 1, TokenType::Colon);
+                    }
+                    break;
+                }
                 case '>':
                 {
                     if (lastTokenIsAmbiguous)
@@ -698,6 +770,21 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                         {
                             result.pop_back();
                             result.emplace_back(line, column - 1, 2, TokenType::ShiftRight);
+                        }
+                        else if (!result.empty() && result.back().getTokenType() == TokenType::Colon)
+                        {
+                            result.pop_back();
+                            result.emplace_back(line,
+                                                column - 1,
+                                                2,
+                                                TokenType::CloseSquareBracket,
+                                                std::monostate{},
+                                                ":>");
+                        }
+                        else if (!result.empty() && result.back().getTokenType() == TokenType::Percent)
+                        {
+                            result.pop_back();
+                            result.emplace_back(line, column - 1, 2, TokenType::CloseBrace, std::monostate{}, "%>");
                         }
                         else
                         {
@@ -887,8 +974,8 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::Identifier: return std::get<std::string>(getValue());
     case TokenType::OpenParenthese: return "(";
     case TokenType::CloseParenthese: return ")";
-    case TokenType::OpenBrace: return "{";
-    case TokenType::CloseBrace: return "}";
+    case TokenType::OpenBrace: return m_valueRepresentation.empty() ? "{" : m_valueRepresentation;
+    case TokenType::CloseBrace: return m_valueRepresentation.empty() ? "}" : m_valueRepresentation;
     case TokenType::StringLiteral:
     case TokenType::Literal:return m_valueRepresentation;
     case TokenType::SemiColon: return ";";
@@ -952,8 +1039,8 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::ForKeyword: return "for";
     case TokenType::IfKeyword: return "if";
     case TokenType::WhileKeyword: return "while";
-    case TokenType::OpenSquareBracket: return "[";
-    case TokenType::CloseSquareBracket: return "]";
+    case TokenType::OpenSquareBracket: return m_valueRepresentation.empty() ? "[" : m_valueRepresentation;
+    case TokenType::CloseSquareBracket: return m_valueRepresentation.empty() ? "]" : m_valueRepresentation;
     case TokenType::StructKeyword: return "struct";
     case TokenType::Dot: return ".";
     case TokenType::Arrow: return "->";
@@ -967,6 +1054,8 @@ std::string OpenCL::Lexer::Token::emitBack() const
     case TokenType::Ellipse: return "...";
     case TokenType::RestrictKeyword: return "restrict";
     case TokenType::InlineKeyword: return "inline";
+    case TokenType::Pound:return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
+    case TokenType::DoublePound:return m_valueRepresentation.empty() ? "##" : m_valueRepresentation;
     }
     return "";
 }
@@ -1058,6 +1147,8 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
     case TokenType::Ellipse: return "'...'";
     case TokenType::RestrictKeyword: return "'restrict'";
     case TokenType::InlineKeyword: return "'inline'";
+    case TokenType::Pound:return "'#'";
+    case TokenType::DoublePound:return "'##'";
     }
     return "";
 }

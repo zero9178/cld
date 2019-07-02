@@ -544,6 +544,31 @@ TEST_CASE("Positions", "[lexer]")
     }
 }
 
+TEST_CASE("Digraphs", "[lexer]")
+{
+    auto result = OpenCL::Lexer::tokenize("<: :> <% %> %: %:%:");
+    REQUIRE(result.size() == 6);
+    CHECK(result.at(0).getTokenType() == OpenCL::Lexer::TokenType::OpenSquareBracket);
+    CHECK(result.at(1).getTokenType() == OpenCL::Lexer::TokenType::CloseSquareBracket);
+    CHECK(result.at(2).getTokenType() == OpenCL::Lexer::TokenType::OpenBrace);
+    CHECK(result.at(3).getTokenType() == OpenCL::Lexer::TokenType::CloseBrace);
+    CHECK(result.at(4).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(5).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
+    CHECK(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == "<: :> <% %> %: %:%:");
+
+    result = OpenCL::Lexer::tokenize("%: %: #%: %:# # %: %: #");
+    REQUIRE(result.size() == 8);
+    CHECK(result.at(0).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(1).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(2).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
+    CHECK(result.at(3).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
+    CHECK(result.at(4).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(5).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(6).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.at(7).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == "%: %: #%: %:# # %: %: #");
+}
+
 TEST_CASE("Input reconstruction", "[lexer]")
 {
     auto source = R"(void updateHeight(TreeNode* h)
