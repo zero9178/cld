@@ -2461,7 +2461,8 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                         Modifier(loc->identifier, loc->identifier + 1, Modifier::Underline)});
                 }
             }
-            if (!expect(Lexer::TokenType::SemiColon, begin, findSemicolonOrEOL(begin, end), context, std::move(notes)))
+            if (!expect(Lexer::TokenType::SemiColon, begin, findSemicolonOrEOL(begin, end), context, std::move(notes))
+                || !expression)
             {
                 return {};
             }

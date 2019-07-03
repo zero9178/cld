@@ -9,7 +9,7 @@ OpenCL::Syntax::Expression::Expression(std::vector<Lexer::Token>::const_iterator
                                        std::vector<OpenCL::Syntax::AssignmentExpression> assignmentExpressions)
     : Node(begin, end), m_assignmentExpressions(std::move(assignmentExpressions))
 {
-    assert(!m_assignmentExpressions.empty());
+
 }
 
 const std::vector<OpenCL::Syntax::AssignmentExpression>& OpenCL::Syntax::Expression::getAssignmentExpressions() const
@@ -76,7 +76,7 @@ OpenCL::Syntax::PostFixExpressionSubscript::PostFixExpressionSubscript(
     OpenCL::Syntax::Expression&& expression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
 {
-    assert(m_postFixExpression);
+
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionSubscript::getPostFixExpression() const
@@ -95,7 +95,7 @@ OpenCL::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(
     std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
-    assert(m_postFixExpression);
+
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionIncrement::getPostFixExpression() const
@@ -109,7 +109,7 @@ OpenCL::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(
     std::unique_ptr<OpenCL::Syntax::PostFixExpression>&& postFixExpression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
-    assert(m_postFixExpression);
+
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionDecrement::getPostFixExpression() const
@@ -124,7 +124,7 @@ OpenCL::Syntax::PostFixExpressionDot::PostFixExpressionDot(
     std::string identifier)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {
-    assert(m_postFixExpression);
+
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionDot::getPostFixExpression() const

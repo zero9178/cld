@@ -815,9 +815,12 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 return {};
             }
         }
-        current = std::make_unique<PostFixExpression>(PostFixExpressionPrimaryExpression(start,
-                                                                                         begin,
-                                                                                         std::move(*newPrimary)));
+        else
+        {
+            current = std::make_unique<PostFixExpression>(PostFixExpressionPrimaryExpression(start,
+                                                                                             begin,
+                                                                                             std::move(*newPrimary)));
+        }
     }
     else
     {
@@ -935,9 +938,12 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                    context,
                    {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
                      Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}});
-            current = std::make_unique<PostFixExpression>(
-                PostFixExpressionFunctionCall(start, begin, std::move(current),
-                                              std::move(nonCommaExpressions)));
+            if (current)
+            {
+                current = std::make_unique<PostFixExpression>(
+                    PostFixExpressionFunctionCall(start, begin, std::move(current),
+                                                  std::move(nonCommaExpressions)));
+            }
         }
         else if (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
         {
@@ -968,8 +974,11 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                     return {};
                 }
             }
-            current = std::make_unique<PostFixExpression>(
-                PostFixExpressionSubscript(start, begin, std::move(current), std::move(*expression)));
+            if (expression)
+            {
+                current = std::make_unique<PostFixExpression>(
+                    PostFixExpressionSubscript(start, begin, std::move(current), std::move(*expression)));
+            }
         }
         else if (begin->getTokenType() == Lexer::TokenType::Increment)
         {
