@@ -146,19 +146,13 @@ TEST_CASE("Parse Declaration Specifiers", "[paser]")
 {
     SECTION("Typedef scoping")
     {
-        sourceProduces("typedef int aa;"
-                       "aa aa;", ProducesNoErrors() && ProducesNoNotes());
-        sourceProduces("typedef int aa;"
-                       "aa aa;aa bb;", Catch::Contains(EXPECTED_N_BEFORE_N
-                                                           .args("storage specifier or typename", "'aa'"))
-                           && Catch::Contains(EXPECTED_N_INSTEAD_OF_N
-                                                  .args("';'", "'bb'"))
+        sourceProduces("typedef int aa;void foo(){aa aa;}", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("typedef int aa;void foo(){aa aa;aa bb;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
                            && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
-                           && ProducesNErrors(2) && ProducesNNotes(1));
-
-        sourceProduces("typedef int aa;"
-                       "aa\n aa;const aa bb;", Catch::Contains(EXPECTED_N_INSTEAD_OF_N
-                                                                   .args("';'", "'bb'"))
+                           && ProducesNErrors(1) && ProducesNNotes(1));
+        sourceProduces("typedef int aa;void foo(){aa aa;const aa bb;}",
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
                            && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'"))
                            && ProducesNErrors(1) && ProducesNNotes(1));
         sourceProduces("typedef int i;void foo(i){}",
@@ -170,10 +164,17 @@ TEST_CASE("Parse Declaration Specifiers", "[paser]")
                            Catch::Contains(IDENTIFIER_IS_TYPDEF.args("'i'")) && ProducesNErrors(1)
                            && ProducesNNotes(1));
         sourceProduces("typedef int aa;int foo(int aa){aa i;}",
-                       ProducesNErrors(1) && ProducesNoNotes());
+                       Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) &&
+                           Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
+                           && ProducesNNotes(1));
         sourceProduces("typedef int aa;"
                        "enum aa; aa r;", ProducesNoErrors() && ProducesNoNotes());
         sourceProduces("typedef signed int t;t f(t (t));", ProducesNoErrors() && ProducesNoNotes());
+        sourceProduces("typedef int aa;"
+                       "enum {aa,};",
+                       Catch::Contains(REDEFINITION_OF_SYMBOL_N.args("'aa'")) &&
+                           Catch::Contains(PREVIOUSLY_DECLARED_HERE) &&
+                           ProducesNErrors(1) && ProducesNNotes(1));
     }
     sourceProduces(
         "typedef int aa; typedef extern static auto register const restrict volatile inline void char short "

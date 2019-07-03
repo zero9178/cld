@@ -34,6 +34,8 @@ namespace OpenCL::Parser
         constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
 
         constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
+
+        constexpr auto REDEFINITION_OF_SYMBOL_N = Format("Redefinition of symbol {}");
     }
 
     namespace Notes
@@ -45,6 +47,8 @@ namespace OpenCL::Parser
             IDENTIFIER_IS_TYPDEF = Format("{} is a typename and not an identifier due to typedef declaration here:");
 
         constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");
+
+        constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
     }
 
     class ParsingContext final
@@ -57,8 +61,13 @@ namespace OpenCL::Parser
             Tokens::const_iterator end;
             Tokens::const_iterator identifier;
         };
-        std::vector<std::map<std::string, DeclarationLocation>> m_currentScope{1};
-        std::vector<std::map<std::string, DeclarationLocation>> m_typedefs{1};
+
+        struct Declaration
+        {
+            DeclarationLocation location;
+            bool isTypedef{};
+        };
+        std::vector<std::map<std::string, Declaration>> m_currentScope{1};
         std::vector<Tokens::const_iterator> m_start{};
         std::size_t m_errorCount = 0;
 
@@ -98,6 +107,8 @@ namespace OpenCL::Parser
 
         [[nodiscard]] bool isTypedef(const std::string& name) const;
 
+        [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
+
         void logError(std::string message,
                       Tokens::const_iterator end,
                       std::optional<Modifier> modifier = {},
@@ -116,11 +127,9 @@ namespace OpenCL::Parser
 
         ParsingContext& operator=(ParsingContext&&) = delete;
 
-        void addToScope(std::string name, DeclarationLocation declarator);
+        void addToScope(const std::string& name, DeclarationLocation declarator);
 
         [[nodiscard]] const Parser::ParsingContext::DeclarationLocation* getLocationOf(const std::string& name) const;
-
-        [[nodiscard]] bool isInScope(const std::string& name) const;
 
         void pushScope();
 

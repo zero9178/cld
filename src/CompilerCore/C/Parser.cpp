@@ -12,14 +12,24 @@ std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const
 
 void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
-    m_typedefs.back().emplace(name, declarator);
+    auto[iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
+    if (!inserted && iter->second.isTypedef)
+    {
+        logError(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
+                 declarator.end,
+                 Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
+                 {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end, Modifier(
+                     iter->second.location.identifier,
+                     iter->second.location.identifier + 1,
+                     Modifier::Underline)}});
+    }
 }
 
 bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
 {
-    for (auto& iter : m_typedefs)
+    for (auto& iter : m_currentScope)
     {
-        if (iter.count(name))
+        if (auto result = iter.find(name);result != iter.end() && result->second.isTypedef)
         {
             return true;
         }
@@ -56,33 +66,29 @@ void OpenCL::Parser::ParsingContext::logImpl(Message&& error)
     }
 }
 
-void OpenCL::Parser::ParsingContext::addToScope(std::string name, DeclarationLocation declarator)
+void OpenCL::Parser::ParsingContext::addToScope(const std::string& name, DeclarationLocation declarator)
 {
-    m_currentScope.back().emplace(std::move(name), declarator);
-}
-
-bool OpenCL::Parser::ParsingContext::isInScope(const std::string& name) const
-{
-    for (auto& iter : m_currentScope)
+    auto[iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
+    if (!inserted && iter->second.isTypedef)
     {
-        if (iter.count(name))
-        {
-            return true;
-        }
+        logError(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
+                 declarator.end,
+                 Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
+                 {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end, Modifier(
+                     iter->second.location.identifier,
+                     iter->second.location.identifier + 1,
+                     Modifier::Underline)}});
     }
-    return false;
 }
 
 void OpenCL::Parser::ParsingContext::pushScope()
 {
     m_currentScope.emplace_back();
-    m_typedefs.emplace_back();
 }
 
 void OpenCL::Parser::ParsingContext::popScope()
 {
     m_currentScope.pop_back();
-    m_typedefs.pop_back();
 }
 
 bool OpenCL::Parser::ParsingContext::isErrorsOccured() const
@@ -110,21 +116,26 @@ std::size_t OpenCL::Parser::ParsingContext::getCurrentErrorCount() const
 
 const OpenCL::Parser::ParsingContext::DeclarationLocation* OpenCL::Parser::ParsingContext::getLocationOf(const std::string& name) const
 {
-    for (auto& iter : m_currentScope)
+    for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
-        if (auto result = iter.find(name);result != iter.end())
+        if (auto result = iter->find(name);result != iter->end())
         {
-            return &result->second;
-        }
-    }
-    for (auto& iter : m_typedefs)
-    {
-        if (auto result = iter.find(name);result != iter.end())
-        {
-            return &result->second;
+            return &result->second.location;
         }
     }
     return nullptr;
+}
+
+bool OpenCL::Parser::ParsingContext::isTypedefInScope(const std::string& name) const
+{
+    for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
+    {
+        if (auto result = iter->find(name); result != iter->end())
+        {
+            return result->second.isTypedef;
+        }
+    }
+    return false;
 }
 
 OpenCL::Parser::ParsingContext::Branch::Branch(ParsingContext& context,

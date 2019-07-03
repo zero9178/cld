@@ -53,9 +53,7 @@ bool OpenCL::Parser::firstIsInDeclarationSpecifier(const Lexer::Token& token,
     case Lexer::TokenType::RestrictKeyword:
     case Lexer::TokenType::VolatileKeyword:
     case Lexer::TokenType::InlineKeyword: return true;
-    case Lexer::TokenType::Identifier:
-        return !context.isInScope(std::get<std::string>(token.getValue()))
-            && context.isTypedef(std::get<std::string>(token.getValue()));
+    case Lexer::TokenType::Identifier:return context.isTypedefInScope(std::get<std::string>(token.getValue()));
     default: return false;
     }
 }
@@ -80,9 +78,7 @@ bool OpenCL::Parser::firstIsInSpecifierQualifier(const Lexer::Token& token,
     case Lexer::TokenType::ConstKeyword:
     case Lexer::TokenType::RestrictKeyword:
     case Lexer::TokenType::VolatileKeyword:return true;
-    case Lexer::TokenType::Identifier:
-        return !context.isInScope(std::get<std::string>(token.getValue()))
-            && context.isTypedef(std::get<std::string>(token.getValue()));
+    case Lexer::TokenType::Identifier:return context.isTypedefInScope(std::get<std::string>(token.getValue()));
     default: return false;
     }
 }

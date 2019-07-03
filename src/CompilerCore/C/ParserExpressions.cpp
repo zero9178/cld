@@ -804,7 +804,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     std::unique_ptr<PostFixExpression> current;
 
     auto start = begin;
-    if (begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 >= end
+    if (begin >= end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 >= end
         || !firstIsInTypeName(*(begin + 1), context))
     {
         auto newPrimary = parsePrimaryExpression(begin, end, context);
@@ -870,32 +870,16 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         {
             begin++;
         }
-        if (openBrace != Tokens::const_iterator{})
+        if (!expect(Lexer::TokenType::CloseBrace,
+                    begin,
+                    end,
+                    context,
+                    {{Notes::TO_MATCH_N_HERE.args("'{'"), start, findSemicolonOrEOL(begin, end),
+                      Modifier(openBrace, openBrace + 1, Modifier::PointAtBeginning)}}))
         {
-            if (!expect(Lexer::TokenType::CloseBrace,
-                        begin,
-                        end,
-                        context,
-                        {{Notes::TO_MATCH_N_HERE.args("'{'"), start, findSemicolonOrEOL(begin, end),
-                          Modifier(openBrace, openBrace + 1, Modifier::PointAtBeginning)}}))
+            if (begin == end || !isPostFixOperator(*begin))
             {
-                if (begin == end || !isPostFixOperator(*begin))
-                {
-                    return {};
-                }
-            }
-        }
-        else
-        {
-            if (!expect(Lexer::TokenType::CloseBrace,
-                        begin,
-                        end,
-                        context))
-            {
-                if (begin == end || !isPostFixOperator(*begin))
-                {
-                    return {};
-                }
+                return {};
             }
         }
         current = std::make_unique<PostFixExpression>(

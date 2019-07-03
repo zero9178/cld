@@ -14,13 +14,6 @@ namespace OpenCL::Semantics
 {
     class Type;
 
-    enum class Linkage
-    {
-        Internal,
-        External,
-        None
-    };
-
     class PrimitiveType final
     {
         bool m_isFloatingPoint;
@@ -253,9 +246,13 @@ namespace OpenCL::Semantics
         [[nodiscard]] bool isCompatibleWith(const Type& rhs) const;
     };
 
-    class CompoundStatement final
-    {
+    class CompoundStatement;
 
+    enum class Linkage
+    {
+        Internal,
+        External,
+        None
     };
 
     enum class Lifetime
