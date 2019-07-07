@@ -4,6 +4,7 @@
 #include "CompilerCore/Common/Expected.hpp"
 #include "CompilerCore/Common/FailureReason.hpp"
 #include "Syntax.hpp"
+#include "Message.hpp"
 
 #include <map>
 #include <memory>
@@ -13,6 +14,39 @@
 namespace OpenCL::Semantics
 {
     class Type;
+
+    class CompoundStatement;
+
+    class LabelStatement;
+
+    class CaseStatement;
+
+    class DefaultStatement;
+
+    class IfStatement;
+
+    class SwitchStatement;
+
+    class ForStatement;
+
+    class HeadWhileStatement;
+
+    class FootWhileStatement;
+
+    class GotoStatement;
+
+    class ContinueStatement;
+
+    class BreakStatement;
+
+    class ReturnStatement;
+
+    class ExpressionStatement;
+
+    using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
+                                   HeadWhileStatement, FootWhileStatement, BreakStatement,
+                                   ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement, GotoStatement,
+                                   LabelStatement>;
 
     class PrimitiveType final
     {
@@ -221,13 +255,21 @@ namespace OpenCL::Semantics
         bool m_isConst;
         bool m_isVolatile;
         std::string m_name;
-        using variant = std::variant<PrimitiveType, ArrayType, AbstractArrayType, ValArrayType, FunctionType,
+        using variant = std::variant<std::monostate,
+                                     PrimitiveType,
+                                     ArrayType,
+                                     AbstractArrayType,
+                                     ValArrayType,
+                                     FunctionType,
                                      RecordType, EnumType, PointerType>;
 
         variant m_type;
 
     public:
-        Type(bool isConst, bool isVolatile, std::string name, variant&& type);
+        explicit Type(bool isConst = false,
+                      bool isVolatile = false,
+                      std::string name = "<undefined>",
+                      variant&& type = std::monostate{});
 
         [[nodiscard]] const variant& get() const;
 
@@ -243,10 +285,8 @@ namespace OpenCL::Semantics
 
         bool operator!=(const Type& rhs) const;
 
-        [[nodiscard]] bool isCompatibleWith(const Type& rhs) const;
+        [[nodiscard]] bool isUndefined() const;
     };
-
-    class CompoundStatement;
 
     enum class Linkage
     {
@@ -284,20 +324,97 @@ namespace OpenCL::Semantics
         [[nodiscard]] const std::string& getName() const;
     };
 
+    class ReturnStatement final
+    {
+
+    };
+
+    class ExpressionStatement final
+    {
+
+    };
+
+    class IfStatement final
+    {
+
+    };
+
+    class CompoundStatement final
+    {
+        std::vector<std::variant<Statement, Declaration>> m_compoundItems;
+
+    public:
+
+        explicit CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems);
+
+        [[nodiscard]] const std::vector<std::variant<Statement, Declaration>>& getCompoundItems() const;
+    };
+
+    class ForStatement final
+    {
+
+    };
+
+    class HeadWhileStatement final
+    {
+
+    };
+
+    class FootWhileStatement final
+    {
+
+    };
+
+    class BreakStatement final
+    {
+
+    };
+
+    class ContinueStatement final
+    {
+
+    };
+
+    class SwitchStatement final
+    {
+
+    };
+
+    class DefaultStatement final
+    {
+
+    };
+
+    class CaseStatement final
+    {
+
+    };
+
+    class GotoStatement final
+    {
+
+    };
+
+    class LabelStatement final
+    {
+
+    };
+
     class FunctionDefinition final
     {
         FunctionType m_type;
         std::string m_name;
         std::vector<Declaration> m_parameterDeclarations;
         Linkage m_linkage;
-        //Compound statement
+        CompoundStatement m_compoundStatement;
 
     public:
 
         FunctionDefinition(FunctionType type,
                            std::string name,
                            std::vector<Declaration> parameterDeclarations,
-                           Linkage linkage);
+                           Linkage linkage,
+                           CompoundStatement&& compoundStatement);
 
         [[nodiscard]] const std::string& getName() const;
 
@@ -325,19 +442,6 @@ namespace OpenCL::Semantics
 
         [[nodiscard]] const std::vector<variant>& getGlobals() const;
     };
-
-    using SpecifierQualifierRef = std::variant<std::reference_wrapper<const Syntax::TypeSpecifier>,
-                                               std::reference_wrapper<const Syntax::TypeQualifier>>;
-
-    using PossiblyAbstractQualifierRef =
-    std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
-
-    Expected<Type, FailureReason>
-    declaratorsToType(std::vector<SpecifierQualifierRef> specifierQualifiers,
-                      PossiblyAbstractQualifierRef declarator = {},
-                      const std::map<std::string, std::reference_wrapper<const Type>>& typedefs = {},
-                      const std::vector<Syntax::Declaration>& declarations = {},
-                      const std::map<std::string, Semantics::RecordType>& structOrUnions = {});
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 

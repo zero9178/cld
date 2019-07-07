@@ -587,13 +587,14 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
     {
         if (begin < end)
         {
-            context.logError(ErrorMessages::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
-                             findSemicolonOrEOL(begin, end),
-                             Modifier(begin, begin + 1, Modifier::PointAtBeginning));
+            context
+                .logError(ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
+                          findSemicolonOrEOL(begin, end),
+                          Modifier(begin, begin + 1, Modifier::PointAtBeginning));
         }
         else
         {
-            context.logError(ErrorMessages::EXPECTED_N.args("typename"),
+            context.logError(ErrorMessages::Parser::EXPECTED_N.args("typename"),
                              findSemicolonOrEOL(begin, end),
                              Modifier(begin, begin + 1, Modifier::InsertAtEnd));
         }
@@ -1106,14 +1107,14 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
 
     if (begin == end)
     {
-        context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N
                              .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")),
                          begin,
                          Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
     }
     else
     {
-        context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
                              .args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
                                    '\'' + begin->emitBack() + '\''),
                          findSemicolonOrEOL(begin, end),

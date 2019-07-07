@@ -10,7 +10,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 99)
 
 find_package(LLVM REQUIRED)
-find_package(Threads REQUIRED)
 
 if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options("-Wa,-mbig-obj")
@@ -35,6 +34,8 @@ if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND "${CMAKE_BUILD_TYP
     add_compile_options(-fno-limit-debug-info)
 endif ()
 if (NOT MSVC)
+    find_package(Threads REQUIRED)
+    link_libraries(Threads::Threads)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wextra -fdiagnostics-color=always")
     option(COVERAGE "Compile with coverage" OFF)
 

@@ -713,9 +713,9 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::DefaultStatement::getStatement(
 
 OpenCL::Syntax::CaseStatement::CaseStatement(std::vector<Lexer::Token>::const_iterator begin,
                                              std::vector<Lexer::Token>::const_iterator end,
-                                             const constantVariant& constant,
+                                             AssignmentExpression&& constantExpression,
                                              std::unique_ptr<Statement>&& statement)
-    : Node(begin, end), m_constant(constant), m_statement(std::move(statement))
+    : Node(begin, end), m_constantExpression(std::move(constantExpression)), m_statement(std::move(statement))
 {
 }
 
@@ -724,9 +724,9 @@ const OpenCL::Syntax::Statement* OpenCL::Syntax::CaseStatement::getStatement() c
     return m_statement.get();
 }
 
-const OpenCL::Syntax::CaseStatement::constantVariant& OpenCL::Syntax::CaseStatement::getConstant() const
+const OpenCL::Syntax::AssignmentExpression& OpenCL::Syntax::CaseStatement::getConstantExpression() const
 {
-    return m_constant;
+    return m_constantExpression;
 }
 
 OpenCL::Syntax::InitializerList::InitializerList(std::vector<Lexer::Token>::const_iterator begin,
@@ -744,7 +744,8 @@ OpenCL::Syntax::InitializerList::getNonCommaExpressionsAndBlocks() const
 
 OpenCL::Syntax::EnumDeclaration::EnumDeclaration(std::vector<Lexer::Token>::const_iterator begin,
                                                  std::vector<Lexer::Token>::const_iterator end, std::string name,
-                                                 std::vector<std::pair<std::string, std::int32_t>> values)
+                                                 std::vector<std::pair<std::string,
+                                                                       std::optional<ConstantExpression>>>&& values)
     : Node(begin, end), m_name(std::move(name)), m_values(std::move(values))
 {
 }
@@ -754,7 +755,8 @@ const std::string& OpenCL::Syntax::EnumDeclaration::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<std::string, std::int32_t>>& OpenCL::Syntax::EnumDeclaration::getValues() const
+const std::vector<std::pair<std::string,
+                            std::optional<OpenCL::Syntax::ConstantExpression>>>& OpenCL::Syntax::EnumDeclaration::getValues() const
 {
     return m_values;
 }

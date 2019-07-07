@@ -23,34 +23,6 @@ namespace OpenCL::Parser
 {
     using Tokens = std::vector<OpenCL::Lexer::Token>;
 
-    namespace ErrorMessages
-    {
-        constexpr auto EXPECTED_N = Format("Expected {}");
-
-        constexpr auto EXPECTED_N_BEFORE_N = Format("Expected {} before {}");
-
-        constexpr auto EXPECTED_N_AFTER_N = Format("Expected {} after {}");
-
-        constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
-
-        constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
-
-        constexpr auto REDEFINITION_OF_SYMBOL_N = Format("Redefinition of symbol {}");
-    }
-
-    namespace Notes
-    {
-        constexpr auto
-            TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is a typedef but overshadowed by declaration here:");
-
-        constexpr auto
-            IDENTIFIER_IS_TYPDEF = Format("{} is a typename and not an identifier due to typedef declaration here:");
-
-        constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");
-
-        constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
-    }
-
     class ParsingContext final
     {
         std::ostream* m_reporter;
@@ -101,7 +73,6 @@ namespace OpenCL::Parser
         void logImpl(Message&& error);
 
     public:
-        std::map<std::string, Semantics::RecordType> structOrUnions;
 
         void addTypedef(const std::string& name, DeclarationLocation declarator);
 

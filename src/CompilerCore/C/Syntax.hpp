@@ -3,6 +3,7 @@
 
 #include "Lexer.hpp"
 
+#include <optional>
 #include <memory>
 #include <set>
 #include <vector>
@@ -70,6 +71,8 @@ namespace OpenCL::Syntax
     class ConditionalExpression;
 
     class AssignmentExpression;
+
+    using ConstantExpression = AssignmentExpression;
 
     class AssignmentExpressionAssignment;
 
@@ -948,7 +951,7 @@ namespace OpenCL::Syntax
      *
      * <SelectionStatement> ::= <IfStatement> | <SwitchStatement>
      *
-     * <IterationStatement> ::= <ForStatement> | <ForDeclarationStatement> | <HeadWhileStatement> | <FootWhileStatement>
+     * <IterationStatement> ::= <ForStatement> | <HeadWhileStatement> | <FootWhileStatement>
      *
      * <JumpStatement> ::= <GotoStatement> | <ContinueStatement> | <BreakStatement> | <ReturnStatement>
      *
@@ -1028,18 +1031,15 @@ namespace OpenCL::Syntax
      */
     class CaseStatement final : public Node
     {
-        using constantVariant =
-        std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
-
-        constantVariant m_constant;
+        ConstantExpression m_constantExpression;
         std::unique_ptr<Statement> m_statement;
 
     public:
         CaseStatement(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, const constantVariant& constant,
+                      std::vector<Lexer::Token>::const_iterator end, ConstantExpression&& constantExpression,
                       std::unique_ptr<Statement>&& statement);
 
-        [[nodiscard]] const constantVariant& getConstant() const;
+        [[nodiscard]] const ConstantExpression& getConstantExpression() const;
 
         [[nodiscard]] const Statement* getStatement() const;
     };
@@ -1597,7 +1597,7 @@ namespace OpenCL::Syntax
         struct StructDeclaration
         {
             std::vector<SpecifierQualifier> specifierQualifiers;
-            std::vector<std::pair<std::unique_ptr<Declarator>, std::int64_t>> structDeclarators;
+            std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> structDeclarators;
         };
 
     private:
@@ -1624,16 +1624,16 @@ namespace OpenCL::Syntax
     class EnumDeclaration final : public Node
     {
         std::string m_name;
-        std::vector<std::pair<std::string, std::int32_t>> m_values;
+        std::vector<std::pair<std::string, std::optional<ConstantExpression>>> m_values;
 
     public:
         EnumDeclaration(std::vector<Lexer::Token>::const_iterator begin,
                         std::vector<Lexer::Token>::const_iterator end, std::string name,
-                        std::vector<std::pair<std::string, std::int32_t>> values);
+                        std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values);
 
         [[nodiscard]] const std::string& getName() const;
 
-        [[nodiscard]] const std::vector<std::pair<std::string, std::int32_t>>& getValues() const;
+        [[nodiscard]] const std::vector<std::pair<std::string, std::optional<ConstantExpression>>>& getValues() const;
     };
 
     /**
@@ -1721,7 +1721,7 @@ namespace OpenCL::Syntax
          * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
          *                | <TokenType::Dot> <TokenType::Identifier>
          */
-        using Designator = std::variant<std::size_t, std::string>;
+        using Designator = std::variant<ConstantExpression, std::string>;
 
         /**
          * <DesignatorList> ::= <Designator> { <Designator> }
@@ -1800,22 +1800,65 @@ namespace OpenCL::Syntax
         [[nodiscard]] const std::vector<ExternalDeclaration>& getGlobals() const;
     };
 
-    template <class...T>
-    Node& nodeFromNodeDerivedVariant(std::variant<T...>& variant)
+    namespace detail
     {
-        static_assert(std::conjunction_v<std::is_base_of<Node, T>...>,
-                      "All alternatives in variant must derive of Node");
-        return std::visit([](auto&& value) -> Node&
-                          { return value; }, variant);
+        template <class Test, template <typename...> class Ref>
+        struct isSpecilization : std::false_type
+        {
+        };
+
+        template <template <typename...> class Ref, typename... Args>
+        struct isSpecilization<Ref<Args...>, Ref> : std::true_type
+        {
+        };
+
+        template <class T>
+        constexpr bool isVariant = isSpecilization<T, std::variant>{};
+
+        template <class T>
+        constexpr bool isReferenceWrapper = isSpecilization<T, std::reference_wrapper>{};
     }
 
     template <class...T>
-    const Node& nodeFromNodeDerivedVariant(const std::variant<T...>& variant)
+    [[nodiscard]] Node& nodeFromNodeDerivedVariant(std::variant<T...>& variant)
     {
-        static_assert(std::conjunction_v<std::is_base_of<Node, T>...>,
-                      "All alternatives in variant must derive of Node");
+        return std::visit([](auto&& value) -> Node&
+                          {
+                              using U = std::decay_t<decltype(value)>;
+                              if constexpr(detail::isVariant<U>)
+                              {
+                                  return nodeFromNodeDerivedVariant(value);
+                              }
+                              else if constexpr(detail::isReferenceWrapper<U>)
+                              {
+                                  return nodeFromNodeDerivedVariant(value.get());
+                              }
+                              else
+                              {
+                                  return value;
+                              }
+                          }, variant);
+    }
+
+    template <class...T>
+    [[nodiscard]] const Node& nodeFromNodeDerivedVariant(const std::variant<T...>& variant)
+    {
         return std::visit([](auto&& value) -> const Node&
-                          { return value; }, variant);
+                          {
+                              using U = std::decay_t<decltype(value)>;
+                              if constexpr(detail::isVariant < U >)
+                              {
+                                  return nodeFromNodeDerivedVariant(value);
+                              }
+                              else if constexpr(detail::isReferenceWrapper < U >)
+                              {
+                                  return nodeFromNodeDerivedVariant(value.get());
+                              }
+                              else
+                              {
+                                  return value;
+                              }
+                          }, variant);
     }
 } // namespace OpenCL::Syntax
 

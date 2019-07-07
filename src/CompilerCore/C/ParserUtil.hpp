@@ -2,6 +2,7 @@
 #define OPENCLPARSER_PARSERUTIL_HPP
 
 #include "Parser.hpp"
+#include "ErrorMessages.hpp"
 
 namespace OpenCL::Parser
 {
@@ -19,7 +20,7 @@ namespace OpenCL::Parser
         {
             if (curr >= end)
             {
-                context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
+                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N
                                      .args(Lexer::tokenName(expected)),
                                  findSemicolonOrEOL(curr, end),
                                  Modifier{end - 1, end, Modifier::InsertAtEnd,
@@ -28,7 +29,7 @@ namespace OpenCL::Parser
             }
             else
             {
-                context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
                                      .args(Lexer::tokenName(expected), '\'' + curr->emitBack())
                                      + '\'', findSemicolonOrEOL(curr, end),
                                  Modifier{curr, curr + 1, Modifier::PointAtBeginning}, std::move(notes));

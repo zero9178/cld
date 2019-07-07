@@ -4,22 +4,28 @@
 #include <CompilerCore/C/SemanticAnalysis.hpp>
 #include <CompilerCore/C/Parser.hpp>
 
+#define generateSemantics(source) [parserSource = source]()->std::pair<OpenCL::Semantics::TranslationUnit,std::string>\
+{\
+    std::ostringstream ss;\
+    std::vector<OpenCL::Lexer::Token> tokens;\
+    REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(parserSource));\
+    auto parsing = OpenCL::Parser::buildTree(tokens,&ss);\
+    REQUIRE((ss.str().empty() && parsing.second));\
+    OpenCL::Semantics::SemanticAnalysis analysis(&ss);\
+    auto semantics = analysis.visit(parsing.first);\
+    return {semantics,ss.str()};\
+}()
+
 TEST_CASE("Function definition semantics", "[semantics]")
 {
     auto source = "void foo(int i,float f){}";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 2);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error)
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 2);
     SECTION("Prototype")
     {
-        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(prototype);
         auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
         CHECK(prototype->getName() == "foo");
@@ -36,11 +42,10 @@ TEST_CASE("Function definition semantics", "[semantics]")
                       == OpenCL::Semantics::PrimitiveType::createFloat(false, false));
             CHECK(functionType->getArguments()[1].second == "f");
         }
-    }
-    SECTION("Definition")
+    }SECTION("Definition")
     {
         const OpenCL::Semantics::FunctionDefinition
-            * definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics->getGlobals()[1]);
+            * definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics.getGlobals()[1]);
         REQUIRE(definition);
         CHECK(definition->getName() == "foo");
         CHECK(definition->hasPrototype());
@@ -64,17 +69,12 @@ TEST_CASE("Function definition semantics", "[semantics]")
 TEST_CASE("K&R Function definition semantics", "[semantics]")
 {
     auto source = R"(void foo(i,f) register short i;float f;{})";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    const OpenCL::Semantics::FunctionDefinition* definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics->getGlobals()[0]);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 1);
+    const OpenCL::Semantics::FunctionDefinition
+        * definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics.getGlobals()[0]);
     REQUIRE(definition);
     CHECK(definition->getName() == "foo");
     CHECK(!definition->hasPrototype());
@@ -90,7 +90,7 @@ TEST_CASE("K&R Function definition semantics", "[semantics]")
                   == OpenCL::Semantics::PrimitiveType::createShort(false, false));
         CHECK(definition->getParameterDeclarations()[0].getLifetime() == OpenCL::Semantics::Lifetime::Register);
         CHECK(definition->getType().getArguments()[1].first
-                      == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
+                  == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
         CHECK(definition->getParameterDeclarations()[1].getType()
                   == OpenCL::Semantics::PrimitiveType::createFloat(false, false));
         CHECK(definition->getType().getArguments()[0].second == "i");
@@ -101,17 +101,11 @@ TEST_CASE("K&R Function definition semantics", "[semantics]")
 TEST_CASE("No argument function prototype semantics", "[semantics]")
 {
     auto source = R"(void foo(void);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 1);
+    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
     REQUIRE(prototype);
     CHECK(prototype->getName() == "foo");
     auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -124,19 +118,13 @@ TEST_CASE("No argument function prototype semantics", "[semantics]")
 TEST_CASE("No argument function definition semantics", "[semantics]")
 {
     auto source = R"(void foo(void){})";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 2);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 2);
     SECTION("Prototype")
     {
-        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(prototype);
         CHECK(prototype->getName() == "foo");
         auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -144,15 +132,14 @@ TEST_CASE("No argument function definition semantics", "[semantics]")
         CHECK(!functionType->isLastVararg());
         CHECK(functionType->getReturnType() == OpenCL::Semantics::PrimitiveType::createVoid(false, false));
         CHECK(functionType->getArguments().empty());
-    }
-    SECTION("Definition")
+    }SECTION("Definition")
     {
         const OpenCL::Semantics::FunctionDefinition
-            * definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics->getGlobals()[1]);
+            * definition = std::get_if<OpenCL::Semantics::FunctionDefinition>(&semantics.getGlobals()[1]);
         REQUIRE(definition);
         CHECK(definition->getName() == "foo");
         CHECK(!definition->getType().isLastVararg());
-        CHECK(definition->getType().getReturnType() == OpenCL::Semantics::PrimitiveType::createVoid(false,false));
+        CHECK(definition->getType().getReturnType() == OpenCL::Semantics::PrimitiveType::createVoid(false, false));
         CHECK(definition->getType().getArguments().empty());
     }
 }
@@ -160,17 +147,11 @@ TEST_CASE("No argument function definition semantics", "[semantics]")
 TEST_CASE("Function prototype semantics", "[semantics]")
 {
     auto source = R"(void foo(register int i,float f);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 1);
+    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
     REQUIRE(prototype);
     CHECK(prototype->getName() == "foo");
     auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -192,17 +173,11 @@ TEST_CASE("Function prototype semantics", "[semantics]")
 TEST_CASE("Empty identifier list function prototype semantics", "[semantics]")
 {
     auto source = R"(double foo();)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 1);
+    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
     REQUIRE(prototype);
     CHECK(prototype->getName() == "foo");
     auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -216,17 +191,11 @@ TEST_CASE("Empty identifier list function prototype semantics", "[semantics]")
 TEST_CASE("Ellipsis function semantics", "[semantics]")
 {
     auto source = R"(void foo(int i,float f,...);)";
-    auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-    REQUIRE(parsing.second);
-
-    OpenCL::Semantics::SemanticAnalysis analysis;
-    auto semantics = analysis.visit(parsing.first);
-    if (!semantics)
-    {
-        FAIL(semantics.error().getText());
-    }
-    REQUIRE(semantics->getGlobals().size() == 1);
-    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+    auto[semantics, error] = generateSemantics(source);
+    INFO(error);
+    REQUIRE(error.empty());
+    REQUIRE(semantics.getGlobals().size() == 1);
+    auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
     REQUIRE(prototype);
     CHECK(prototype->getName() == "foo");
     auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -251,17 +220,11 @@ TEST_CASE("Function linkage semantics", "[semantics]")
     SECTION("internal")
     {
         auto source = R"(static void foo(void);)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
-        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
+        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(prototype);
         CHECK(prototype->getName() == "foo");
         auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -270,21 +233,14 @@ TEST_CASE("Function linkage semantics", "[semantics]")
         CHECK(functionType->getReturnType()
                   == OpenCL::Semantics::PrimitiveType::createVoid(false, false));
         CHECK(prototype->getLinkage() == OpenCL::Semantics::Linkage::Internal);
-    }
-    SECTION("External")
+    }SECTION("External")
     {
         auto source = R"(extern void foo(void);)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
-        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
+        auto* prototype = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(prototype);
         CHECK(prototype->getName() == "foo");
         auto* functionType = std::get_if<OpenCL::Semantics::FunctionType>(&prototype->getType().get());
@@ -311,16 +267,13 @@ TEST_CASE("Function definitions and prototypes that should fail semantics", "[se
         "void foo(extern int i);",
         "void foo(auto int i);"
     };
-    for(auto& source : sources)
+    for (auto& source : sources)
     {
         DYNAMIC_SECTION(source)
         {
-            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-            REQUIRE(parsing.second);
-
-            OpenCL::Semantics::SemanticAnalysis analysis;
-            auto semantics = analysis.visit(parsing.first);
-            REQUIRE(!semantics);
+            auto[semantics, error] = generateSemantics(source);
+            INFO(error);
+            REQUIRE_FALSE(error.empty());
         }
     }
 }
@@ -330,19 +283,13 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
     SECTION("Multi declarations")
     {
         auto source = R"(int i,f,c;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 3);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 3);
         std::array names = {"i", "f", "c"};
         std::size_t i = 0;
-        for (auto& iter : semantics->getGlobals())
+        for (auto& iter : semantics.getGlobals())
         {
             auto* declaration = std::get_if<OpenCL::Semantics::Declaration>(&iter);
             REQUIRE(declaration);
@@ -351,176 +298,126 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
             CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
             CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
         }
-    }
-    SECTION("Empty declaration")
-    {
-        auto source = R"(int;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        REQUIRE(!semantics);
-    }
-    SECTION("non cv qualified")
+    }SECTION("non cv qualified")
     {
         auto source = R"(int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
         const OpenCL::Semantics::Declaration
-            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(declaration);
         CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
         CHECK(declaration->getName() == "i");
         CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
         CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
-    }
-    SECTION("const")
+    }SECTION("const")
     {
         auto source = R"(const int const i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
         const OpenCL::Semantics::Declaration
-            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(declaration);
         CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(true, false));
         CHECK(declaration->getName() == "i");
         CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
         CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
-    }
-    SECTION("volatile")
+    }SECTION("volatile")
     {
         auto source = R"(volatile int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
         const OpenCL::Semantics::Declaration
-            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(declaration);
         CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, true));
         CHECK(declaration->getName() == "i");
         CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
         CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
-    }
-    SECTION("const volatile")
+    }SECTION("const volatile")
     {
         auto source = R"(const int volatile i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
         const OpenCL::Semantics::Declaration
-            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(declaration);
         CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(true, true));
         CHECK(declaration->getName() == "i");
         CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
         CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::None);
-    }
-    SECTION("External linkage")
+    }SECTION("External linkage")
     {
         auto source = R"(extern int i;)";
-        auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-        REQUIRE(parsing.second);
-
-        OpenCL::Semantics::SemanticAnalysis analysis;
-        auto semantics = analysis.visit(parsing.first);
-        if (!semantics)
-        {
-            FAIL(semantics.error().getText());
-        }
-        REQUIRE(semantics->getGlobals().size() == 1);
+        auto[semantics, error] = generateSemantics(source);
+        INFO(error);
+        REQUIRE(error.empty());
+        REQUIRE(semantics.getGlobals().size() == 1);
         const OpenCL::Semantics::Declaration
-            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+            * declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
         REQUIRE(declaration);
         CHECK(declaration->getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
         CHECK(declaration->getName() == "i");
         CHECK(declaration->getLifetime() == OpenCL::Semantics::Lifetime::Static);
         CHECK(declaration->getLinkage() == OpenCL::Semantics::Linkage::External);
-    }
-    SECTION("Various primitives")
+    }SECTION("Various primitives")
     {
         std::array results = {
-            std::pair{"char i;",OpenCL::Semantics::PrimitiveType::createChar(false,false)},
-            std::pair{"signed char i;",OpenCL::Semantics::PrimitiveType::createChar(false,false)},
-            std::pair{"unsigned i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
-            std::pair{"short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"short int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"int short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"signed short i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"short signed i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"signed short int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"short signed int i;",OpenCL::Semantics::PrimitiveType::createShort(false,false)},
-            std::pair{"unsigned short i;",OpenCL::Semantics::PrimitiveType::createUnsignedShort(false,false)},
-            std::pair{"unsigned short int i;",OpenCL::Semantics::PrimitiveType::createUnsignedShort(false,false)},
-            std::pair{"int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"signed int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"signed i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"unsigned int i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
-            std::pair{"unsigned i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
-            std::pair{"long i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"signed long i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"long int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"signed long int i;",OpenCL::Semantics::PrimitiveType::createInt(false,false)},
-            std::pair{"unsigned long i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
-            std::pair{"unsigned long int i;",OpenCL::Semantics::PrimitiveType::createUnsignedInt(false,false)},
-            std::pair{"long long i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
-            std::pair{"signed long long i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
-            std::pair{"long long int i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
-            std::pair{"signed long long int i;",OpenCL::Semantics::PrimitiveType::createLongLong(false,false)},
-            std::pair{"unsigned long long i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
-            std::pair{"unsigned long long int i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
-            std::pair{"long unsigned int long i;",OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false,false)},
-            std::pair{"float i;",OpenCL::Semantics::PrimitiveType::createFloat(false,false)},
-            std::pair{"double i;",OpenCL::Semantics::PrimitiveType::createDouble(false,false)}
+            std::pair{"char i;", OpenCL::Semantics::PrimitiveType::createChar(false, false)},
+            std::pair{"signed char i;", OpenCL::Semantics::PrimitiveType::createChar(false, false)},
+            std::pair{"unsigned i;", OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false)},
+            std::pair{"short i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"short int i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"int short i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"signed short i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"short signed i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"signed short int i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"short signed int i;", OpenCL::Semantics::PrimitiveType::createShort(false, false)},
+            std::pair{"unsigned short i;", OpenCL::Semantics::PrimitiveType::createUnsignedShort(false, false)},
+            std::pair{"unsigned short int i;", OpenCL::Semantics::PrimitiveType::createUnsignedShort(false, false)},
+            std::pair{"int i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"signed int i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"signed i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"unsigned int i;", OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false)},
+            std::pair{"unsigned i;", OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false)},
+            std::pair{"long i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"signed long i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"long int i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"signed long int i;", OpenCL::Semantics::PrimitiveType::createInt(false, false)},
+            std::pair{"unsigned long i;", OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false)},
+            std::pair{"unsigned long int i;", OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false)},
+            std::pair{"long long i;", OpenCL::Semantics::PrimitiveType::createLongLong(false, false)},
+            std::pair{"signed long long i;", OpenCL::Semantics::PrimitiveType::createLongLong(false, false)},
+            std::pair{"long long int i;", OpenCL::Semantics::PrimitiveType::createLongLong(false, false)},
+            std::pair{"signed long long int i;", OpenCL::Semantics::PrimitiveType::createLongLong(false, false)},
+            std::pair{"unsigned long long i;", OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false, false)},
+            std::pair{"unsigned long long int i;",
+                      OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false, false)},
+            std::pair{"long unsigned int long i;",
+                      OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false, false)},
+            std::pair{"float i;", OpenCL::Semantics::PrimitiveType::createFloat(false, false)},
+            std::pair{"double i;", OpenCL::Semantics::PrimitiveType::createDouble(false, false)}
         };
-        for(auto& [source,type] : results)
+        for (auto&[source, type] : results)
         {
-            DYNAMIC_SECTION("Primitive: "<<source)
+            DYNAMIC_SECTION("Primitive: " << source)
             {
-                auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-                REQUIRE(parsing.second);
-
-                OpenCL::Semantics::SemanticAnalysis analysis;
-                auto semantics = analysis.visit(parsing.first);
-                if (!semantics)
-                {
-                    FAIL(semantics.error().getText());
-                }
-                if(semantics->getGlobals().size() != 1)
+                auto[semantics, error] = generateSemantics(source);
+                INFO(error);
+                REQUIRE(error.empty());
+                if (semantics.getGlobals().size() != 1)
                 {
                     FAIL(source);
                 }
-                auto* declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics->getGlobals()[0]);
+                auto* declaration = std::get_if<OpenCL::Semantics::Declaration>(&semantics.getGlobals()[0]);
                 REQUIRE(declaration);
                 CHECK(declaration->getType() == type);
             }
@@ -542,16 +439,12 @@ TEST_CASE("Invalid primitive declarations semantics", "[semantics]")
         "signed unsigned i;",
         "restrict int i;",
     };
-    for(auto& source : sources)
+    for (auto& source : sources)
     {
         DYNAMIC_SECTION(source)
         {
-            auto parsing = OpenCL::Parser::buildTree(OpenCL::Lexer::tokenize(source), nullptr);
-            REQUIRE(parsing.second);
-
-            OpenCL::Semantics::SemanticAnalysis analysis;
-            auto semantics = analysis.visit(parsing.first);
-            REQUIRE(!semantics);
+            auto[semantics, error] = generateSemantics(source);
+            REQUIRE_FALSE(error.empty());
         }
     }
 }

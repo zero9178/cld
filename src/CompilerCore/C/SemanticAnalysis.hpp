@@ -4,105 +4,116 @@
 #include <map>
 #include "Semantics.hpp"
 #include "Syntax.hpp"
+#include "Message.hpp"
 
 namespace OpenCL::Semantics
 {
+    using PossiblyAbstractQualifierRef =
+    std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
+
     class SemanticAnalysis final
     {
+        std::ostream* m_reporter;
         std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
-        std::vector<std::map<std::string, Semantics::Type>> m_typedefs{1};
-        std::vector<std::map<std::string, Semantics::Declaration>> m_typesOfNamedValues{1};
+        std::vector<std::map<std::string, std::variant<Semantics::Declaration, Semantics::Type>>> m_declarations{1};
         std::set<std::string> m_definedFunctions;
-
-        [[nodiscard]] std::map<std::string, std::reference_wrapper<const Semantics::Type>> gatherTypedefs() const;
 
         [[nodiscard]] std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
 
         void popScope()
         {
-            m_typesOfNamedValues.pop_back();
+            m_declarations.pop_back();
             m_structsUnions.pop_back();
-            m_typedefs.pop_back();
         }
 
         void pushScope()
         {
-            m_typesOfNamedValues.emplace_back();
+            m_declarations.emplace_back();
             m_structsUnions.emplace_back();
-            m_typedefs.emplace_back();
         }
+
+        [[nodiscard]] bool isTypedef(const std::string& name) const;
+
+        [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
+
+        [[nodiscard]] const Semantics::Type* getTypedef(const std::string& name) const;
+
+        void logError(const Message& message);
+
+        OpenCL::Semantics::Type primitivesToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                 std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                 const std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives,
+                                                 bool isConst,
+                                                 bool isVolatile);
+
+        OpenCL::Semantics::Type typeSpecifiersToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                     std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                     const std::vector<const OpenCL::Syntax::TypeSpecifier*>& typeSpecifiers,
+                                                     bool isConst,
+                                                     bool isVolatile);
+
+        OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
+                                      std::vector<Lexer::Token>::const_iterator declEnd,
+                                      PossiblyAbstractQualifierRef declarator,
+                                      Type&& baseType,
+                                      const std::vector<Syntax::Declaration>& declarations);
+
+        OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
+                                      std::vector<Lexer::Token>::const_iterator declEnd,
+                                      const Syntax::DirectAbstractDeclarator& abstractDeclarator,
+                                      Type&& baseType,
+                                      const std::vector<Syntax::Declaration>& declarations);
+
+        OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
+                                      std::vector<Lexer::Token>::const_iterator declEnd,
+                                      const Syntax::DirectDeclarator& directDeclarator,
+                                      Type&& baseType,
+                                      const std::vector<Syntax::Declaration>& declarations);
+
+        static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
+        {
+            bool isConst = false;
+            bool isVolatile = false;
+            bool isRestricted = false;
+            for (auto& typeQual : typeQualifiers)
+            {
+                switch (typeQual.getQualifier())
+                {
+                case Syntax::TypeQualifier::Const: isConst = true;
+                    break;
+                case Syntax::TypeQualifier::Restrict: isRestricted = true;
+                    break;
+                case Syntax::TypeQualifier::Volatile: isVolatile = true;
+                    break;
+                default: break;
+                }
+            }
+            return std::tie(isConst, isVolatile, isRestricted);
+        };
+
+        std::vector<std::pair<OpenCL::Semantics::Type,
+                              std::string>> parameterListToArguments(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                     std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                     const std::vector<OpenCL::Syntax::ParameterDeclaration>& parameterDeclarations,
+                                                                     const std::vector<OpenCL::Syntax::Declaration>& declarations);
 
     public:
 
-        Expected<Type, FailureReason> visit(const Syntax::PrimaryExpression& node);
+        explicit SemanticAnalysis(std::ostream* reporter = nullptr) : m_reporter(reporter)
+        {}
 
-        Expected<Type, FailureReason> visit(const Syntax::PrimaryExpressionIdentifier& node);
+        TranslationUnit visit(const Syntax::TranslationUnit& node);
 
-        Expected<Type, FailureReason> visit(const Syntax::PrimaryExpressionConstant& node);
+        std::optional<OpenCL::Semantics::FunctionDefinition> visit(const Syntax::FunctionDefinition& node);
 
-        Expected<Type, FailureReason> visit(const Syntax::PrimaryExpressionParenthese& node);
+        std::vector<Declaration> visit(const Syntax::Declaration& node);
 
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpression& node);
+        using DeclarationOrSpecifierQualifier = std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,
+                                                             std::reference_wrapper<const OpenCL::Syntax::SpecifierQualifier>>;
 
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionPrimaryExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionSubscript& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionIncrement& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionDecrement& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionDot& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionArrow& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionFunctionCall& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::PostFixExpressionTypeInitializer& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::UnaryExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::UnaryExpressionPostFixExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::UnaryExpressionSizeOf& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::UnaryExpressionUnaryOperator& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::CastExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::Term& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::AdditiveExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::ShiftExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::RelationalExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::EqualityExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::BitAndExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::BitXorExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::BitOrExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::LogicalAndExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::LogicalOrExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::ConditionalExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::AssignmentExpression& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::AssignmentExpressionAssignment& node);
-
-        Expected<Type, FailureReason> visit(const Syntax::Expression& node);
-
-        Expected<TranslationUnit, FailureReason> visit(const Syntax::TranslationUnit& node);
-
-        Expected<FunctionDefinition, FailureReason> visit(const Syntax::FunctionDefinition& node);
-
-        Expected<std::vector<OpenCL::Semantics::Declaration>, FailureReason> visit(const Syntax::Declaration& node);
+        Type declaratorsToType(const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
+                               PossiblyAbstractQualifierRef declarator = {},
+                               const std::vector<Syntax::Declaration>& declarations = {});
     };
 }
 

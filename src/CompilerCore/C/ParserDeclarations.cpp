@@ -253,7 +253,7 @@ OpenCL::Parser::parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::
                                              Modifier(loc->identifier, loc->identifier + 1, Modifier::Underline)});
                         }
                     }
-                    context.logError(ErrorMessages::MISSING_PARAMETER_NAME,
+                    context.logError(ErrorMessages::Parser::MISSING_PARAMETER_NAME,
                                      begin,
                                      Modifier(nodeFromNodeDerivedVariant(specifier.back()).begin(),
                                               *abstractDecl ? (*abstractDecl)->end() : nodeFromNodeDerivedVariant(
@@ -643,24 +643,12 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
         case Lexer::TokenType::UnionKeyword:
         case Lexer::TokenType::StructKeyword:
         {
-            auto prevErrorCount = context.getCurrentErrorCount();
             auto expected = parseStructOrUnionSpecifier(begin, end, context);
             if (expected)
             {
-                auto name = expected->getIdentifier();
-                auto isDefinition = !expected->getStructDeclarations().empty();
-                auto result =
-                    TypeSpecifier(start, begin, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
-                if (isDefinition && prevErrorCount == context.getCurrentErrorCount())
-                {
-                    auto type = Semantics::declaratorsToType({std::cref(result)});
-                    if (!type)
-                    {
-                        return {};
-                    }
-                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->get()));
-                }
-                return DeclarationSpecifier{std::move(result)};
+                return DeclarationSpecifier{TypeSpecifier(start,
+                                                          begin,
+                                                          std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)))};
             }
             else
             {
@@ -696,7 +684,7 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
                                  loc->begin,
                                  loc->end,
                                  Modifier(loc->identifier, loc->identifier + 1, Modifier::Action::Underline)});
-                context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+                context.logError(ErrorMessages::Parser::EXPECTED_N_BEFORE_N
                                      .args("storage specifier or typename", '\'' + begin->emitBack() + '\''),
                                  findSemicolonOrEOL(start, end),
                                  Modifier{begin, begin + 1, Modifier::PointAtBeginning}, std::move(notes));
@@ -709,14 +697,14 @@ OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens:
     }
     if (begin < end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N_BEFORE_N
                              .args("storage specifier or typename", '\'' + begin->emitBack() + '\''),
                          findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
     }
     else
     {
-        context.logError(ErrorMessages::EXPECTED_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N
                              .args("storage specifier or typename"),
                          findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
@@ -742,7 +730,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
     }
     else
     {
-        context.logError(ErrorMessages::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
+        context.logError(ErrorMessages::Parser::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
                          begin + 1,
                          Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
         begin = std::find_if(begin, end, [](const Lexer::Token& token)
@@ -758,7 +746,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
 
     if (begin >= end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_AFTER_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N
                              .args(Format::List(", ", " or ", "identifier", "'{'"), isUnion ? "union" : "struct"),
                          end,
                          Modifier(end - 1, end, Modifier::Action::InsertAtEnd));
@@ -799,7 +787,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
             }
         }
 
-        std::vector<std::pair<std::unique_ptr<Declarator>, std::int64_t>> declarators;
+        std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> declarators;
         bool first = true;
         do
         {
@@ -823,27 +811,7 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
                 {
                     return {};
                 }
-                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
-                auto value = evaluator.visit(*constant);
-                if (!value)
-                {
-                    return {};
-                }
-                declarators.emplace_back(nullptr,
-                                         std::visit(
-                                             [](auto&& value) -> std::size_t
-                                             {
-                                                 using T = std::decay_t<decltype(value)>;
-                                                 if constexpr (std::is_convertible_v<T, std::size_t>)
-                                                 {
-                                                     return value;
-                                                 }
-                                                 else
-                                                 {
-                                                     throw std::runtime_error("Invalid type of constant expression");
-                                                 }
-                                             },
-                                             *value));
+                declarators.emplace_back(nullptr, std::move(*constant));
                 continue;
             }
             auto declarator = parseDeclarator(begin, end, context);
@@ -868,31 +836,12 @@ OpenCL::Parser::parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Token
                 {
                     return {};
                 }
-                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
-                auto value = evaluator.visit(*constant);
-                if (!value)
-                {
-                    return {};
-                }
-                declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                         std::visit(
-                                             [](auto&& value) -> std::size_t
-                                             {
-                                                 using T = std::decay_t<decltype(value)>;
-                                                 if constexpr (std::is_convertible_v<T, std::size_t>)
-                                                 {
-                                                     return value;
-                                                 }
-                                                 else
-                                                 {
-                                                     throw std::runtime_error("Invalid type of constant expression");
-                                                 }
-                                             },
-                                             *value));
+                declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), std::move(*constant));
             }
             else
             {
-                declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), -1);
+                declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                         std::optional<ConstantExpression>{});
             }
         }
         while (true);
@@ -981,20 +930,9 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
             auto expected = parseStructOrUnionSpecifier(begin, end, context);
             if (expected)
             {
-                auto name = expected->getIdentifier();
-                bool isDefinition = !expected->getStructDeclarations().empty();
-                auto result =
-                    TypeSpecifier(start, begin, std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)));
-                if (isDefinition)
-                {
-                    auto type = Semantics::declaratorsToType({std::cref(result)});
-                    if (!type)
-                    {
-                        return {};
-                    }
-                    context.structOrUnions.emplace(name, std::get<Semantics::RecordType>(type->get()));
-                }
-                return SpecifierQualifier{std::move(result)};
+                return SpecifierQualifier{TypeSpecifier(start,
+                                                        begin,
+                                                        std::make_unique<Syntax::StructOrUnionSpecifier>(std::move(*expected)))};
             }
             else
             {
@@ -1030,7 +968,7 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
                                  loc->begin,
                                  loc->end,
                                  Modifier(loc->identifier, loc->identifier + 1, Modifier::Action::Underline)});
-                context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+                context.logError(ErrorMessages::Parser::EXPECTED_N_BEFORE_N
                                      .args("or typename", '\'' + begin->emitBack() + '\''),
                                  findSemicolonOrEOL(start, end),
                                  Modifier{begin, begin + 1, Modifier::PointAtBeginning}, std::move(notes));
@@ -1043,14 +981,14 @@ OpenCL::Parser::parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::c
     }
     if (begin < end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_BEFORE_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N_BEFORE_N
                              .args("typename", '\'' + begin->emitBack() + '\''),
                          findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
     }
     else
     {
-        context.logError(ErrorMessages::EXPECTED_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N
                              .args("typename"),
                          findSemicolonOrEOL(start, end),
                          Modifier{begin, begin + 1, Modifier::PointAtBeginning});
@@ -1173,7 +1111,8 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                                                                         Modifier::Underline)});
                                     }
                                     context
-                                        .logError(ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("identifier", "typename"),
+                                        .logError(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
+                                                      .args("identifier", "typename"),
                                                   findSemicolonOrEOL(begin, end),
                                                   Modifier(begin - 1, begin, Modifier::Underline), std::move(notes));
                                     if (begin->getTokenType() == Lexer::TokenType::Comma)
@@ -1416,14 +1355,14 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
     {
         if (begin == end)
         {
-            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
+            context.logError(ErrorMessages::Parser::EXPECTED_N
                                  .args(OpenCL::Format::List(", ", " or ", "'('", "identifier")),
                              begin,
                              Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
         }
         else
         {
-            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+            context.logError(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
                                  .args(OpenCL::Format::List(", ", " or ", "'('", "identifier"),
                                        '\'' + begin->emitBack() + '\''),
                              end, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
@@ -1445,7 +1384,7 @@ OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator& begin, Tokens::co
         begin++;
         if (begin >= end || begin->getTokenType() != Lexer::TokenType::Ellipse)
         {
-            context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("parameter", "','"),
+            context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("parameter", "','"),
                              findEOL(begin, end),
                              Modifier(begin - 1, begin, Modifier::PointAtEnd));
         }
@@ -1573,7 +1512,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
     }
     if (parameterDeclarations.empty())
     {
-        context.logError(ErrorMessages::EXPECTED_N.args("at least one parameter in parameter list"),
+        context.logError(ErrorMessages::Parser::EXPECTED_N.args("at least one parameter in parameter list"),
                          findSemicolonOrEOL(begin, end), Modifier(begin, end, Modifier::PointAtBeginning));
     }
     return ParameterList(start, begin, std::move(parameterDeclarations));
@@ -1773,14 +1712,14 @@ OpenCL::Parser::parseDirectAbstractDeclarator(OpenCL::Parser::Tokens::const_iter
     {
         if (begin == end)
         {
-            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N
+            context.logError(ErrorMessages::Parser::EXPECTED_N
                                  .args(OpenCL::Format::List(", ", " or ", "'('", "'['")),
                              begin,
                              Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
         }
         else
         {
-            context.logError(OpenCL::Parser::ErrorMessages::EXPECTED_N_INSTEAD_OF_N
+            context.logError(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
                                  .args(OpenCL::Format::List(", ", " or ", "'('", "'['"),
                                        '\'' + begin->emitBack() + '\''),
                              end, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
@@ -1812,7 +1751,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
     }
     else if (begin >= end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("identifier", "enum"),
+        context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("identifier", "enum"),
                          end,
                          Modifier(begin - 1, begin, Modifier::InsertAtEnd));
         return {};
@@ -1831,7 +1770,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         begin++;
     }
 
-    std::vector<std::pair<std::string, std::int32_t>> values;
+    std::vector<std::pair<std::string, std::optional<ConstantExpression>>> values;
     while (begin < end && begin->getTokenType() != Lexer::TokenType::CloseBrace)
     {
         auto thisValueStart = begin;
@@ -1849,8 +1788,11 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
                 return {};
             }
         }
+        else
+        {
+            values.emplace_back(valueName, std::optional<ConstantExpression>{});
+        }
 
-        std::int32_t value = values.empty() ? 0 : values.back().second + 1;
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Assignment)
         {
             begin++;
@@ -1859,26 +1801,6 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
             {
                 return {};
             }
-            Semantics::ConstantEvaluator evaluator(context.structOrUnions);
-            auto constValue = evaluator.visit(*constant);
-            if (!constValue)
-            {
-                return {};
-            }
-            value = std::visit(
-                [](auto&& value) -> std::int32_t
-                {
-                    using T = std::decay_t<decltype(value)>;
-                    if constexpr (std::is_same_v<T, void*>)
-                    {
-                        return (std::int32_t)(std::intptr_t)value;
-                    }
-                    else
-                    {
-                        return value;
-                    }
-                },
-                *constValue);
         }
 
         if (!valueName.empty())
@@ -1894,14 +1816,15 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         {
             if (begin >= end)
             {
-                context.logError(ErrorMessages::EXPECTED_N.args("'}'"),
+                context.logError(ErrorMessages::Parser::EXPECTED_N.args("'}'"),
                                  begin,
                                  Modifier(begin - 1, begin, Modifier::InsertAtEnd));
                 return {};
             }
             else
             {
-                context.logError(ErrorMessages::EXPECTED_N_INSTEAD_OF_N.args("','", '\'' + begin->emitBack() + '\''),
+                context.logError(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
+                                     .args("','", '\'' + begin->emitBack() + '\''),
                                  findSemicolonOrEOL(begin, end),
                                  Modifier(begin, begin + 1, Modifier::PointAtBeginning));
                 begin = std::find_if(begin, end, [](const Lexer::Token& token)
@@ -1915,7 +1838,6 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
                 }
             }
         }
-        values.emplace_back(valueName, value);
     }
     if (begin < end)
     {
@@ -1926,7 +1848,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         expect(Lexer::TokenType::CloseBrace, begin, end, context);
         return {};
     }
-    return EnumSpecifier(start, begin, EnumDeclaration(start, begin, std::move(name), values));
+    return EnumSpecifier(start, begin, EnumDeclaration(start, begin, std::move(name), std::move(values)));
 }
 
 std::optional<CompoundStatement>
@@ -2079,7 +2001,7 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
             break;
         }
 
-        std::vector<std::variant<std::size_t, std::string>> variants;
+        std::vector<std::variant<ConstantExpression, std::string>> variants;
         while (begin < end && (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket
             || begin->getTokenType() == Lexer::TokenType::Dot))
         {
@@ -2099,6 +2021,10 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
                         return {};
                     }
                 }
+                else
+                {
+                    variants.emplace_back(std::move(*constant));
+                }
                 if (!expect(Lexer::TokenType::CloseSquareBracket,
                             begin,
                             end,
@@ -2107,25 +2033,6 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
                               Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
                 {
                     continue;
-                }
-                Semantics::ConstantEvaluator evaluator(context.structOrUnions);
-                auto constValue = evaluator.visit(*constant);
-                if (constValue)
-                {
-                    variants.emplace_back(std::visit(
-                        [](auto&& value) -> std::size_t
-                        {
-                            using T = std::decay_t<decltype(value)>;
-                            if constexpr (std::is_convertible_v<T, std::size_t>)
-                            {
-                                return value;
-                            }
-                            else
-                            {
-                                throw std::runtime_error("Invalid type of constant expression");
-                            }
-                        },
-                        *constValue));
                 }
             }
             else if (begin->getTokenType() == Lexer::TokenType::Dot)
@@ -2151,7 +2058,7 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
         {
             continue;
         }
-        vector.push_back({std::move(*initializer), variants});
+        vector.push_back({std::move(*initializer), std::move(variants)});
     }
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma);
 
@@ -2386,19 +2293,13 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 return {};
             }
         }
-        Semantics::ConstantEvaluator evaluator(context.structOrUnions);
         auto statement = parseStatement(begin, end, context);
         if (!statement || !expression)
         {
             return {};
         }
-        auto constValue = evaluator.visit(*expression);
-        if (!constValue)
-        {
-            return {};
-        }
         return Statement(
-            CaseStatement(start, begin, *constValue, std::make_unique<Statement>(std::move(*statement))));
+            CaseStatement(start, begin, std::move(*expression), std::make_unique<Statement>(std::move(*statement))));
     }
     case Lexer::TokenType::GotoKeyword:
     {
@@ -2700,7 +2601,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     }
     if (begin >= end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_AFTER_N
+        context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N
                              .args(Format::List(", ", " or ", "expression", "declaration"), "'('"),
                          begin,
                          Modifier(begin - 1, begin, Modifier::PointAtEnd));
@@ -2764,7 +2665,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     std::unique_ptr<Expression> controlling;
     if (begin >= end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("expression", "';'"),
+        context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("expression", "';'"),
                          begin,
                          Modifier(begin - 1, begin, Modifier::PointAtEnd));
         return {};
@@ -2807,7 +2708,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     std::unique_ptr<Expression> post;
     if (begin >= end)
     {
-        context.logError(ErrorMessages::EXPECTED_N_AFTER_N.args("expression", "';'"),
+        context.logError(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("expression", "';'"),
                          begin,
                          Modifier(begin - 1, begin, Modifier::PointAtEnd));
         return {};

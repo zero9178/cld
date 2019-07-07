@@ -1,5 +1,6 @@
 #include "Parser.hpp"
 
+#include "ParserUtil.hpp"
 #include <algorithm>
 
 std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Lexer::Token>& tokens,

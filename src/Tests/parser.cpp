@@ -1,6 +1,7 @@
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 #include <sstream>
+#include "CompilerCore/C/ErrorMessages.hpp"
 #include "TestConfig.hpp"
 #include "catch.hpp"
 
@@ -108,8 +109,9 @@ namespace
     };
 }
 
-using namespace OpenCL::Parser::ErrorMessages;
-using namespace OpenCL::Parser::Notes;
+using namespace OpenCL::Notes;
+using namespace OpenCL::ErrorMessages;
+using namespace OpenCL::ErrorMessages::Parser;
 
 TEST_CASE("Parse Global Declarations", "[parser]")
 {

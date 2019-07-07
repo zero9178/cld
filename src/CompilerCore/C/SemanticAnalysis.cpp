@@ -1,576 +1,51 @@
 #include <utility>
 #include <algorithm>
 #include <optional>
+#include <CompilerCore/Common/Util.hpp>
+#include <array>
 
+#include "ErrorMessages.hpp"
 #include "SemanticAnalysis.hpp"
+#include "ConstantEvaluator.hpp"
 
-namespace
+void OpenCL::Semantics::SemanticAnalysis::logError(const OpenCL::Message& message)
 {
-    template <typename G>
-    struct Y
+    if (m_reporter)
     {
-        template <typename... X>
-        decltype(auto) operator()(X&& ... x) const&
-        {
-            return g(*this, std::forward<X>(x)...);
-        }
-
-        G g;
-    };
-
-    template <typename G>
-    Y(G)->Y<G>;
-
-    template <class... Ts>
-    struct overload : Ts ...
-    {
-        using Ts::operator()...;
-    };
-    template <class... Ts>
-    overload(Ts...)->overload<Ts...>;
-
-    template <class... Args>
-    struct variant_cast_proxy
-    {
-        std::variant<Args...> v;
-
-        template <class... ToArgs>
-        operator std::variant<ToArgs...>() const
-        {
-            return std::visit([](auto&& arg) -> std::variant<ToArgs...>
-                              { return arg; },
-                              v);
-        }
-    };
-
-    template <class... Args>
-    auto variant_cast(const std::variant<Args...>& v) -> variant_cast_proxy<Args...>
-    {
-        return {v};
-    }
-
-    bool canCastTo(const OpenCL::Semantics::Type& sourceType,
-                   const OpenCL::Semantics::Type& destinationType,
-                   bool explicitConversion)
-    {
-        if (sourceType.isCompatibleWith(destinationType))
-        {
-            return true;
-        }
-        return std::visit(
-            overload{
-                [&](const OpenCL::Semantics::PrimitiveType& primitiveType) -> bool
-                {
-                    return std::visit(
-                        overload{[&](const OpenCL::Semantics::PrimitiveType&) -> bool
-                                 {
-                                     return true;
-                                 },
-                                 [&](const OpenCL::Semantics::PointerType& pointerType) -> bool
-                                 {
-                                     if (primitiveType.isFloatingPoint())
-                                     {
-                                         return false;
-                                     }
-                                     if (explicitConversion)
-                                     {
-                                         return !std::holds_alternative<OpenCL::Semantics::FunctionType>(
-                                             pointerType.getElementType().get());
-                                     }
-                                     else
-                                     {
-                                         return true;
-                                     }
-                                 },
-                                 [&](const OpenCL::Semantics::EnumType&) -> bool
-                                 {
-                                     return true;
-                                 },
-                                 [](auto&&) -> bool
-                                 { return false; }},
-                        destinationType.get());
-                },
-                [&](const OpenCL::Semantics::PointerType& pointerType) -> bool
-                {
-                    return std::visit(overload{[&](const OpenCL::Semantics::PrimitiveType& primitiveType) -> bool
-                                               {
-                                                   return !(primitiveType.isFloatingPoint() || !explicitConversion);
-                                               },
-                                               [&](const OpenCL::Semantics::PointerType& otherPointer) -> bool
-                                               {
-                                                   if (!explicitConversion)
-                                                   {
-                                                       auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(
-                                                           &pointerType.getElementType().get());
-                                                       auto* otherPrimitive
-                                                           = std::get_if<OpenCL::Semantics::PrimitiveType>(
-                                                               &otherPointer.getElementType().get());
-                                                       if ((!primitive || primitive->getBitCount() == 0)
-                                                           && (!otherPrimitive || otherPrimitive->getBitCount() == 0))
-                                                       {
-                                                           return false;
-                                                       }
-                                                   }
-                                                   return true;
-                                               },
-                                               [&](const OpenCL::Semantics::EnumType&) -> bool
-                                               {
-                                                   return true;
-                                               },
-                                               [](auto&&) -> bool
-                                               { return false; }},
-                                      destinationType.get());
-                },
-                [&](const OpenCL::Semantics::FunctionType& functionType) -> bool
-                {
-                    return std::visit(overload{[&](const OpenCL::Semantics::PointerType& pointerType) -> bool
-                                               {
-                                                   auto* function = std::get_if<OpenCL::Semantics::FunctionType>(
-                                                       &pointerType.getElementType().get());
-                                                   return function && *function == functionType;
-                                               },
-                                               [](auto&&) -> bool
-                                               { return false; }},
-                                      destinationType.get());
-                },
-                [&](const OpenCL::Semantics::EnumType&) -> bool
-                {
-                    return std::visit(overload{[&](const OpenCL::Semantics::PrimitiveType&) -> bool
-                                               {
-                                                   return true;
-                                               },
-                                               [&](const OpenCL::Semantics::PointerType&) -> bool
-                                               {
-                                                   return true;
-                                               },
-                                               [&](const OpenCL::Semantics::EnumType&) -> bool
-                                               { return true; },
-                                               [](auto&&) -> bool
-                                               { return false; }},
-                                      destinationType.get());
-                },
-                [&](const OpenCL::Semantics::ArrayType& arrayType) -> bool
-                {
-                    return canCastTo(OpenCL::Semantics::PointerType::create(false, false, false,
-                                                                            OpenCL::Semantics::Type(arrayType
-                                                                                                        .getType())),
-                                     destinationType,
-                                     explicitConversion);
-                },
-                [](auto&&) -> bool
-                { return false; }},
-            sourceType.get());
-    }
-
-    [[maybe_unused]] OpenCL::Semantics::Type integerPromotion(const OpenCL::Semantics::Type& type)
-    {
-        if (auto* primitive = std::get_if<OpenCL::Semantics::PrimitiveType>(&type.get()))
-        {
-            if (!primitive->isFloatingPoint() && primitive->getBitCount() < 32)
-            {
-                return OpenCL::Semantics::PrimitiveType::create(type.isConst(), type.isVolatile(), false, true, 32);
-            }
-        }
-        return type;
+        (*m_reporter) << message;
     }
 }
 
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      { return visit(value); }, node);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
-{
-    return std::visit(
-        overload{[](std::int32_t) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, false, true, 32);
-                 },
-                 [](std::uint32_t) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, false, false, 32);
-                 },
-                 [](std::int64_t) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, false, true, 64);
-                 },
-                 [](std::uint64_t) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, false, false, 64);
-                 },
-                 [](float) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, true, true, 32);
-                 },
-                 [](double) -> Semantics::Type
-                 {
-                     return Semantics::PrimitiveType::create(false, false, true, true, 64);
-                 },
-                 [](const std::string& s) -> Semantics::Type
-                 {
-                     return Semantics::ArrayType::create(
-                         false, false, false,
-                         Semantics::PrimitiveType::create(false, false, false, true, 8),
-                         s.size() + 1);
-                 }}, node.getValue());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
-{
-    return visit(node.getExpression());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return visit(value);
-                      }, node);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
-{
-    return visit(node.getPrimaryExpression());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
-{
-    auto result = visit(node.getPostFixExpression());
-    if (!result)
-    {
-        return result;
-    }
-    auto index = visit(node.getExpression());
-    if (!index)
-    {
-        return index;
-    }
-    auto* ptr = std::get_if<Semantics::PointerType>(&result->get());
-    if (!ptr)
-    {
-        return FailureReason("[] operator can only be applied to pointers and arrays");
-    }
-    return ptr->getElementType();
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
-{
-    return visit(node.getPostFixExpression());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
-{
-    return visit(node.getPostFixExpression());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
-{
-    auto result = visit(node.getPostFixExpression());
-    if (!result)
-    {
-        return result;
-    }
-    const Semantics::RecordType* structType = std::get_if<Semantics::RecordType>(&result->get());
-    if (!structType)
-    {
-        return FailureReason("Can only apply . to struct or union type");
-    }
-    auto member = std::find_if(structType->getMembers().begin(), structType->getMembers().end(),
-                               [&node](const auto& tuple)
-                               { return std::get<1>(tuple) == node.getIdentifier(); });
-    if (member == structType->getMembers().end())
-    {
-        return FailureReason("Could not find member " + node.getIdentifier() + " in " + structType->getName());
-    }
-    return std::get<0>(*member);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
-{
-    auto result = visit(node.getPostFixExpression());
-    if (!result)
-    {
-        return result;
-    }
-    const Semantics::PointerType* pointerType =
-        std::get_if<Semantics::PointerType>(&result->get());
-    if (!pointerType)
-    {
-        return FailureReason("Can only apply -> to pointer types");
-    }
-    const Semantics::RecordType* structType =
-        std::get_if<Semantics::RecordType>(&pointerType->getElementType().get());
-    if (!structType)
-    {
-        return FailureReason("Can only apply -> to pointer to struct or union type");
-    }
-    auto member = std::find_if(structType->getMembers().begin(), structType->getMembers().end(),
-                               [&node](const auto& tuple)
-                               { return std::get<1>(tuple) == node.getIdentifier(); });
-    if (member == structType->getMembers().end())
-    {
-        return FailureReason("Could not find member " + node.getIdentifier() + " in " + structType->getName());
-    }
-    return std::get<0>(*member);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& node)
-{
-    auto result = visit(node.getPostFixExpression());
-    if (!result)
-    {
-        return result;
-    }
-    auto type = *result;
-    auto* function = std::get_if<Semantics::FunctionType>(&type.get());
-    if (!function)
-    {
-        return FailureReason("Function call only possible on function type");
-    }
-    std::size_t i = 0;
-    for (auto& iter : node.getOptionalAssignmentExpressions())
-    {
-        auto argType = visit(*iter);
-        if (!argType)
-        {
-            return argType;
-        }
-        if (!canCastTo(*argType, function->getArguments()[i++].first, false))
-        {
-            return FailureReason(
-                "Argument " + std::to_string(i - 1) + " in function call can not be cast from " + argType->getName()
-                    + " to " + function->getArguments()[i - 1].first.getName());
-        }
-    }
-    return function->getReturnType();
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
-{
-    std::vector<Semantics::SpecifierQualifierRef> specifierQualifierRefs;
-    for (auto& iter : node.getTypeName().getSpecifierQualifiers())
-    {
-        std::visit([&specifierQualifierRefs](auto&& value)
-                   {
-                       specifierQualifierRefs.emplace_back(value);
-                   }, iter);
-    }
-    return Semantics::declaratorsToType(specifierQualifierRefs,
-                                        node.getTypeName().getAbstractDeclarator(),
-                                        gatherTypedefs(),
-                                        {},
-                                        gatherStructsAndUnions());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpression& node)
-{
-    return std::visit([this](auto&& value)
-                      {
-                          return visit(value);
-                      }, node);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
-{
-    return visit(node.getPostFixExpression());
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
-{
-    return Semantics::PrimitiveType::create(false, false, false, false, 64);
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
-{
-    auto result = visit(node.getUnaryExpression());
-    if (!result)
-    {
-        return result;
-    }
-    auto type = *result;
-    switch (node.getAnOperator())
-    {
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:return type;
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
-        return Semantics::PointerType::create(false,
-                                              false,
-                                              false,
-                                              std::move(type));
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
-    {
-        auto* pointer = std::get_if<Semantics::PointerType>(&type.get());
-        if (!pointer)
-        {
-            return FailureReason("Can only dereference pointer type");
-        }
-        return pointer->getElementType();
-    }
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:break;
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:break;
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:break;
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:break;
-    }
-    return result;
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::CastExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Term& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AdditiveExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::ShiftExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::RelationalExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::EqualityExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitAndExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitXorExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::BitOrExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::LogicalAndExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::LogicalOrExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::ConditionalExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AssignmentExpression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::AssignmentExpressionAssignment& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::Type,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Expression& node)
-{
-
-}
-
-OpenCL::Expected<OpenCL::Semantics::TranslationUnit, OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(
+OpenCL::Semantics::TranslationUnit OpenCL::Semantics::SemanticAnalysis::visit(
     const Syntax::TranslationUnit& node)
 {
     std::vector<TranslationUnit::variant> globals;
     for (auto& iter : node.getGlobals())
     {
-        auto result = std::visit(overload{
-            [this, &globals](const Syntax::FunctionDefinition& function) -> Expected<std::optional<TranslationUnit::variant>,
-                                                                                     FailureReason>
-            {
-                auto result = visit(function);
-                if (!result)
-                {
-                    return result;
-                }
-                if (result->hasPrototype())
-                {
-                    globals.emplace_back(Declaration(Type(false, false, "", result->getType()),
-                                                     result->getLinkage(),
-                                                     Lifetime::Static,
-                                                     result->getName()));
-                }
-                return *result;
-            },
-            [this, &globals](const Syntax::Declaration& declaration) -> Expected<std::optional<TranslationUnit::variant>,
-                                                                                 FailureReason>
-            {
-                auto result = visit(declaration);
-                if (!result)
-                {
-                    return result;
-                }
-                globals.insert(globals.end(), result->begin(), result->end());
-                return std::optional<TranslationUnit::variant>{};
-            }
-        }, iter);
-        if (!result)
+        auto result = match(iter,
+                            [this, &globals](const Syntax::FunctionDefinition& function) -> std::optional<
+                                TranslationUnit::variant>
+                            {
+                                auto result = visit(function);
+                                if (result && result->hasPrototype())
+                                {
+                                    globals.emplace_back(Declaration(Type(false, false, "", result->getType()),
+                                                                     result->getLinkage(),
+                                                                     Lifetime::Static,
+                                                                     result->getName()));
+                                }
+                                return result ? std::optional<TranslationUnit::variant>(*result) : std::optional<
+                                    TranslationUnit::variant>{};
+                            },
+                            [this, &globals](const Syntax::Declaration& declaration) -> std::optional<TranslationUnit::variant>
+                            {
+                                auto result = visit(declaration);
+                                globals.insert(globals.end(), result.begin(), result.end());
+                                return std::optional<TranslationUnit::variant>{};
+                            });
+        if (result)
         {
-            return result;
-        }
-        if (*result)
-        {
-            globals.push_back(std::move(**result));
+            globals.push_back(std::move(*result));
         }
     }
     return TranslationUnit(std::move(globals));
@@ -607,124 +82,81 @@ namespace
     }
 } // namespace
 
-OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::FunctionDefinition& node)
+std::optional<OpenCL::Semantics::FunctionDefinition> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::FunctionDefinition& node)
 {
     auto name = declaratorToName(node.getDeclarator());
-    std::vector<Semantics::SpecifierQualifierRef> specifierQualifiers;
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
-        std::visit(
-            overload{[&specifierQualifiers](const Syntax::TypeSpecifier& typeSpecifier)
-                     {
-                         specifierQualifiers.emplace_back(typeSpecifier);
-                     },
-                     [&specifierQualifiers](const Syntax::TypeQualifier& typeQualifier)
-                     {
-                         specifierQualifiers.emplace_back(typeQualifier);
-                     },
-                     [](auto&&)
-                     {}},
-            iter);
         if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter))
         {
             if (storageClassSpecifier)
             {
-                return FailureReason("A maximum of one storage class specifier allowed in function definition");
+                logError({ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
+                          node.getCompoundStatement().begin(),
+                          Modifier(storage->begin(), storage->end(), Modifier::Underline),
+                          {{Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(),
+                            node.getCompoundStatement().begin(), Modifier(storageClassSpecifier->begin(),
+                                                                          storageClassSpecifier->end(),
+                                                                          Modifier::Underline)}}});
+                continue;
             }
             if (storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                 && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
             {
-                return FailureReason("Only static or extern are allowed storage class specifiers in function definition");
+                logError({ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION, node.begin(),
+                          node.getCompoundStatement().begin(),
+                          Modifier(storage->begin(), storage->end(), Modifier::Underline)});
+                continue;
             }
             storageClassSpecifier = storage;
         }
     }
-    auto type = Semantics::declaratorsToType(specifierQualifiers, node.getDeclarator(), gatherTypedefs(),
-                                             node.getDeclarations(), gatherStructsAndUnions());
-    if (!type)
+    auto type = declaratorsToType({node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end()},
+                                  node.getDeclarator(),
+                                  node.getDeclarations());
+    if (!std::holds_alternative<Semantics::FunctionType>(type.get()))
     {
-        return type;
+        logError({ErrorMessages::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, node.begin(),
+                  node.getCompoundStatement().begin(),
+                  Modifier(node.getDeclarator().begin(), node.getDeclarator().end(), Modifier::Underline)});
+        return {};
     }
-    if (!std::holds_alternative<Semantics::FunctionType>(type->get()))
-    {
-        return FailureReason("Expected parameter list in function definition");
-    }
-    auto functionRP = std::get<Semantics::FunctionType>(type->get());
-    if (std::any_of(functionRP.getArguments().begin(), functionRP.getArguments().end(), [](const auto& pair)
-    {
-        return pair.second.empty();
-    }))
-    {
-        return FailureReason("Parameter name omitted");
-    }
+    const auto& functionRP = std::get<Semantics::FunctionType>(type.get());
     if (!m_definedFunctions.insert(name).second)
     {
-        return FailureReason("Redefinition of function " + name);
+        //TODO: Show previous symbol location in note
+        auto result = declaratorToLoc(node.getDeclarator());
+        logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), node.begin(),
+                  node.getCompoundStatement().begin(), Modifier(result, result + 1, Modifier::Underline)});
     }
 
+    //TODO: Make recursive for DirectDeclaratorParenthese
     auto* paramterTypeList = std::get_if<Syntax::DirectDeclaratorParentheseParameters>(
         &node.getDeclarator().getDirectDeclarator());
     auto* identifierList = std::get_if<Syntax::DirectDeclaratorParentheseIdentifiers>(
         &node.getDeclarator().getDirectDeclarator());
-    std::map<std::string, Semantics::Type> declarationMap;
-    for (auto& iter : node.getDeclarations())
+
+    if (!identifierList && !node.getDeclarations().empty())
     {
-        std::vector<Semantics::SpecifierQualifierRef> refs;
-        for (auto& specifiers : iter.getDeclarationSpecifiers())
-        {
-            auto result = std::visit(
-                overload{[](Syntax::StorageClassSpecifier storageClassSpecifier) -> std::optional<FailureReason>
-                         {
-                             if (storageClassSpecifier.getSpecifier() == Syntax::StorageClassSpecifier::Register)
-                             {
-                                 return {};
-                             }
-                             else
-                             {
-                                 return FailureReason(
-                                     "Storage class specifiers not allowed in declarations of function parameters");
-                             }
-                         },
-                         [&refs](const Syntax::TypeSpecifier& typeSpecifier) -> std::optional<FailureReason>
-                         {
-                             refs.emplace_back(typeSpecifier);
-                             return {};
-                         },
-                         [&refs](const Syntax::TypeQualifier& typeQualifier) -> std::optional<FailureReason>
-                         {
-                             refs.emplace_back(typeQualifier);
-                             return {};
-                         },
-                         [](Syntax::FunctionSpecifier) -> std::optional<FailureReason>
-                         {
-                             return FailureReason("inline keyword not allowed in this context");
-                         }},
-                specifiers);
-            if (result)
-            {
-                return *result;
-            }
-        }
-        for (auto& pair : iter.getInitDeclarators())
-        {
-            if (pair.second)
-            {
-                return FailureReason("Declarations in function definitions are not allowed to have initializers");
-            }
-            auto result =
-                Semantics::declaratorsToType(refs, *pair.first, gatherTypedefs(), {}, gatherStructsAndUnions());
-            if (!result)
-            {
-                return result.error();
-            }
-            declarationMap.emplace(Semantics::declaratorToName(*pair.first), *result);
-        }
+        logError({ErrorMessages::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST,
+                  node.begin(), node.getCompoundStatement().end(), Modifier(node.getDeclarations().front().begin(),
+                                                                            node.getDeclarations().back().end(),
+                                                                            Modifier::Underline)});
     }
-    if (!identifierList && !declarationMap.empty())
+
+    std::map<std::string, Semantics::Type> declarationMap;
+    if (identifierList)
     {
-        return FailureReason("Declarations even though function has parameter type list");
+        for (auto& iter : node.getDeclarations())
+        {
+            for (auto& pair : iter.getInitDeclarators())
+            {
+                auto result = declaratorsToType({iter.getDeclarationSpecifiers().begin(),
+                                                 iter.getDeclarationSpecifiers().end()}, *pair.first);
+                declarationMap.emplace(Semantics::declaratorToName(*pair.first), result);
+            }
+        }
     }
 
     pushScope();
@@ -737,8 +169,9 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                 ->getParameterTypeList().getParameterList().getParameterDeclarations()[i].second);
             if (!declarator)
             {
-                return FailureReason("Parameter name omitted");
+                throw std::runtime_error("Internal compiler error");
             }
+            //declarator cannot be null as otherwise it'd have failed in the parser
             auto argName = declaratorToName(**declarator);
             auto& specifiers = paramterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i]
                 .first;
@@ -755,7 +188,7 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                                       ? Lifetime::Register : Lifetime::Automatic,
                                       functionRP.getArguments()[i].second);
         }
-        else
+        else if (identifierList)
         {
             auto result = declarationMap.find(identifierList->getIdentifiers()[i].first);
             if (result == declarationMap.end())
@@ -770,24 +203,31 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
                 declarations.emplace_back(result->second,
                                           Linkage::None,
                                           declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(node.getDeclarations()[i]
-                                                                                                     .getDeclarationSpecifiers()
-                                                                                                     .begin(),
-                                                                                                 node.getDeclarations()[i]
-                                                                                                     .getDeclarationSpecifiers()
-                                                                                                     .end(),
-                                                                                                 [](const Syntax::StorageClassSpecifier& specifier)
-                                                                                                 {
-                                                                                                     return specifier
-                                                                                                         .getSpecifier()
-                                                                                                         == Syntax::StorageClassSpecifier::Register;
-                                                                                                 })
+                                                                                                       .getDeclarationSpecifiers()
+                                                                                                       .begin(),
+                                                                                                   node.getDeclarations()[i]
+                                                                                                       .getDeclarationSpecifiers()
+                                                                                                       .end(),
+                                                                                                   [](const Syntax::StorageClassSpecifier& specifier)
+                                                                                                   {
+                                                                                                       return specifier
+                                                                                                           .getSpecifier()
+                                                                                                           == Syntax::StorageClassSpecifier::Register;
+                                                                                                   })
                                           ? Lifetime::Register : Lifetime::Automatic,
                                           functionRP.getArguments()[i].second);
             }
         }
-        if (!m_typesOfNamedValues.back().emplace(declarations.back().getName(), declarations.back()).second)
+        else
         {
-            return FailureReason("Parameter with name " + declarations.back().getName() + " already exists");
+            throw std::runtime_error("Internal compiler error");
+        }
+        if (auto[iter, inserted] = m_declarations.back()
+                                                 .emplace(declarations.back().getName(), declarations.back());!inserted)
+        {
+            //TODO: Modifier and showing previous one
+            logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
+                      node.begin(), node.getCompoundStatement().begin()});
         }
     }
 
@@ -803,8 +243,9 @@ OpenCL::Expected<OpenCL::Semantics::FunctionDefinition,
     return FunctionDefinition(functionRP,
                               name,
                               std::move(declarations),
-                              storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static
-                              ? Linkage::Internal : Linkage::External);
+                              storageClassSpecifier
+                                  && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static
+                              ? Linkage::Internal : Linkage::External, CompoundStatement({}));
 }
 
 std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Semantics::SemanticAnalysis::gatherStructsAndUnions() const
@@ -820,105 +261,65 @@ std::map<std::string, OpenCL::Semantics::RecordType> OpenCL::Semantics::Semantic
     return result;
 }
 
-std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>>
-OpenCL::Semantics::SemanticAnalysis::gatherTypedefs() const
-{
-    std::map<std::string, std::reference_wrapper<const OpenCL::Semantics::Type>> result;
-    for (auto iter = m_typedefs.rbegin(); iter != m_typedefs.rend(); iter++)
-    {
-        result.insert(iter->begin(), iter->end());
-    }
-    return result;
-}
-
-OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
-                 OpenCL::FailureReason> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Declaration& node)
+std::vector<OpenCL::Semantics::Declaration> OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Declaration& node)
 {
     std::vector<OpenCL::Semantics::Declaration> decls;
-    std::vector<SpecifierQualifierRef> refs;
-    if (std::count_if(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-                      [](const Syntax::DeclarationSpecifier& specifier)
-                      {
-                          return std::holds_alternative<Syntax::StorageClassSpecifier>(specifier);
-                      })
-        > 1)
-    {
-        return FailureReason("A maximum of one storage class specifier allowed in declaration");
-    }
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
-        std::visit(overload{[&refs](const Syntax::TypeSpecifier& typeSpecifier)
-                            {
-                                refs.emplace_back(typeSpecifier);
-                            },
-                            [&refs](const Syntax::TypeQualifier& typeQualifier)
-                            {
-                                refs.emplace_back(typeQualifier);
-                            },
-                            [](auto&&)
-                            {}}, iter);
-        if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter);m_typesOfNamedValues.size() == 1
-            && storage)
+        if (auto* storage = std::get_if<Syntax::StorageClassSpecifier>(&iter);storage)
         {
-            storageClassSpecifier = storage;
-            if (storage->getSpecifier() == Syntax::StorageClassSpecifier::Auto
-                || storage->getSpecifier() == Syntax::StorageClassSpecifier::Register)
+            if (!storageClassSpecifier)
             {
-                return FailureReason("auto and register not allowed in declaration in file scope");
+                storageClassSpecifier = storage;
+            }
+            else
+            {
+                logError({ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
+                          node.end(),
+                          Modifier(storage->begin(), storage->end(), Modifier::Underline),
+                          {{Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(),
+                            node.end(), Modifier(storageClassSpecifier->begin(),
+                                                 storageClassSpecifier->end(),
+                                                 Modifier::Underline)}}});
+            }
+            if (m_declarations.size() == 1 && (storage->getSpecifier() == Syntax::StorageClassSpecifier::Auto
+                || storage->getSpecifier() == Syntax::StorageClassSpecifier::Register))
+            {
+                logError({ErrorMessages::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER, node.begin(),
+                          node.end(), Modifier(storage->begin(), storage->end(), Modifier::Underline)});
             }
         }
     }
     if (node.getInitDeclarators().empty())
     {
-        if (std::none_of(refs.begin(), refs.end(), [](const SpecifierQualifierRef& ref)
-        {
-            return std::visit(overload{
-                [](const Syntax::TypeSpecifier& typeSpecifier) -> bool
-                {
-                    return std::visit(overload{
-                        [](const Syntax::StructOrUnionSpecifier&)
-                        {
-                            return true;
-                        },
-                        [](const Syntax::EnumDeclaration&)
-                        {
-                            return true;
-                        },
-                        [](auto&&) -> bool
-                        {
-                            return false;
-                        }
-                    }, typeSpecifier.getVariant());
-                },
-                [](auto&&) -> bool
-                {
-                    return false;
-                }
-            }, ref);
-        }))
-        {
-            return FailureReason("There must be at least one declaration");
-        }
+        //TODO: Warning
         return decls;
     }
     for (auto&[declarator, initializer] : node.getInitDeclarators())
     {
         auto name = declaratorToName(*declarator);
-        auto result = declaratorsToType(refs, *declarator, gatherTypedefs(), {}, gatherStructsAndUnions());
-        if (!result)
+        auto
+            result = declaratorsToType({node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end()},
+                                       *declarator);
+        if (isVoid(result))
         {
-            return result;
+            auto voidLoc = std::find_if(Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().front())
+                                            .begin(),
+                                        Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().back())
+                                            .end(),
+                                        [](const Lexer::Token& token)
+                                        {
+                                            return token.getTokenType() == Lexer::TokenType::VoidKeyword;
+                                        });
+            logError({ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, node.begin(), node.end(),
+                      Modifier(voidLoc, voidLoc + 1, Modifier::Underline)});
         }
-        if (isVoid(*result))
-        {
-            return FailureReason("Type in declaration is not allowed to be void");
-        }
-        if (auto* functionType = std::get_if<FunctionType>(&result->get()))
+        if (auto* functionType = std::get_if<FunctionType>(&result.get()))
         {
             if (declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(node.getDeclarationSpecifiers().begin(),
                                                                          node.getDeclarationSpecifiers().end(),
-                                                                         [](Syntax::StorageClassSpecifier storageClassSpecifier)
+                                                                         [](const Syntax::StorageClassSpecifier& storageClassSpecifier)
                                                                          {
                                                                              return storageClassSpecifier.getSpecifier()
                                                                                  != Syntax::StorageClassSpecifier::Static
@@ -926,34 +327,57 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                                                                                      != Syntax::StorageClassSpecifier::Extern;
                                                                          }))
             {
-                return FailureReason("Only static and extern are allowed storage specifiers for function declarations");
+                auto storageLoc = std::find_if(node.getDeclarationSpecifiers().begin(),
+                                               node.getDeclarationSpecifiers().end(),
+                                               [](const Syntax::DeclarationSpecifier& declarationSpecifier)
+                                               {
+                                                   auto* storage
+                                                       = std::get_if<Syntax::StorageClassSpecifier>(&declarationSpecifier);
+                                                   if (!storage)
+                                                   {
+                                                       return false;
+                                                   }
+                                                   return
+                                                       storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
+                                                           && storage->getSpecifier()
+                                                               != Syntax::StorageClassSpecifier::Extern;
+                                               });
+                logError({ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION, node.begin(),
+                          node.end(), Modifier(Syntax::nodeFromNodeDerivedVariant(*storageLoc).begin(),
+                                               Syntax::nodeFromNodeDerivedVariant(*storageLoc).end())});
             }
             if (initializer)
             {
-                return FailureReason("Initializer not allowed for function prototype");
+                logError({ErrorMessages::Semantics::FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER, node.begin(),
+                          node.end(), Modifier(initializer->begin(), initializer->end())});
             }
-            if (m_typesOfNamedValues.size() > 1 && storageClassSpecifier
+            if (m_declarations.size() > 1 && storageClassSpecifier
                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
-                return FailureReason("static at function prototype only allowed at file scope");
+                logError({ErrorMessages::Semantics::STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE,
+                          node.begin(),
+                          node.end(), Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end())});
             }
             if (!functionType->hasPrototype() && !functionType->getArguments().empty())
             {
-                return FailureReason("Identifier list not allowed in function prototype");
+                //TODO: Recursively walk down direct declarators to find identifier list
+                logError({ErrorMessages::Semantics::IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION, node.begin(),
+                          node.end()});
             }
-            decls.emplace_back(Declaration(std::move(*result),
+            decls.emplace_back(Declaration(std::move(result),
                                            storageClassSpecifier
-                                               && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static
+                                               && storageClassSpecifier->getSpecifier()
+                                                   == Syntax::StorageClassSpecifier::Static
                                            ? Linkage::Internal : Linkage::External, Lifetime::Static, std::move(name)));
-            m_typesOfNamedValues.back().emplace(decls.back().getName(), decls.back());
+            m_declarations.back().emplace(decls.back().getName(), decls.back());
         }
         else
         {
             Linkage linkage = Linkage::None;
-            Lifetime lifetime = m_typesOfNamedValues.size() > 1 ? Lifetime::Automatic : Lifetime::Static;
+            Lifetime lifetime = m_declarations.size() > 1 ? Lifetime::Automatic : Lifetime::Static;
             if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
-                if (m_typesOfNamedValues.size() > 1)
+                if (m_declarations.size() > 1)
                 {
                     lifetime = Lifetime::Static;
                 }
@@ -962,22 +386,1219 @@ OpenCL::Expected<std::vector<OpenCL::Semantics::Declaration>,
                     linkage = Linkage::Internal;
                 }
             }
-            else if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+            else if (storageClassSpecifier
+                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
             {
                 linkage = Linkage::External;
             }
-            else if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Register)
+            else if (storageClassSpecifier
+                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Register)
             {
                 lifetime = Lifetime::Register;
             }
-            auto declaration = Declaration(std::move(*result), linkage, lifetime, name);
-            if (auto[prev, success] = m_typesOfNamedValues.back().emplace(name, declaration);!success
-                && (prev->second.getLinkage() == Linkage::None || linkage == Linkage::None))
+            auto declaration = Declaration(std::move(result), linkage, lifetime, name);
+            if (auto[prev, success] = m_declarations.back().emplace(name, declaration);!success
+                && (std::get<Declaration>(prev->second).getLinkage() == Linkage::None || linkage == Linkage::None))
             {
-                return FailureReason("Redeclaration of " + prev->first);
+                auto declLoc = declaratorToLoc(*declarator);
+                //TODO: Note to show previous declaration
+                logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args(name), node.begin(), node.end(),
+                          Modifier(declLoc, declLoc + 1)});
             }
             decls.emplace_back(std::move(declaration));
         }
     }
     return decls;
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                              std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                              const std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives,
+                                                                              bool isConst,
+                                                                              bool isVolatile)
+{
+    enum
+    {
+        Void = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void),
+        Char = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char),
+        Short = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short),
+        Int = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int),
+        Long = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long),
+        Float = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float),
+        Double = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double),
+        Signed = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
+        Unsigned = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
+    };
+    auto logMoreThanN = [&](OpenCL::Lexer::TokenType tokenType, const char* amountString) -> void
+    {
+        auto result = std::find_if(std::find_if(declStart, declEnd, [tokenType](const OpenCL::Lexer::Token& token)
+        {
+            return token.getTokenType() == tokenType;
+        }) + 1, declEnd, [tokenType](const OpenCL::Lexer::Token& token)
+                                   {
+                                       return token.getTokenType() == tokenType;
+                                   });
+        logError({OpenCL::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N
+                      .args(OpenCL::Lexer::tokenName(tokenType), amountString),
+                  declStart,
+                  declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+    };
+
+    std::array<std::size_t, 9> primitivesCount = {0};
+    for (auto& iter : primitives)
+    {
+        primitivesCount[static_cast<std::size_t>(iter)]++;
+        if (primitivesCount[Void] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::VoidKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Char] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::CharKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Short] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::ShortKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Int] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::IntKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Float] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::FloatKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Double] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::DoubleKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Signed] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::SignedKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Unsigned] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::UnsignedKeyword, "once");
+            return Type{};
+        }
+        if (primitivesCount[Long] > 2)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::LongKeyword, "twice");
+            return Type{};
+        }
+    }
+
+    bool hasSigned = primitivesCount[Signed];
+    bool hasUnsigned = primitivesCount[Unsigned];
+    if (hasSigned && hasUnsigned)
+    {
+        auto result = std::find_if(std::find_if(declStart, declEnd, [](const OpenCL::Lexer::Token& token)
+        {
+            return token.getTokenType() == OpenCL::Lexer::TokenType::SignedKeyword
+                || token.getTokenType() == OpenCL::Lexer::TokenType::UnsignedKeyword;
+        }) + 1, declEnd, [](const OpenCL::Lexer::Token& token)
+                                   {
+                                       return token.getTokenType() == OpenCL::Lexer::TokenType::SignedKeyword
+                                           || token.getTokenType() == OpenCL::Lexer::TokenType::UnsignedKeyword;
+                                   });
+        logError({
+                     OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"),
+                     declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        return Type{};
+    }
+
+    auto firstPrimitiveNotOf = [&](const std::vector<OpenCL::Lexer::TokenType>& tokenTypes)
+    {
+        return std::find_if(declStart, declEnd, [&tokenTypes](const OpenCL::Lexer::Token& token)
+        {
+            using namespace OpenCL::Lexer;
+            return std::none_of(tokenTypes.begin(), tokenTypes.end(), [&token](OpenCL::Lexer::TokenType tokenType)
+            {
+                return token.getTokenType() == tokenType;
+            }) && (token.getTokenType() == TokenType::CharKeyword
+                || token.getTokenType() == TokenType::VoidKeyword ||
+                token.getTokenType() == TokenType::ShortKeyword || token.getTokenType() == TokenType::IntKeyword
+                || token.getTokenType() == TokenType::LongKeyword
+                || token.getTokenType() == TokenType::FloatKeyword
+                || token.getTokenType() == TokenType::DoubleKeyword
+                || token.getTokenType() == TokenType::SignedKeyword
+                || token.getTokenType() == TokenType::UnsignedKeyword);
+        });
+    };
+
+    if (primitivesCount[Void])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i++ == Void)
+            {
+                return false;
+            }
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::VoidKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'void'", " any other primitives"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        return OpenCL::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
+    }
+    if (primitivesCount[Float])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i++ == Float)
+            {
+                return false;
+            }
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::FloatKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'float'", " any other primitives"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        return OpenCL::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
+    }
+    if (primitivesCount[Double])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i++ == Double)
+            {
+                return false;
+            }
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::DoubleKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'double'", " any other primitives"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        return OpenCL::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
+    }
+    if (primitivesCount[Char])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i == Char || i == Signed || i == Unsigned)
+            {
+                i++;
+                return false;
+            }
+            i++;
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::CharKeyword,
+                                               OpenCL::Lexer::TokenType::SignedKeyword,
+                                               OpenCL::Lexer::TokenType::UnsignedKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'char'", " any other primitives but signed and unsigned"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        if (hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createChar(isConst, isVolatile);
+        }
+    }
+    if (primitivesCount[Short])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i == Short || i == Signed || i == Unsigned || i == Int)
+            {
+                i++;
+                return false;
+            }
+            i++;
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword,
+                                               OpenCL::Lexer::TokenType::SignedKeyword,
+                                               OpenCL::Lexer::TokenType::UnsignedKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'short'", " any other primitives but signed and unsigned"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        if (hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createShort(isConst, isVolatile);
+        }
+    }
+    if (primitivesCount[Long] == 1)
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i == Signed || i == Unsigned || i == Int || i == Long)
+            {
+                i++;
+                return false;
+            }
+            i++;
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::LongKeyword,
+                                               OpenCL::Lexer::TokenType::IntKeyword,
+                                               OpenCL::Lexer::TokenType::SignedKeyword,
+                                               OpenCL::Lexer::TokenType::UnsignedKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'long'", " any other primitives but signed, unsigned, long and int"),
+                      declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        if (hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+        }
+    }
+    if (primitivesCount[Long] == 2)
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i == Signed || i == Unsigned || i == Int || i == Long)
+            {
+                i++;
+                return false;
+            }
+            i++;
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::LongKeyword,
+                                               OpenCL::Lexer::TokenType::IntKeyword,
+                                               OpenCL::Lexer::TokenType::SignedKeyword,
+                                               OpenCL::Lexer::TokenType::UnsignedKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'long'", " any other primitives but signed, unsigned, long and int"),
+                      declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        if (hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createLongLong(isConst, isVolatile);
+        }
+    }
+    if (primitivesCount[Int])
+    {
+        std::size_t i = 0;
+        if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool
+        {
+            if (i == Signed || i == Unsigned || i == Int)
+            {
+                i++;
+                return false;
+            }
+            i++;
+            return count;
+        }))
+        {
+            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword,
+                                               OpenCL::Lexer::TokenType::SignedKeyword,
+                                               OpenCL::Lexer::TokenType::UnsignedKeyword});
+            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N
+                          .args("'int'", " any other primitives but signed and unsigned"), declStart, declEnd,
+                      OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        }
+        if (hasUnsigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+        }
+    }
+    if (hasSigned)
+    {
+        return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+    }
+    else if (hasUnsigned)
+    {
+        return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+    }
+    throw std::runtime_error(
+        "Internal compiler error in " + std::string(__func__) + ":" + std::to_string(__LINE__));
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(const std::vector<
+    DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
+                                                                               OpenCL::Semantics::PossiblyAbstractQualifierRef declarator,
+                                                                               const std::vector<Syntax::Declaration>& declarations)
+{
+    auto declStart = Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.front()).begin();
+    auto declEnd = match(declarator,
+                         [&declarations](const Syntax::Declarator& realDeclarator)
+                         {
+                             return declarations.empty() ? realDeclarator.end() : declarations.back().end();
+                         },
+                         [&declarationOrSpecifierQualifiers, &declarations](const Syntax::AbstractDeclarator* abstractDeclarator)
+                         {
+                             if (declarations.empty())
+                             {
+                                 return abstractDeclarator ? abstractDeclarator->end()
+                                                           : Syntax::nodeFromNodeDerivedVariant(
+                                         declarationOrSpecifierQualifiers.back()).end();
+                             }
+                             else
+                             {
+                                 return declarations.back().end();
+                             }
+                         });
+
+    bool isConst = false;
+    bool isVolatile = false;
+    bool isRestricted = false;
+    for (auto& iter : declarationOrSpecifierQualifiers)
+    {
+        match(iter, [&](auto&& value)
+        {
+            if (auto* typeQualifier = std::get_if<Syntax::TypeQualifier>(&value.get()))
+            {
+                switch (typeQualifier->getQualifier())
+                {
+                case Syntax::TypeQualifier::Const:
+                {
+                    isConst = true;
+                    break;
+                }
+                case Syntax::TypeQualifier::Restrict:
+                {
+                    if (!isRestricted)
+                    {
+                        isRestricted = true;
+                        auto result = std::find_if(declarationOrSpecifierQualifiers.begin(),
+                                                   declarationOrSpecifierQualifiers.end(),
+                                                   [](const DeclarationOrSpecifierQualifier& declarationOrSpecifierQualifier)
+                                                   {
+                                                       return match(declarationOrSpecifierQualifier, [](auto&& value)
+                                                       {
+                                                           auto* typeQualifier
+                                                               = std::get_if<Syntax::TypeQualifier>(&value
+                                                                   .get());
+                                                           if (!typeQualifier)
+                                                           {
+                                                               return false;
+                                                           }
+                                                           return typeQualifier->getQualifier()
+                                                               == Syntax::TypeQualifier::Restrict;
+                                                       });
+                                                   });
+                        logError({ErrorMessages::Semantics::ONLY_POINTERS_CAN_BE_RESTRICTED,
+                                  declStart,
+                                  declEnd,
+                                  Modifier(Syntax::nodeFromNodeDerivedVariant(*result).begin(),
+                                           Syntax::nodeFromNodeDerivedVariant(*result).end(),
+                                           Modifier::Underline)});
+                    }
+                    break;
+                }
+                case Syntax::TypeQualifier::Volatile:
+                {
+                    isVolatile = true;
+                    break;
+                }
+                }
+            }
+        });
+    }
+
+    std::vector<const Syntax::TypeSpecifier*> typeSpecifiers;
+    std::transform(declarationOrSpecifierQualifiers.begin(),
+                   declarationOrSpecifierQualifiers.end(),
+                   std::back_inserter(typeSpecifiers),
+                   [](auto&& value) -> const Syntax::TypeSpecifier*
+                   {
+                       return match(value, [](auto&& value2)
+                       {
+                           return std::get_if<Syntax::TypeSpecifier>(&value2.get());
+                       });
+                   });
+    typeSpecifiers.erase(std::remove(typeSpecifiers.begin(), typeSpecifiers.end(), nullptr), typeSpecifiers.end());
+
+    Type baseType;
+    if (typeSpecifiers.empty())
+    {
+        logError({ErrorMessages::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED,
+                  declStart,
+                  declEnd,
+                  Modifier(declStart, Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.back()).end(),
+                           Modifier::Underline)});
+    }
+    else
+    {
+        baseType = typeSpecifiersToType(declStart, declEnd, typeSpecifiers, isConst, isVolatile);
+    }
+
+    return apply(declStart, declEnd, declarator, std::move(baseType), declarations);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                                  std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                                  const std::vector<const OpenCL::Syntax::TypeSpecifier*>& typeSpecifiers,
+                                                                                  bool isConst,
+                                                                                  bool isVolatile)
+{
+    return match(typeSpecifiers[0]->getVariant(),
+                 [&](Syntax::TypeSpecifier::PrimitiveTypeSpecifier) -> Type
+                 {
+                     if (auto result = std::find_if(typeSpecifiers.begin(),
+                                                    typeSpecifiers.end(),
+                                                    [](const auto pointer)
+                                                    {
+                                                        return !std::holds_alternative<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(
+                                                            pointer->getVariant());
+                                                    });result != typeSpecifiers.end())
+                     {
+                         logError({ErrorMessages::Semantics::EXPECTED_ONLY_PRIMITIVES
+                                       .args('\'' + typeSpecifiers[0]->begin()->emitBack() + '\''),
+                                   declStart,
+                                   declEnd,
+                                   Modifier((*result)->begin(), (*result)->end(),
+                                            Modifier::Underline)});
+                     }
+                     std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
+                     for (auto& iter : typeSpecifiers)
+                     {
+                         if (auto* primitive = std::get_if<Syntax::TypeSpecifier::PrimitiveTypeSpecifier>(&iter
+                             ->getVariant()))
+                         {
+                             primitiveTypeSpecifier.push_back(*primitive);
+                         }
+                     }
+                     return primitivesToType(declStart, declEnd,
+                                             primitiveTypeSpecifier,
+                                             isConst,
+                                             isVolatile);
+                 },
+                 [&](const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> Type
+                 {
+                     if (typeSpecifiers.size() > 1)
+                     {
+                         logError({ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N
+                                       .args("type specifiers",
+                                             (structOrUnion->isUnion() ? "union specifier"
+                                                                       : "struct specifier")),
+                                   declStart,
+                                   declEnd,
+                                   Modifier(typeSpecifiers[1]->begin(),
+                                            typeSpecifiers[1]->end(),
+                                            Modifier::Underline)});
+                     }
+                     if (structOrUnion->getStructDeclarations().empty())
+                     {
+                         return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
+                                                   structOrUnion->getIdentifier());
+                     }
+                     std::vector<std::tuple<Type, std::string, std::int64_t>> members;
+                     for (auto&[structSpecifiers, structDecls] : structOrUnion->getStructDeclarations())
+                     {
+                         for (auto& iter : structDecls)
+                         {
+                             auto type = declaratorsToType({structSpecifiers.begin(), structSpecifiers.end()},
+                                                           [&]() -> PossiblyAbstractQualifierRef
+                                                           {
+                                                               return iter.first
+                                                                      ? PossiblyAbstractQualifierRef{
+                                                                       *iter.first}
+                                                                      : nullptr;
+                                                           }());
+                             std::string name = iter.first ? declaratorToName(*iter.first) : "";
+                             //TODO: evaluate iter.second
+                             members.emplace_back(std::move(type), std::move(name), 0);
+                         }
+                     }
+                     return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
+                                               structOrUnion->getIdentifier(), std::move(members));
+                 },
+                 [&](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> Type
+                 {
+                     if (typeSpecifiers.size() > 1)
+                     {
+                         logError({ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N
+                                       .args("type specifiers", "enum"),
+                                   declStart,
+                                   declEnd,
+                                   Modifier(typeSpecifiers[1]->begin(),
+                                            typeSpecifiers[1]->end(),
+                                            Modifier::Underline)});
+                     }
+                     std::vector<std::pair<std::string, std::int32_t>> values;
+                     //TODO: Evaluate value
+                     auto name = match(enumSpecifier->getVariant(), [](const std::string& name)
+                                       { return name; },
+                                       [&values](const Syntax::EnumDeclaration& declaration)
+                                       {
+                                           //values = declaration.getValues();
+                                           return declaration.getName();
+                                       });
+                     return EnumType::create(isConst, isVolatile, name, std::move(values));
+                 },
+                 [&](const std::string& typedefName) -> Type
+                 {
+                     auto* result = getTypedef(typedefName);
+                     if (!result)
+                     {
+                         throw std::runtime_error("Internal compiler error: could not find typedef in semantics");
+                     }
+                     Type copy = *result;
+                     copy.setName(typedefName);
+                     return copy;
+                 });
+}
+
+bool OpenCL::Semantics::SemanticAnalysis::isTypedef(const std::string& name) const
+{
+    for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
+    {
+        if (auto result = iter->find(name);result != iter->end() && std::holds_alternative<Type>(result->second))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool OpenCL::Semantics::SemanticAnalysis::isTypedefInScope(const std::string& name) const
+{
+    for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
+    {
+        if (auto result = iter->find(name);result != iter->end())
+        {
+            return std::holds_alternative<Type>(result->second);
+        }
+    }
+    return false;
+}
+
+const OpenCL::Semantics::Type* OpenCL::Semantics::SemanticAnalysis::getTypedef(const std::string& name) const
+{
+    for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
+    {
+        if (auto result = iter->find(name);result != iter->end())
+        {
+            return std::get_if<Type>(&result->second);
+        }
+    }
+    return nullptr;
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<Lexer::Token>::const_iterator declStart,
+                                                                   std::vector<Lexer::Token>::const_iterator declEnd,
+                                                                   PossiblyAbstractQualifierRef declarator,
+                                                                   Type&& baseType,
+                                                                   const std::vector<Syntax::Declaration>& declarations)
+{
+    return match(declarator,
+                 [&](const Syntax::AbstractDeclarator* abstractDeclarator) -> Type
+                 {
+                     if (!abstractDeclarator)
+                     {
+                         return baseType;
+                     }
+                     for (auto& iter : abstractDeclarator->getPointers())
+                     {
+                         auto[isConst, isVolatile, isRestricted] = getQualifiers(iter.getTypeQualifiers());
+                         baseType = PointerType::create(isConst,
+                                                        isVolatile,
+                                                        isRestricted,
+                                                        std::move(baseType));
+                     }
+                     return apply(declStart,
+                                  declEnd,
+                                  abstractDeclarator->getDirectAbstractDeclarator(),
+                                  std::move(baseType),
+                                  declarations);
+                 },
+                 [&](std::reference_wrapper<const Syntax::Declarator> declarator) -> Type
+                 {
+                     for (auto& iter : declarator.get().getPointers())
+                     {
+                         auto[isConst, isVolatile, isRestricted] =
+                         getQualifiers(iter.getTypeQualifiers());
+                         baseType = PointerType::create(isConst, isVolatile,
+                                                        isRestricted,
+                                                        std::move(baseType));
+                     }
+                     return apply(declStart,
+                                  declEnd,
+                                  declarator.get().getDirectDeclarator(),
+                                  std::move(baseType),
+                                  declarations);
+                 });
+}
+
+std::vector<std::pair<OpenCL::Semantics::Type,
+                      std::string>> OpenCL::Semantics::SemanticAnalysis::parameterListToArguments(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                                                  std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                                                  const std::vector<
+                                                                                                      OpenCL::Syntax::ParameterDeclaration>& parameterDeclarations,
+                                                                                                  const std::vector<
+                                                                                                      OpenCL::Syntax::Declaration>& declarations)
+{
+    std::vector<std::pair<OpenCL::Semantics::Type, std::string>> arguments;
+    for (auto& pair : parameterDeclarations)
+    {
+        for (auto& iter : pair.first)
+        {
+            OpenCL::match(iter,
+                          [](auto&&)
+                          {},
+                          [this, declStart, declEnd](const OpenCL::Syntax::StorageClassSpecifier& storageClassSpecifier)
+                          {
+                              if (storageClassSpecifier.getSpecifier()
+                                  != OpenCL::Syntax::StorageClassSpecifier::Register)
+                              {
+                                  logError({OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
+                                            declStart,
+                                            declEnd,
+                                            OpenCL::Modifier(storageClassSpecifier.begin(),
+                                                             storageClassSpecifier.end(),
+                                                             OpenCL::Modifier::Underline)});
+                              }
+                          },
+                          [this, declStart, declEnd](const OpenCL::Syntax::FunctionSpecifier& functionSpecifier)
+                          {
+                              logError({OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
+                                        declStart,
+                                        declEnd,
+                                        OpenCL::Modifier(functionSpecifier.begin(),
+                                                         functionSpecifier.end(),
+                                                         OpenCL::Modifier::Underline)});
+                          });
+        }
+        auto result = declaratorsToType(
+            {pair.first.begin(), pair.first.end()},
+            OpenCL::match(pair.second,
+                          [](const std::unique_ptr<OpenCL::Syntax::Declarator>& directDeclarator) -> OpenCL::Semantics::PossiblyAbstractQualifierRef
+                          {
+                              return std::cref(*directDeclarator);
+                          },
+                          [](const std::unique_ptr<OpenCL::Syntax::AbstractDeclarator>& abstractDeclarator) -> OpenCL::Semantics::PossiblyAbstractQualifierRef
+                          {
+                              return abstractDeclarator.get();
+                          }), declarations);
+        if (parameterDeclarations.size() == 1
+            && result == OpenCL::Semantics::PrimitiveType::createVoid(false, false)
+            && !std::visit([](const auto& uniquePtr) -> bool
+                           { return uniquePtr.get(); }, pair.second))
+        {
+            break;
+        }
+        if (isVoid(result))
+        {
+            auto voidBegin = std::find_if(Syntax::nodeFromNodeDerivedVariant(pair.first.front()).begin(),
+                                          Syntax::nodeFromNodeDerivedVariant(pair.first.back()).end(),
+                                          [](const Lexer::Token& token)
+                                          {
+                                              return token.getTokenType() == Lexer::TokenType::VoidKeyword;
+                                          });
+            logError({OpenCL::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID,
+                      declStart,
+                      declEnd, OpenCL::Modifier(voidBegin, voidBegin + 1, OpenCL::Modifier::Underline)});
+        }
+        else
+        {
+            arguments.emplace_back(std::move(result),
+                                   std::holds_alternative<std::unique_ptr<OpenCL::Syntax::Declarator>>(pair.second)
+                                   ? OpenCL::Semantics::declaratorToName(*std::get<std::unique_ptr<OpenCL::Syntax::Declarator>>(
+                                       pair.second)) : "");
+        }
+
+    }
+    return arguments;
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                   std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                   const OpenCL::Syntax::DirectAbstractDeclarator& abstractDeclarator,
+                                                                   OpenCL::Semantics::Type&& baseType,
+                                                                   const std::vector<Syntax::Declaration>& declarations)
+{
+    matchWithSelf(abstractDeclarator,
+                  [&](auto&&,
+                      const Syntax::DirectAbstractDeclaratorParenthese& abstractDeclarator) -> void
+                  {
+                      // Might need to watch out for 6.7.5.3.11 not sure yet
+                      baseType = apply(declStart,
+                                       declEnd,
+                                       &abstractDeclarator.getAbstractDeclarator(),
+                                       std::move(baseType),
+                                       declarations);
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectAbstractDeclaratorAssignmentExpression&
+                      directAbstractDeclaratorAssignmentExpression) -> void
+                  {
+                      if (!directAbstractDeclaratorAssignmentExpression
+                          .getAssignmentExpression())
+                      {
+                          baseType = AbstractArrayType::create(false,
+                                                               false,
+                                                               false,
+                                                               std::move(baseType));
+                      }
+                      else
+                      {
+                          //TODO:
+                          //                          Semantics::ConstantEvaluator
+                          //                              evaluator(structOrUnions, typedefs);
+                          //                          auto result = evaluator.visit(
+                          //                              *directAbstractDeclaratorAssignmentExpression
+                          //                                  .getAssignmentExpression());
+                          //                          if (result)
+                          //                          {
+                          //                              auto size = std::visit(
+                          //                                  [](auto&& value) -> std::optional<std::size_t>
+                          //                                  {
+                          //                                      using T = std::decay_t<decltype(value)>;
+                          //                                      if constexpr (std::is_integral_v<T>)
+                          //                                      {
+                          //                                          return value;
+                          //                                      }
+                          //                                      else
+                          //                                      {
+                          //                                          return {};
+                          //                                      }
+                          //                                  },
+                          //                                  *result);
+                          //                              if (size)
+                          //                              {
+                          //                                  baseType =
+                          //                                      ArrayType::create(false,
+                          //                                                        false,
+                          //                                                        false,
+                          //                                                        std::move(baseType),
+                          //                                                        *size);
+                          //                              }
+                          //                              else
+                          //                              {
+                          //                                  logError({ErrorMessages::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER,
+                          //                                            declStart,
+                          //                                            declEnd,
+                          //                                            Modifier(
+                          //                                                directAbstractDeclaratorAssignmentExpression
+                          //                                                    .getAssignmentExpression()->begin(),
+                          //                                                directAbstractDeclaratorAssignmentExpression
+                          //                                                    .getAssignmentExpression()->end(),
+                          //                                                Modifier::Underline)});
+                          //                                  baseType = ArrayType::create(false,
+                          //                                                               false,
+                          //                                                               false,
+                          //                                                               std::move(baseType), -1);
+                          //                              }
+                          //                          }
+                          //                          else
+                          //                          {
+                          //                              baseType = ValArrayType::create(false,
+                          //                                                              false,
+                          //                                                              false,
+                          //                                                              std::move(baseType));
+                          //                          }
+                      }
+
+                      if (directAbstractDeclaratorAssignmentExpression
+                          .getDirectAbstractDeclarator())
+                      {
+                          std::visit([&directSelf](auto&& value) -> void
+                                     {
+                                         directSelf(value);
+                                     },
+                                     *directAbstractDeclaratorAssignmentExpression
+                                         .getDirectAbstractDeclarator());
+                      }
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectAbstractDeclaratorAsterisk& directAbstractDeclarator) -> void
+                  {
+                      baseType = ValArrayType::create(false,
+                                                      false,
+                                                      false,
+                                                      std::move(baseType));
+                      if (directAbstractDeclarator.getDirectAbstractDeclarator())
+                      {
+                          std::visit(
+                              [&directSelf](auto&& value)
+                              {
+                                  directSelf(value);
+                              },
+                              *directAbstractDeclarator.getDirectAbstractDeclarator());
+                      }
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) -> void
+                  {
+                      std::vector<std::pair<Type, std::string>> arguments;
+                      if (parameterTypeList.getParameterTypeList())
+                      {
+                          auto argumentsResult
+                              = parameterListToArguments(declStart,
+                                                         declEnd,
+                                                         parameterTypeList
+                                                             .getParameterTypeList()
+                                                             ->getParameterList()
+                                                             .getParameterDeclarations(),
+                                                         declarations);
+                          arguments = std::move(argumentsResult);
+                      }
+                      baseType = FunctionType::create(
+                          std::move(baseType), std::move(arguments),
+                          !parameterTypeList.getParameterTypeList()
+                              || parameterTypeList.getParameterTypeList()->hasEllipse(),
+                          true);
+                      if (parameterTypeList.getDirectAbstractDeclarator())
+                      {
+                          std::visit([&directSelf](auto&& value) -> void
+                                     {
+                                         directSelf(value);
+                                     },
+                                     *parameterTypeList.getDirectAbstractDeclarator());
+                      }
+                  });
+    return std::move(baseType);
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                                                   std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                                                   const OpenCL::Syntax::DirectDeclarator& directDeclarator,
+                                                                   OpenCL::Semantics::Type&& baseType,
+                                                                   const std::vector<Syntax::Declaration>& declarations)
+{
+    matchWithSelf(directDeclarator,
+                  [&](auto&&, const Syntax::DirectDeclaratorIdentifier&) -> void
+                  {},
+                  [&](auto&&, const Syntax::DirectDeclaratorParenthese& declarator) -> void
+                  {
+                      // Might need to watch out
+                      // for 6.7.5.3.11 not sure yet
+                      baseType = apply(declStart,
+                                       declEnd,
+                                       std::cref(declarator.getDeclarator()),
+                                       std::move(baseType),
+                                       declarations);
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectDeclaratorNoStaticOrAsterisk& dirWithoutStaticOrAsterisk) -> void
+                  {
+                      auto[isConst, isVolatile,
+                      isRestricted] = getQualifiers(dirWithoutStaticOrAsterisk.getTypeQualifiers());
+                      if (!dirWithoutStaticOrAsterisk.getAssignmentExpression())
+                      {
+                          baseType = AbstractArrayType::create(isConst,
+                                                               isVolatile,
+                                                               isRestricted,
+                                                               std::move(baseType));
+                      }
+                      else
+                      {
+                          //TODO:
+                          //                          Semantics::ConstantEvaluator evaluator(structOrUnions, typedefs);
+                          //                          auto result = evaluator.visit(*dirWithoutStaticOrAsterisk
+                          //                              .getAssignmentExpression());
+                          //                          if (!result)
+                          //                          {
+                          //                              baseType = ValArrayType::create(isConst,
+                          //                                                              isVolatile,
+                          //                                                              isRestricted,
+                          //                                                              std::move(baseType));
+                          //                          }
+                          //                          else
+                          //                          {
+                          //                              auto size = std::visit([](auto&& value) -> std::optional<std::size_t>
+                          //                                                     {
+                          //                                                         using T = std::decay_t<decltype(value)>;
+                          //                                                         if constexpr (std::is_integral_v<T>)
+                          //                                                         {
+                          //                                                             return value;
+                          //                                                         }
+                          //                                                         return {};
+                          //                                                     }, *result);
+                          //                              if (!size)
+                          //                              {
+                          //                                  logError({ErrorMessages::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER,
+                          //                                            declStart,
+                          //                                            declEnd,
+                          //                                            Modifier(dirWithoutStaticOrAsterisk
+                          //                                                         .getAssignmentExpression()->begin(),
+                          //                                                     dirWithoutStaticOrAsterisk
+                          //                                                         .getAssignmentExpression()->end(),
+                          //                                                     Modifier::Underline)});
+                          //                              }
+                          //                              baseType = ArrayType::create(isConst,
+                          //                                                           isVolatile,
+                          //                                                           isRestricted,
+                          //                                                           std::move(baseType),
+                          //                                                           size.value_or(-1));
+                          //                          }
+                      }
+                      std::visit([&directSelf](auto&& value) -> void
+                                 {
+                                     directSelf(value);
+                                 }, dirWithoutStaticOrAsterisk.getDirectDeclarator());
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectDeclaratorStatic& directDeclaratorStatic) -> void
+                  {
+                      auto[isConst, isVolatile, isRestricted] =getQualifiers(
+                          directDeclaratorStatic
+                              .getTypeQualifiers());
+                      //TODO:
+                      //                      Semantics::ConstantEvaluator evaluator(structOrUnions, typedefs);
+                      //                      auto result = evaluator.visit(directDeclaratorStatic.getAssignmentExpression());
+                      //                      if (!result)
+                      //                      {
+                      //                          baseType = ValArrayType::create(isConst,
+                      //                                                          isVolatile,
+                      //                                                          isRestricted,
+                      //                                                          std::move(baseType));
+                      //                      }
+                      //                      else
+                      //                      {
+                      //                          auto size = std::visit([](auto&& value) -> std::optional<std::size_t>
+                      //                                                 {
+                      //                                                     using T = std::decay_t<decltype(value)>;
+                      //                                                     if constexpr (std::is_integral_v<T>)
+                      //                                                     {
+                      //                                                         return value;
+                      //                                                     }
+                      //                                                     return {};
+                      //                                                 },
+                      //                                                 *result);
+                      //                          if (!size)
+                      //                          {
+                      //                              logError({ErrorMessages::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER,
+                      //                                        declStart,
+                      //                                        declEnd,
+                      //                                        Modifier(directDeclaratorStatic
+                      //                                                     .getAssignmentExpression().begin(),
+                      //                                                 directDeclaratorStatic
+                      //                                                     .getAssignmentExpression().end(),
+                      //                                                 Modifier::Underline)});
+                      //                          }
+                      //                          baseType = ArrayType::create(isConst,
+                      //                                                       isVolatile,
+                      //                                                       isRestricted,
+                      //                                                       std::move(baseType),
+                      //                                                       size.value_or(-1));
+                      //                      }
+                      std::visit([&directSelf](auto&& value) -> void
+                                 {
+                                     directSelf(value);
+                                 }, directDeclaratorStatic.getDirectDeclarator());
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectDeclaratorAsterisk& directDeclaratorAsterisk) -> void
+                  {
+                      auto[isConst, isVolatile, isRestricted] = getQualifiers(
+                          directDeclaratorAsterisk
+                              .getTypeQualifiers());
+                      baseType = ValArrayType::create(isConst,
+                                                      isVolatile,
+                                                      isRestricted,
+                                                      std::move(baseType));
+                      std::visit([&directSelf](auto&& value) -> void
+                                 {
+                                     directSelf(value);
+                                 }, directDeclaratorAsterisk.getDirectDeclarator());
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectDeclaratorParentheseParameters& parentheseParameters) -> void
+                  {
+                      auto& parameterDeclarations = parentheseParameters
+                          .getParameterTypeList()
+                          .getParameterList()
+                          .getParameterDeclarations();
+                      auto argumentResult
+                          = parameterListToArguments(declStart,
+                                                     declEnd,
+                                                     parameterDeclarations,
+                                                     declarations);
+                      baseType = FunctionType::create(std::move(baseType),
+                                                      std::move(argumentResult),
+                                                      parentheseParameters
+                                                          .getParameterTypeList()
+                                                          .hasEllipse(),
+                                                      true);
+                      std::visit([&directSelf](auto&& value) -> void
+                                 {
+                                     directSelf(value);
+                                 }, parentheseParameters.getDirectDeclarator());
+                  },
+                  [&](auto&& directSelf,
+                      const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers) -> void
+                  {
+                      std::vector<std::pair<Type, std::string>>
+                          arguments(identifiers.getIdentifiers().size(),
+                                    {PrimitiveType::create(false,
+                                                           false,
+                                                           false,
+                                                           true,
+                                                           32), ""});
+                      using Iterator = std::vector<Lexer::Token>::const_iterator;
+                      struct TypeBinding
+                      {
+                          Type type;
+                          Iterator begin;
+                          Iterator end;
+                      };
+                      std::map<std::string, TypeBinding> declarationMap;
+                      for (auto& iter : declarations)
+                      {
+                          auto thisBegin
+                              = Syntax::nodeFromNodeDerivedVariant(iter.getDeclarationSpecifiers()[0])
+                                  .begin();
+                          for (auto& specifiers : iter.getDeclarationSpecifiers())
+                          {
+                              match(specifiers,
+                                    [](auto&&)
+                                    {},
+                                    [this, declStart, declEnd](const Syntax::StorageClassSpecifier& storageClassSpecifier)
+                                    {
+                                        if (storageClassSpecifier.getSpecifier()
+                                            != Syntax::StorageClassSpecifier::Register)
+                                        {
+                                            logError({OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
+                                                      declStart,
+                                                      declEnd,
+                                                      OpenCL::Modifier(
+                                                          storageClassSpecifier
+                                                              .begin(),
+                                                          storageClassSpecifier
+                                                              .end(),
+                                                          OpenCL::Modifier::Underline)});
+                                        }
+                                    },
+                                    [this, declStart, declEnd](const Syntax::FunctionSpecifier& functionSpecifier)
+                                    {
+                                        logError({OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
+                                                  declStart,
+                                                  declEnd,
+                                                  OpenCL::Modifier(functionSpecifier
+                                                                       .begin(),
+                                                                   functionSpecifier
+                                                                       .end(),
+                                                                   OpenCL::Modifier::Underline)});
+                                    });
+
+                          }
+                          for (auto& pair : iter.getInitDeclarators())
+                          {
+                              if (pair.second)
+                              {
+                                  logError({OpenCL::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
+                                            declStart,
+                                            declEnd,
+                                            Modifier(pair.second->begin(),
+                                                     pair.second->end(),
+                                                     Modifier::Underline)});
+                              }
+                              auto name = Semantics::declaratorToName(*pair.first);
+                              auto
+                                  result = declaratorsToType({iter.getDeclarationSpecifiers().begin(),
+                                                              iter.getDeclarationSpecifiers().end()},
+                                                             *pair.first, {});
+                              declarationMap
+                                  .insert({name, {std::move(result), thisBegin, pair.first->end()}});
+                          }
+                      }
+
+                      for (std::size_t i = 0; i < identifiers.getIdentifiers().size(); i++)
+                      {
+                          auto result = declarationMap.find(identifiers.getIdentifiers()[i].first);
+                          if (result == declarationMap.end())
+                          {
+                              continue;
+                          }
+                          if (auto
+                              * primitive = std::get_if<PrimitiveType>(&result->second.type.get()))
+                          {
+                              if (primitive->isFloatingPoint())
+                              {
+                                  arguments[i] = {
+                                      PrimitiveType::createDouble(result->second.type.isConst(),
+                                                                  result->second.type.isVolatile()),
+                                      result->first};
+                              }
+                              else if (primitive->getBitCount() == 0)
+                              {
+                                  logError({ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID,
+                                            declStart, declEnd, Modifier(result->second.begin,
+                                                                         result->second.end,
+                                                                         Modifier::Underline)});
+                              }
+                              else if (primitive->getBitCount() < 32)
+                              {
+                                  arguments[i] = {
+                                      PrimitiveType::createInt(result->second.type.isConst(),
+                                                               result->second.type
+                                                                     .isVolatile()),
+                                      result->first};
+                              }
+                              else
+                              {
+                                  arguments[i] = {result->second.type, result->first};
+                              }
+                          }
+                          else
+                          {
+                              arguments[i] = {result->second.type, result->first};
+                          }
+                          declarationMap.erase(result);
+                      }
+
+                      for (auto&[name, binding] : declarationMap)
+                      {
+                          logError({ErrorMessages::Semantics::N_APPEARING_IN_N_BUT_NOT_IN_N
+                                        .args(
+                                            '\'' + name + '\'',
+                                            "declarations",
+                                            "identifier list"),
+                                    declStart,
+                                    declEnd,
+                                    Modifier(binding.begin,
+                                             binding.end,
+                                             Modifier::Underline)});
+                      }
+                      baseType = FunctionType::create(std::move(baseType),
+                                                      std::move(arguments),
+                                                      false,
+                                                      false);
+                      std::visit(directSelf, identifiers.getDirectDeclarator());
+                  });
+    return std::move(baseType);
 }
