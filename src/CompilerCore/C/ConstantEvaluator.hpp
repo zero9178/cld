@@ -2,27 +2,27 @@
 #define OPENCLPARSER_CONSTANTEVALUATOR_HPP
 
 #include "../Common/Expected.hpp"
-#include "../Common/FailureReason.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
-
-#include <map>
+#include <functional>
 
 namespace OpenCL::Semantics
 {
-    using ConstRetType =
-        OpenCL::Expected<std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>,
-                         OpenCL::FailureReason>;
+    using ConstRetType = std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
 
     class ConstantEvaluator final
     {
-        std::map<std::string, Semantics::RecordType> m_structOrUnions;
-        std::map<std::string, std::reference_wrapper<const Semantics::Type>> m_typedefs;
+        std::function<const RecordType*(const std::string&)> m_recordCallback;
+        std::function<const Type*(const std::string&)> m_typedefCallback;
+        std::function<void(const Message&)> m_loggerCallback;
+
+        void logError(const Message& message);
 
     public:
-        explicit ConstantEvaluator(
-            const std::map<std::string, Semantics::RecordType>& structOrUnions = {},
-            const std::map<std::string, std::reference_wrapper<const Semantics::Type>>& typedefs = {});
+
+        explicit ConstantEvaluator(const std::function<const RecordType*(const std::string&)>& recordCallback = {},
+                                   const std::function<const Type*(const std::string&)>& typedefCallback = {},
+                                   const std::function<void(const Message&)>& loggerCallback = {});
 
         ConstRetType visit(const Syntax::Expression& node);
 

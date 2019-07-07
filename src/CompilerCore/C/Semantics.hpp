@@ -155,7 +155,7 @@ namespace OpenCL::Semantics
     class FunctionType final
     {
         std::shared_ptr<const Type> m_returnType;
-        std::vector<std::pair<Type,std::string>> m_arguments;
+        std::vector<std::pair<Type, std::string>> m_arguments;
         bool m_lastIsVararg;
         bool m_hasPrototype;
 
@@ -166,7 +166,7 @@ namespace OpenCL::Semantics
 
     public:
         static Type create(OpenCL::Semantics::Type&& returnType,
-                           std::vector<std::pair<Type,std::string>>&& arguments, bool lastIsVararg,
+                           std::vector<std::pair<Type, std::string>>&& arguments, bool lastIsVararg,
                            bool hasPrototype);
 
         [[nodiscard]] const Type& getReturnType() const;
@@ -212,7 +212,7 @@ namespace OpenCL::Semantics
         std::string m_name;
         std::vector<std::pair<std::string, std::int32_t>> m_values;
 
-        EnumType(std::string  name, std::vector<std::pair<std::string, std::int32_t>> values);
+        EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values);
 
     public:
         static Type create(bool isConst, bool isVolatile, const std::string& name,
@@ -430,26 +430,26 @@ namespace OpenCL::Semantics
     class TranslationUnit final
     {
     public:
-        using variant = std::variant<FunctionDefinition, Declaration>;
+        using Variant = std::variant<FunctionDefinition, Declaration>;
 
     private:
 
-        std::vector<variant> m_globals;
+        std::vector<Variant> m_globals;
 
     public:
 
-        explicit TranslationUnit(std::vector<variant> globals);
+        explicit TranslationUnit(std::vector<Variant> globals);
 
-        [[nodiscard]] const std::vector<variant>& getGlobals() const;
+        [[nodiscard]] const std::vector<Variant>& getGlobals() const;
     };
 
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 
     std::vector<Lexer::Token>::const_iterator declaratorToLoc(const OpenCL::Syntax::Declarator& declarator);
 
-    Expected<std::size_t, FailureReason> sizeOf(const Type& type);
+    OpenCL::Expected<std::size_t, OpenCL::Message> sizeOf(const Type& type);
 
-    Expected<std::size_t, FailureReason> alignmentOf(const Type& type);
+    OpenCL::Expected<std::size_t, OpenCL::Message> alignmentOf(const Type& type);
 
     bool isVoid(const Type& type);
 } // namespace OpenCL::Semantics

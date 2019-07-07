@@ -73,7 +73,7 @@ namespace
                                                                {
                                                                    return static_cast<std::uint64_t>(value);
                                                                }
-                                                           }, iter.getValue()),iter.emitBack());
+                                                           }, iter.getValue()), iter.emitBack());
                 }
             }
         }
@@ -388,15 +388,16 @@ namespace
                                     throw std::runtime_error("Invalid expression");
                                 }
                                 OpenCL::Semantics::ConstantEvaluator evaluator;
-                                auto value = evaluator.visit(*expression);
-                                if (!value)
-                                {
-                                    throw std::runtime_error("Failed at evaluating constant expression");
-                                }
-                                bool isTrue = std::visit([](auto&& value) -> bool
-                                                         { return value != 0; }, *value);
-                                currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
-                                hasPreprocessorTokens = isTrue;
+                                //TODO:
+                                //                                auto value = evaluator.visit(*expression);
+                                //                                if (!value)
+                                //                                {
+                                //                                    throw std::runtime_error("Failed at evaluating constant expression");
+                                //                                }
+                                //                                bool isTrue = std::visit([](auto&& value) -> bool
+                                //                                                         { return value != 0; }, *value);
+                                //                                currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
+                                //                                hasPreprocessorTokens = isTrue;
                                 iter = "";
                             }
                             else if (iter.rfind("error") == 0)

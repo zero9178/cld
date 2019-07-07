@@ -19,12 +19,12 @@ void OpenCL::Semantics::SemanticAnalysis::logError(const OpenCL::Message& messag
 OpenCL::Semantics::TranslationUnit OpenCL::Semantics::SemanticAnalysis::visit(
     const Syntax::TranslationUnit& node)
 {
-    std::vector<TranslationUnit::variant> globals;
+    std::vector<TranslationUnit::Variant> globals;
     for (auto& iter : node.getGlobals())
     {
         auto result = match(iter,
                             [this, &globals](const Syntax::FunctionDefinition& function) -> std::optional<
-                                TranslationUnit::variant>
+                                TranslationUnit::Variant>
                             {
                                 auto result = visit(function);
                                 if (result && result->hasPrototype())
@@ -34,14 +34,14 @@ OpenCL::Semantics::TranslationUnit OpenCL::Semantics::SemanticAnalysis::visit(
                                                                      Lifetime::Static,
                                                                      result->getName()));
                                 }
-                                return result ? std::optional<TranslationUnit::variant>(*result) : std::optional<
-                                    TranslationUnit::variant>{};
+                                return result ? std::optional<TranslationUnit::Variant>(*result) : std::optional<
+                                    TranslationUnit::Variant>{};
                             },
-                            [this, &globals](const Syntax::Declaration& declaration) -> std::optional<TranslationUnit::variant>
+                            [this, &globals](const Syntax::Declaration& declaration) -> std::optional<TranslationUnit::Variant>
                             {
                                 auto result = visit(declaration);
                                 globals.insert(globals.end(), result.begin(), result.end());
-                                return std::optional<TranslationUnit::variant>{};
+                                return std::optional<TranslationUnit::Variant>{};
                             });
         if (result)
         {

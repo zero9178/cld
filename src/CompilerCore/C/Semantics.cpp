@@ -535,34 +535,34 @@ const std::string& OpenCL::Semantics::RecordType::getName() const
     return m_name;
 }
 
-OpenCL::Expected<std::size_t, OpenCL::FailureReason>
+OpenCL::Expected<std::size_t, OpenCL::Message>
 OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
 {
-    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason>
+    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      return primitiveType.getBitCount() / 8;
                  },
-                 [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason>
+                 [](const ArrayType& arrayType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      return alignmentOf(arrayType.getType());
                  },
-                 [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason>
+                 [](const AbstractArrayType&) -> Expected<std::size_t, OpenCL::Message>
                  {
-                     return FailureReason("Incomplete type in sizeof");
+                     //TODO:return FailureReason("Incomplete type in sizeof");
                  },
-                 [](const ValArrayType& valArrayType) -> Expected<std::size_t, FailureReason>
+                 [](const ValArrayType& valArrayType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      return alignmentOf(valArrayType.getType());
                  },
-                 [](const FunctionType&) -> Expected<std::size_t, FailureReason>
+                 [](const FunctionType&) -> Expected<std::size_t, OpenCL::Message>
                  {
-                     return FailureReason("Function type not allowed in sizeof operator");
+                     //TODO:return FailureReason("Function type not allowed in sizeof operator");
                  },
-                 [](const RecordType& recordType) -> Expected<std::size_t, FailureReason>
+                 [](const RecordType& recordType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      if (recordType.getMembers().empty())
                      {
-                         return FailureReason("Incomplete type in sizeof");
+                         //TODO:return FailureReason("Incomplete type in sizeof");
                      }
                      if (!recordType.isUnion())
                      {
@@ -582,7 +582,7 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                      }
                      else
                      {
-                         std::optional<FailureReason> failure;
+                         std::optional<OpenCL::Message> failure;
                          auto result = std::max_element(
                              recordType.getMembers().begin(), recordType.getMembers().end(),
                              [&failure](const auto& lhs, const auto& rhs)
@@ -606,11 +606,11 @@ OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
                          return alignmentOf(std::get<0>(*result));
                      }
                  },
-                 [](const EnumType&) -> Expected<std::size_t, FailureReason>
+                 [](const EnumType&) -> Expected<std::size_t, OpenCL::Message>
                  { return 4; },
-                 [](const PointerType&) -> Expected<std::size_t, FailureReason>
+                 [](const PointerType&) -> Expected<std::size_t, OpenCL::Message>
                  { return 8; },
-                 [](std::monostate) -> Expected<std::size_t, FailureReason>
+                 [](std::monostate) -> Expected<std::size_t, OpenCL::Message>
                  { return 0; });
 }
 
@@ -624,14 +624,14 @@ bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-OpenCL::Expected<std::size_t, OpenCL::FailureReason>
+OpenCL::Expected<std::size_t, OpenCL::Message>
 OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
 {
-    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, FailureReason>
+    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      return primitiveType.getBitCount() / 8;
                  },
-                 [](const ArrayType& arrayType) -> Expected<std::size_t, FailureReason>
+                 [](const ArrayType& arrayType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      auto result = sizeOf(arrayType.getType());
                      if (!result)
@@ -640,24 +640,24 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                      }
                      return *result * arrayType.getSize();
                  },
-                 [](const AbstractArrayType&) -> Expected<std::size_t, FailureReason>
+                 [](const AbstractArrayType&) -> Expected<std::size_t, OpenCL::Message>
                  {
-                     return FailureReason("Incomplete type in sizeof");
+                     //TODO:return FailureReason("Incomplete type in sizeof");
                  },
-                 [](const ValArrayType&) -> Expected<std::size_t, FailureReason>
+                 [](const ValArrayType&) -> Expected<std::size_t, OpenCL::Message>
                  {
-                     return FailureReason("sizeof Val array cannot be determined in constant expression");
+                     //TODO:return FailureReason("sizeof Val array cannot be determined in constant expression");
                  },
-                 [](const FunctionType&) -> Expected<std::size_t, FailureReason>
+                 [](const FunctionType&) -> Expected<std::size_t, OpenCL::Message>
                  {
-                     return FailureReason("Function type not allowed in sizeof operator");
+                     //TODO: return FailureReason("Function type not allowed in sizeof operator");
                  },
-                 [](const RecordType& recordType) -> Expected<std::size_t, FailureReason>
+                 [](const RecordType& recordType) -> Expected<std::size_t, OpenCL::Message>
                  {
                      std::size_t currentSize = 0;
                      if (recordType.getMembers().empty())
                      {
-                         return FailureReason("Incomplete type in sizeof");
+                         //TODO:return FailureReason("Incomplete type in sizeof");
                      }
                      for (auto&[subtype, name, bits] : recordType.getMembers())
                      {
@@ -682,11 +682,11 @@ OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
                      }
                      return currentSize;
                  },
-                 [](const EnumType&) -> Expected<std::size_t, FailureReason>
+                 [](const EnumType&) -> Expected<std::size_t, OpenCL::Message>
                  { return 4; },
-                 [](const PointerType&) -> Expected<std::size_t, FailureReason>
+                 [](const PointerType&) -> Expected<std::size_t, OpenCL::Message>
                  { return 8; },
-                 [](std::monostate) -> Expected<std::size_t, FailureReason>
+                 [](std::monostate) -> Expected<std::size_t, OpenCL::Message>
                  { return 0; });
 }
 
@@ -726,11 +726,11 @@ const std::vector<OpenCL::Semantics::Declaration>& OpenCL::Semantics::FunctionDe
     return m_parameterDeclarations;
 }
 
-OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::variant> globals)
+OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {}
 
-const std::vector<OpenCL::Semantics::TranslationUnit::variant>& OpenCL::Semantics::TranslationUnit::getGlobals() const
+const std::vector<OpenCL::Semantics::TranslationUnit::Variant>& OpenCL::Semantics::TranslationUnit::getGlobals() const
 {
     return m_globals;
 }
