@@ -15,14 +15,14 @@ OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpress
             using T = std::decay_t<decltype(value)>;
             if constexpr (!std::is_same_v<T, std::string>)
             {
-                return value;
+                return {value};
             }
             else
             {
                 logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
-                          node.begin(),
-                          node.end(), Modifier(node.begin(), node.end())});
-                return 0;
+                          m_exprStart,
+                          m_exprEnd, Modifier(node.begin(), node.end())});
+                return {};
             }
         },
         node.getValue());
@@ -50,82 +50,34 @@ OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
 {
     auto value = visit(node.getUnaryExpression());
-    auto applyUnary = [&](const ConstRetType& value, auto&& op)
+    if (!value.isInteger() && m_integerOnly)
     {
-        return std::visit(
-            [&](auto&& value) -> ConstRetType
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_arithmetic_v<T>)
-                {
-                    return op(-value);
-                }
-                else
-                {
-
-                    return 0;
-                }
-            }, value);
-    };
+        logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                  m_exprEnd, Modifier(node.begin(), node.begin() + 1)});
+    }
     switch (node.getAnOperator())
     {
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION
                       .args('\'' + node.begin()->emitBack() + '\''), node.begin(), node.end(),
                   Modifier(node.begin(), node.begin() + 1)});
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:return value;
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
-    {
-        return std::visit(
-            [](auto&& value) -> ConstRetType
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_arithmetic_v<T>)
-                {
-                    return -value;
-                }
-                else
-                {
-
-                    return 0;
-                }
-            }, value);
-    }
+        break;
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:throw std::runtime_error("Not supported yet");
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:return +value;
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:return -value;
     case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
     {
-        return std::visit(
-            [](auto&& value) -> ConstRetType
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (hasBitNegate < T > {})
-                {
-                    return Semantics::ConstRetType::ValueType(~value);
-                }
-                else
-                {
-                    return FailureReason("Can't apply - to constant operator");
-                }
-            }, value);
+        if (!value.isInteger() && value.isArithmetic())
+        {
+            logError({ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N
+                          .args("~", value.getType().getName()), m_exprStart, m_exprEnd,
+                      Modifier(node.begin(), node.end(), Modifier::PointAtBeginning)});
+        }
+        return ~value;
     }
-    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
-    {
-        return std::visit(
-            [](auto&& value) -> ConstRetType
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (hasLogicNegate < T > {})
-                {
-                    return Semantics::ConstRetType::ValueType(!value);
-                }
-                else
-                {
-                    return FailureReason("Can't apply - to constant operator");
-                }
-            }, value);
-    }
+    case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:return !value;
     }
     return value;
 }
@@ -134,248 +86,96 @@ OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 {
     return match(node.getVariant(),
-                 [this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Semantics::ConstRetType
+                 [this, &node](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Semantics::ConstRetType
                  {
-                     //TODO:
-                     //                     std::vector<Semantics::SpecifierQualifierRef> refs;
-                     //                     for (auto& iter : typeName->getSpecifierQualifiers())
-                     //                     {
-                     //                         std::visit([&refs](auto&& value)
-                     //                                    {
-                     //                                        refs.emplace_back(std::cref(value));
-                     //                                    }, iter);
-                     //                     }
-                     //                     auto type = Semantics::declaratorsToType(refs,
-                     //                                                              typeName->getAbstractDeclarator(),
-                     //                                                              m_typedefs,
-                     //                                                              {},
-                     //                                                              m_structOrUnions);
-                     //                     auto result = Semantics::sizeOf(type);
-                     //                     if (!result)
-                     //                     {
-                     //                         return result;
-                     //                     }
-                     //                     return *result;
-                     throw std::runtime_error("Not implemented yet");
+                     auto type = m_typeCallback(*typeName);
+                     auto size = Semantics::sizeOf(type);
+                     if (!size)
+                     {
+                         logError({size.error(), m_exprStart, m_exprEnd, Modifier(node.begin(), node.end())});
+                         return {};
+                     }
+                     return {*size};
                  },
                  [](auto&&) -> OpenCL::Semantics::ConstRetType
                  { throw std::runtime_error("Not implemented yet"); });
 }
 
-namespace
-{
-    template <class T>
-    OpenCL::Semantics::ConstRetType castVariant(const OpenCL::Semantics::ConstRetType& variant)
-    {
-        return std::visit(
-            [](auto&& value) -> OpenCL::Semantics::ConstRetType
-            {
-                using U = std::decay_t<decltype(value)>;
-                if constexpr (std::is_convertible_v<U, T>)
-                {
-                    return static_cast<T>(value);
-                }
-                else
-                {
-                    return OpenCL::FailureReason("Invalid constant cast");
-                }
-            },
-            variant);
-    }
-} // namespace
-
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
 {
-    return std::visit(
-        [this](auto&& value) -> OpenCL::Semantics::ConstRetType
-        {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<T, OpenCL::Syntax::UnaryExpression>)
-            {
-                return visit(value);
-            }
-            else
-            {
-                //                                  value.second->accept(*this);
-                //                                  auto old = std::get<ConstRetType>(m_return);
-                //                                  if (std::shared_ptr<Syntax::PrimitiveType>
-                //                                          primitive =
-                //                                          std::dynamic_pointer_cast<Syntax::PrimitiveType>(value
-                //                                                                                                           .first);primitive)
-                //                                  {
-                //                                      if (primitive->isFloatingPoint())
-                //                                      {
-                //                                          if (primitive->getBitCount() == 32)
-                //                                          {
-                //                                              return castVariant<float>(old);
-                //                                          }
-                //                                          else if (primitive->getBitCount() == 64)
-                //                                          {
-                //                                              return castVariant<double>(old);
-                //                                          }
-                //                                          else
-                //                                          {
-                //                                              throw std::runtime_error("Invalid bitcount for floating
-                //                                              point type");
-                //                                          }
-                //                                      }
-                //                                      else
-                //                                      {
-                //                                          switch (primitive->getBitCount())
-                //                                          {
-                //                                          case 8:
-                //                                              if (primitive->isSigned())
-                //                                              {
-                //                                                  return castVariant<std::int8_t>(old);
-                //                                              }
-                //                                              else
-                //                                              {
-                //                                                  return castVariant<std::uint8_t>(old);
-                //                                              }
-                //                                          case 16:
-                //                                              if (primitive->isSigned())
-                //                                              {
-                //                                                  return castVariant<std::int16_t>(old);
-                //                                              }
-                //                                              else
-                //                                              {
-                //                                                  return castVariant<std::uint16_t>(old);
-                //                                              }
-                //                                          case 32:
-                //                                              if (primitive->isSigned())
-                //                                              {
-                //                                                  return castVariant<std::int32_t>(old);
-                //                                              }
-                //                                              else
-                //                                              {
-                //                                                  return castVariant<std::uint32_t>(old);
-                //                                              }
-                //                                          case 64:
-                //                                              if (primitive->isSigned())
-                //                                              {
-                //                                                  return castVariant<std::int64_t>(old);
-                //                                              }
-                //                                              else
-                //                                              {
-                //                                                  return castVariant<std::uint64_t>(old);
-                //                                              }
-                //                                          default:throw std::runtime_error("Invalid bitcount for
-                //                                          integer type");
-                //                                          }
-                //                                      }
-                //                                  }
-                //                                  else
-                {
-                    throw std::runtime_error("Not implemented yet");
-                }
-            }
-        },
-        node.getVariant());
+    return match(node.getVariant(), [this](const Syntax::UnaryExpression& unaryExpression) -> ConstRetType
+    {
+        return visit(unaryExpression);
+    }, [this](const std::pair<Syntax::TypeName, std::unique_ptr<Syntax::CastExpression>>& cast) -> ConstRetType
+                 {
+                     auto value = visit(*cast.second);
+                     auto type = m_typeCallback(cast.first);
+                     if (auto* primitive = std::get_if<PrimitiveType>(&type.get());m_integerOnly
+                         && (!primitive || primitive->isFloatingPoint() || primitive->getBitCount() == 0))
+                     {
+                         logError({ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
+                                   m_exprStart, m_exprEnd, Modifier(cast.first.begin(), cast.first.end())});
+                         return {};
+                     }
+                     return value.castTo(type);
+                 });
 }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
 {
-    if (node.getOptionalCastExpressions().empty())
-    {
-        return visit(node.getCastExpression());
-    }
     auto value = visit(node.getCastExpression());
     for (auto&[op, exp] : node.getOptionalCastExpressions())
     {
-        if (!value)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return value;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getCastExpression().begin(), node.getCastExpression().end())});
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
         }
         switch (op)
         {
         case Syntax::Term::BinaryDotOperator::BinaryMultiply:
         {
-            value = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasMultiply < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs * rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *value);
+            if (!value.isArithmetic() || !other.isArithmetic())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("*", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value *= other;
         }
             break;
         case Syntax::Term::BinaryDotOperator::BinaryDivide:
         {
-            value = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasDivide < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs / rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *value);
+            if (!value.isArithmetic() || !other.isArithmetic())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("/", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value /= other;
         }
             break;
         case Syntax::Term::BinaryDotOperator::BinaryRemainder:
         {
-            value = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasModulo < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs % rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *value);
+            if (!value.isInteger() || !other.isInteger())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("%", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value %= other;
         }
             break;
         }
@@ -386,374 +186,241 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
 {
-    if (node.getOptionalTerms().empty())
-    {
-        return visit(node.getTerm());
-    }
-    auto currentValue = visit(node.getTerm());
+    auto value = visit(node.getTerm());
     for (auto&[op, exp] : node.getOptionalTerms())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getTerm().begin(), node.getTerm().end())});
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
         }
         switch (op)
         {
         case Syntax::AdditiveExpression::BinaryDashOperator::BinaryPlus:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasPlus < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs + rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            if (!value.isArithmetic() || !other.isArithmetic())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("+", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value += other;
         }
             break;
         case Syntax::AdditiveExpression::BinaryDashOperator::BinaryMinus:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (!std::is_void_v<std::remove_pointer_t<
-                                T1>> || !std::is_void_v<std::remove_pointer_t<T2>>)
-                            {
-                                if constexpr (hasMinus < T1, T2 > {})
-                                {
-                                    return ConstRetType::ValueType(lhs - rhs);
-                                }
-                                else
-                                {
-                                    return FailureReason("Can't apply minux to operands in constant expression");
-                                }
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply minux to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            if (!value.isArithmetic() || !other.isArithmetic())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("-", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value -= other;
         }
             break;
         }
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
 {
-    if (node.getOptionalAdditiveExpressions().empty())
-    {
-        return visit(node.getAdditiveExpression());
-    }
-    auto currentValue = visit(node.getAdditiveExpression());
+    auto value = visit(node.getAdditiveExpression());
     for (auto&[op, exp] : node.getOptionalAdditiveExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getAdditiveExpression().begin(), node.getAdditiveExpression().end())});
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
         }
         switch (op)
         {
         case Syntax::ShiftExpression::ShiftOperator::Left:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return *second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasLShift < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs << rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            if (!value.isInteger() || !other.isInteger())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args("<<", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value <<= other;
         }
             break;
         case Syntax::ShiftExpression::ShiftOperator::Right:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasRShift < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs >> rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            if (!value.isInteger() || !other.isInteger())
+            {
+                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                              .args(">>", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                          Modifier(exp.begin() - 1,
+                                   exp.begin(),
+                                   Modifier::PointAtBeginning)});
+            }
+            value <<= other;
         }
             break;
         }
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
-    if (node.getOptionalEqualityExpressions().empty())
-    {
-        return visit(node.getEqualityExpression());
-    }
-    auto currentValue = visit(node.getEqualityExpression());
+    auto value = visit(node.getEqualityExpression());
     for (auto& exp : node.getOptionalEqualityExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getEqualityExpression().begin(), node.getEqualityExpression().end())});
         }
-        currentValue = std::visit(
-            [&exp, this](auto&& lhs) -> ConstRetType
-            {
-                using T1 = std::decay_t<decltype(lhs)>;
-                auto second = visit(exp);
-                if (second)
-                {
-                    return second;
-                }
-                return std::visit(
-                    [lhs](auto&& rhs) -> ConstRetType
-                    {
-                        using T2 = std::decay_t<decltype(rhs)>;
-                        if constexpr (hasBitAnd < T1, T2 > {})
-                        {
-                            return ConstRetType::ValueType(lhs & rhs);
-                        }
-                        else
-                        {
-                            return FailureReason("Can't apply plus to operands in constant expression");
-                        }
-                    },
-                    *second);
-            },
-            *currentValue);
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
+        if (!value.isInteger() || !other.isInteger())
+        {
+            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                          .args("&", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                      Modifier(exp.begin() - 1,
+                               exp.begin(),
+                               Modifier::PointAtBeginning)});
+        }
+        value &= other;
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
-    if (node.getOptionalBitAndExpressions().empty())
-    {
-        return visit(node.getBitAndExpression());
-    }
-    auto currentValue = visit(node.getBitAndExpression());
+    auto value = visit(node.getBitAndExpression());
     for (auto& exp : node.getOptionalBitAndExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getBitAndExpression().begin(), node.getBitAndExpression().end())});
         }
-        currentValue = std::visit(
-            [&exp, this](auto&& lhs) -> ConstRetType
-            {
-                using T1 = std::decay_t<decltype(lhs)>;
-                auto second = visit(exp);
-                return std::visit(
-                    [lhs](auto&& rhs) -> ConstRetType
-                    {
-                        using T2 = std::decay_t<decltype(rhs)>;
-                        if constexpr (hasBitXor < T1, T2 > {})
-                        {
-                            return ConstRetType::ValueType(lhs ^ rhs);
-                        }
-                        else
-                        {
-                            return FailureReason("Can't apply plus to operands in constant expression");
-                        }
-                    },
-                    *second);
-            },
-            *currentValue);
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
+        if (!value.isInteger() || !other.isInteger())
+        {
+            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                          .args("^", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                      Modifier(exp.begin() - 1,
+                               exp.begin(),
+                               Modifier::PointAtBeginning)});
+        }
+        value ^= other;
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
-    if (node.getOptionalBitXorExpressions().empty())
-    {
-        return visit(node.getBitXorExpression());
-    }
-    auto currentValue = visit(node.getBitXorExpression());
+    auto value = visit(node.getBitXorExpression());
     for (auto& exp : node.getOptionalBitXorExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getBitXorExpression().begin(), node.getBitXorExpression().end())});
         }
-        currentValue = std::visit(
-            [&exp, this](auto&& lhs) -> ConstRetType
-            {
-                using T1 = std::decay_t<decltype(lhs)>;
-                auto second = visit(exp);
-                if (!second)
-                {
-                    return second;
-                }
-                return std::visit(
-                    [lhs](auto&& rhs) -> ConstRetType
-                    {
-                        using T2 = std::decay_t<decltype(rhs)>;
-                        if constexpr (hasBitOr < T1, T2 > {})
-                        {
-                            return ConstRetType::ValueType(lhs | rhs);
-                        }
-                        else
-                        {
-                            return FailureReason("Can't apply plus to operands in constant expression");
-                        }
-                    },
-                    *second);
-            },
-            *currentValue);
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
+        if (!value.isInteger() || !other.isInteger())
+        {
+            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N
+                          .args("|", value.getType().getName(), other.getType().getName()), m_exprStart, m_exprEnd,
+                      Modifier(exp.begin() - 1,
+                               exp.begin(),
+                               Modifier::PointAtBeginning)});
+        }
+        value |= other;
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
-    if (node.getOptionalBitOrExpressions().empty())
-    {
-        return visit(node.getBitOrExpression());
-    }
-    auto currentValue = visit(node.getBitOrExpression());
+    auto value = visit(node.getBitOrExpression());
     for (auto& exp : node.getOptionalBitOrExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getBitOrExpression().begin(), node.getBitOrExpression().end())});
         }
-        currentValue = std::visit(
-            [&exp, this](auto&& lhs) -> ConstRetType
-            {
-                using T1 = std::decay_t<decltype(lhs)>;
-                auto second = visit(exp);
-                if (!second)
-                {
-                    return second;
-                }
-                return std::visit(
-                    [lhs](auto&& rhs) -> ConstRetType
-                    {
-                        using T2 = std::decay_t<decltype(rhs)>;
-                        if constexpr (hasLogicAnd < T1, T2 > {})
-                        {
-                            return ConstRetType::ValueType(lhs && rhs);
-                        }
-                        else
-                        {
-                            return FailureReason("Can't apply plus to operands in constant expression");
-                        }
-                    },
-                    *second);
-            },
-            *currentValue);
+        value = value.isUndefined() ? value : value.toBool();
+        if (!value && !value.isUndefined())
+        {
+            break;
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
+        value = other.isUndefined() ? other : other.toBool();
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
-    if (node.getOptionalAndExpressions().empty())
-    {
-        return visit(node.getAndExpression());
-    }
-    auto currentValue = visit(node.getAndExpression());
+    auto value = visit(node.getAndExpression());
     for (auto& exp : node.getOptionalAndExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getAndExpression().begin(), node.getAndExpression().end())});
         }
-        currentValue = std::visit(
-            [&exp, this](auto&& lhs) -> ConstRetType
-            {
-                using T1 = std::decay_t<decltype(lhs)>;
-                auto second = visit(exp);
-                if (!second)
-                {
-                    return second;
-                }
-                return std::visit(
-                    [lhs](auto&& rhs) -> ConstRetType
-                    {
-                        using T2 = std::decay_t<decltype(rhs)>;
-                        if constexpr (hasLogicOr < T1, T2 > {})
-                        {
-                            return ConstRetType::ValueType(lhs || rhs);
-                        }
-                        else
-                        {
-                            return FailureReason("Can't apply plus to operands in constant expression");
-                        }
-                    },
-                    *second);
-            },
-            *currentValue);
+        value = value.isUndefined() ? value : value.toBool();
+        if (value && !value.isUndefined())
+        {
+            break;
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
+        value = other.isUndefined() ? other : other.toBool();
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType
@@ -762,18 +429,24 @@ OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExp
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
         auto value = visit(node.getLogicalOrExpression());
-        if (!value)
+        //TODO: Type returned is wrong but there needs to be more complex logic to figure out the type of each expression
+        if (value.isUndefined())
         {
-            return value;
-        }
-        if (std::visit([](auto&& value) -> bool
-                       { return value; }, *value))
-        {
-            return visit(*node.getOptionalExpression());
+            //Evaluate both and return undefined
+            visit(*node.getOptionalExpression());
+            visit(*node.getOptionalConditionalExpression());
+            return {};
         }
         else
         {
-            return visit(*node.getOptionalConditionalExpression());
+            if (value)
+            {
+                return visit(*node.getOptionalExpression());
+            }
+            else
+            {
+                return visit(*node.getOptionalConditionalExpression());
+            }
         }
     }
     else
@@ -782,228 +455,84 @@ OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExp
     }
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
 {
-    if (node.getOptionalShiftExpressions().empty())
-    {
-        return visit(node.getShiftExpression());
-    }
-    auto currentValue = visit(node.getShiftExpression());
+    auto value = visit(node.getShiftExpression());
     for (auto&[op, exp] : node.getOptionalShiftExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(node.getShiftExpression().begin(), node.getShiftExpression().end())});
+        }
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
         }
         switch (op)
         {
         case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasGT < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs > rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't > to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value > other;
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasGE < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs > rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply >= to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value >= other;
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::LessThan:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasLT < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs < rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value < other;
         }
             break;
         case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasLE < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs <= rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value <= other;
         }
             break;
         }
     }
-    return currentValue;
+    return value;
 }
 
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
 {
-    if (node.getOptionalRelationalExpressions().empty())
-    {
-        return visit(node.getRelationalExpression());
-    }
-    auto currentValue = visit(node.getRelationalExpression());
+    auto value = visit(node.getRelationalExpression());
     for (auto&[op, exp] : node.getOptionalRelationalExpressions())
     {
-        if (!currentValue)
+        if (!value.isInteger() && m_integerOnly)
         {
-            return currentValue;
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd,
+                      Modifier(node.getRelationalExpression().begin(), node.getRelationalExpression().end())});
         }
-
+        auto other = visit(exp);
+        if (!other.isInteger() && m_integerOnly)
+        {
+            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_exprStart,
+                      m_exprEnd, Modifier(exp.begin(), exp.end())});
+        }
         switch (op)
         {
         case Syntax::EqualityExpression::EqualityOperator::Equal:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasEQ < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs == rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value == other;
         }
             break;
         case Syntax::EqualityExpression::EqualityOperator::NotEqual:
         {
-            currentValue = std::visit(
-                [exp = &exp, this](auto&& lhs) -> ConstRetType
-                {
-                    using T1 = std::decay_t<decltype(lhs)>;
-                    auto second = visit(*exp);
-                    if (!second)
-                    {
-                        return second;
-                    }
-                    return std::visit(
-                        [lhs](auto&& rhs) -> ConstRetType
-                        {
-                            using T2 = std::decay_t<decltype(rhs)>;
-                            if constexpr (hasNE < T1, T2 > {})
-                            {
-                                return ConstRetType::ValueType(lhs != rhs);
-                            }
-                            else
-                            {
-                                return FailureReason("Can't apply plus to operands in constant expression");
-                            }
-                        },
-                        *second);
-                },
-                *currentValue);
+            value = value != other;
         }
             break;
         }
     }
-    return currentValue;
+    return value;
 }
-
-#pragma GCC diagnostic pop
-#pragma GCC diagnostic pop
 
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
@@ -1025,9 +554,21 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 {
     return match(node, [this](auto&& value) -> ConstRetType
                  { return visit(value); },
-                 [](const Syntax::PrimaryExpressionIdentifier&) -> ConstRetType
+                 [this](const Syntax::PrimaryExpressionIdentifier& identifier) -> ConstRetType
                  {
-                     return FailureReason("Identifier not allowed in constant expression");
+                     auto& decl = m_declarationCallback(identifier.getIdentifier());
+                     if (std::holds_alternative<Type>(decl))
+                     {
+                         throw std::runtime_error(
+                             "Internal compiler error: identifier is typename and was not found as such by the parser");
+                     }
+                     else if (auto* value = std::get_if<std::int32_t>(&decl))
+                     {
+                         return {*value};
+                     }
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
+                               m_exprStart, m_exprEnd, Modifier(identifier.begin(), identifier.end())});
+                     return {};
                  });
 }
 
@@ -1035,21 +576,39 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 {
     return match(node, [this](auto&& value) -> ConstRetType
                  { return visit(value); },
-                 [](const Syntax::PostFixExpressionFunctionCall&) -> ConstRetType
+                 [this](const Syntax::PostFixExpressionFunctionCall& call) -> ConstRetType
                  {
-                     return FailureReason("Function call not allowed in constant expression");
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call"),
+                               m_exprStart, m_exprEnd,
+                               Modifier(Syntax::nodeFromNodeDerivedVariant(call.getPostFixExpression()).begin() + 1,
+                                        call.end())});
+                     return {};
                  },
-                 [](const Syntax::PostFixExpressionIncrement&) -> ConstRetType
+                 [this](const Syntax::PostFixExpressionIncrement& increment) -> ConstRetType
                  {
-                     return FailureReason("Increment not allowed in constant expression");
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
+                               m_exprStart, m_exprEnd,
+                               Modifier(
+                                   Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
+                                   increment.end())});
+                     return {};
                  },
-                 [](const Syntax::PostFixExpressionDecrement&) -> ConstRetType
+                 [this](const Syntax::PostFixExpressionDecrement& decrement) -> ConstRetType
                  {
-                     return FailureReason("Decrement not allowed in constant expression");
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
+                               m_exprStart, m_exprEnd,
+                               Modifier(
+                                   Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
+                                   decrement.end())});
+                     return {};
                  },
-                 [](const Syntax::PostFixExpressionTypeInitializer&) -> ConstRetType
+                 [this](const Syntax::PostFixExpressionTypeInitializer& initializer) -> ConstRetType
                  {
-                     return FailureReason("Type initializer not allowed in constant expression");
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer"),
+                               m_exprStart, m_exprEnd,
+                               Modifier(initializer.begin(),
+                                        initializer.end())});
+                     return {};
                  });
 }
 
@@ -1061,9 +620,12 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
 {
-    if (node.getAssignmentExpressions().size() != 1)
+    if (node.getAssignmentExpressions().size() > 1)
     {
-        return FailureReason(", operator not allowed in constant expression");
+        logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
+                  m_exprStart, m_exprEnd,
+                  Modifier(node.getAssignmentExpressions()[1].begin() - 1,
+                           node.getAssignmentExpressions()[1].begin())});
     }
     return visit(node.getAssignmentExpressions()[0]);
 }
@@ -1071,27 +633,29 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
-    return std::visit(
-        [this](auto&& value) -> OpenCL::Semantics::ConstRetType
-        {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<Syntax::ConditionalExpression, T>)
-            {
-                return visit(value);
-            }
-            else
-            {
-                return FailureReason("assignment not allowed in constant expression");
-            }
-        },
-        node.getVariant());
+    return match(node.getVariant(),
+                 [this](const Syntax::AssignmentExpressionAssignment& assignmentExpressionAssignment) -> ConstRetType
+                 {
+                     logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("assignment"),
+                               m_exprStart, m_exprEnd,
+                               Modifier(assignmentExpressionAssignment.getAssignmentExpression().begin() - 1,
+                                        assignmentExpressionAssignment.getAssignmentExpression().begin())});
+                     return {};
+                 },
+                 [this](const Syntax::ConditionalExpression& conditionalExpression) -> ConstRetType
+                 {
+                     return visit(conditionalExpression);
+                 });
 }
 
-OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(std::function<const RecordType*(const std::string&)> recordCallback,
+OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(std::vector<Lexer::Token>::const_iterator exprStart,
+                                                        std::vector<Lexer::Token>::const_iterator exprEnd,
+                                                        std::function<Type(const Syntax::TypeName&)> typeCallback,
                                                         std::function<const DeclarationTypedefEnums&(const std::string&)> declarationCallback,
                                                         std::function<void(const Message&)> loggerCallback,
                                                         bool integerOnly)
-    : m_recordCallback(std::move(recordCallback)), m_declarationCallback(std::move(declarationCallback)),
+    : m_exprStart(exprStart), m_exprEnd(exprEnd), m_typeCallback(std::move(typeCallback)),
+      m_declarationCallback(std::move(declarationCallback)),
       m_loggerCallback(std::move(loggerCallback)), m_integerOnly(integerOnly)
 {}
 
@@ -1103,10 +667,11 @@ void OpenCL::Semantics::ConstantEvaluator::logError(const OpenCL::Message& messa
     }
 }
 
-OpenCL::Semantics::ConstRetType::ConstRetType(const OpenCL::Semantics::ConstRetType::ValueType& value) : m_value(value),
-                                                                                                         m_type(
-                                                                                                             valueToType(
-                                                                                                                 m_value))
+OpenCL::Semantics::ConstRetType::ConstRetType(const OpenCL::Semantics::ConstRetType::ValueType& value,
+                                              const OpenCL::Semantics::Type& type) : m_value(value),
+                                                                                     m_type(type.isUndefined()
+                                                                                            ? valueToType(
+                                                                                             m_value) : type)
 {}
 
 OpenCL::Semantics::Type OpenCL::Semantics::ConstRetType::valueToType(const OpenCL::Semantics::ConstRetType::ValueType& value)
@@ -1134,3 +699,456 @@ OpenCL::Semantics::Type OpenCL::Semantics::ConstRetType::valueToType(const OpenC
                  [](auto&&)
                  { return Type{}; });
 }
+
+template <class F>
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::applyBinary(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                             F&& binaryOperator) const
+{
+    return match(m_value, [](void*) -> ConstRetType
+                 {
+                     throw std::runtime_error("Not implemented yet");
+                 },
+                 [](std::monostate) -> ConstRetType
+                 {
+                     return {};
+                 },
+                 [&rhs, &binaryOperator](auto&& value) -> ConstRetType
+                 {
+                     return match(rhs.m_value, [](void*) -> ConstRetType
+                                  {
+                                      throw std::runtime_error("Not implemented yet");
+                                  },
+                                  [](std::monostate) -> ConstRetType
+                                  {
+                                      return {};
+                                  },
+                                  [value, &binaryOperator](auto&& otherValue) -> ConstRetType
+                                  {
+                                      return {binaryOperator(value, otherValue)};
+                                  });
+                 });
+}
+
+template <class F>
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::applyIntegerBinary(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                                    F&& binaryOperator) const
+{
+    return match(m_value, [](void*) -> ConstRetType
+                 {
+                     throw std::runtime_error("Not implemented yet");
+                 },
+                 [](std::monostate) -> ConstRetType
+                 {
+                     return {};
+                 },
+                 [](float) -> ConstRetType
+                 {
+                     return {};
+                 },
+                 [](double) -> ConstRetType
+                 {
+                     return {};
+                 },
+                 [&rhs, &binaryOperator](auto&& value) -> ConstRetType
+                 {
+                     return match(rhs.m_value, [](void*) -> ConstRetType
+                                  {
+                                      throw std::runtime_error("Not implemented yet");
+                                  },
+                                  [](std::monostate) -> ConstRetType
+                                  {
+                                      return {};
+                                  },
+                                  [](float) -> ConstRetType
+                                  {
+                                      return {};
+                                  },
+                                  [](double) -> ConstRetType
+                                  {
+                                      return {};
+                                  },
+                                  [value, &binaryOperator](auto&& otherValue) -> ConstRetType
+                                  {
+                                      return {binaryOperator(value, otherValue)};
+                                  });
+                 });
+}
+
+bool OpenCL::Semantics::ConstRetType::isInteger() const
+{
+    return std::visit([](auto&& value)
+                      {
+                          using T = std::decay_t<decltype(value)>;
+                          return std::is_integral_v<T> || std::is_same_v<T, std::monostate>;
+                      }, m_value);
+}
+
+bool OpenCL::Semantics::ConstRetType::isArithmetic() const
+{
+    return std::visit([](auto&& value)
+                      {
+                          using T = std::decay_t<decltype(value)>;
+                          return std::is_arithmetic_v<T>
+                              || std::is_same_v<T, std::monostate>;
+                      }, m_value);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator+() const
+{
+    return {match(m_value, [](void*) -> ConstRetType
+                  {
+                      throw std::runtime_error("Not implemented yet");
+                  }, [this](std::monostate) -> ConstRetType
+                  {
+                      return *this;
+                  },
+                  [](auto&& value) -> ConstRetType
+                  {
+                      return {+value};
+                  })};
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator-() const
+{
+    return {match(m_value, [](void*) -> ConstRetType
+                  {
+                      throw std::runtime_error("Not implemented yet");
+                  }, [this](std::monostate) -> ConstRetType
+                  {
+                      return *this;
+                  },
+                  [](auto&& value) -> ConstRetType
+                  {
+                      return {-value};
+                  })};
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator!() const
+{
+    return {match(m_value, [](void*) -> ConstRetType
+                  {
+                      throw std::runtime_error("Not implemented yet");
+                  }, [this](std::monostate) -> ConstRetType
+                  {
+                      return *this;
+                  },
+                  [](auto&& value) -> ConstRetType
+                  {
+                      return {static_cast<std::int32_t>(!value)};
+                  })};
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator~() const
+{
+    return {match(m_value, [](void*) -> ConstRetType
+                  {
+                      throw std::runtime_error("Not implemented yet");
+                  }, [this](std::monostate) -> ConstRetType
+                  {
+                      return *this;
+                  },
+                  [](float) -> ConstRetType
+                  {
+                      return {};
+                  },
+                  [](double) -> ConstRetType
+                  {
+                      return {};
+                  },
+                  [](auto&& value) -> ConstRetType
+                  {
+                      return {static_cast<std::int32_t>(~value)};
+                  })};
+}
+
+const OpenCL::Semantics::Type& OpenCL::Semantics::ConstRetType::getType() const
+{
+    return m_type;
+}
+
+const OpenCL::Semantics::ConstRetType::ValueType& OpenCL::Semantics::ConstRetType::getValue() const
+{
+    return m_value;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type) const
+{
+    return match(m_value, [this](std::monostate) -> ConstRetType
+                 {
+                     return *this;
+                 },
+                 [](void*) -> ConstRetType
+                 {
+                     throw std::runtime_error("Not implemented yet");
+                 },
+                 [&type](auto&& value) -> ConstRetType
+                 {
+                     return match(type.get(), [value, &type](const PrimitiveType& primitiveType) -> ConstRetType
+                     {
+                         if (primitiveType.isFloatingPoint())
+                         {
+                             switch (primitiveType.getBitCount())
+                             {
+                             case 32:return {static_cast<float>(value), type};
+                             case 64:return {static_cast<double>(value), type};
+                             }
+                         }
+                         else
+                         {
+                             switch (primitiveType.getBitCount())
+                             {
+                             case 8:
+                             {
+                                 if (primitiveType.isSigned())
+                                 {
+                                     return {static_cast<std::int8_t>(value), type};
+                                 }
+                                 else
+                                 {
+                                     return {static_cast<std::uint8_t>(value), type};
+                                 }
+                             }
+                             case 16:
+                             {
+                                 if (primitiveType.isSigned())
+                                 {
+                                     return {static_cast<std::int16_t>(value), type};
+                                 }
+                                 else
+                                 {
+                                     return {static_cast<std::uint16_t>(value), type};
+                                 }
+                             }
+                             case 32:
+                             {
+                                 if (primitiveType.isSigned())
+                                 {
+                                     return {static_cast<std::int32_t>(value), type};
+                                 }
+                                 else
+                                 {
+                                     return {static_cast<std::uint32_t>(value), type};
+                                 }
+                             }
+                             case 64:
+                             {
+                                 if (primitiveType.isSigned())
+                                 {
+                                     return {static_cast<std::int64_t>(value), type};
+                                 }
+                                 else
+                                 {
+                                     return {static_cast<std::uint64_t>(value), type};
+                                 }
+                             }
+                             }
+                         }
+                         return {};
+                     }, [](auto&&) -> ConstRetType
+                                  {
+                                      return {};
+                                  });
+                 });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator*(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    { return lhs * rhs; });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator/(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    { return lhs / rhs; });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator%(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs % rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator*=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this * rhs;
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator/=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this / rhs;
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator%=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this % rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator+(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    { return lhs + rhs; });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator+=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this + rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator-(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    { return lhs - rhs; });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator-=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this - rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator<<(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs << rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator<<=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this << rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator>>(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs >> rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator>>=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this >> rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator&(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs & rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator&=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this & rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator^(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs ^ rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator^=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this ^ rhs;
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator|(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyIntegerBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return lhs | rhs;
+    });
+}
+
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator|=(const OpenCL::Semantics::ConstRetType& rhs)
+{
+    return *this = *this | rhs;
+}
+
+OpenCL::Semantics::ConstRetType::operator bool() const
+{
+    return match(m_value, [](std::monostate)
+                 { return false; },
+                 [](void* ptr)
+                 {
+                     return ptr != nullptr;
+                 },
+                 [](auto value)
+                 {
+                     return value != 0;
+                 });
+}
+
+bool OpenCL::Semantics::ConstRetType::isUndefined() const
+{
+    return std::holds_alternative<std::monostate>(m_value);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::toBool() const
+{
+    return {*this ? 1 : 0};
+}
+
+#pragma GCC diagnostic push
+#pragma clang diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wsign-compare"
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator<(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs < rhs);
+    });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator>(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs > rhs);
+    });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator<=(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs <= rhs);
+    });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator>=(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs >= rhs);
+    });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator==(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs == rhs);
+    });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator!=(const OpenCL::Semantics::ConstRetType& rhs) const
+{
+    return applyBinary(rhs, [](auto lhs, auto rhs)
+    {
+        return static_cast<std::int32_t>(lhs != rhs);
+    });
+}
+
+#pragma GCC diagnostic pop
+#pragma clang diagnostic pop

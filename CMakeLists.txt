@@ -45,7 +45,7 @@ if (NOT MSVC)
         add_compile_options(--coverage)
     endif ()
 else ()
-    add_compile_options(/w34716)
+    add_compile_options(/w34716 /bigobj)
 endif ()
 
 llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)

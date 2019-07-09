@@ -94,6 +94,18 @@ namespace OpenCL
 
             constexpr auto N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION
                 = Format("{} not allowed in constant expression");
+
+            constexpr auto ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS
+                = "Only integers allowed in integer constant expressions";
+
+            constexpr auto CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N = Format(
+                "Cannot apply unary operator '{}' to value of type '{}'");
+
+            constexpr auto CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION
+                = "Can only cast to integers in integer constant expression";
+
+            constexpr auto CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N = Format(
+                "Cannot apply binary operator '{}' to value of type '{}' and '{}'");
         }
     }
 

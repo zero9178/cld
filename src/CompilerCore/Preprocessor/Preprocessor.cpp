@@ -6,6 +6,7 @@
 #include <numeric>
 #include <regex>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -387,20 +388,15 @@ namespace
                                 {
                                     throw std::runtime_error("Invalid expression");
                                 }
-                                OpenCL::Semantics::ConstantEvaluator evaluator(<#initializer#>,
-                                                                               <#initializer#>,
-                                                                               <#initializer#>,
-                                                                               false);
-                                //TODO:
-                                //                                auto value = evaluator.visit(*expression);
-                                //                                if (!value)
-                                //                                {
-                                //                                    throw std::runtime_error("Failed at evaluating constant expression");
-                                //                                }
-                                //                                bool isTrue = std::visit([](auto&& value) -> bool
-                                //                                                         { return value != 0; }, *value);
-                                //                                currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
-                                //                                hasPreprocessorTokens = isTrue;
+                                OpenCL::Semantics::ConstantEvaluator evaluator(expression->begin(), expression->end());
+                                auto value = evaluator.visit(*expression);
+                                if (value.isUndefined())
+                                {
+                                    throw std::runtime_error("");
+                                }
+                                bool isTrue = static_cast<bool>(value);
+                                currentState = isTrue ? States::IncludeRegion : States::RemoveRegion;
+                                hasPreprocessorTokens = isTrue;
                                 iter = "";
                             }
                             else if (iter.rfind("error") == 0)
