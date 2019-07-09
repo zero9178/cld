@@ -80,6 +80,20 @@ namespace OpenCL
 
             constexpr auto IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION
                 = "Identifier list not allowed in function declaration";
+
+            constexpr auto INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF = Format("Incomplete type {} in alignment of");
+
+            constexpr auto INCOMPLETE_TYPE_N_IN_SIZE_OF = Format("Incomplete type {} in size of");
+
+            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF = "Function type not allowed in alignment of";
+
+            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF = "Function type not not allowed in size of";
+
+            constexpr auto SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION
+                = "Size of Valarray cannot be determined in constant expression";
+
+            constexpr auto N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION
+                = Format("{} not allowed in constant expression");
         }
     }
 

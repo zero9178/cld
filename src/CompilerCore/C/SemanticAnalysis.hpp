@@ -15,7 +15,7 @@ namespace OpenCL::Semantics
     {
         std::ostream* m_reporter;
         std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
-        std::vector<std::map<std::string, std::variant<Semantics::Declaration, Semantics::Type>>> m_declarations{1};
+        std::vector<std::map<std::string, DeclarationTypedefEnums>> m_declarations{1};
         std::set<std::string> m_definedFunctions;
 
         [[nodiscard]] std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;

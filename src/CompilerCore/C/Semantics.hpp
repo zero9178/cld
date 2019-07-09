@@ -443,13 +443,15 @@ namespace OpenCL::Semantics
         [[nodiscard]] const std::vector<Variant>& getGlobals() const;
     };
 
+    using DeclarationTypedefEnums = std::variant<Semantics::Declaration, Semantics::Type, std::int32_t>;
+
     std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 
     std::vector<Lexer::Token>::const_iterator declaratorToLoc(const OpenCL::Syntax::Declarator& declarator);
 
-    OpenCL::Expected<std::size_t, OpenCL::Message> sizeOf(const Type& type);
+    OpenCL::Expected<std::size_t, std::string> sizeOf(const Type& type);
 
-    OpenCL::Expected<std::size_t, OpenCL::Message> alignmentOf(const Type& type);
+    OpenCL::Expected<std::size_t, std::string> alignmentOf(const Type& type);
 
     bool isVoid(const Type& type);
 } // namespace OpenCL::Semantics

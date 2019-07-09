@@ -8,21 +8,50 @@
 
 namespace OpenCL::Semantics
 {
-    using ConstRetType = std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
+    //TODO: Pointer arithmetic support
+    class ConstRetType
+    {
+    public:
+        using ValueType = std::variant<std::monostate,
+                                       std::int8_t,
+                                       std::uint8_t,
+                                       std::int16_t,
+                                       std::uint16_t,
+                                       std::int32_t,
+                                       std::uint32_t,
+                                       std::int64_t,
+                                       std::uint64_t,
+                                       float,
+                                       double,
+                                       void*>;
+
+    private:
+        ValueType m_value;
+        Type m_type;
+
+        static Type valueToType(const ValueType& value);
+
+    public:
+
+        /* implicit */ ConstRetType(const ValueType& value);
+
+    };
 
     class ConstantEvaluator final
     {
         std::function<const RecordType*(const std::string&)> m_recordCallback;
-        std::function<const Type*(const std::string&)> m_typedefCallback;
+        std::function<const DeclarationTypedefEnums&(const std::string&)> m_declarationCallback;
         std::function<void(const Message&)> m_loggerCallback;
+        bool m_integerOnly;
 
         void logError(const Message& message);
 
     public:
 
-        explicit ConstantEvaluator(const std::function<const RecordType*(const std::string&)>& recordCallback = {},
-                                   const std::function<const Type*(const std::string&)>& typedefCallback = {},
-                                   const std::function<void(const Message&)>& loggerCallback = {});
+        explicit ConstantEvaluator(std::function<const RecordType*(const std::string&)> recordCallback = {},
+                                   std::function<const DeclarationTypedefEnums&(const std::string&)> declarationCallback = {},
+                                   std::function<void(const Message&)> loggerCallback = {},
+                                   bool integerOnly = true);
 
         ConstRetType visit(const Syntax::Expression& node);
 

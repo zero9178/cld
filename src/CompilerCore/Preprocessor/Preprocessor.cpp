@@ -387,7 +387,10 @@ namespace
                                 {
                                     throw std::runtime_error("Invalid expression");
                                 }
-                                OpenCL::Semantics::ConstantEvaluator evaluator;
+                                OpenCL::Semantics::ConstantEvaluator evaluator(<#initializer#>,
+                                                                               <#initializer#>,
+                                                                               <#initializer#>,
+                                                                               false);
                                 //TODO:
                                 //                                auto value = evaluator.visit(*expression);
                                 //                                if (!value)
