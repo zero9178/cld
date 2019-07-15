@@ -119,27 +119,53 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
     }
     const auto& functionRP = std::get<Semantics::FunctionType>(type.get());
 
-    const Syntax::DirectDeclaratorParentheseParameters* paramterTypeList = matchWithSelf(
-        node.getDeclarator().getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorParentheseParameters& directDeclaratorParentheseParameters)
-            -> const Syntax::DirectDeclaratorParentheseParameters* { return &directDeclaratorParentheseParameters; },
-        [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese)
-            -> const Syntax::DirectDeclaratorParentheseParameters* {
-            return std::visit([&self](auto&& value) { return self(value); },
-                              directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
-        },
-        [](auto&&, auto &&) -> const Syntax::DirectDeclaratorParentheseParameters* { return nullptr; });
+    auto* paramterTypeList = [&]() -> const Syntax::DirectDeclaratorParentheseParameters* {
+        const Syntax::DirectDeclaratorParentheseParameters* result = nullptr;
+        matchWithSelf(
+            node.getDeclarator().getDirectDeclarator(),
+            [&result](
+                auto&& self,
+                const Syntax::DirectDeclaratorParentheseParameters& directDeclaratorParentheseParameters) -> void {
+                result = &directDeclaratorParentheseParameters;
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParentheseParameters.getDirectDeclarator());
+            },
+            [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese) -> void {
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
+            },
+            [](auto&& self,
+               const Syntax::DirectDeclaratorParentheseIdentifiers& directDeclaratorParentheseIdentifiers) -> void {
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParentheseIdentifiers.getDirectDeclarator());
+            },
+            [](auto&&, auto &&) -> void {});
+        return result;
+    }();
 
-    const Syntax::DirectDeclaratorParentheseIdentifiers* identifierList = matchWithSelf(
-        node.getDeclarator().getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorParentheseIdentifiers& directDeclaratorParentheseIdentifiers)
-            -> const Syntax::DirectDeclaratorParentheseIdentifiers* { return &directDeclaratorParentheseIdentifiers; },
-        [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese)
-            -> const Syntax::DirectDeclaratorParentheseIdentifiers* {
-            return std::visit([&self](auto&& value) { return self(value); },
-                              directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
-        },
-        [](auto&&, auto &&) -> const Syntax::DirectDeclaratorParentheseIdentifiers* { return nullptr; });
+    auto* identifierList = [&]() -> const Syntax::DirectDeclaratorParentheseIdentifiers* {
+        const Syntax::DirectDeclaratorParentheseIdentifiers* result = nullptr;
+        matchWithSelf(
+            node.getDeclarator().getDirectDeclarator(),
+            [](auto&& self,
+               const Syntax::DirectDeclaratorParentheseParameters& directDeclaratorParentheseParameters) -> void {
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParentheseParameters.getDirectDeclarator());
+            },
+            [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese) -> void {
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
+            },
+            [&result](
+                auto&& self,
+                const Syntax::DirectDeclaratorParentheseIdentifiers& directDeclaratorParentheseIdentifiers) -> void {
+                result = &directDeclaratorParentheseIdentifiers;
+                std::visit([&self](auto&& value) { return self(value); },
+                           directDeclaratorParentheseIdentifiers.getDirectDeclarator());
+            },
+            [](auto&&, auto &&) -> void {});
+        return result;
+    }();
 
     if (!identifierList && !node.getDeclarations().empty())
     {
@@ -1031,8 +1057,15 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<L
                 auto [isConst, isVolatile, isRestricted] = getQualifiers(iter.getTypeQualifiers());
                 baseType = PointerType::create(isConst, isVolatile, isRestricted, std::move(baseType));
             }
-            return apply(declStart, declEnd, abstractDeclarator->getDirectAbstractDeclarator(), std::move(baseType),
-                         declarations);
+            if (abstractDeclarator->getDirectAbstractDeclarator())
+            {
+                return apply(declStart, declEnd, *abstractDeclarator->getDirectAbstractDeclarator(),
+                             std::move(baseType), declarations);
+            }
+            else
+            {
+                return baseType;
+            }
         },
         [&](std::reference_wrapper<const Syntax::Declarator> declarator) -> Type {
             for (auto& iter : declarator.get().getPointers())
@@ -1167,7 +1200,7 @@ OpenCL::Semantics::Type
                                   directAbstractDeclaratorAssignmentExpression.begin(),
                                   directAbstractDeclaratorAssignmentExpression.end(),
                                   Modifier(expression->begin(), expression->end())});
-                        baseType = ArrayType::create(false, false, false, std::move(baseType), -1);
+                        baseType = ArrayType::create(false, false, false, std::move(baseType), 0);
                     }
                     else
                     {
@@ -1249,7 +1282,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                         logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                                   dirWithoutStaticOrAsterisk.begin(), dirWithoutStaticOrAsterisk.end(),
                                   Modifier(expression->begin(), expression->end())});
-                        baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), -1);
+                        baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), 0);
                     }
                     else
                     {
@@ -1279,7 +1312,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                               directDeclaratorStatic.begin(), directDeclaratorStatic.end(),
                               Modifier(directDeclaratorStatic.getAssignmentExpression().begin(),
                                        directDeclaratorStatic.getAssignmentExpression().end())});
-                    baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), -1);
+                    baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), 0);
                 }
                 else
                 {
@@ -1408,4 +1441,23 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
             std::visit(directSelf, identifiers.getDirectDeclarator());
         });
     return std::move(baseType);
+}
+
+std::tuple<bool, bool, bool>
+    OpenCL::Semantics::SemanticAnalysis::getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
+{
+    bool isConst = false;
+    bool isVolatile = false;
+    bool isRestricted = false;
+    for (auto& typeQual : typeQualifiers)
+    {
+        switch (typeQual.getQualifier())
+        {
+            case Syntax::TypeQualifier::Const: isConst = true; break;
+            case Syntax::TypeQualifier::Restrict: isRestricted = true; break;
+            case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
+            default: break;
+        }
+    }
+    return std::tie(isConst, isVolatile, isRestricted);
 }

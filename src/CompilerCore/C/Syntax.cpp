@@ -1059,8 +1059,7 @@ const OpenCL::Syntax::ParameterTypeList*
 
 OpenCL::Syntax::AbstractDeclarator::AbstractDeclarator(
     std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-    std::vector<OpenCL::Syntax::Pointer>&& pointers,
-    OpenCL::Syntax::DirectAbstractDeclarator&& directAbstractDeclarator)
+    std::vector<OpenCL::Syntax::Pointer>&& pointers, std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator)
     : Node(begin, end), m_pointers(std::move(pointers)), m_directAbstractDeclarator(std::move(directAbstractDeclarator))
 {
 }
@@ -1070,9 +1069,9 @@ const std::vector<OpenCL::Syntax::Pointer>& OpenCL::Syntax::AbstractDeclarator::
     return m_pointers;
 }
 
-const OpenCL::Syntax::DirectAbstractDeclarator& OpenCL::Syntax::AbstractDeclarator::getDirectAbstractDeclarator() const
+const OpenCL::Syntax::DirectAbstractDeclarator* OpenCL::Syntax::AbstractDeclarator::getDirectAbstractDeclarator() const
 {
-    return m_directAbstractDeclarator;
+    return m_directAbstractDeclarator ? &*m_directAbstractDeclarator : nullptr;
 }
 
 OpenCL::Syntax::TypeName::TypeName(std::vector<Lexer::Token>::const_iterator begin,

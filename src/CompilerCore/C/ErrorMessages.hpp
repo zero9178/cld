@@ -85,9 +85,12 @@ namespace OpenCL
 
             constexpr auto INCOMPLETE_TYPE_N_IN_SIZE_OF = Format("Incomplete type {} in 'sizeof'");
 
+            constexpr auto INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC =
+                Format("Incomplete type {} used in pointer arithmetic");
+
             constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF = "Function type not allowed in alignmentof";
 
-            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF = "Function type not not allowed in 'sizeof'";
+            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF = "Function type not allowed in 'sizeof'";
 
             constexpr auto SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION =
                 "Size of Valarray cannot be determined in constant expression";
@@ -105,6 +108,14 @@ namespace OpenCL
 
             constexpr auto CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N =
                 Format("Cannot apply binary operator '{}' to value of type {} and {}");
+
+            constexpr auto CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N =
+                Format("Cannot apply binary operator '{}' to value of incompatible types {} and {}");
+
+            constexpr auto INVALID_CAST_FROM_TYPE_N_TO_TYPE_N = Format("Invalid cast from type {} to type {}");
+
+            constexpr auto INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER =
+                "Integer must evaluate to null to be compared with pointer";
         } // namespace Semantics
     }     // namespace ErrorMessages
 

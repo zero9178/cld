@@ -14,15 +14,9 @@ using namespace OpenCL::ErrorMessages::Semantics;
 
 namespace
 {
-    enum ConstantExpression
-    {
-        Integer,
-        Arithmetic,
-        Initialization
-    };
-
-    std::pair<OpenCL::Semantics::ConstRetType, std::string>
-        evaluateConstantExpression(const std::string& expression, ConstantExpression constantExpression = Integer)
+    std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpression(
+        const std::string& expression,
+        OpenCL::Semantics::ConstantEvaluator::Mode mode = OpenCL::Semantics::ConstantEvaluator::Integer)
     {
         std::ostringstream ss;
         std::vector<OpenCL::Lexer::Token> tokens;
@@ -41,7 +35,7 @@ namespace
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
-            {}, [&ss](const OpenCL::Message& message) { ss << message; }, constantExpression == Integer);
+            {}, [&ss](const OpenCL::Message& message) { ss << message; }, mode);
         auto ret = evaluator.visit(*parsing);
         auto string = ss.str();
         if (OpenCL::colourConsoleOutput && !string.empty())
@@ -53,7 +47,7 @@ namespace
                         {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                         typeName.getAbstractDeclarator());
                 },
-                {}, [](const OpenCL::Message& message) { std::cerr << message; }, constantExpression == Integer)
+                {}, [](const OpenCL::Message& message) { std::cerr << message << std::endl; }, mode)
                 .visit(*parsing);
         }
         return {ret, string};
@@ -221,7 +215,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             }
             SECTION("Arithmetic constant expression")
             {
-                auto [value, error] = evaluateConstantExpression("+.0", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("+.0", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
@@ -229,6 +224,13 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
                 CHECK(value.getType().getName() == "double");
             }
+        }
+        SECTION("Pointer")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("+(void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("+", "'void*'")));
         }
     }
     SECTION("Minus")
@@ -253,7 +255,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             }
             SECTION("Arithmetic constant expression")
             {
-                auto [value, error] = evaluateConstantExpression("-.1", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("-.1", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
@@ -261,6 +264,13 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
                 CHECK(value.getType().getName() == "double");
             }
+        }
+        SECTION("Pointer")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("-(void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("-", "'void*'")));
         }
     }
     SECTION("Bitnot")
@@ -277,12 +287,30 @@ TEST_CASE("Const eval unary expression", "[constEval]")
         }
         SECTION("Floating point")
         {
-            auto [value, error] = evaluateConstantExpression("~0.0", Arithmetic);
+            SECTION("Integer constant expression")
+            {
+                auto [value, error] = evaluateConstantExpression("~0.0");
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            }
+            SECTION("Arithmetic constant expression")
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("~0.0", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error,
+                           Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'double'")));
+            }
+        }
+        SECTION("Pointer")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("~(void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'double'")));
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'void*'")));
         }
     }
-    SECTION("Minus")
+    SECTION("Logical not")
     {
         SECTION("Integer")
         {
@@ -304,7 +332,31 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             }
             SECTION("Arithmetic constant expression")
             {
-                auto [value, error] = evaluateConstantExpression("!.1", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("!.1", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+        }
+        SECTION("Pointer")
+        {
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("!(void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("!(void*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -331,34 +383,36 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                     float r[5];
                     char c[24];
                 };
-                std::array<std::pair<const char*, std::uint64_t>, 16> sizes = {{{"char", 1},
-                                                                                {"unsigned char", 1},
-                                                                                {"short", 2},
-                                                                                {"unsigned short", 2},
-                                                                                {"int", 4},
-                                                                                {"long", 4},
-                                                                                {"unsigned int", 4},
-                                                                                {"unsigned long", 4},
-                                                                                {"long long", 8},
-                                                                                {"unsigned long long", 8},
-                                                                                {"float", 4},
-                                                                                {"double", 8},
-                                                                                {"float[0]", 0},
-                                                                                {"int[5]", 20},
-                                                                                {"struct Test"
-                                                                                 "{"
-                                                                                 "int f;"
-                                                                                 "float r[5];"
-                                                                                 "char c[24];"
-                                                                                 "}",
-                                                                                 sizeof(Test)},
-                                                                                {"union Test"
-                                                                                 "{"
-                                                                                 "int f;"
-                                                                                 "float r[5];"
-                                                                                 "char c[24];"
-                                                                                 "}",
-                                                                                 sizeof(TestU)}}};
+                std::array sizes = {std::pair{"char", 1ull},
+                                    std::pair{"unsigned char", 1ull},
+                                    std::pair{"short", 2ull},
+                                    std::pair{"unsigned short", 2ull},
+                                    std::pair{"int", 4ull},
+                                    std::pair{"long", 4ull},
+                                    std::pair{"unsigned int", 4ull},
+                                    std::pair{"unsigned long", 4ull},
+                                    std::pair{"long long", 8ull},
+                                    std::pair{"unsigned long long", 8ull},
+                                    std::pair{"float", 4ull},
+                                    std::pair{"double", 8ull},
+                                    std::pair{"float[0]", 0ull},
+                                    std::pair{"int[5]", 20ull},
+                                    std::pair{"struct Test"
+                                              "{"
+                                              "int f;"
+                                              "float r[5];"
+                                              "char c[24];"
+                                              "}",
+                                              sizeof(Test)},
+                                    std::pair{"union Test"
+                                              "{"
+                                              "int f;"
+                                              "float r[5];"
+                                              "char c[24];"
+                                              "}",
+                                              sizeof(TestU)},
+                                    std::pair{"void*", 8ull},
+                                    std::pair{"struct u*", 8ull}};
                 for (auto& [name, size] : sizes)
                 {
                     DYNAMIC_SECTION(name)
@@ -426,19 +480,78 @@ TEST_CASE("Const eval cast expression", "[constEval]")
     }
     SECTION("Float")
     {
+        SECTION("Integer constant expressions")
         {
             auto [value, error] = evaluateConstantExpression("(float)0");
             CHECK(value.isUndefined());
             CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
         }
+        SECTION("Arithmetic constant expressions")
         {
-            auto [value, error] = evaluateConstantExpression("(float)0", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("(float)0", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<float>(value.getValue()));
             CHECK(std::get<float>(value.getValue()) == 0);
             CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createFloat(false, false));
             CHECK(value.getType().getName() == "float");
+        }
+        SECTION("Initializer constant expressions")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("(float)(int*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'int*'", "'float'")));
+        }
+    }
+    SECTION("Pointers")
+    {
+        SECTION("Integer constant expressions")
+        {
+            auto [value, error] = evaluateConstantExpression("(void*)0");
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
+        }
+        SECTION("Arithmetic constant expressions")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("(void*)0", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
+        }
+        SECTION("Initializer constant expressions")
+        {
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<OpenCL::Semantics::VoidStar>(value.getValue()));
+                CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 0);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PointerType::create(
+                          false, false, false, OpenCL::Semantics::PrimitiveType::createVoid(false, false)));
+                CHECK(value.getType().getName() == "void*");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(float*)(void*)0",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<OpenCL::Semantics::VoidStar>(value.getValue()));
+                CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 0);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PointerType::create(
+                          false, false, false, OpenCL::Semantics::PrimitiveType::createFloat(false, false)));
+                CHECK(value.getType().getName() == "float*");
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(void*)0.0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'double'", "'void*'")));
+            }
         }
     }
 }
@@ -493,7 +606,8 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 * .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 * .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
@@ -515,7 +629,8 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 / .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 / .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
@@ -537,11 +652,39 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 % .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 % .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "%", "'int'", "'double'")));
             }
+        }
+    }
+    SECTION("Pointer")
+    {
+        SECTION("Multiply")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 * (void*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                  "*", "'int'", "'void*'")));
+        }
+        SECTION("Divide")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 / (void*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                  "/", "'int'", "'void*'")));
+        }
+        SECTION("Rest")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 % (void*)6", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                  "%", "'int'", "'void*'")));
         }
     }
 }
@@ -553,6 +696,7 @@ TEST_CASE("Const eval additive", "[constEval]")
         SECTION("Plus")
         {
             auto [value, error] = evaluateConstantExpression("5 + 4");
+            UNSCOPED_INFO(error);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -563,6 +707,7 @@ TEST_CASE("Const eval additive", "[constEval]")
         SECTION("Minus")
         {
             auto [value, error] = evaluateConstantExpression("5 - 2");
+            UNSCOPED_INFO(error);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -586,7 +731,9 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 + .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 + .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+                UNSCOPED_INFO(error);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
@@ -608,13 +755,156 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 - .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 - .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+                UNSCOPED_INFO(error);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<double>(value.getValue()));
                 CHECK(std::get<double>(value.getValue()) == Approx(3 - .55));
                 CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
                 CHECK(value.getType().getName() == "double");
+            }
+        }
+    }
+    SECTION("Pointer")
+    {
+        SECTION("Plus")
+        {
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("3 + (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<OpenCL::Semantics::VoidStar>(value.getValue()));
+                CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 17);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PointerType::create(
+                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                CHECK(value.getType().getName() == "int*");
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(int*)5 + 3", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<OpenCL::Semantics::VoidStar>(value.getValue()));
+                CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 17);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PointerType::create(
+                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                CHECK(value.getType().getName() == "int*");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int*)3 + (int*)5",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "+", "'int*'", "'int*'")));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("3.0 + (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "+", "'double'", "'int*'")));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(int*)5 + 3.0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "+", "'int*'", "'double'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(struct i*)5 + 3",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+            }
+        }
+        SECTION("Minus")
+        {
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("3 - (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "-", "'int'", "'int*'")));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(int*)5 - 3", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<OpenCL::Semantics::VoidStar>(value.getValue()));
+                CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == -7);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PointerType::create(
+                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                CHECK(value.getType().getName() == "int*");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int*)20 - (int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int64_t>(value.getValue()));
+                CHECK(std::get<std::int64_t>(value.getValue()) == 4);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
+                CHECK(value.getType().getName() == "long long");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(struct i*)3 - (struct i*)5",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("3.0 - (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "-", "'double'", "'int*'")));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(int*)5 - 3.0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "-", "'int*'", "'double'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(struct i*)5 - 3",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)20 - (int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int64_t>(value.getValue()));
+                CHECK(std::get<std::int64_t>(value.getValue()) == 4);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
+                CHECK(value.getType().getName() == "long long");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int*)20 - (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                UNSCOPED_INFO(error);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int64_t>(value.getValue()));
+                CHECK(std::get<std::int64_t>(value.getValue()) == 4);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
+                CHECK(value.getType().getName() == "long long");
             }
         }
     }
@@ -650,25 +940,6 @@ TEST_CASE("Const eval shift", "[constEval]")
         SECTION("Left")
         {
             {
-                auto [value, error] = evaluateConstantExpression(".55 >> 3");
-                CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
-            }
-            {
-                auto [value, error] = evaluateConstantExpression("3 >> .55");
-                CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
-            }
-            {
-                auto [value, error] = evaluateConstantExpression("3 >> .55", Arithmetic);
-                CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                      ">>", "'int'", "'double'")));
-            }
-        }
-        SECTION("Right")
-        {
-            {
                 auto [value, error] = evaluateConstantExpression(".55 << 3");
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
@@ -679,11 +950,51 @@ TEST_CASE("Const eval shift", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 << .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 << .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "<<", "'int'", "'double'")));
             }
+        }
+        SECTION("Right")
+        {
+            {
+                auto [value, error] = evaluateConstantExpression(".55 >> 3");
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("3 >> .55");
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("3 >> .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      ">>", "'int'", "'double'")));
+            }
+        }
+    }
+    SECTION("Pointers")
+    {
+        SECTION("Left")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 << (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                  "<<", "'int'", "'int*'")));
+        }
+        SECTION("Right")
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 >> (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            CHECK(value.isUndefined());
+            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                  ">>", "'int'", "'int*'")));
         }
     }
 }
@@ -713,11 +1024,20 @@ TEST_CASE("Const eval bitand", "[constEval]")
             CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
-            auto [value, error] = evaluateConstantExpression("3 & .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("3 & .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
             CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                   "&", "'int'", "'double'")));
         }
+    }
+    SECTION("Pointers")
+    {
+        auto [value, error] =
+            evaluateConstantExpression("3 & (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+        CHECK(value.isUndefined());
+        CHECK_THAT(error, Catch::Contains(
+                              CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("&", "'int'", "'int*'")));
     }
 }
 
@@ -746,11 +1066,20 @@ TEST_CASE("Const eval bitxor", "[constEval]")
             CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
-            auto [value, error] = evaluateConstantExpression("3 ^ .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("3 ^ .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
             CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                   "^", "'int'", "'double'")));
         }
+    }
+    SECTION("Pointers")
+    {
+        auto [value, error] =
+            evaluateConstantExpression("3 ^ (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+        CHECK(value.isUndefined());
+        CHECK_THAT(error, Catch::Contains(
+                              CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("^", "'int'", "'int*'")));
     }
 }
 
@@ -779,11 +1108,20 @@ TEST_CASE("Const eval bitor", "[constEval]")
             CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
-            auto [value, error] = evaluateConstantExpression("3 | .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("3 | .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
             CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                   "|", "'int'", "'double'")));
         }
+    }
+    SECTION("Pointers")
+    {
+        auto [value, error] =
+            evaluateConstantExpression("3 | (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+        CHECK(value.isUndefined());
+        CHECK_THAT(error, Catch::Contains(
+                              CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("|", "'int'", "'int*'")));
     }
 }
 
@@ -823,7 +1161,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
-            auto [value, error] = evaluateConstantExpression("3 && .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("3 && .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -832,7 +1171,31 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(value.getType().getName() == "int");
         }
         {
-            auto [value, error] = evaluateConstantExpression("0 && .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("0 && .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+    }
+    SECTION("Pointers")
+    {
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 && (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+        {
+            auto [value, error] =
+                evaluateConstantExpression("0 && (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -879,7 +1242,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
-            auto [value, error] = evaluateConstantExpression("3 || .55", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("3 || .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -888,7 +1252,31 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(value.getType().getName() == "int");
         }
         {
-            auto [value, error] = evaluateConstantExpression("0 || .0", Arithmetic);
+            auto [value, error] =
+                evaluateConstantExpression("0 || .0", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+    }
+    SECTION("Pointer")
+    {
+        {
+            auto [value, error] =
+                evaluateConstantExpression("3 || (void*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+        {
+            auto [value, error] =
+                evaluateConstantExpression("0 || (void*)0", OpenCL::Semantics::ConstantEvaluator::Initialization);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -959,7 +1347,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 < .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 < .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -981,7 +1370,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 > .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 > .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1003,7 +1393,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 <= .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 <= .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1025,7 +1416,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 >= .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 >= .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1033,6 +1425,53 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
                 CHECK(value.getType().getName() == "int");
             }
+        }
+    }
+    SECTION("Pointers")
+    {
+        SECTION("Less than")
+        {
+            auto [value, error] = evaluateConstantExpression("(void*)3 < (void*)55",
+                                                             OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+        SECTION("Greater than")
+        {
+            auto [value, error] = evaluateConstantExpression("(int* const)3 > (const int*)55",
+                                                             OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+        SECTION("Less than or equal")
+        {
+            auto [value, error] = evaluateConstantExpression("(struct i*)3 <= (struct i*)55",
+                                                             OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
+        }
+        SECTION("Greater than or equal")
+        {
+            auto [value, error] = evaluateConstantExpression("(float*)3 >= (float*)55",
+                                                             OpenCL::Semantics::ConstantEvaluator::Initialization);
+            REQUIRE(error.empty());
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+            CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType().getName() == "int");
         }
     }
 }
@@ -1099,7 +1538,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 == .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 == .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1108,7 +1548,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(value.getType().getName() == "int");
             }
             {
-                auto [value, error] = evaluateConstantExpression(".55 == .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression(".55 == .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1130,7 +1571,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
-                auto [value, error] = evaluateConstantExpression("3 != .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("3 != .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
@@ -1139,13 +1581,203 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(value.getType().getName() == "int");
             }
             {
-                auto [value, error] = evaluateConstantExpression(".55 != .55", Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression(".55 != .55", OpenCL::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
                 CHECK(std::get<std::int32_t>(value.getValue()) == 0);
                 CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
                 CHECK(value.getType().getName() == "int");
+            }
+        }
+    }
+    SECTION("Pointers")
+    {
+        SECTION("Equal")
+        {
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)5 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)4 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(struct i*)5 == (struct i*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)5 == (void*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(void*)5 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(float*)5 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error,
+                           Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                               "==", "'float*'", "'int const*'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("0 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(void*)5 == 0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("5 == (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(const int*)5 == 4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+            }
+        }
+        SECTION("Not equal")
+        {
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)5 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)4 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) == 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(struct i*)5 != (struct i*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int* const)5 != (void*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(void*)5 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(float*)5 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error,
+                           Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                               "!=", "'float*'", "'int const*'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("0 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] =
+                    evaluateConstantExpression("(void*)5 != 0", OpenCL::Semantics::ConstantEvaluator::Initialization);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<std::int32_t>(value.getValue()));
+                CHECK(std::get<std::int32_t>(value.getValue()) != 0);
+                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("5 != (const int*)4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(const int*)5 != 4",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
             }
         }
     }

@@ -45,7 +45,6 @@ namespace OpenCL
             {
                 return std::to_string(value);
             }
-            return "";
         }
 
     public:

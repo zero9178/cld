@@ -1459,10 +1459,6 @@ std::optional<AbstractDeclarator> OpenCL::Parser::parseAbstractDeclarator(OpenCL
                                                                           Tokens::const_iterator end,
                                                                           OpenCL::Parser::ParsingContext& context)
 {
-    if (begin >= end)
-    {
-        return {};
-    }
     auto start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
@@ -1473,6 +1469,10 @@ std::optional<AbstractDeclarator> OpenCL::Parser::parseAbstractDeclarator(OpenCL
             return {};
         }
         pointers.push_back(std::move(*result));
+    }
+    if (begin < end ? !firstIsInDirectAbstractDeclarator(*begin, context) && !pointers.empty() : !pointers.empty())
+    {
+        return AbstractDeclarator(start, begin, std::move(pointers), {});
     }
     auto result = parseDirectAbstractDeclarator(begin, end, context);
     if (!result)

@@ -70,23 +70,7 @@ namespace OpenCL::Semantics
                                       const Syntax::DirectDeclarator& directDeclarator, Type&& baseType,
                                       const std::vector<Syntax::Declaration>& declarations);
 
-        static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
-        {
-            bool isConst = false;
-            bool isVolatile = false;
-            bool isRestricted = false;
-            for (auto& typeQual : typeQualifiers)
-            {
-                switch (typeQual.getQualifier())
-                {
-                    case Syntax::TypeQualifier::Const: isConst = true; break;
-                    case Syntax::TypeQualifier::Restrict: isRestricted = true; break;
-                    case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
-                    default: break;
-                }
-            }
-            return std::tie(isConst, isVolatile, isRestricted);
-        };
+        static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers);
 
         std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
             parameterListToArguments(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
@@ -97,12 +81,6 @@ namespace OpenCL::Semantics
     public:
         explicit SemanticAnalysis(std::ostream* reporter = nullptr) : m_reporter(reporter) {}
 
-        TranslationUnit visit(const Syntax::TranslationUnit& node);
-
-        std::optional<OpenCL::Semantics::FunctionDefinition> visit(const Syntax::FunctionDefinition& node);
-
-        std::vector<Declaration> visit(const Syntax::Declaration& node);
-
         using DeclarationOrSpecifierQualifier =
             std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,
                          std::reference_wrapper<const OpenCL::Syntax::SpecifierQualifier>>;
@@ -110,6 +88,12 @@ namespace OpenCL::Semantics
         Type declaratorsToType(const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
                                PossiblyAbstractQualifierRef declarator = {},
                                const std::vector<Syntax::Declaration>& declarations = {});
+
+        TranslationUnit visit(const Syntax::TranslationUnit& node);
+
+        std::optional<OpenCL::Semantics::FunctionDefinition> visit(const Syntax::FunctionDefinition& node);
+
+        std::vector<Declaration> visit(const Syntax::Declaration& node);
     };
 } // namespace OpenCL::Semantics
 

@@ -1282,21 +1282,21 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <AbstractDeclarator> ::= { <Pointer> } <DirectAbstractDeclarator>
+     * <AbstractDeclarator> ::= { <Pointer> } [<DirectAbstractDeclarator>]
      */
     class AbstractDeclarator final : public Node
     {
         std::vector<Pointer> m_pointers;
-        DirectAbstractDeclarator m_directAbstractDeclarator;
+        std::optional<DirectAbstractDeclarator> m_directAbstractDeclarator;
 
     public:
         AbstractDeclarator(std::vector<Lexer::Token>::const_iterator begin,
                            std::vector<Lexer::Token>::const_iterator end, std::vector<Pointer>&& pointers,
-                           DirectAbstractDeclarator&& directAbstractDeclarator);
+                           std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator);
 
         [[nodiscard]] const std::vector<Pointer>& getPointers() const;
 
-        [[nodiscard]] const DirectAbstractDeclarator& getDirectAbstractDeclarator() const;
+        [[nodiscard]] const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
     };
 
     /**

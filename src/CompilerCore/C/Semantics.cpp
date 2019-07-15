@@ -77,7 +77,21 @@ const OpenCL::Semantics::Type::variant& OpenCL::Semantics::Type::get() const
 }
 
 OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, OpenCL::Semantics::Type::variant&& type)
-    : m_isConst(isConst), m_isVolatile(isVolatile), m_name(std::move(name)), m_typeName(m_name), m_type(std::move(type))
+    : m_isConst(isConst),
+      m_isVolatile(isVolatile),
+      m_name([name = std::move(name), isConst, isVolatile]() mutable {
+          if (isConst)
+          {
+              name += " const";
+          }
+          if (isVolatile)
+          {
+              name += " volatile";
+          }
+          return name;
+      }()),
+      m_typeName(m_name),
+      m_type(std::move(type))
 {
 }
 
@@ -143,6 +157,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, boo
     else
     {
         name = elementType.getName() + "*";
+    }
+    if (isRestricted)
+    {
+        name += " restricted";
     }
     return OpenCL::Semantics::Type(isConst, isVolatile, name,
                                    PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
@@ -245,7 +263,6 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, b
                 case 64: return isSigned ? "long long" : "unsigned long long";
                 default: return "void";
             }
-            return "";
         }(),
         PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
