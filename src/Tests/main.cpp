@@ -14,11 +14,15 @@ int main(int argc, char* argv[])
     if (returnCode != 0) // Indicates a command line error
         return returnCode;
 
-    // writing to session.configData() or session.Config() here
-    // overrides command line args
-    // only do this if you know you need to
+        // writing to session.configData() or session.Config() here
+        // overrides command line args
+        // only do this if you know you need to
 
+#ifdef _WIN32
+    OpenCL::colourConsoleOutput = true;
+#else
     OpenCL::colourConsoleOutput = session.config().getReporterName() == "console";
+#endif
 
     int numFailed = session.run();
 

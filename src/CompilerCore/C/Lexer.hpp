@@ -114,7 +114,6 @@ namespace OpenCL::Lexer
         friend std::vector<Token> tokenize(std::string source);
 
     public:
-
         using ValueType = variant;
 
         Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType) noexcept
@@ -123,13 +122,13 @@ namespace OpenCL::Lexer
         }
 
         template <class T>
-        Token(std::uint64_t line,
-              std::uint64_t column,
-              std::uint64_t length,
-              TokenType tokenType,
-              T&& value,
+        Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType, T&& value,
               std::string valueRepresentation)
-            : m_line(line), m_column(column), m_length(length), m_tokenType(tokenType), m_value(std::forward<T>(value)),
+            : m_line(line),
+              m_column(column),
+              m_length(length),
+              m_tokenType(tokenType),
+              m_value(std::forward<T>(value)),
               m_valueRepresentation(std::move(valueRepresentation))
         {
         }
@@ -157,7 +156,6 @@ namespace OpenCL::Lexer
         [[nodiscard]] std::uint64_t getLength() const;
 
         [[nodiscard]] std::string emitBack() const;
-
     };
 
     std::string tokenName(TokenType tokenType);

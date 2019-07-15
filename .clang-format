@@ -10,7 +10,7 @@ AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: Empty
-AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
@@ -33,6 +33,20 @@ DisableFormat: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
 IncludeBlocks: Regroup
+IncludeIsMainRegex: ''
+IncludeCategories:
+  - Regex: '[<"]catch\.(hpp|h)[">]'
+    Priority: -1
+  - Regex: '<llvm/.*>'
+    Priority: 2
+  - Regex: '<CompilerCore/.*>'
+    Priority: 3
+  - Regex: '<.*>'
+    Priority: 4
+  - Regex: '"CompilerCore/.*"'
+    Priority: 5
+  - Regex: '".*"'
+    Priority: 6
 IndentCaseLabels: true
 IndentPPDirectives: None
 IndentWidth: 4

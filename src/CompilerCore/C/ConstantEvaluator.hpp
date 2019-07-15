@@ -1,29 +1,20 @@
 #ifndef OPENCLPARSER_CONSTANTEVALUATOR_HPP
 #define OPENCLPARSER_CONSTANTEVALUATOR_HPP
 
+#include <functional>
+
 #include "../Common/Expected.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
-#include <functional>
 
 namespace OpenCL::Semantics
 {
-    //TODO: Pointer arithmetic support
+    // TODO: Pointer arithmetic support
     class ConstRetType final
     {
     public:
-        using ValueType = std::variant<std::monostate,
-                                       std::int8_t,
-                                       std::uint8_t,
-                                       std::int16_t,
-                                       std::uint16_t,
-                                       std::int32_t,
-                                       std::uint32_t,
-                                       std::int64_t,
-                                       std::uint64_t,
-                                       float,
-                                       double,
-                                       void*>;
+        using ValueType = std::variant<std::monostate, std::int8_t, std::uint8_t, std::int16_t, std::uint16_t,
+                                       std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, void*>;
 
     private:
         ValueType m_value;
@@ -38,7 +29,6 @@ namespace OpenCL::Semantics
         static Type valueToType(const ValueType& value);
 
     public:
-
         ConstRetType() = default;
 
         /* implicit */ ConstRetType(const ValueType& value, const Type& type = Type{});
@@ -118,6 +108,24 @@ namespace OpenCL::Semantics
         [[nodiscard]] ConstRetType toBool() const;
 
         explicit operator bool() const;
+
+        template <class T>
+        T to() const
+        {
+            return std::visit(
+                [](auto&& value) -> T {
+                    using U = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_convertible_v<U, T>)
+                    {
+                        return static_cast<T>(value);
+                    }
+                    else
+                    {
+                        return T{};
+                    }
+                },
+                m_value);
+        }
     };
 
     class ConstantEvaluator final
@@ -125,20 +133,18 @@ namespace OpenCL::Semantics
         std::vector<Lexer::Token>::const_iterator m_exprStart;
         std::vector<Lexer::Token>::const_iterator m_exprEnd;
         std::function<Type(const Syntax::TypeName&)> m_typeCallback;
-        std::function<const DeclarationTypedefEnums&(const std::string&)> m_declarationCallback;
+        std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
         std::function<void(const Message&)> m_loggerCallback;
         bool m_integerOnly;
 
         void logError(const Message& message);
 
     public:
-
-        explicit ConstantEvaluator(std::vector<Lexer::Token>::const_iterator exprStart,
-                                   std::vector<Lexer::Token>::const_iterator exprEnd,
-                                   std::function<Type(const Syntax::TypeName&)> typeCallback = {},
-                                   std::function<const DeclarationTypedefEnums&(const std::string&)> declarationCallback = {},
-                                   std::function<void(const Message&)> loggerCallback = {},
-                                   bool integerOnly = true);
+        explicit ConstantEvaluator(
+            std::vector<Lexer::Token>::const_iterator exprStart, std::vector<Lexer::Token>::const_iterator exprEnd,
+            std::function<Type(const Syntax::TypeName&)> typeCallback = {},
+            std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
+            std::function<void(const Message&)> loggerCallback = {}, bool integerOnly = true);
 
         ConstRetType visit(const Syntax::Expression& node);
 

@@ -164,8 +164,8 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr Expected<T, E>& Expected<T, E>::
-        operator=(ValueType&& value) noexcept(std::is_nothrow_move_assignable_v<ValueType>)
+    constexpr Expected<T, E>&
+        Expected<T, E>::operator=(ValueType&& value) noexcept(std::is_nothrow_move_assignable_v<ValueType>)
     {
         m_value = std::move(value);
         return *this;
@@ -180,8 +180,8 @@ namespace OpenCL
     }
 
     template <class T, class E>
-    constexpr Expected<T, E>& Expected<T, E>::
-        operator=(ErrorType&& error) noexcept(std::is_nothrow_move_assignable_v<ErrorType>)
+    constexpr Expected<T, E>&
+        Expected<T, E>::operator=(ErrorType&& error) noexcept(std::is_nothrow_move_assignable_v<ErrorType>)
     {
         m_value = std::move(error);
         return *this;

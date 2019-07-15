@@ -1,18 +1,19 @@
 #ifndef OPENCLPARSER_CODEGEN_HPP
 #define OPENCLPARSER_CODEGEN_HPP
 
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/IRBuilder.h>
+
+#include <map>
+
 #include "../Common/Expected.hpp"
 #include "../Common/FailureReason.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-#include <llvm/IR/DIBuilder.h>
-#include <llvm/IR/IRBuilder.h>
-#include <map>
-
 namespace OpenCL::Codegen
 {
-    //using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
+    // using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
 
     using TypeRetType = llvm::Type*;
 
@@ -27,7 +28,6 @@ namespace OpenCL::Codegen
         std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
         std::vector<llvm::DIScope*> debugScope;
         const Semantics::FunctionType* currentFunction;
-
     };
 } // namespace OpenCL::Codegen
 

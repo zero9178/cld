@@ -8,7 +8,7 @@ namespace OpenCL
     namespace detail
     {
         template <class... Ts>
-        struct overload : Ts ...
+        struct overload : Ts...
         {
             using Ts::operator()...;
         };
@@ -19,7 +19,7 @@ namespace OpenCL
         struct Y
         {
             template <typename... X>
-            decltype(auto) operator()(X&& ... x) const&
+            decltype(auto) operator()(X&&... x) const&
             {
                 return g(*this, std::forward<X>(x)...);
             }
@@ -29,23 +29,20 @@ namespace OpenCL
 
         template <typename G>
         Y(G)->Y<G>;
+    } // namespace detail
+
+    template <typename Variant, typename... Matchers>
+    auto match(Variant&& variant, Matchers&&... matchers)
+    {
+        return std::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
     }
 
     template <typename Variant, typename... Matchers>
-    auto match(Variant&& variant, Matchers&& ... matchers)
+    auto matchWithSelf(Variant&& variant, Matchers&&... matchers)
     {
-        return std::visit(
-            detail::overload{std::forward<Matchers>(matchers)...},
-            std::forward<Variant>(variant));
+        return std::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
+                          std::forward<Variant>(variant));
     }
+} // namespace OpenCL
 
-    template <typename Variant, typename... Matchers>
-    auto matchWithSelf(Variant&& variant, Matchers&& ... matchers)
-    {
-        return std::visit(
-            detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
-            std::forward<Variant>(variant));
-    }
-}
-
-#endif //OPENCLPARSER_UTIL_HPP
+#endif // OPENCLPARSER_UTIL_HPP

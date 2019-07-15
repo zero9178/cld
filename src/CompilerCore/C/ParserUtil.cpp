@@ -3,11 +3,11 @@
 bool OpenCL::Parser::isAssignment(Lexer::TokenType type)
 {
     return type == Lexer::TokenType::Assignment || type == Lexer::TokenType::PlusAssign
-        || type == Lexer::TokenType::MinusAssign
-        || type == Lexer::TokenType::DivideAssign || type == Lexer::TokenType::MultiplyAssign
-        || type == Lexer::TokenType::ModuloAssign || type == Lexer::TokenType::ShiftLeftAssign
-        || type == Lexer::TokenType::ShiftRightAssign || type == Lexer::TokenType::BitAndAssign
-        || type == Lexer::TokenType::BitOrAssign || type == Lexer::TokenType::BitXorAssign;
+           || type == Lexer::TokenType::MinusAssign || type == Lexer::TokenType::DivideAssign
+           || type == Lexer::TokenType::MultiplyAssign || type == Lexer::TokenType::ModuloAssign
+           || type == Lexer::TokenType::ShiftLeftAssign || type == Lexer::TokenType::ShiftRightAssign
+           || type == Lexer::TokenType::BitAndAssign || type == Lexer::TokenType::BitOrAssign
+           || type == Lexer::TokenType::BitXorAssign;
 }
 
 bool OpenCL::Parser::firstIsInExternalDeclaration(const Lexer::Token& token,
@@ -32,29 +32,29 @@ bool OpenCL::Parser::firstIsInDeclarationSpecifier(const Lexer::Token& token,
 {
     switch (token.getTokenType())
     {
-    case Lexer::TokenType::TypedefKeyword:
-    case Lexer::TokenType::ExternKeyword:
-    case Lexer::TokenType::StaticKeyword:
-    case Lexer::TokenType::AutoKeyword:
-    case Lexer::TokenType::RegisterKeyword:
-    case Lexer::TokenType::VoidKeyword:
-    case Lexer::TokenType::CharKeyword:
-    case Lexer::TokenType::ShortKeyword:
-    case Lexer::TokenType::IntKeyword:
-    case Lexer::TokenType::LongKeyword:
-    case Lexer::TokenType::FloatKeyword:
-    case Lexer::TokenType::DoubleKeyword:
-    case Lexer::TokenType::SignedKeyword:
-    case Lexer::TokenType::UnsignedKeyword:
-    case Lexer::TokenType::EnumKeyword:
-    case Lexer::TokenType::StructKeyword:
-    case Lexer::TokenType::UnionKeyword:
-    case Lexer::TokenType::ConstKeyword:
-    case Lexer::TokenType::RestrictKeyword:
-    case Lexer::TokenType::VolatileKeyword:
-    case Lexer::TokenType::InlineKeyword: return true;
-    case Lexer::TokenType::Identifier:return context.isTypedefInScope(std::get<std::string>(token.getValue()));
-    default: return false;
+        case Lexer::TokenType::TypedefKeyword:
+        case Lexer::TokenType::ExternKeyword:
+        case Lexer::TokenType::StaticKeyword:
+        case Lexer::TokenType::AutoKeyword:
+        case Lexer::TokenType::RegisterKeyword:
+        case Lexer::TokenType::VoidKeyword:
+        case Lexer::TokenType::CharKeyword:
+        case Lexer::TokenType::ShortKeyword:
+        case Lexer::TokenType::IntKeyword:
+        case Lexer::TokenType::LongKeyword:
+        case Lexer::TokenType::FloatKeyword:
+        case Lexer::TokenType::DoubleKeyword:
+        case Lexer::TokenType::SignedKeyword:
+        case Lexer::TokenType::UnsignedKeyword:
+        case Lexer::TokenType::EnumKeyword:
+        case Lexer::TokenType::StructKeyword:
+        case Lexer::TokenType::UnionKeyword:
+        case Lexer::TokenType::ConstKeyword:
+        case Lexer::TokenType::RestrictKeyword:
+        case Lexer::TokenType::VolatileKeyword:
+        case Lexer::TokenType::InlineKeyword: return true;
+        case Lexer::TokenType::Identifier: return context.isTypedefInScope(std::get<std::string>(token.getValue()));
+        default: return false;
     }
 }
 
@@ -63,23 +63,23 @@ bool OpenCL::Parser::firstIsInSpecifierQualifier(const Lexer::Token& token,
 {
     switch (token.getTokenType())
     {
-    case Lexer::TokenType::VoidKeyword:
-    case Lexer::TokenType::CharKeyword:
-    case Lexer::TokenType::ShortKeyword:
-    case Lexer::TokenType::IntKeyword:
-    case Lexer::TokenType::LongKeyword:
-    case Lexer::TokenType::FloatKeyword:
-    case Lexer::TokenType::DoubleKeyword:
-    case Lexer::TokenType::SignedKeyword:
-    case Lexer::TokenType::UnsignedKeyword:
-    case Lexer::TokenType::EnumKeyword:
-    case Lexer::TokenType::StructKeyword:
-    case Lexer::TokenType::UnionKeyword:
-    case Lexer::TokenType::ConstKeyword:
-    case Lexer::TokenType::RestrictKeyword:
-    case Lexer::TokenType::VolatileKeyword:return true;
-    case Lexer::TokenType::Identifier:return context.isTypedefInScope(std::get<std::string>(token.getValue()));
-    default: return false;
+        case Lexer::TokenType::VoidKeyword:
+        case Lexer::TokenType::CharKeyword:
+        case Lexer::TokenType::ShortKeyword:
+        case Lexer::TokenType::IntKeyword:
+        case Lexer::TokenType::LongKeyword:
+        case Lexer::TokenType::FloatKeyword:
+        case Lexer::TokenType::DoubleKeyword:
+        case Lexer::TokenType::SignedKeyword:
+        case Lexer::TokenType::UnsignedKeyword:
+        case Lexer::TokenType::EnumKeyword:
+        case Lexer::TokenType::StructKeyword:
+        case Lexer::TokenType::UnionKeyword:
+        case Lexer::TokenType::ConstKeyword:
+        case Lexer::TokenType::RestrictKeyword:
+        case Lexer::TokenType::VolatileKeyword: return true;
+        case Lexer::TokenType::Identifier: return context.isTypedefInScope(std::get<std::string>(token.getValue()));
+        default: return false;
     }
 }
 
@@ -91,7 +91,7 @@ bool OpenCL::Parser::firstIsInDeclarator(const Lexer::Token& token, const OpenCL
 bool OpenCL::Parser::firstIsInDirectDeclarator(const Lexer::Token& token, const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::Identifier
-        || token.getTokenType() == Lexer::TokenType::OpenParenthese;
+           || token.getTokenType() == Lexer::TokenType::OpenParenthese;
 }
 
 [[maybe_unused]] bool OpenCL::Parser::firstIsInParameterTypeList(const Lexer::Token& token,
@@ -109,7 +109,7 @@ bool OpenCL::Parser::firstIsInAbstractDeclarator(const Lexer::Token& token,
 bool OpenCL::Parser::firstIsInDirectAbstractDeclarator(const Lexer::Token& token, const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParenthese
-        || token.getTokenType() == Lexer::TokenType::OpenSquareBracket;
+           || token.getTokenType() == Lexer::TokenType::OpenSquareBracket;
 }
 
 bool OpenCL::Parser::firstIsInParameterList(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context)
@@ -122,33 +122,33 @@ bool OpenCL::Parser::firstIsInPointer(const Lexer::Token& token, const OpenCL::P
     return token.getTokenType() == Lexer::TokenType::Asterisk;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInStructOrUnionSpecifier(const Lexer::Token& token,
-                                                                     const OpenCL::Parser::ParsingContext&)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInStructOrUnionSpecifier(const Lexer::Token& token,
+                                                                      const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::StructKeyword
-        || token.getTokenType() == Lexer::TokenType::UnionKeyword;
+           || token.getTokenType() == Lexer::TokenType::UnionKeyword;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInEnumSpecifier(const Lexer::Token& token,
-                                                            const OpenCL::Parser::ParsingContext&)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInEnumSpecifier(const Lexer::Token& token,
+                                                             const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::EnumKeyword;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInEnumDeclaration(const Lexer::Token& token,
-                                                              const OpenCL::Parser::ParsingContext&)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInEnumDeclaration(const Lexer::Token& token,
+                                                               const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::EnumKeyword;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInCompoundStatement(const Lexer::Token& token,
-                                                                const OpenCL::Parser::ParsingContext&)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInCompoundStatement(const Lexer::Token& token,
+                                                                 const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::OpenBrace;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInCompoundItem(const Lexer::Token& token,
-                                                           const OpenCL::Parser::ParsingContext& context)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInCompoundItem(const Lexer::Token& token,
+                                                            const OpenCL::Parser::ParsingContext& context)
 {
     return firstIsInDeclaration(token, context) || firstIsInStatement(token, context);
 }
@@ -158,26 +158,27 @@ bool OpenCL::Parser::firstIsInInitializer(const Lexer::Token& token, const OpenC
     return firstIsInAssignmentExpression(token, context) || token.getTokenType() == Lexer::TokenType::OpenBrace;
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInInitializerList(const Lexer::Token& token,
-                                                              const OpenCL::Parser::ParsingContext& context)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInInitializerList(const Lexer::Token& token,
+                                                               const OpenCL::Parser::ParsingContext& context)
 {
     return token.getTokenType() == Lexer::TokenType::OpenSquareBracket || token.getTokenType() == Lexer::TokenType::Dot
-        || firstIsInInitializer(token, context);
+           || firstIsInInitializer(token, context);
 }
 
 bool OpenCL::Parser::firstIsInStatement(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context)
 {
     return token.getTokenType() == Lexer::TokenType::IfKeyword || token.getTokenType() == Lexer::TokenType::ForKeyword
-        || token.getTokenType() == Lexer::TokenType::SwitchKeyword
-        || token.getTokenType() == Lexer::TokenType::ContinueKeyword
-        || token.getTokenType() == Lexer::TokenType::BreakKeyword
-        || token.getTokenType() == Lexer::TokenType::CaseKeyword
-        || token.getTokenType() == Lexer::TokenType::DefaultKeyword
-        || token.getTokenType() == Lexer::TokenType::Identifier
-        || token.getTokenType() == Lexer::TokenType::DoKeyword || token.getTokenType() == Lexer::TokenType::WhileKeyword
-        || token.getTokenType() == Lexer::TokenType::ReturnKeyword
-        || token.getTokenType() == Lexer::TokenType::GotoKeyword
-        || token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context);
+           || token.getTokenType() == Lexer::TokenType::SwitchKeyword
+           || token.getTokenType() == Lexer::TokenType::ContinueKeyword
+           || token.getTokenType() == Lexer::TokenType::BreakKeyword
+           || token.getTokenType() == Lexer::TokenType::CaseKeyword
+           || token.getTokenType() == Lexer::TokenType::DefaultKeyword
+           || token.getTokenType() == Lexer::TokenType::Identifier
+           || token.getTokenType() == Lexer::TokenType::DoKeyword
+           || token.getTokenType() == Lexer::TokenType::WhileKeyword
+           || token.getTokenType() == Lexer::TokenType::ReturnKeyword
+           || token.getTokenType() == Lexer::TokenType::GotoKeyword
+           || token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context);
 }
 
 bool OpenCL::Parser::firstIsInExpression(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context)
@@ -252,8 +253,8 @@ bool OpenCL::Parser::firstIsInTerm(const Lexer::Token& token, const OpenCL::Pars
     return firstIsInCastExpression(token, context);
 }
 
-[[maybe_unused]]bool OpenCL::Parser::firstIsInTypeName(const Lexer::Token& token,
-                                                       const OpenCL::Parser::ParsingContext& context)
+[[maybe_unused]] bool OpenCL::Parser::firstIsInTypeName(const Lexer::Token& token,
+                                                        const OpenCL::Parser::ParsingContext& context)
 {
     return firstIsInSpecifierQualifier(token, context);
 }
@@ -266,11 +267,11 @@ bool OpenCL::Parser::firstIsInCastExpression(const Lexer::Token& token, const Op
 bool OpenCL::Parser::firstIsInUnaryExpression(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context)
 {
     return firstIsInPostFixExpression(token, context) || token.getTokenType() == Lexer::TokenType::Increment
-        || token.getTokenType() == Lexer::TokenType::Decrement || token.getTokenType() == Lexer::TokenType::Ampersand
-        || token.getTokenType() == Lexer::TokenType::Plus || token.getTokenType() == Lexer::TokenType::Minus
-        || token.getTokenType() == Lexer::TokenType::BitWiseNegation
-        || token.getTokenType() == Lexer::TokenType::LogicalNegation
-        || token.getTokenType() == Lexer::TokenType::SizeofKeyword;
+           || token.getTokenType() == Lexer::TokenType::Decrement || token.getTokenType() == Lexer::TokenType::Ampersand
+           || token.getTokenType() == Lexer::TokenType::Plus || token.getTokenType() == Lexer::TokenType::Minus
+           || token.getTokenType() == Lexer::TokenType::BitWiseNegation
+           || token.getTokenType() == Lexer::TokenType::LogicalNegation
+           || token.getTokenType() == Lexer::TokenType::SizeofKeyword;
 }
 
 bool OpenCL::Parser::firstIsInPostFixExpression(const Lexer::Token& token,
@@ -282,6 +283,6 @@ bool OpenCL::Parser::firstIsInPostFixExpression(const Lexer::Token& token,
 bool OpenCL::Parser::firstIsInPrimaryExpression(const Lexer::Token& token, const OpenCL::Parser::ParsingContext&)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParenthese
-        || token.getTokenType() == Lexer::TokenType::Identifier
-        || token.getTokenType() == Lexer::TokenType::Literal || token.getTokenType() == Lexer::TokenType::StringLiteral;
+           || token.getTokenType() == Lexer::TokenType::Identifier || token.getTokenType() == Lexer::TokenType::Literal
+           || token.getTokenType() == Lexer::TokenType::StringLiteral;
 }

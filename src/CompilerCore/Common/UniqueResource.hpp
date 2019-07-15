@@ -10,9 +10,7 @@ namespace OpenCL
         std::function<void()> m_function;
 
     public:
-
-        explicit UniqueResource(std::function<void()>&& function) : m_function(std::move(function))
-        {}
+        explicit UniqueResource(std::function<void()>&& function) : m_function(std::move(function)) {}
 
         ~UniqueResource()
         {
@@ -27,6 +25,6 @@ namespace OpenCL
 
         UniqueResource& operator=(const UniqueResource&) = delete;
     };
-}
+} // namespace OpenCL
 
-#endif //OPENCLPARSER_UNIQUERESOURCE_HPP
+#endif // OPENCLPARSER_UNIQUERESOURCE_HPP

@@ -2,23 +2,23 @@
 #define OPENCLPARSER_SEMANTICANALYSIS_HPP
 
 #include <map>
+
+#include "Message.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
-#include "Message.hpp"
 
 namespace OpenCL::Semantics
 {
     using PossiblyAbstractQualifierRef =
-    std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
+        std::variant<const Syntax::AbstractDeclarator*, std::reference_wrapper<const Syntax::Declarator>>;
+
+    class ConstantEvaluator;
 
     class SemanticAnalysis final
     {
         std::ostream* m_reporter;
         std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
         std::vector<std::map<std::string, DeclarationTypedefEnums>> m_declarations{1};
-        std::set<std::string> m_definedFunctions;
-
-        [[nodiscard]] std::map<std::string, Semantics::RecordType> gatherStructsAndUnions() const;
 
         void popScope()
         {
@@ -32,6 +32,9 @@ namespace OpenCL::Semantics
             m_structsUnions.emplace_back();
         }
 
+        ConstantEvaluator makeEvaluator(std::vector<OpenCL::Lexer::Token>::const_iterator exprBegin,
+                                        std::vector<OpenCL::Lexer::Token>::const_iterator exprEnd);
+
         [[nodiscard]] bool isTypedef(const std::string& name) const;
 
         [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
@@ -40,34 +43,31 @@ namespace OpenCL::Semantics
 
         void logError(const Message& message);
 
-        OpenCL::Semantics::Type primitivesToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-                                                 std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-                                                 const std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives,
-                                                 bool isConst,
-                                                 bool isVolatile);
+        OpenCL::Semantics::Type
+            primitivesToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                             std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                             const std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives,
+                             bool isConst, bool isVolatile);
 
-        OpenCL::Semantics::Type typeSpecifiersToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-                                                     std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-                                                     const std::vector<const OpenCL::Syntax::TypeSpecifier*>& typeSpecifiers,
-                                                     bool isConst,
-                                                     bool isVolatile);
+        OpenCL::Semantics::Type
+            typeSpecifiersToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                 std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                 const std::vector<const OpenCL::Syntax::TypeSpecifier*>& typeSpecifiers, bool isConst,
+                                 bool isVolatile);
 
         OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
                                       std::vector<Lexer::Token>::const_iterator declEnd,
-                                      PossiblyAbstractQualifierRef declarator,
-                                      Type&& baseType,
+                                      PossiblyAbstractQualifierRef declarator, Type&& baseType,
                                       const std::vector<Syntax::Declaration>& declarations);
 
         OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
                                       std::vector<Lexer::Token>::const_iterator declEnd,
-                                      const Syntax::DirectAbstractDeclarator& abstractDeclarator,
-                                      Type&& baseType,
+                                      const Syntax::DirectAbstractDeclarator& abstractDeclarator, Type&& baseType,
                                       const std::vector<Syntax::Declaration>& declarations);
 
         OpenCL::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
                                       std::vector<Lexer::Token>::const_iterator declEnd,
-                                      const Syntax::DirectDeclarator& directDeclarator,
-                                      Type&& baseType,
+                                      const Syntax::DirectDeclarator& directDeclarator, Type&& baseType,
                                       const std::vector<Syntax::Declaration>& declarations);
 
         static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
@@ -79,28 +79,23 @@ namespace OpenCL::Semantics
             {
                 switch (typeQual.getQualifier())
                 {
-                case Syntax::TypeQualifier::Const: isConst = true;
-                    break;
-                case Syntax::TypeQualifier::Restrict: isRestricted = true;
-                    break;
-                case Syntax::TypeQualifier::Volatile: isVolatile = true;
-                    break;
-                default: break;
+                    case Syntax::TypeQualifier::Const: isConst = true; break;
+                    case Syntax::TypeQualifier::Restrict: isRestricted = true; break;
+                    case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
+                    default: break;
                 }
             }
             return std::tie(isConst, isVolatile, isRestricted);
         };
 
-        std::vector<std::pair<OpenCL::Semantics::Type,
-                              std::string>> parameterListToArguments(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-                                                                     std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-                                                                     const std::vector<OpenCL::Syntax::ParameterDeclaration>& parameterDeclarations,
-                                                                     const std::vector<OpenCL::Syntax::Declaration>& declarations);
+        std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
+            parameterListToArguments(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
+                                     std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
+                                     const std::vector<OpenCL::Syntax::ParameterDeclaration>& parameterDeclarations,
+                                     const std::vector<OpenCL::Syntax::Declaration>& declarations);
 
     public:
-
-        explicit SemanticAnalysis(std::ostream* reporter = nullptr) : m_reporter(reporter)
-        {}
+        explicit SemanticAnalysis(std::ostream* reporter = nullptr) : m_reporter(reporter) {}
 
         TranslationUnit visit(const Syntax::TranslationUnit& node);
 
@@ -108,13 +103,14 @@ namespace OpenCL::Semantics
 
         std::vector<Declaration> visit(const Syntax::Declaration& node);
 
-        using DeclarationOrSpecifierQualifier = std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,
-                                                             std::reference_wrapper<const OpenCL::Syntax::SpecifierQualifier>>;
+        using DeclarationOrSpecifierQualifier =
+            std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,
+                         std::reference_wrapper<const OpenCL::Syntax::SpecifierQualifier>>;
 
         Type declaratorsToType(const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
                                PossiblyAbstractQualifierRef declarator = {},
                                const std::vector<Syntax::Declaration>& declarations = {});
     };
-}
+} // namespace OpenCL::Semantics
 
-#endif //OPENCLPARSER_SEMANTICANALYSIS_HPP
+#endif // OPENCLPARSER_SEMANTICANALYSIS_HPP

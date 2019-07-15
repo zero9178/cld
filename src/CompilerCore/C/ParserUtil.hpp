@@ -1,44 +1,41 @@
 #ifndef OPENCLPARSER_PARSERUTIL_HPP
 #define OPENCLPARSER_PARSERUTIL_HPP
 
-#include "Parser.hpp"
 #include "ErrorMessages.hpp"
+#include "Parser.hpp"
 
 namespace OpenCL::Parser
 {
     bool isAssignment(Lexer::TokenType type);
 
     template <class T = void>
-    bool expect(Lexer::TokenType expected,
-                std::vector<OpenCL::Lexer::Token>::const_iterator& curr,
-                OpenCL::Parser::Tokens::const_iterator end,
-                OpenCL::Parser::ParsingContext& context,
-                std::vector<Message::Note> notes = {},
-                [[maybe_unused]] T* value = nullptr)
+    bool expect(Lexer::TokenType expected, std::vector<OpenCL::Lexer::Token>::const_iterator& curr,
+                OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context,
+                std::vector<Message::Note> notes = {}, [[maybe_unused]] T* value = nullptr)
     {
         if (curr >= end || curr->getTokenType() != expected)
         {
             if (curr >= end)
             {
-                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N
-                                     .args(Lexer::tokenName(expected)),
-                                 findSemicolonOrEOL(curr, end),
-                                 Modifier{end - 1, end, Modifier::InsertAtEnd,
-                                          Lexer::Token(0, 0, 0, expected).emitBack()},
-                                 std::move(notes));
+                context.logError(
+                    OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
+                    findSemicolonOrEOL(curr, end),
+                    Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::Token(0, 0, 0, expected).emitBack()},
+                    std::move(notes));
             }
             else
             {
-                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N
-                                     .args(Lexer::tokenName(expected), '\'' + curr->emitBack())
-                                     + '\'', findSemicolonOrEOL(curr, end),
-                                 Modifier{curr, curr + 1, Modifier::PointAtBeginning}, std::move(notes));
+                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(Lexer::tokenName(expected),
+                                                                                             '\'' + curr->emitBack())
+                                     + '\'',
+                                 findSemicolonOrEOL(curr, end), Modifier{curr, curr + 1, Modifier::PointAtBeginning},
+                                 std::move(notes));
             }
             return false;
         }
         else
         {
-            if constexpr(!std::is_void_v<T>)
+            if constexpr (!std::is_void_v<T>)
             {
                 if (value)
                 {
@@ -54,7 +51,7 @@ namespace OpenCL::Parser
     struct Y
     {
         template <typename... X>
-        decltype(auto) operator()(X&& ... x) const&
+        decltype(auto) operator()(X&&... x) const&
         {
             return g(*this, std::forward<X>(x)...);
         }
@@ -65,7 +62,7 @@ namespace OpenCL::Parser
     template <typename G>
     Y(G)->Y<G>;
 
-    //firstIsInTranslationUnit not needed
+    // firstIsInTranslationUnit not needed
 
     bool firstIsInExternalDeclaration(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context);
 
@@ -142,6 +139,6 @@ namespace OpenCL::Parser
     bool firstIsInPostFixExpression(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context);
 
     bool firstIsInPrimaryExpression(const Lexer::Token& token, const OpenCL::Parser::ParsingContext& context);
-} // namespace
+} // namespace OpenCL::Parser
 
-#endif //OPENCLPARSER_PARSERUTIL_HPP
+#endif // OPENCLPARSER_PARSERUTIL_HPP

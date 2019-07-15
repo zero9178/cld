@@ -1,12 +1,12 @@
 #ifndef OPENCLPARSER_SYNTAX_HPP
 #define OPENCLPARSER_SYNTAX_HPP
 
-#include "Lexer.hpp"
-
-#include <optional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
+
+#include "Lexer.hpp"
 
 /**
  * This uses EBNF syntax meaning that: { <A> } means 0 to infinite amount of times and [ <A> ] 0 or 1 times
@@ -187,8 +187,7 @@ namespace OpenCL::Syntax
         std::vector<AssignmentExpression> m_assignmentExpressions;
 
     public:
-        Expression(std::vector<Lexer::Token>::const_iterator begin,
-                   std::vector<Lexer::Token>::const_iterator end,
+        Expression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                    std::vector<AssignmentExpression> assignmentExpressions);
 
         [[nodiscard]] const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
@@ -203,8 +202,7 @@ namespace OpenCL::Syntax
 
     public:
         PrimaryExpressionIdentifier(std::vector<Lexer::Token>::const_iterator begin,
-                                    std::vector<Lexer::Token>::const_iterator end,
-                                    std::string identifier);
+                                    std::vector<Lexer::Token>::const_iterator end, std::string identifier);
 
         [[nodiscard]] const std::string& getIdentifier() const;
     };
@@ -217,15 +215,14 @@ namespace OpenCL::Syntax
     {
     public:
         using variant =
-        std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
+            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
 
     private:
         variant m_value;
 
     public:
         PrimaryExpressionConstant(std::vector<Lexer::Token>::const_iterator begin,
-                                  std::vector<Lexer::Token>::const_iterator end,
-                                  variant value);
+                                  std::vector<Lexer::Token>::const_iterator end, variant value);
 
         [[nodiscard]] const variant& getValue() const;
     };
@@ -249,9 +246,8 @@ namespace OpenCL::Syntax
      *                       | <PrimaryExpressionConstant>
      *                       | <PrimaryExpressionParenthese>
      */
-    using PrimaryExpression = std::variant<PrimaryExpressionIdentifier,
-                                           PrimaryExpressionConstant,
-                                           PrimaryExpressionParenthese>;
+    using PrimaryExpression =
+        std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParenthese>;
 
     /**
      * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
@@ -263,14 +259,10 @@ namespace OpenCL::Syntax
      *                       | <PostFixExpressionDecrement>
      *                       | <PostFixExpressionTypeInitializer>
      */
-    using PostFixExpression = std::variant<PostFixExpressionPrimaryExpression,
-                                           PostFixExpressionSubscript,
-                                           PostFixExpressionDot,
-                                           PostFixExpressionFunctionCall,
-                                           PostFixExpressionArrow,
-                                           PostFixExpressionIncrement,
-                                           PostFixExpressionDecrement,
-                                           PostFixExpressionTypeInitializer>;
+    using PostFixExpression =
+        std::variant<PostFixExpressionPrimaryExpression, PostFixExpressionSubscript, PostFixExpressionDot,
+                     PostFixExpressionFunctionCall, PostFixExpressionArrow, PostFixExpressionIncrement,
+                     PostFixExpressionDecrement, PostFixExpressionTypeInitializer>;
 
     /**
      * <PostFixExpressionPrimaryExpression> ::= <PrimaryExpression>
@@ -299,8 +291,7 @@ namespace OpenCL::Syntax
     public:
         PostFixExpressionSubscript(std::vector<Lexer::Token>::const_iterator begin,
                                    std::vector<Lexer::Token>::const_iterator end,
-                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                   Expression&& expression);
+                                   std::unique_ptr<PostFixExpression>&& postFixExpression, Expression&& expression);
 
         [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
@@ -348,8 +339,7 @@ namespace OpenCL::Syntax
     public:
         PostFixExpressionDot(std::vector<Lexer::Token>::const_iterator begin,
                              std::vector<Lexer::Token>::const_iterator end,
-                             std::unique_ptr<PostFixExpression>&& postFixExpression,
-                             std::string identifier);
+                             std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
@@ -367,8 +357,7 @@ namespace OpenCL::Syntax
     public:
         PostFixExpressionArrow(std::vector<Lexer::Token>::const_iterator begin,
                                std::vector<Lexer::Token>::const_iterator end,
-                               std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               std::string identifier);
+                               std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
         [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
@@ -387,14 +376,14 @@ namespace OpenCL::Syntax
 
     public:
         PostFixExpressionFunctionCall(
-            std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator end,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
             std::unique_ptr<PostFixExpression>&& postFixExpression,
             std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
 
         [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-        [[nodiscard]] const std::vector<std::unique_ptr<AssignmentExpression>>& getOptionalAssignmentExpressions() const;
+        [[nodiscard]] const std::vector<std::unique_ptr<AssignmentExpression>>&
+            getOptionalAssignmentExpressions() const;
     };
 
     /**
@@ -409,8 +398,7 @@ namespace OpenCL::Syntax
 
     public:
         PostFixExpressionTypeInitializer(std::vector<Lexer::Token>::const_iterator begin,
-                                         std::vector<Lexer::Token>::const_iterator end,
-                                         TypeName&& typeName,
+                                         std::vector<Lexer::Token>::const_iterator end, TypeName&& typeName,
                                          InitializerList&& initializerList);
 
         [[nodiscard]] const InitializerList& getInitializerList() const;
@@ -423,9 +411,8 @@ namespace OpenCL::Syntax
      *                     | <UnaryExpressionUnaryOperator>
      *                     | <UnaryExpressionSizeOf>
      */
-    using UnaryExpression = std::variant<UnaryExpressionPostFixExpression,
-                                         UnaryExpressionUnaryOperator,
-                                         UnaryExpressionSizeOf>;
+    using UnaryExpression =
+        std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator, UnaryExpressionSizeOf>;
 
     /**
      * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
@@ -443,14 +430,14 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <UnaryExpressionUnaryOperator> ::= <TokenType::Increment> <UnaryExpression>
-     *                                  | <TokenType::Decrement> <UnaryExpression>
-     *                                  | <TokenType::Ampersand> <UnaryExpression>
-     *                                  | <TokenType::Asterisk> <UnaryExpression>
-     *                                  | <TokenType::Plus> <UnaryExpression>
-     *                                  | <TokenType::Minus> <UnaryExpression>
-     *                                  | <TokenType::BitWiseNegation> <UnaryExpression>
-     *                                  | <TokenType::LogicalNegation> <UnaryExpression>
+     * <UnaryExpressionUnaryOperator> ::= <TokenType::Increment> <CastExpression>
+     *                                  | <TokenType::Decrement> <CastExpression>
+     *                                  | <TokenType::Ampersand> <CastExpression>
+     *                                  | <TokenType::Asterisk> <CastExpression>
+     *                                  | <TokenType::Plus> <CastExpression>
+     *                                  | <TokenType::Minus> <CastExpression>
+     *                                  | <TokenType::BitWiseNegation> <CastExpression>
+     *                                  | <TokenType::LogicalNegation> <CastExpression>
      */
     class UnaryExpressionUnaryOperator final : public Node
     {
@@ -469,17 +456,16 @@ namespace OpenCL::Syntax
 
     private:
         UnaryOperator m_operator;
-        std::unique_ptr<UnaryExpression> m_unaryExpression;
+        std::unique_ptr<CastExpression> m_castExpression;
 
     public:
         UnaryExpressionUnaryOperator(std::vector<Lexer::Token>::const_iterator begin,
-                                     std::vector<Lexer::Token>::const_iterator end,
-                                     UnaryOperator anOperator,
-                                     std::unique_ptr<UnaryExpression>&& unaryExpression);
+                                     std::vector<Lexer::Token>::const_iterator end, UnaryOperator anOperator,
+                                     std::unique_ptr<CastExpression>&& unaryExpression);
 
         [[nodiscard]] UnaryOperator getAnOperator() const;
 
-        [[nodiscard]] const UnaryExpression& getUnaryExpression() const;
+        [[nodiscard]] const CastExpression& getCastExpression() const;
     };
 
     /**
@@ -495,8 +481,7 @@ namespace OpenCL::Syntax
 
     public:
         UnaryExpressionSizeOf(std::vector<Lexer::Token>::const_iterator begin,
-                              std::vector<Lexer::Token>::const_iterator end,
-                              variant&& variant);
+                              std::vector<Lexer::Token>::const_iterator end, variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
     };
@@ -533,8 +518,7 @@ namespace OpenCL::Syntax
 
     public:
         AssignmentExpressionAssignment(std::vector<Lexer::Token>::const_iterator begin,
-                                       std::vector<Lexer::Token>::const_iterator end,
-                                       UnaryExpression&& unaryFactor,
+                                       std::vector<Lexer::Token>::const_iterator end, UnaryExpression&& unaryFactor,
                                        AssignOperator assignOperator,
                                        std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
@@ -551,7 +535,6 @@ namespace OpenCL::Syntax
     class TypeQualifier final : public Node
     {
     public:
-
         enum Qualifier
         {
             Const,
@@ -560,13 +543,10 @@ namespace OpenCL::Syntax
         };
 
     private:
-
         Qualifier m_qualifier;
 
     public:
-
-        TypeQualifier(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end,
+        TypeQualifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                       Qualifier qualifier);
 
         [[nodiscard]] Qualifier getQualifier() const;
@@ -586,8 +566,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
     public:
-        TypeName(std::vector<Lexer::Token>::const_iterator begin,
-                 std::vector<Lexer::Token>::const_iterator end,
+        TypeName(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                  std::vector<SpecifierQualifier>&& specifierQualifiers,
                  std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
@@ -607,8 +586,7 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        CastExpression(std::vector<Lexer::Token>::const_iterator begin,
-                       std::vector<Lexer::Token>::const_iterator end,
+        CastExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                        variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
@@ -636,15 +614,14 @@ namespace OpenCL::Syntax
         std::vector<std::pair<BinaryDotOperator, CastExpression>> m_optionalCastExpressions;
 
     public:
-        Term(std::vector<Lexer::Token>::const_iterator begin,
-             std::vector<Lexer::Token>::const_iterator end,
+        Term(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
              CastExpression&& castExpressions,
              std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
 
         [[nodiscard]] const CastExpression& getCastExpression() const;
 
-        [[nodiscard]] const std::vector<std::pair<BinaryDotOperator,
-                                                  CastExpression>>& getOptionalCastExpressions() const;
+        [[nodiscard]] const std::vector<std::pair<BinaryDotOperator, CastExpression>>&
+            getOptionalCastExpressions() const;
     };
 
     /**
@@ -669,8 +646,7 @@ namespace OpenCL::Syntax
 
     public:
         AdditiveExpression(std::vector<Lexer::Token>::const_iterator begin,
-                           std::vector<Lexer::Token>::const_iterator end,
-                           Term&& term,
+                           std::vector<Lexer::Token>::const_iterator end, Term&& term,
                            std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
 
         [[nodiscard]] const Term& getTerm() const;
@@ -699,15 +675,14 @@ namespace OpenCL::Syntax
         std::vector<std::pair<ShiftOperator, AdditiveExpression>> m_optionalAdditiveExpressions;
 
     public:
-        ShiftExpression(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end,
+        ShiftExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                         AdditiveExpression&& additiveExpression,
                         std::vector<std::pair<ShiftOperator, AdditiveExpression>>&& optionalAdditiveExpressions);
 
         [[nodiscard]] const AdditiveExpression& getAdditiveExpression() const;
 
-        [[nodiscard]] const std::vector<std::pair<ShiftOperator,
-                                                  AdditiveExpression>>& getOptionalAdditiveExpressions() const;
+        [[nodiscard]] const std::vector<std::pair<ShiftOperator, AdditiveExpression>>&
+            getOptionalAdditiveExpressions() const;
     };
 
     /**
@@ -734,15 +709,14 @@ namespace OpenCL::Syntax
 
     public:
         RelationalExpression(
-            std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator end,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
             ShiftExpression&& shiftExpression,
             std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions);
 
         [[nodiscard]] const ShiftExpression& getShiftExpression() const;
 
-        [[nodiscard]] const std::vector<std::pair<RelationalOperator,
-                                                  ShiftExpression>>& getOptionalShiftExpressions() const;
+        [[nodiscard]] const std::vector<std::pair<RelationalOperator, ShiftExpression>>&
+            getOptionalShiftExpressions() const;
     };
 
     /**
@@ -767,15 +741,14 @@ namespace OpenCL::Syntax
 
     public:
         EqualityExpression(
-            std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator end,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
             RelationalExpression&& relationalExpression,
             std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions);
 
         [[nodiscard]] const RelationalExpression& getRelationalExpression() const;
 
-        [[nodiscard]] const std::vector<std::pair<EqualityOperator,
-                                                  RelationalExpression>>& getOptionalRelationalExpressions() const;
+        [[nodiscard]] const std::vector<std::pair<EqualityOperator, RelationalExpression>>&
+            getOptionalRelationalExpressions() const;
     };
 
     /**
@@ -787,8 +760,7 @@ namespace OpenCL::Syntax
         std::vector<EqualityExpression> m_optionalEqualityExpressions;
 
     public:
-        BitAndExpression(std::vector<Lexer::Token>::const_iterator begin,
-                         std::vector<Lexer::Token>::const_iterator end,
+        BitAndExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                          EqualityExpression&& equalityExpression,
                          std::vector<EqualityExpression>&& optionalEqualityExpressions);
 
@@ -806,8 +778,7 @@ namespace OpenCL::Syntax
         std::vector<BitAndExpression> m_optionalBitAndExpressions;
 
     public:
-        BitXorExpression(std::vector<Lexer::Token>::const_iterator begin,
-                         std::vector<Lexer::Token>::const_iterator end,
+        BitXorExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                          BitAndExpression&& bitAndExpression,
                          std::vector<BitAndExpression>&& optionalBitAndExpressions);
 
@@ -825,10 +796,8 @@ namespace OpenCL::Syntax
         std::vector<BitXorExpression> m_optionalBitXorExpressions;
 
     public:
-        BitOrExpression(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end,
-                        BitXorExpression&& bitXorExpression,
-                        std::vector<BitXorExpression>&& optionalBitXorExpressions);
+        BitOrExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                        BitXorExpression&& bitXorExpression, std::vector<BitXorExpression>&& optionalBitXorExpressions);
 
         [[nodiscard]] const BitXorExpression& getBitXorExpression() const;
 
@@ -845,8 +814,7 @@ namespace OpenCL::Syntax
 
     public:
         LogicalAndExpression(std::vector<Lexer::Token>::const_iterator begin,
-                             std::vector<Lexer::Token>::const_iterator end,
-                             BitOrExpression&& equalityExpression,
+                             std::vector<Lexer::Token>::const_iterator end, BitOrExpression&& equalityExpression,
                              std::vector<BitOrExpression>&& optionalEqualityExpressions);
 
         [[nodiscard]] const BitOrExpression& getBitOrExpression() const;
@@ -864,8 +832,7 @@ namespace OpenCL::Syntax
 
     public:
         LogicalOrExpression(std::vector<Lexer::Token>::const_iterator begin,
-                            std::vector<Lexer::Token>::const_iterator end,
-                            LogicalAndExpression&& andExpression,
+                            std::vector<Lexer::Token>::const_iterator end, LogicalAndExpression&& andExpression,
                             std::vector<LogicalAndExpression>&& optionalAndExpressions);
 
         [[nodiscard]] const LogicalAndExpression& getAndExpression() const;
@@ -887,8 +854,7 @@ namespace OpenCL::Syntax
 
     public:
         ConditionalExpression(std::vector<Lexer::Token>::const_iterator begin,
-                              std::vector<Lexer::Token>::const_iterator end,
-                              LogicalOrExpression&& logicalOrExpression,
+                              std::vector<Lexer::Token>::const_iterator end, LogicalOrExpression&& logicalOrExpression,
                               std::unique_ptr<Expression>&& optionalExpression = nullptr,
                               std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
 
@@ -922,8 +888,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Expression> m_expression;
 
     public:
-        ReturnStatement(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end,
+        ReturnStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                         std::unique_ptr<Expression>&& expression);
 
         [[nodiscard]] const Expression* getExpression() const;
@@ -963,9 +928,8 @@ namespace OpenCL::Syntax
      *               | <JumpStatement>
      */
     using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-                                   HeadWhileStatement, FootWhileStatement, BreakStatement,
-                                   ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement, GotoStatement,
-                                   LabelStatement>;
+                                   HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                                   SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
 
     /**
      * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
@@ -978,10 +942,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_elseBranch;
 
     public:
-        IfStatement(std::vector<Lexer::Token>::const_iterator begin,
-                    std::vector<Lexer::Token>::const_iterator end,
-                    Expression&& expression,
-                    std::unique_ptr<Statement>&& branch,
+        IfStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                    Expression&& expression, std::unique_ptr<Statement>&& branch,
                     std::unique_ptr<Statement>&& elseBranch = nullptr);
 
         [[nodiscard]] const Expression& getExpression() const;
@@ -1001,10 +963,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-        SwitchStatement(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end,
-                        Expression&& expression,
-                        std::unique_ptr<Statement>&& statement);
+        SwitchStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                        Expression&& expression, std::unique_ptr<Statement>&& statement);
 
         [[nodiscard]] const Expression& getExpression() const;
 
@@ -1019,8 +979,7 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-        DefaultStatement(std::vector<Lexer::Token>::const_iterator begin,
-                         std::vector<Lexer::Token>::const_iterator end,
+        DefaultStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
                          std::unique_ptr<Statement>&& statement);
 
         [[nodiscard]] const Statement& getStatement() const;
@@ -1035,9 +994,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Statement> m_statement;
 
     public:
-        CaseStatement(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, ConstantExpression&& constantExpression,
-                      std::unique_ptr<Statement>&& statement);
+        CaseStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                      ConstantExpression&& constantExpression, std::unique_ptr<Statement>&& statement);
 
         [[nodiscard]] const ConstantExpression& getConstantExpression() const;
 
@@ -1052,8 +1010,8 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-        LabelStatement(std::vector<Lexer::Token>::const_iterator begin,
-                       std::vector<Lexer::Token>::const_iterator end, std::string identifier);
+        LabelStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                       std::string identifier);
     };
 
     /**
@@ -1085,7 +1043,6 @@ namespace OpenCL::Syntax
     class StorageClassSpecifier final : public Node
     {
     public:
-
         enum Specifiers
         {
             Typedef,
@@ -1096,14 +1053,11 @@ namespace OpenCL::Syntax
         };
 
     private:
-
         Specifiers m_specifier;
 
     public:
-
         StorageClassSpecifier(std::vector<Lexer::Token>::const_iterator begin,
-                              std::vector<Lexer::Token>::const_iterator end,
-                              Specifiers specifier);
+                              std::vector<Lexer::Token>::const_iterator end, Specifiers specifier);
 
         [[nodiscard]] Specifiers getSpecifier() const;
     };
@@ -1114,7 +1068,6 @@ namespace OpenCL::Syntax
     class FunctionSpecifier final : public Node
     {
     public:
-
         FunctionSpecifier(const std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
                           const std::vector<OpenCL::Lexer::Token>::const_iterator& end);
     };
@@ -1137,14 +1090,14 @@ namespace OpenCL::Syntax
 
     public:
         Declaration(
-            std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator end, std::vector<DeclarationSpecifier>&& declarationSpecifiers,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+            std::vector<DeclarationSpecifier>&& declarationSpecifiers,
             std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&& initDeclarators);
 
         [[nodiscard]] const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
         [[nodiscard]] const std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&
-        getInitDeclarators() const;
+            getInitDeclarators() const;
     };
 
     /**
@@ -1161,8 +1114,8 @@ namespace OpenCL::Syntax
         std::unique_ptr<Expression> m_post;
 
     public:
-        ForStatement(std::vector<Lexer::Token>::const_iterator begin,
-                     std::vector<Lexer::Token>::const_iterator end, std::unique_ptr<Statement>&& statement,
+        ForStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                     std::unique_ptr<Statement>&& statement,
                      std::variant<Declaration, std::unique_ptr<Expression>>&& initial,
                      std::unique_ptr<Expression>&& controlling, std::unique_ptr<Expression>&& post);
 
@@ -1219,8 +1172,7 @@ namespace OpenCL::Syntax
     class BreakStatement final : public Node
     {
     public:
-        BreakStatement(std::vector<Lexer::Token>::const_iterator begin,
-                       std::vector<Lexer::Token>::const_iterator end);
+        BreakStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end);
     };
 
     /**
@@ -1241,8 +1193,8 @@ namespace OpenCL::Syntax
         std::string m_identifier;
 
     public:
-        GotoStatement(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, std::string identifier);
+        GotoStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                      std::string identifier);
 
         [[nodiscard]] const std::string& getIdentifier() const;
     };
@@ -1253,20 +1205,19 @@ namespace OpenCL::Syntax
      *                              | <DirectAbstractDeclaratorAsterisk>
      *                              | <DirectAbstractDeclaratorParameterTypeList>
      */
-    using DirectAbstractDeclarator = std::variant<DirectAbstractDeclaratorParenthese,
-                                                  DirectAbstractDeclaratorAssignmentExpression,
-                                                  DirectAbstractDeclaratorAsterisk,
-                                                  DirectAbstractDeclaratorParameterTypeList>;
+    using DirectAbstractDeclarator =
+        std::variant<DirectAbstractDeclaratorParenthese, DirectAbstractDeclaratorAssignmentExpression,
+                     DirectAbstractDeclaratorAsterisk, DirectAbstractDeclaratorParameterTypeList>;
 
     /**
-     * <DirectAbstractDeclaratorParenthese> ::= <TokenType::OpenParenthese> <AbstractDeclarator> <TokenType::CloseParenthese>
+     * <DirectAbstractDeclaratorParenthese> ::= <TokenType::OpenParenthese> <AbstractDeclarator>
+     * <TokenType::CloseParenthese>
      */
     class DirectAbstractDeclaratorParenthese final : public Node
     {
         std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
     public:
-
         DirectAbstractDeclaratorParenthese(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                            std::vector<OpenCL::Lexer::Token>::const_iterator end,
                                            std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
@@ -1285,8 +1236,7 @@ namespace OpenCL::Syntax
 
     public:
         DirectAbstractDeclaratorAssignmentExpression(
-            std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator end,
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
             std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
             std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
@@ -1296,15 +1246,14 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <DirectAbstractDeclaratorAsterisk> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket> <TokenType::Asterisk>
-     *                                        <TokenType::CloseSquareBracket>
+     * <DirectAbstractDeclaratorAsterisk> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket>
+     * <TokenType::Asterisk> <TokenType::CloseSquareBracket>
      */
     class DirectAbstractDeclaratorAsterisk final : public Node
     {
         std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
 
     public:
-
         DirectAbstractDeclaratorAsterisk(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                          std::vector<OpenCL::Lexer::Token>::const_iterator end,
                                          std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator);
@@ -1355,8 +1304,8 @@ namespace OpenCL::Syntax
      *                          | <DeclarationSpecifier> { <DelcarationSpecifier> } [ <AbstractDeclarator> ]
      */
     using ParameterDeclaration =
-    std::pair<std::vector<DeclarationSpecifier>,
-              std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
+        std::pair<std::vector<DeclarationSpecifier>,
+                  std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
 
     /**
      * <ParameterList> ::= <ParameterDeclaration> { <TokenType::Comma> <ParameterDeclaration> }
@@ -1367,8 +1316,8 @@ namespace OpenCL::Syntax
         std::vector<ParameterDeclaration> m_parameterList;
 
     public:
-        ParameterList(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, std::vector<ParameterDeclaration>&& parameterList);
+        ParameterList(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                      std::vector<ParameterDeclaration>&& parameterList);
 
         [[nodiscard]] const std::vector<ParameterDeclaration>& getParameterDeclarations() const;
     };
@@ -1383,8 +1332,7 @@ namespace OpenCL::Syntax
 
     public:
         ParameterTypeList(std::vector<Lexer::Token>::const_iterator begin,
-                          std::vector<Lexer::Token>::const_iterator end,
-                          ParameterList&& parameterList,
+                          std::vector<Lexer::Token>::const_iterator end, ParameterList&& parameterList,
                           bool hasEllipse);
 
         [[nodiscard]] const ParameterList& getParameterList() const;
@@ -1401,13 +1349,10 @@ namespace OpenCL::Syntax
      *                      | <DirectDeclaratorParentheseParameters>
      *                      | <DirectDeclaratorParentheseIdentifier>
      */
-    using DirectDeclarator = std::variant<DirectDeclaratorIdentifier,
-                                          DirectDeclaratorParenthese,
-                                          DirectDeclaratorNoStaticOrAsterisk,
-                                          DirectDeclaratorStatic,
-                                          DirectDeclaratorAsterisk,
-                                          DirectDeclaratorParentheseParameters,
-                                          DirectDeclaratorParentheseIdentifiers>;
+    using DirectDeclarator =
+        std::variant<DirectDeclaratorIdentifier, DirectDeclaratorParenthese, DirectDeclaratorNoStaticOrAsterisk,
+                     DirectDeclaratorStatic, DirectDeclaratorAsterisk, DirectDeclaratorParentheseParameters,
+                     DirectDeclaratorParentheseIdentifiers>;
 
     /**
      * <DirectDeclaratorIdentifier> ::= <TokenType::Identifier>
@@ -1418,10 +1363,8 @@ namespace OpenCL::Syntax
         std::vector<Lexer::Token>::const_iterator m_identifierLoc;
 
     public:
-
         DirectDeclaratorIdentifier(std::vector<Lexer::Token>::const_iterator begin,
-                                   std::vector<Lexer::Token>::const_iterator end,
-                                   std::string identifier,
+                                   std::vector<Lexer::Token>::const_iterator end, std::string identifier,
                                    std::vector<Lexer::Token>::const_iterator identifierLoc);
 
         [[nodiscard]] const std::string& getIdentifier() const;
@@ -1437,7 +1380,6 @@ namespace OpenCL::Syntax
         std::unique_ptr<Declarator> m_declarator;
 
     public:
-
         DirectDeclaratorParenthese(std::vector<Lexer::Token>::const_iterator begin,
                                    std::vector<Lexer::Token>::const_iterator end,
                                    std::unique_ptr<Declarator>&& declarator);
@@ -1475,16 +1417,15 @@ namespace OpenCL::Syntax
         std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>> m_identifiers;
 
     public:
-        DirectDeclaratorParentheseIdentifiers(std::vector<Lexer::Token>::const_iterator begin,
-                                              std::vector<Lexer::Token>::const_iterator end,
-                                              DirectDeclarator&& directDeclarator,
-                                              std::vector<std::pair<std::string,
-                                                                    std::vector<Lexer::Token>::const_iterator>>&& identifiers);
+        DirectDeclaratorParentheseIdentifiers(
+            std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+            DirectDeclarator&& directDeclarator,
+            std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>>&& identifiers);
 
         [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
-        [[nodiscard]] const std::vector<std::pair<std::string,
-                                                  std::vector<Lexer::Token>::const_iterator>>& getIdentifiers() const;
+        [[nodiscard]] const std::vector<std::pair<std::string, std::vector<Lexer::Token>::const_iterator>>&
+            getIdentifiers() const;
     };
 
     /**
@@ -1565,9 +1506,8 @@ namespace OpenCL::Syntax
         DirectDeclarator m_directDeclarator;
 
     public:
-        Declarator(std::vector<Lexer::Token>::const_iterator begin,
-                   std::vector<Lexer::Token>::const_iterator end, std::vector<Pointer>&& pointers,
-                   DirectDeclarator&& directDeclarator);
+        Declarator(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                   std::vector<Pointer>&& pointers, DirectDeclarator&& directDeclarator);
 
         [[nodiscard]] const std::vector<Pointer>& getPointers() const;
 
@@ -1627,8 +1567,8 @@ namespace OpenCL::Syntax
         std::vector<std::pair<std::string, std::optional<ConstantExpression>>> m_values;
 
     public:
-        EnumDeclaration(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end, std::string name,
+        EnumDeclaration(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                        std::string name,
                         std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values);
 
         [[nodiscard]] const std::string& getName() const;
@@ -1646,8 +1586,8 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        EnumSpecifier(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, variant&& variant);
+        EnumSpecifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                      variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
     };
@@ -1689,8 +1629,8 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        TypeSpecifier(std::vector<Lexer::Token>::const_iterator begin,
-                      std::vector<Lexer::Token>::const_iterator end, variant&& variant);
+        TypeSpecifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                      variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
     };
@@ -1703,8 +1643,8 @@ namespace OpenCL::Syntax
         std::vector<TypeQualifier> m_typeQualifiers;
 
     public:
-        Pointer(std::vector<Lexer::Token>::const_iterator begin,
-                std::vector<Lexer::Token>::const_iterator end, std::vector<TypeQualifier>&& typeQualifiers);
+        Pointer(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                std::vector<TypeQualifier>&& typeQualifiers);
 
         [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
     };
@@ -1734,8 +1674,8 @@ namespace OpenCL::Syntax
         vector m_nonCommaExpressionsAndBlocks;
 
     public:
-        InitializerList(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator end, vector&& nonCommaExpressionsAndBlocks);
+        InitializerList(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                        vector&& nonCommaExpressionsAndBlocks);
 
         [[nodiscard]] const vector& getNonCommaExpressionsAndBlocks() const;
     };
@@ -1750,8 +1690,8 @@ namespace OpenCL::Syntax
         variant m_variant;
 
     public:
-        Initializer(std::vector<Lexer::Token>::const_iterator begin,
-                    std::vector<Lexer::Token>::const_iterator end, variant&& variant);
+        Initializer(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+                    variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
     };
@@ -1817,48 +1757,50 @@ namespace OpenCL::Syntax
 
         template <class T>
         constexpr bool isReferenceWrapper = isSpecilization<T, std::reference_wrapper>{};
-    }
+    } // namespace detail
 
-    template <class...T>
+    template <class... T>
     [[nodiscard]] Node& nodeFromNodeDerivedVariant(std::variant<T...>& variant)
     {
-        return std::visit([](auto&& value) -> Node&
-                          {
-                              using U = std::decay_t<decltype(value)>;
-                              if constexpr(detail::isVariant<U>)
-                              {
-                                  return nodeFromNodeDerivedVariant(value);
-                              }
-                              else if constexpr(detail::isReferenceWrapper<U>)
-                              {
-                                  return nodeFromNodeDerivedVariant(value.get());
-                              }
-                              else
-                              {
-                                  return value;
-                              }
-                          }, variant);
+        return std::visit(
+            [](auto&& value) -> Node& {
+                using U = std::decay_t<decltype(value)>;
+                if constexpr (detail::isVariant<U>)
+                {
+                    return nodeFromNodeDerivedVariant(value);
+                }
+                else if constexpr (detail::isReferenceWrapper<U>)
+                {
+                    return nodeFromNodeDerivedVariant(value.get());
+                }
+                else
+                {
+                    return value;
+                }
+            },
+            variant);
     }
 
-    template <class...T>
+    template <class... T>
     [[nodiscard]] const Node& nodeFromNodeDerivedVariant(const std::variant<T...>& variant)
     {
-        return std::visit([](auto&& value) -> const Node&
-                          {
-                              using U = std::decay_t<decltype(value)>;
-                              if constexpr(detail::isVariant < U >)
-                              {
-                                  return nodeFromNodeDerivedVariant(value);
-                              }
-                              else if constexpr(detail::isReferenceWrapper < U >)
-                              {
-                                  return nodeFromNodeDerivedVariant(value.get());
-                              }
-                              else
-                              {
-                                  return value;
-                              }
-                          }, variant);
+        return std::visit(
+            [](auto&& value) -> const Node& {
+                using U = std::decay_t<decltype(value)>;
+                if constexpr (detail::isVariant<U>)
+                {
+                    return nodeFromNodeDerivedVariant(value);
+                }
+                else if constexpr (detail::isReferenceWrapper<U>)
+                {
+                    return nodeFromNodeDerivedVariant(value.get());
+                }
+                else
+                {
+                    return value;
+                }
+            },
+            variant);
     }
 } // namespace OpenCL::Syntax
 

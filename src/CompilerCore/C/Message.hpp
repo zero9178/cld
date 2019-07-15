@@ -1,13 +1,11 @@
-#include <utility>
-
 #ifndef OPENCLPARSER_MESSAGE_HPP
 #define OPENCLPARSER_MESSAGE_HPP
 
-#include <string>
-#include <vector>
-#include <optional>
 #include <iostream>
+#include <optional>
 #include <sstream>
+#include <utility>
+
 #include "Lexer.hpp"
 
 namespace OpenCL
@@ -31,15 +29,15 @@ namespace OpenCL
         template <class T>
         static std::string toString(T&& value)
         {
-            if constexpr(std::is_convertible_v<T, std::string>)
+            if constexpr (std::is_convertible_v<T, std::string>)
             {
                 return value;
             }
-            else if constexpr(canStaticCast<T, std::string>{})
+            else if constexpr (canStaticCast<T, std::string>{})
             {
                 return static_cast<std::string>(value);
             }
-            else if constexpr(std::is_same_v<T, char>)
+            else if constexpr (std::is_same_v<T, char>)
             {
                 return std::string(1, value);
             }
@@ -51,7 +49,6 @@ namespace OpenCL
         }
 
     public:
-
         class List
         {
             std::string m_delimiter;
@@ -59,12 +56,13 @@ namespace OpenCL
             std::vector<std::string> m_strings;
 
         public:
-
-            template <class...Args>
-            List(std::string delimiter, std::string m_lastInbetween, Args&& ...args)
-                : m_delimiter(std::move(delimiter)), m_lastInbetween(std::move(m_lastInbetween)),
+            template <class... Args>
+            List(std::string delimiter, std::string m_lastInbetween, Args&&... args)
+                : m_delimiter(std::move(delimiter)),
+                  m_lastInbetween(std::move(m_lastInbetween)),
                   m_strings({toString(args)...})
-            {}
+            {
+            }
 
             explicit operator std::string() const
             {
@@ -85,11 +83,10 @@ namespace OpenCL
             }
         };
 
-        constexpr explicit Format(const char* format) : m_format(format)
-        {}
+        constexpr explicit Format(const char* format) : m_format(format) {}
 
-        template <class...Args>
-        std::string args(Args&& ...args) const
+        template <class... Args>
+        std::string args(Args&&... args) const
         {
             return format({toString(args)...});
         }
@@ -97,12 +94,10 @@ namespace OpenCL
 
     class Modifier
     {
-
         std::vector<Lexer::Token>::const_iterator m_begin;
         std::vector<Lexer::Token>::const_iterator m_end;
 
     public:
-
         enum Action
         {
             Underline,
@@ -112,14 +107,11 @@ namespace OpenCL
         };
 
     private:
-
         Action m_action;
         std::string m_actionArgument;
 
     public:
-
-        Modifier(std::vector<Lexer::Token>::const_iterator begin,
-                 std::vector<Lexer::Token>::const_iterator anEnd,
+        Modifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator anEnd,
                  Action action = Underline, std::string actionArgument = {});
 
         [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
@@ -139,7 +131,6 @@ namespace OpenCL
         std::optional<Modifier> m_modifier;
 
     public:
-
         struct Note
         {
             std::string message;
@@ -149,21 +140,17 @@ namespace OpenCL
         };
 
     private:
-
         std::vector<Note> m_notes;
 
     public:
-
         enum Severity
         {
             Error,
             Warning
         };
 
-        Message(std::string message,
-                std::vector<Lexer::Token>::const_iterator begin,
-                std::vector<Lexer::Token>::const_iterator end,
-                std::optional<Modifier> modifier = {},
+        Message(std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {},
                 std::vector<Note> notes = {});
 
         [[nodiscard]] const std::string& getMessage() const;
@@ -184,9 +171,9 @@ namespace OpenCL
 
     template <class F>
     std::enable_if_t<!std::is_same_v<std::decay_t<F>, Lexer::TokenType>,
-                     std::vector<OpenCL::Lexer::Token>::const_iterator> findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                                                                  std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                                                                  F&& functor)
+                     std::vector<OpenCL::Lexer::Token>::const_iterator>
+        findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                  std::vector<OpenCL::Lexer::Token>::const_iterator end, F&& functor)
     {
         for (auto curr = begin; curr != end; curr++)
         {
@@ -207,6 +194,6 @@ namespace OpenCL
 
     std::vector<Lexer::Token>::const_iterator findSemicolonOrEOL(std::vector<Lexer::Token>::const_iterator begin,
                                                                  std::vector<Lexer::Token>::const_iterator end);
-}
+} // namespace OpenCL
 
-#endif //OPENCLPARSER_MESSAGE_HPP
+#endif // OPENCLPARSER_MESSAGE_HPP

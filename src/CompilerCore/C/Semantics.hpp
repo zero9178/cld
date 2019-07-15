@@ -1,15 +1,16 @@
 #ifndef OPENCLPARSER_SEMANTICS_HPP
 #define OPENCLPARSER_SEMANTICS_HPP
 
-#include "CompilerCore/Common/Expected.hpp"
-#include "CompilerCore/Common/FailureReason.hpp"
-#include "Syntax.hpp"
-#include "Message.hpp"
-
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "CompilerCore/Common/Expected.hpp"
+#include "CompilerCore/Common/FailureReason.hpp"
+
+#include "Message.hpp"
+#include "Syntax.hpp"
 
 namespace OpenCL::Semantics
 {
@@ -44,9 +45,8 @@ namespace OpenCL::Semantics
     class ExpressionStatement;
 
     using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-                                   HeadWhileStatement, FootWhileStatement, BreakStatement,
-                                   ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement, GotoStatement,
-                                   LabelStatement>;
+                                   HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                                   SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
 
     class PrimitiveType final
     {
@@ -159,15 +159,12 @@ namespace OpenCL::Semantics
         bool m_lastIsVararg;
         bool m_hasPrototype;
 
-        FunctionType(std::shared_ptr<Type>&& returnType,
-                     std::vector<std::pair<Type, std::string>> arguments,
-                     bool lastIsVararg,
-                     bool hasPrototype);
+        FunctionType(std::shared_ptr<Type>&& returnType, std::vector<std::pair<Type, std::string>> arguments,
+                     bool lastIsVararg, bool hasPrototype);
 
     public:
-        static Type create(OpenCL::Semantics::Type&& returnType,
-                           std::vector<std::pair<Type, std::string>>&& arguments, bool lastIsVararg,
-                           bool hasPrototype);
+        static Type create(OpenCL::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
+                           bool lastIsVararg, bool hasPrototype);
 
         [[nodiscard]] const Type& getReturnType() const;
 
@@ -255,20 +252,14 @@ namespace OpenCL::Semantics
         bool m_isConst;
         bool m_isVolatile;
         std::string m_name;
-        using variant = std::variant<std::monostate,
-                                     PrimitiveType,
-                                     ArrayType,
-                                     AbstractArrayType,
-                                     ValArrayType,
-                                     FunctionType,
-                                     RecordType, EnumType, PointerType>;
+        std::string m_typeName;
+        using variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
+                                     FunctionType, RecordType, EnumType, PointerType>;
 
         variant m_type;
 
     public:
-        explicit Type(bool isConst = false,
-                      bool isVolatile = false,
-                      std::string name = "<undefined>",
+        explicit Type(bool isConst = false, bool isVolatile = false, std::string name = "<undefined>",
                       variant&& type = std::monostate{});
 
         [[nodiscard]] const variant& get() const;
@@ -280,6 +271,12 @@ namespace OpenCL::Semantics
         [[nodiscard]] const std::string& getName() const;
 
         void setName(const std::string& name);
+
+        [[nodiscard]] const std::string& getTypeName() const;
+
+        [[nodiscard]] bool isTypedef() const;
+
+        [[nodiscard]] std::string getFullFormattedTypeName() const;
 
         bool operator==(const Type& rhs) const;
 
@@ -309,10 +306,9 @@ namespace OpenCL::Semantics
         Linkage m_linkage;
         Lifetime m_lifetime;
         std::string m_name;
-        //initializer
+        // initializer
 
     public:
-
         Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name);
 
         [[nodiscard]] const Type& getType() const;
@@ -326,17 +322,14 @@ namespace OpenCL::Semantics
 
     class ReturnStatement final
     {
-
     };
 
     class ExpressionStatement final
     {
-
     };
 
     class IfStatement final
     {
-
     };
 
     class CompoundStatement final
@@ -344,7 +337,6 @@ namespace OpenCL::Semantics
         std::vector<std::variant<Statement, Declaration>> m_compoundItems;
 
     public:
-
         explicit CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems);
 
         [[nodiscard]] const std::vector<std::variant<Statement, Declaration>>& getCompoundItems() const;
@@ -352,52 +344,42 @@ namespace OpenCL::Semantics
 
     class ForStatement final
     {
-
     };
 
     class HeadWhileStatement final
     {
-
     };
 
     class FootWhileStatement final
     {
-
     };
 
     class BreakStatement final
     {
-
     };
 
     class ContinueStatement final
     {
-
     };
 
     class SwitchStatement final
     {
-
     };
 
     class DefaultStatement final
     {
-
     };
 
     class CaseStatement final
     {
-
     };
 
     class GotoStatement final
     {
-
     };
 
     class LabelStatement final
     {
-
     };
 
     class FunctionDefinition final
@@ -409,12 +391,8 @@ namespace OpenCL::Semantics
         CompoundStatement m_compoundStatement;
 
     public:
-
-        FunctionDefinition(FunctionType type,
-                           std::string name,
-                           std::vector<Declaration> parameterDeclarations,
-                           Linkage linkage,
-                           CompoundStatement&& compoundStatement);
+        FunctionDefinition(FunctionType type, std::string name, std::vector<Declaration> parameterDeclarations,
+                           Linkage linkage, CompoundStatement&& compoundStatement);
 
         [[nodiscard]] const std::string& getName() const;
 
@@ -433,11 +411,9 @@ namespace OpenCL::Semantics
         using Variant = std::variant<FunctionDefinition, Declaration>;
 
     private:
-
         std::vector<Variant> m_globals;
 
     public:
-
         explicit TranslationUnit(std::vector<Variant> globals);
 
         [[nodiscard]] const std::vector<Variant>& getGlobals() const;
@@ -456,4 +432,4 @@ namespace OpenCL::Semantics
     bool isVoid(const Type& type);
 } // namespace OpenCL::Semantics
 
-#endif //OPENCLPARSER_SEMANTICS_HPP
+#endif // OPENCLPARSER_SEMANTICS_HPP

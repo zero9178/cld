@@ -1,7 +1,8 @@
 #include "Parser.hpp"
 
-#include "ParserUtil.hpp"
 #include <algorithm>
+
+#include "ParserUtil.hpp"
 
 std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Lexer::Token>& tokens,
                                                                            std::ostream* reporter)
@@ -13,16 +14,14 @@ std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const
 
 void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
-    auto[iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
+    auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
     {
-        logError(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
-                 declarator.end,
-                 Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
-                 {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end, Modifier(
-                     iter->second.location.identifier,
-                     iter->second.location.identifier + 1,
-                     Modifier::Underline)}});
+        logError(
+            ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.end,
+            Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
+            {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
+              Modifier(iter->second.location.identifier, iter->second.location.identifier + 1, Modifier::Underline)}});
     }
 }
 
@@ -30,7 +29,7 @@ bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
 {
     for (auto& iter : m_currentScope)
     {
-        if (auto result = iter.find(name);result != iter.end() && result->second.isTypedef)
+        if (auto result = iter.find(name); result != iter.end() && result->second.isTypedef)
         {
             return true;
         }
@@ -38,10 +37,8 @@ bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
     return false;
 }
 
-void OpenCL::Parser::ParsingContext::logError(std::string message,
-                                              Tokens::const_iterator end,
-                                              std::optional<Modifier> modifier,
-                                              std::vector<Message::Note> notes)
+void OpenCL::Parser::ParsingContext::logError(std::string message, Tokens::const_iterator end,
+                                              std::optional<Modifier> modifier, std::vector<Message::Note> notes)
 {
     logImpl(Message(std::move(message), m_start.back(), end, std::move(modifier), std::move(notes)));
 }
@@ -69,16 +66,14 @@ void OpenCL::Parser::ParsingContext::logImpl(Message&& error)
 
 void OpenCL::Parser::ParsingContext::addToScope(const std::string& name, DeclarationLocation declarator)
 {
-    auto[iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
+    auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
-        logError(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
-                 declarator.end,
-                 Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
-                 {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end, Modifier(
-                     iter->second.location.identifier,
-                     iter->second.location.identifier + 1,
-                     Modifier::Underline)}});
+        logError(
+            ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.end,
+            Modifier(declarator.identifier, declarator.identifier + 1, Modifier::Underline),
+            {{Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
+              Modifier(iter->second.location.identifier, iter->second.location.identifier + 1, Modifier::Underline)}});
     }
 }
 
@@ -97,8 +92,8 @@ bool OpenCL::Parser::ParsingContext::isErrorsOccured() const
     return m_errorsOccured;
 }
 
-std::unique_ptr<OpenCL::Parser::ParsingContext::Branch> OpenCL::Parser::ParsingContext::createBranch(Tokens::const_iterator& begin,
-                                                                                                     Branch::CriteriaFunction&& criteria)
+std::unique_ptr<OpenCL::Parser::ParsingContext::Branch>
+    OpenCL::Parser::ParsingContext::createBranch(Tokens::const_iterator& begin, Branch::CriteriaFunction&& criteria)
 {
     return std::make_unique<Branch>(*this, begin, std::move(criteria));
 }
@@ -115,11 +110,12 @@ std::size_t OpenCL::Parser::ParsingContext::getCurrentErrorCount() const
     return m_errorCount;
 }
 
-const OpenCL::Parser::ParsingContext::DeclarationLocation* OpenCL::Parser::ParsingContext::getLocationOf(const std::string& name) const
+const OpenCL::Parser::ParsingContext::DeclarationLocation*
+    OpenCL::Parser::ParsingContext::getLocationOf(const std::string& name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
-        if (auto result = iter->find(name);result != iter->end())
+        if (auto result = iter->find(name); result != iter->end())
         {
             return &result->second.location;
         }
@@ -179,14 +175,10 @@ OpenCL::Parser::ParsingContext::Branch::~Branch()
             }
             if (!result)
             {
-                auto alternative = std::find_if(context.m_branches.back().begin(),
-                                                context.m_branches.back().end(),
-                                                [](const Branch* ptr)
-                                                {
-                                                    return !ptr->m_criteria;
-                                                });
-                result = alternative != context.m_branches.back().end() ? *alternative : context.m_branches.back()
-                                                                                                .front();
+                auto alternative = std::find_if(context.m_branches.back().begin(), context.m_branches.back().end(),
+                                                [](const Branch* ptr) { return !ptr->m_criteria; });
+                result =
+                    alternative != context.m_branches.back().end() ? *alternative : context.m_branches.back().front();
             }
             context.m_branches.back().clear();
             m_begin = result->m_curr;

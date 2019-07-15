@@ -1,12 +1,14 @@
 #include "Semantics.hpp"
 
-#include "Syntax.hpp"
 #include <algorithm>
 #include <map>
 #include <optional>
 #include <utility>
+
 #include "CompilerCore/Common/Util.hpp"
+
 #include "ErrorMessages.hpp"
+#include "Syntax.hpp"
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
 {
@@ -29,10 +31,8 @@ bool OpenCL::Semantics::ArrayType::isRestricted() const
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::ArrayType::create(bool isConst, bool isVolatile,
-                                                             bool isRestricted,
-                                                             OpenCL::Semantics::Type&& type,
-                                                             std::size_t size)
+OpenCL::Semantics::Type OpenCL::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
+                                                             OpenCL::Semantics::Type&& type, std::size_t size)
 {
     std::ostringstream ss;
     ss << size;
@@ -76,9 +76,8 @@ const OpenCL::Semantics::Type::variant& OpenCL::Semantics::Type::get() const
     return m_type;
 }
 
-OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name,
-                              OpenCL::Semantics::Type::variant&& type)
-    : m_isConst(isConst), m_isVolatile(isVolatile), m_name(std::move(name)), m_type(std::move(type))
+OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, OpenCL::Semantics::Type::variant&& type)
+    : m_isConst(isConst), m_isVolatile(isVolatile), m_name(std::move(name)), m_typeName(m_name), m_type(std::move(type))
 {
 }
 
@@ -96,9 +95,21 @@ bool OpenCL::Semantics::Type::isUndefined() const
 {
     return std::holds_alternative<std::monostate>(m_type);
 }
+const std::string& OpenCL::Semantics::Type::getTypeName() const
+{
+    return m_typeName;
+}
 
-OpenCL::Semantics::PointerType::PointerType(bool isRestricted,
-                                            std::shared_ptr<OpenCL::Semantics::Type>&& elementType)
+bool OpenCL::Semantics::Type::isTypedef() const
+{
+    return m_typeName != m_name;
+}
+std::string OpenCL::Semantics::Type::getFullFormattedTypeName() const
+{
+    return '\'' + m_name + '\'' + (isTypedef() ? "(aka '" + m_typeName + "')" : "");
+}
+
+OpenCL::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& elementType)
     : m_restricted(isRestricted), m_elementType(std::move(elementType))
 {
 }
@@ -113,8 +124,7 @@ bool OpenCL::Semantics::PointerType::isRestricted() const
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, bool isVolatile,
-                                                               bool isRestricted,
+OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                OpenCL::Semantics::Type&& elementType)
 {
     std::string name;
@@ -124,8 +134,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, boo
         name = elementType.getName().substr(0, openParenthese) + "(*)" + elementType.getName().substr(openParenthese);
     }
     else if (std::holds_alternative<ArrayType>(elementType.get())
-        || std::holds_alternative<ValArrayType>(elementType.get())
-        || std::holds_alternative<AbstractArrayType>(elementType.get()))
+             || std::holds_alternative<ValArrayType>(elementType.get())
+             || std::holds_alternative<AbstractArrayType>(elementType.get()))
     {
         auto openBracket = elementType.getName().find('[');
         name = elementType.getName().substr(0, openBracket) + "(*)" + elementType.getName().substr(openBracket);
@@ -148,8 +158,7 @@ bool OpenCL::Semantics::PointerType::operator!=(const OpenCL::Semantics::Pointer
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::EnumType::EnumType(std::string name,
-                                      std::vector<std::pair<std::string, std::int32_t>> values)
+OpenCL::Semantics::EnumType::EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values)
     : m_name(std::move(name)), m_values(std::move(values))
 {
 }
@@ -169,9 +178,8 @@ bool OpenCL::Semantics::EnumType::isAnonymous() const
     return m_name.empty();
 }
 
-OpenCL::Semantics::Type
-OpenCL::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
-                                    std::vector<std::pair<std::string, std::int32_t>> values)
+OpenCL::Semantics::Type OpenCL::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
+                                                            std::vector<std::pair<std::string, std::int32_t>> values)
 {
     return OpenCL::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
 }
@@ -211,36 +219,35 @@ std::uint8_t OpenCL::Semantics::PrimitiveType::getBitCount() const
     return m_bitCount;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, bool isVolatile,
-                                                                 bool isFloatingPoint, bool isSigned,
-                                                                 std::uint8_t bitCount)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
+                                                                 bool isSigned, std::uint8_t bitCount)
 {
-    return OpenCL::Semantics::Type(isConst, isVolatile,
-                                   [=]() -> const char*
-                                   {
-                                       if (isFloatingPoint)
-                                       {
-                                           if (bitCount == 32)
-                                           {
-                                               return "float";
-                                           }
-                                           else if (bitCount == 64)
-                                           {
-                                               return "double";
-                                           }
-                                           return "";
-                                       }
-                                       switch (bitCount)
-                                       {
-                                       case 8:return isSigned ? "char" : "unsigned char";
-                                       case 16:return isSigned ? "short" : "unsigned short";
-                                       case 32:return isSigned ? "int" : "unsigned int";
-                                       case 64:return isSigned ? "long long" : "unsigned long long";
-                                       default:return "void";
-                                       }
-                                       return "";
-                                   }(),
-                                   PrimitiveType(isFloatingPoint, isSigned, bitCount));
+    return OpenCL::Semantics::Type(
+        isConst, isVolatile,
+        [=]() -> const char* {
+            if (isFloatingPoint)
+            {
+                if (bitCount == 32)
+                {
+                    return "float";
+                }
+                else if (bitCount == 64)
+                {
+                    return "double";
+                }
+                return "";
+            }
+            switch (bitCount)
+            {
+                case 8: return isSigned ? "char" : "unsigned char";
+                case 16: return isSigned ? "short" : "unsigned short";
+                case 32: return isSigned ? "int" : "unsigned int";
+                case 64: return isSigned ? "long long" : "unsigned long long";
+                default: return "void";
+            }
+            return "";
+        }(),
+        PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
 
 bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::PrimitiveType& rhs) const
@@ -250,7 +257,7 @@ bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::Primi
         return true;
     }
     return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount)
-        == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
+           == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
 }
 
 bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::PrimitiveType& rhs) const
@@ -313,8 +320,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createVoid(bool isCons
     return create(isConst, isVolatile, false, true, 0);
 }
 
-OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted,
-                                              std::shared_ptr<OpenCL::Semantics::Type>&& type)
+OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
@@ -329,8 +335,7 @@ bool OpenCL::Semantics::ValArrayType::isRestricted() const
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::ValArrayType::create(bool isConst, bool isVolatile,
-                                                                bool isRestricted,
+OpenCL::Semantics::Type OpenCL::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                 OpenCL::Semantics::Type&& type)
 {
     auto name = type.getName() + "[*]";
@@ -349,8 +354,7 @@ bool OpenCL::Semantics::ValArrayType::operator!=(const OpenCL::Semantics::ValArr
 }
 
 OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
-                                              std::vector<std::pair<Type, std::string>> arguments,
-                                              bool lastIsVararg,
+                                              std::vector<std::pair<Type, std::string>> arguments, bool lastIsVararg,
                                               bool hasPrototype)
     : m_returnType(std::move(returnType)),
       m_arguments(std::move(arguments)),
@@ -364,8 +368,8 @@ const OpenCL::Semantics::Type& OpenCL::Semantics::FunctionType::getReturnType() 
     return *m_returnType;
 }
 
-const std::vector<std::pair<OpenCL::Semantics::Type,
-                            std::string>>& OpenCL::Semantics::FunctionType::getArguments() const
+const std::vector<std::pair<OpenCL::Semantics::Type, std::string>>&
+    OpenCL::Semantics::FunctionType::getArguments() const
 {
     return m_arguments;
 }
@@ -375,10 +379,9 @@ bool OpenCL::Semantics::FunctionType::isLastVararg() const
     return m_lastIsVararg;
 }
 
-OpenCL::Semantics::Type
-OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
-                                        std::vector<std::pair<Type, std::string>>&& arguments,
-                                        bool lastIsVararg, bool hasPrototype)
+OpenCL::Semantics::Type OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
+                                                                std::vector<std::pair<Type, std::string>>&& arguments,
+                                                                bool lastIsVararg, bool hasPrototype)
 {
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
@@ -398,12 +401,11 @@ OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
 bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::FunctionType& rhs) const
 {
     std::vector<Type> thisTypes, rhsTypes;
-    auto pairFirst = [](const auto& pair)
-    { return pair.first; };
+    auto pairFirst = [](const auto& pair) { return pair.first; };
     std::transform(m_arguments.begin(), m_arguments.end(), std::back_inserter(thisTypes), pairFirst);
     std::transform(rhs.m_arguments.begin(), rhs.m_arguments.end(), std::back_inserter(rhsTypes), pairFirst);
     return std::tie(*m_returnType, thisTypes, m_lastIsVararg)
-        == std::tie(*rhs.m_returnType, rhsTypes, rhs.m_lastIsVararg);
+           == std::tie(*rhs.m_returnType, rhsTypes, rhs.m_lastIsVararg);
 }
 
 bool OpenCL::Semantics::FunctionType::operator!=(const OpenCL::Semantics::FunctionType& rhs) const
@@ -432,8 +434,7 @@ bool OpenCL::Semantics::AbstractArrayType::isRestricted() const
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile,
-                                                                     bool isRestricted,
+OpenCL::Semantics::Type OpenCL::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                      OpenCL::Semantics::Type&& type)
 {
     auto name = type.getName() + "[]";
@@ -453,42 +454,37 @@ bool OpenCL::Semantics::AbstractArrayType::operator!=(const OpenCL::Semantics::A
 
 std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
 {
-    return matchWithSelf(declarator.getDirectDeclarator(),
-                         [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string
-                         { return name.getIdentifier(); },
-                         [](auto&& self, const Syntax::DirectDeclaratorParenthese& declarator) -> std::string
-                         {
-                             return std::visit([&self](auto&& value) -> std::string
-                                               { return self(value); },
-                                               declarator.getDeclarator().getDirectDeclarator());
-                         },
-                         [](auto&& self, auto&& value) -> std::string
-                         {
-                             return std::visit([&self](auto&& value) -> std::string
-                                               { return self(value); },
-                                               value.getDirectDeclarator());
-                         });
+    return matchWithSelf(
+        declarator.getDirectDeclarator(),
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string { return name.getIdentifier(); },
+        [](auto&& self, const Syntax::DirectDeclaratorParenthese& declarator) -> std::string {
+            return std::visit([&self](auto&& value) -> std::string { return self(value); },
+                              declarator.getDeclarator().getDirectDeclarator());
+        },
+        [](auto&& self, auto&& value) -> std::string {
+            return std::visit([&self](auto&& value) -> std::string { return self(value); },
+                              value.getDirectDeclarator());
+        });
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Semantics::declaratorToLoc(const OpenCL::Syntax::Declarator& declarator)
+std::vector<OpenCL::Lexer::Token>::const_iterator
+    OpenCL::Semantics::declaratorToLoc(const OpenCL::Syntax::Declarator& declarator)
 {
-    return matchWithSelf(declarator.getDirectDeclarator(), [](auto&&,
-                                                              const Syntax::DirectDeclaratorIdentifier& name) -> std::vector<
-                             OpenCL::Lexer::Token>::const_iterator
-                         { return name.getIdentifierLoc(); },
-                         [](auto&& self,
-                            const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<OpenCL::Lexer::Token>::const_iterator
-                         {
-                             return std::visit([&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
-                                               { return self(value); },
-                                               declarator.getDeclarator().getDirectDeclarator());
-                         },
-                         [](auto&& self, auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
-                         {
-                             return std::visit([&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator
-                                               { return self(value); },
-                                               value.getDirectDeclarator());
-                         });
+    return matchWithSelf(
+        declarator.getDirectDeclarator(),
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name)
+            -> std::vector<OpenCL::Lexer::Token>::const_iterator { return name.getIdentifierLoc(); },
+        [](auto&& self,
+           const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<OpenCL::Lexer::Token>::const_iterator {
+            return std::visit(
+                [&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator { return self(value); },
+                declarator.getDeclarator().getDirectDeclarator());
+        },
+        [](auto&& self, auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator {
+            return std::visit(
+                [&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator { return self(value); },
+                value.getDirectDeclarator());
+        });
 }
 
 OpenCL::Semantics::RecordType::RecordType(std::string name, bool isUnion,
@@ -503,7 +499,7 @@ bool OpenCL::Semantics::RecordType::isUnion() const
 }
 
 const std::vector<std::tuple<OpenCL::Semantics::Type, std::string, std::int64_t>>&
-OpenCL::Semantics::RecordType::getMembers() const
+    OpenCL::Semantics::RecordType::getMembers() const
 {
     return m_members;
 }
@@ -536,85 +532,74 @@ const std::string& OpenCL::Semantics::RecordType::getName() const
     return m_name;
 }
 
-OpenCL::Expected<std::size_t, std::string>
-OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
+OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
 {
-    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string>
-                 {
-                     return primitiveType.getBitCount() / 8;
-                 },
-                 [](const ArrayType& arrayType) -> Expected<std::size_t, std::string>
-                 {
-                     return alignmentOf(arrayType.getType());
-                 },
-                 [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string>
-                 {
-                     return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF
-                         .args('\'' + type.getName() + '\'');
-                 },
-                 [](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string>
-                 {
-                     return alignmentOf(valArrayType.getType());
-                 },
-                 [](const FunctionType&) -> Expected<std::size_t, std::string>
-                 {
-                     return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
-                 },
-                 [&type](const RecordType& recordType) -> Expected<std::size_t, std::string>
-                 {
-                     if (recordType.getMembers().empty())
-                     {
-                         return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF
-                             .args('\'' + type.getName() + '\'');
-                     }
-                     if (!recordType.isUnion())
-                     {
-                         std::size_t currentAlignment = 0;
-                         for (auto&[subtype, name, bits] : recordType.getMembers())
-                         {
-                             (void)name;
-                             (void)bits;
-                             auto result = alignmentOf(subtype);
-                             if (!result)
-                             {
-                                 return result;
-                             }
-                             currentAlignment = std::max(currentAlignment, *result);
-                         }
-                         return currentAlignment;
-                     }
-                     else
-                     {
-                         std::optional<std::string> failure;
-                         auto result = std::max_element(
-                             recordType.getMembers().begin(), recordType.getMembers().end(),
-                             [&failure](const auto& lhs, const auto& rhs)
-                             {
-                                 auto lhsSize = sizeOf(std::get<0>(lhs));
-                                 if (!lhsSize)
-                                 {
-                                     failure = lhsSize.error();
-                                 }
-                                 auto rhsSize = sizeOf(std::get<0>(rhs));
-                                 if (!rhsSize)
-                                 {
-                                     failure = rhsSize.error();
-                                 }
-                                 return (lhsSize ? *lhsSize : 0) < (rhsSize ? *rhsSize : 0);
-                             });
-                         if (failure)
-                         {
-                             return *failure;
-                         }
-                         return alignmentOf(std::get<0>(*result));
-                     }
-                 },
-                 [](const EnumType&) -> Expected<std::size_t, std::string>
-                 { return 4; },
-                 [](const PointerType&) -> Expected<std::size_t, std::string>
-                 { return 8; },
-                 [](std::monostate) -> Expected<std::size_t, std::string>
-                 { return 0; });
+    return match(
+        type.get(),
+        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
+            return primitiveType.getBitCount() / 8;
+        },
+        [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
+            return alignmentOf(arrayType.getType());
+        },
+        [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
+            return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+        },
+        [](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
+            return alignmentOf(valArrayType.getType());
+        },
+        [](const FunctionType&) -> Expected<std::size_t, std::string> {
+            return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
+        },
+        [&type](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+            if (recordType.getMembers().empty())
+            {
+                return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(
+                    type.getFullFormattedTypeName());
+            }
+            if (!recordType.isUnion())
+            {
+                std::size_t currentAlignment = 0;
+                for (auto& [subtype, name, bits] : recordType.getMembers())
+                {
+                    (void)name;
+                    (void)bits;
+                    auto result = alignmentOf(subtype);
+                    if (!result)
+                    {
+                        return result;
+                    }
+                    currentAlignment = std::max(currentAlignment, *result);
+                }
+                return currentAlignment;
+            }
+            else
+            {
+                std::optional<std::string> failure;
+                auto result = std::max_element(recordType.getMembers().begin(), recordType.getMembers().end(),
+                                               [&failure](const auto& lhs, const auto& rhs) {
+                                                   auto lhsSize = sizeOf(std::get<0>(lhs));
+                                                   if (!lhsSize)
+                                                   {
+                                                       failure = lhsSize.error();
+                                                   }
+                                                   auto rhsSize = sizeOf(std::get<0>(rhs));
+                                                   if (!rhsSize)
+                                                   {
+                                                       failure = rhsSize.error();
+                                                   }
+                                                   return (lhsSize ? *lhsSize : 0) < (rhsSize ? *rhsSize : 0);
+                                               });
+                if (failure)
+                {
+                    return *failure;
+                }
+                return alignmentOf(std::get<0>(*result));
+            }
+        },
+        [](const EnumType&) -> Expected<std::size_t, std::string> { return 4; },
+        [](const PointerType&) -> Expected<std::size_t, std::string> { return 8; },
+        [](std::monostate) -> Expected<std::size_t, std::string> { return 0; });
 }
 
 bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
@@ -627,82 +612,92 @@ bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-OpenCL::Expected<std::size_t, std::string>
-OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
+OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
 {
-    return match(type.get(), [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string>
-                 {
-                     return primitiveType.getBitCount() / 8;
-                 },
-                 [](const ArrayType& arrayType) -> Expected<std::size_t, std::string>
-                 {
-                     auto result = sizeOf(arrayType.getType());
-                     if (!result)
-                     {
-                         return result;
-                     }
-                     return *result * arrayType.getSize();
-                 },
-                 [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string>
-                 {
-                     return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args('\'' + type.getName() + '\'');
-                 },
-                 [](const ValArrayType&) -> Expected<std::size_t, std::string>
-                 {
-                     return ErrorMessages::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
-                 },
-                 [](const FunctionType&) -> Expected<std::size_t, std::string>
-                 {
-                     return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
-                 },
-                 [&type](const RecordType& recordType) -> Expected<std::size_t, std::string>
-                 {
-                     std::size_t currentSize = 0;
-                     if (recordType.getMembers().empty())
-                     {
-                         return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF
-                             .args('\'' + type.getName() + '\'');
-                     }
-                     for (auto&[subtype, name, bits] : recordType.getMembers())
-                     {
-                         (void)name;
-                         (void)bits;
-                         auto alignment = alignmentOf(subtype);
-                         if (!alignment)
-                         {
-                             return alignment;
-                         }
-                         auto rest = currentSize % *alignment;
-                         if (rest != 0)
-                         {
-                             currentSize += *alignment - rest;
-                         }
-                         auto subSize = sizeOf(subtype);
-                         if (!subSize)
-                         {
-                             return subSize;
-                         }
-                         currentSize += *subSize;
-                     }
-                     return currentSize;
-                 },
-                 [](const EnumType&) -> Expected<std::size_t, std::string>
-                 { return 4; },
-                 [](const PointerType&) -> Expected<std::size_t, std::string>
-                 { return 8; },
-                 [](std::monostate) -> Expected<std::size_t, std::string>
-                 { return 0; });
+    return match(
+        type.get(),
+        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
+            return primitiveType.getBitCount() / 8;
+        },
+        [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
+            auto result = sizeOf(arrayType.getType());
+            if (!result)
+            {
+                return result;
+            }
+            return *result * arrayType.getSize();
+        },
+        [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
+            return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+        },
+        [](const ValArrayType&) -> Expected<std::size_t, std::string> {
+            return ErrorMessages::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
+        },
+        [](const FunctionType&) -> Expected<std::size_t, std::string> {
+            return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
+        },
+        [&type](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+            if (recordType.getMembers().empty())
+            {
+                return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+            }
+            if (!recordType.isUnion())
+            {
+                std::size_t currentSize = 0;
+                for (auto& [subtype, name, bits] : recordType.getMembers())
+                {
+                    (void)name;
+                    (void)bits;
+                    auto alignment = alignmentOf(subtype);
+                    if (!alignment)
+                    {
+                        return alignment;
+                    }
+                    auto rest = currentSize % *alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += *alignment - rest;
+                    }
+                    auto subSize = sizeOf(subtype);
+                    if (!subSize)
+                    {
+                        return subSize;
+                    }
+                    currentSize += *subSize;
+                }
+                return currentSize;
+            }
+            else
+            {
+                std::size_t maxSize = 0;
+                for (auto& [subtype, name, bits] : recordType.getMembers())
+                {
+                    (void)name;
+                    (void)bits;
+                    auto subSize = sizeOf(subtype);
+                    if (!subSize)
+                    {
+                        return subSize;
+                    }
+                    maxSize = std::max(maxSize, *subSize);
+                }
+                return maxSize;
+            }
+        },
+        [](const EnumType&) -> Expected<std::size_t, std::string> { return 4; },
+        [](const PointerType&) -> Expected<std::size_t, std::string> { return 8; },
+        [](std::monostate) -> Expected<std::size_t, std::string> { return 0; });
 }
 
-OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type,
-                                                          std::string name,
+OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,
                                                           std::vector<Declaration> parameterDeclarations,
-                                                          Linkage linkage,
-                                                          CompoundStatement&& compoundStatement)
-    : m_type(std::move(type)), m_name(std::move(name)), m_parameterDeclarations(std::move(parameterDeclarations)),
-      m_linkage(linkage), m_compoundStatement(std::move(compoundStatement))
+                                                          Linkage linkage, CompoundStatement&& compoundStatement)
+    : m_type(std::move(type)),
+      m_name(std::move(name)),
+      m_parameterDeclarations(std::move(parameterDeclarations)),
+      m_linkage(linkage),
+      m_compoundStatement(std::move(compoundStatement))
 {
-
 }
 
 const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionDefinition::getType() const
@@ -725,26 +720,27 @@ OpenCL::Semantics::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() c
     return m_linkage;
 }
 
-const std::vector<OpenCL::Semantics::Declaration>& OpenCL::Semantics::FunctionDefinition::getParameterDeclarations() const
+const std::vector<OpenCL::Semantics::Declaration>&
+    OpenCL::Semantics::FunctionDefinition::getParameterDeclarations() const
 {
     return m_parameterDeclarations;
 }
 
 OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
-{}
+{
+}
 
 const std::vector<OpenCL::Semantics::TranslationUnit::Variant>& OpenCL::Semantics::TranslationUnit::getGlobals() const
 {
     return m_globals;
 }
 
-OpenCL::Semantics::Declaration::Declaration(OpenCL::Semantics::Type type,
-                                            OpenCL::Semantics::Linkage linkage,
-                                            OpenCL::Semantics::Lifetime lifetime,
-                                            std::string name)
+OpenCL::Semantics::Declaration::Declaration(OpenCL::Semantics::Type type, OpenCL::Semantics::Linkage linkage,
+                                            OpenCL::Semantics::Lifetime lifetime, std::string name)
     : m_type(std::move(type)), m_linkage(linkage), m_lifetime(lifetime), m_name(std::move(name))
-{}
+{
+}
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::Declaration::getType() const
 {
@@ -768,10 +764,11 @@ const std::string& OpenCL::Semantics::Declaration::getName() const
 
 OpenCL::Semantics::CompoundStatement::CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems)
     : m_compoundItems(std::move(compoundItems))
-{}
+{
+}
 
-const std::vector<std::variant<OpenCL::Semantics::Statement,
-                               OpenCL::Semantics::Declaration>>& OpenCL::Semantics::CompoundStatement::getCompoundItems() const
+const std::vector<std::variant<OpenCL::Semantics::Statement, OpenCL::Semantics::Declaration>>&
+    OpenCL::Semantics::CompoundStatement::getCompoundItems() const
 {
     return m_compoundItems;
 }

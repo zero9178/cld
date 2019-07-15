@@ -1,17 +1,17 @@
-#include "CompilerCore/C/Codegen.hpp"
-#include "CompilerCore/C/Lexer.hpp"
-#include "CompilerCore/C/Parser.hpp"
-#include "CompilerCore/Preprocessor/Preprocessor.hpp"
-
-#include <fstream>
-#include <iostream>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/TargetSelect.h>
 
+#include <CompilerCore/C/Codegen.hpp>
+#include <CompilerCore/C/Lexer.hpp>
+#include <CompilerCore/C/Parser.hpp>
+#include <CompilerCore/Preprocessor/Preprocessor.hpp>
+
+#include <fstream>
+#include <iostream>
 
 int main()
 {
@@ -46,8 +46,8 @@ int main()
     auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(), "generic", "", {}, {});
 
     OpenCL::Codegen::Context context;
-    auto result = OpenCL::Lexer::tokenize("int i ft");//OpenCL::PP::preprocess(std::move(source))
-    OpenCL::Parser::buildTree(result,&std::cerr);
+    auto result = OpenCL::Lexer::tokenize("int i ft"); // OpenCL::PP::preprocess(std::move(source))
+    OpenCL::Parser::buildTree(result, &std::cerr);
     return 0;
 
     context.module->print(llvm::outs(), nullptr);

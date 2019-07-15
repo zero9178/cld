@@ -6,4 +6,4 @@ namespace OpenCL
     extern bool colourConsoleOutput;
 }
 
-#endif //OPENCLPARSER_TESTCONFIG_HPP
+#endif // OPENCLPARSER_TESTCONFIG_HPP
