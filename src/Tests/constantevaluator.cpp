@@ -405,14 +405,14 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                                               "float r[5];"
                                               "char c[24];"
                                               "}",
-                                              sizeof(Test)},
+                                              static_cast<unsigned long long>(sizeof(Test))},
                                     std::pair{"union Test"
                                               "{"
                                               "int f;"
                                               "float r[5];"
                                               "char c[24];"
                                               "}",
-                                              sizeof(TestU)},
+                                              static_cast<unsigned long long>(sizeof(TestU))},
                                     std::pair{"void*", 8ull},
                                     std::pair{"struct u*", 8ull}};
                 for (auto& [name, size] : sizes)
