@@ -22,8 +22,8 @@ namespace
         std::vector<OpenCL::Lexer::Token> tokens;
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
         OpenCL::Parser::ParsingContext context(&ss);
+        auto ds = context.setDiagnosticStart(tokens.cbegin());
         auto ref = tokens.cbegin();
-        auto ds = context.setDiagnosticStart(ref);
         auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
         INFO(ss.str());
         REQUIRE((ss.str().empty() && parsing));
@@ -38,6 +38,7 @@ namespace
             {}, [&ss](const OpenCL::Message& message) { ss << message; }, mode);
         auto ret = evaluator.visit(*parsing);
         auto string = ss.str();
+#if !__has_feature(address_sanitizer)
         if (OpenCL::colourConsoleOutput && !string.empty())
         {
             OpenCL::Semantics::ConstantEvaluator(
@@ -50,6 +51,7 @@ namespace
                 {}, [](const OpenCL::Message& message) { std::cerr << message << std::endl; }, mode)
                 .visit(*parsing);
         }
+#endif
         return {ret, string};
     }
 } // namespace
@@ -798,18 +800,18 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(value.getType().getName() == "int*");
             }
             {
-                auto [value, error] = evaluateConstantExpression("(int*)3 + (int*)5",
-                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
-                CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                      "+", "'int*'", "'int*'")));
-            }
-            {
                 auto [value, error] =
                     evaluateConstantExpression("3.0 + (int*)5", OpenCL::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "+", "'double'", "'int*'")));
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("(int*)5 + (int*)3",
+                                                                 OpenCL::Semantics::ConstantEvaluator::Initialization);
+                CHECK(value.isUndefined());
+                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                      "+", "'int*'", "'int*'")));
             }
             {
                 auto [value, error] =

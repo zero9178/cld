@@ -554,7 +554,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
     return match(
         type.get(),
         [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
-            return primitiveType.getBitCount() / 8;
+            return primitiveType.getBitCount() / static_cast<std::size_t>(8);
         },
         [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
             return alignmentOf(arrayType.getType());
@@ -614,9 +614,9 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
                 return alignmentOf(std::get<0>(*result));
             }
         },
-        [](const EnumType&) -> Expected<std::size_t, std::string> { return 4; },
-        [](const PointerType&) -> Expected<std::size_t, std::string> { return 8; },
-        [](std::monostate) -> Expected<std::size_t, std::string> { return 0; });
+        [](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{4}; },
+        [](const PointerType&) -> Expected<std::size_t, std::string> { return std::size_t{8}; },
+        [](std::monostate) -> Expected<std::size_t, std::string> { return std::size_t{0}; });
 }
 
 bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
@@ -634,7 +634,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
     return match(
         type.get(),
         [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
-            return primitiveType.getBitCount() / 8;
+            return primitiveType.getBitCount() / std::size_t{8};
         },
         [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
             auto result = sizeOf(arrayType.getType());
@@ -701,9 +701,9 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
                 return maxSize;
             }
         },
-        [](const EnumType&) -> Expected<std::size_t, std::string> { return 4; },
-        [](const PointerType&) -> Expected<std::size_t, std::string> { return 8; },
-        [](std::monostate) -> Expected<std::size_t, std::string> { return 0; });
+        [](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{4}; },
+        [](const PointerType&) -> Expected<std::size_t, std::string> { return std::size_t{8}; },
+        [](std::monostate) -> Expected<std::size_t, std::string> { return std::size_t{0}; });
 }
 
 OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,

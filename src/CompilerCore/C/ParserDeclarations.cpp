@@ -1515,13 +1515,7 @@ std::optional<DirectAbstractDeclarator>
                     auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                     if (!abstractDeclarator)
                     {
-                        begin = std::find_if(begin, end, [](const Lexer::Token& token) {
-                            return token.getTokenType() == Lexer::TokenType::CloseParenthese;
-                        });
-                        if (begin == end)
-                        {
-                            return {};
-                        }
+                        return {};
                     }
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParenthese(

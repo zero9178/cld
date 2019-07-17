@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(OpenCLParser)
+project(OpenCLParser C CXX)
 if (WIN32)
     set(MGPKG_ROOT "$ENV{USERPROFILE}/.mgpkg")
 else ()
@@ -15,7 +15,7 @@ if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options("-Wa,-mbig-obj")
 endif ()
 
-if (UNIX AND DEFINED SANITIZER)
+if (DEFINED SANITIZER)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZER}")
 endif ()
 
