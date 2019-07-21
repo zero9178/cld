@@ -38,7 +38,6 @@ namespace
             {}, [&ss](const OpenCL::Message& message) { ss << message; }, mode);
         auto ret = evaluator.visit(*parsing);
         auto string = ss.str();
-#if !__has_feature(address_sanitizer)
         if (OpenCL::colourConsoleOutput && !string.empty())
         {
             OpenCL::Semantics::ConstantEvaluator(
@@ -51,7 +50,6 @@ namespace
                 {}, [](const OpenCL::Message& message) { std::cerr << message << std::endl; }, mode)
                 .visit(*parsing);
         }
-#endif
         return {ret, string};
     }
 } // namespace
