@@ -1,16 +1,15 @@
 #ifndef OPENCLPARSER_UNIQUERESOURCE_HPP
 #define OPENCLPARSER_UNIQUERESOURCE_HPP
 
-#include <functional>
-
 namespace OpenCL
 {
+    template <class F>
     class UniqueResource
     {
-        std::function<void()> m_function;
+        F m_function;
 
     public:
-        explicit UniqueResource(std::function<void()>&& function) : m_function(std::move(function)) {}
+        explicit UniqueResource(F&& function) : m_function(std::move(function)) {}
 
         ~UniqueResource()
         {

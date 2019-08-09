@@ -21,6 +21,8 @@ namespace OpenCL
             constexpr auto EXPECTED_N_INSTEAD_OF_N = Format("Expected {} instead of {}");
 
             constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
+
+            constexpr auto N_REQUIRES_AT_LEAST_ONE_N = Format("{} requires at least one {}");
         } // namespace Parser
 
         constexpr auto REDEFINITION_OF_SYMBOL_N = Format("Redefinition of symbol {}");
@@ -81,14 +83,14 @@ namespace OpenCL
             constexpr auto IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION =
                 "Identifier list not allowed in function declaration";
 
-            constexpr auto INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF = Format("Incomplete type {} in alignmentof");
+            constexpr auto INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF = Format("Incomplete type {} in 'alignof'");
 
             constexpr auto INCOMPLETE_TYPE_N_IN_SIZE_OF = Format("Incomplete type {} in 'sizeof'");
 
             constexpr auto INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC =
                 Format("Incomplete type {} used in pointer arithmetic");
 
-            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF = "Function type not allowed in alignmentof";
+            constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF = "Function type not allowed in 'alignof'";
 
             constexpr auto FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF = "Function type not allowed in 'sizeof'";
 

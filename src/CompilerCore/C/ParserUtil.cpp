@@ -10,6 +10,21 @@ bool OpenCL::Parser::isAssignment(Lexer::TokenType type)
            || type == Lexer::TokenType::BitXorAssign;
 }
 
+bool OpenCL::Parser::isInCommonSet(const OpenCL::Lexer::Token& token)
+{
+    return isInCommonSet(token.getTokenType());
+}
+
+bool OpenCL::Parser::isInCommonSet(OpenCL::Lexer::TokenType tokenType)
+{
+    switch (tokenType)
+    {
+        case Lexer::TokenType::SemiColon:
+
+        default: return false;
+    }
+}
+
 bool OpenCL::Parser::firstIsInExternalDeclaration(const Lexer::Token& token,
                                                   const OpenCL::Parser::ParsingContext& context)
 {

@@ -158,7 +158,17 @@ namespace OpenCL::Lexer
         [[nodiscard]] std::string emitBack() const;
     };
 
+    /**
+     * @param tokenType Token
+     * @return name of the token. If the token is a punctuator its surrounded in '
+     */
     std::string tokenName(TokenType tokenType);
+
+    /**
+     * @param tokenType Token
+     * @return generic value of the token. For non punctuators this is just a description. eg. identifier
+     */
+    std::string tokenValue(TokenType tokenType);
 
     std::string reconstruct(std::vector<Token>::const_iterator begin, std::vector<Token>::const_iterator end);
 } // namespace OpenCL::Lexer

@@ -9,10 +9,6 @@ namespace
 {
     std::int32_t charactersToCharLiteral(const std::string& characters)
     {
-        if (characters.empty())
-        {
-            throw std::runtime_error("Character constant can't be empty");
-        }
         if (characters.size() == 1)
         {
             return characters.front();
@@ -84,10 +80,6 @@ namespace
             }
             else
             {
-                if (characters.size() <= 1)
-                {
-                    throw std::runtime_error("At least one octal digit required");
-                }
                 std::istringstream ss(characters.substr(1, characters.size() - 1));
                 std::int32_t number;
                 if (!(ss >> std::oct >> number))
@@ -253,11 +245,7 @@ namespace
         {
             return TokenType::RestrictKeyword;
         }
-        if (characters == "inline")
-        {
-            return TokenType::InlineKeyword;
-        }
-        throw std::runtime_error("Invalid keyword " + characters);
+        return TokenType::InlineKeyword;
     }
 
     OpenCL::Lexer::Token charactersToNumber(const std::string& lastText, std::uint64_t line, std::uint64_t column)
@@ -281,10 +269,6 @@ namespace
 
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (endptr != filtered.c_str() + filtered.size())
-                {
-                    throw std::runtime_error("Invalid constant " + filtered);
-                }
                 if (suffix.empty() || suffix == "l" || suffix == "L")
                 {
                     if (number > std::numeric_limits<std::uint32_t>::max())
@@ -312,10 +296,6 @@ namespace
             {
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (endptr != filtered.c_str() + filtered.size())
-                {
-                    throw std::runtime_error("Invalid constant " + filtered);
-                }
                 if (suffix.empty() || suffix == "l" || suffix == "L")
                 {
                     if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
@@ -380,6 +360,11 @@ namespace
             }
             else
             {
+                if (lastText.size() >= 2 && lastText[0] == '0' && std::tolower(lastText[1]) == 'x'
+                    && std::none_of(lastText.begin(), lastText.end(), [](char c) { return c == 'p' || c == 'P'; }))
+                {
+                    throw std::runtime_error("Binary floating point constant must contain exponent");
+                }
                 double number = std::strtod(lastText.c_str(), &endptr);
                 if (endptr != lastText.c_str() + lastText.size())
                 {
@@ -419,10 +404,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
 
     for (auto iter : source)
     {
-        if (!iter)
-        {
-            continue;
-        }
         bool handeled;
         do
         {
@@ -465,6 +446,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                         default:
                             if (std::isspace(iter))
                             {
+                                lastTokenIsAmbiguous = false;
                                 break;
                             }
                             handeled = false;
@@ -566,7 +548,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                 {
                     if ((iter >= '0' && iter <= '9') || (iter >= 'a' && iter <= 'f') || (iter >= 'A' && iter <= 'F')
                         || iter == 'x' || iter == 'X' || iter == '.' || iter == 'u' || iter == 'U' || iter == 'l'
-                        || iter == 'L')
+                        || iter == 'L' || iter == 'P' || iter == 'p')
                     {
                         characters += iter;
                     }
@@ -950,6 +932,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::CloseParenthese: return ")";
         case TokenType::OpenBrace: return m_valueRepresentation.empty() ? "{" : m_valueRepresentation;
         case TokenType::CloseBrace: return m_valueRepresentation.empty() ? "}" : m_valueRepresentation;
+        case TokenType::DoublePound:
         case TokenType::StringLiteral:
         case TokenType::Literal: return m_valueRepresentation;
         case TokenType::SemiColon: return ";";
@@ -1029,9 +1012,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::RestrictKeyword: return "restrict";
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
-        case TokenType::DoublePound: return m_valueRepresentation.empty() ? "##" : m_valueRepresentation;
     }
-    return "";
 }
 
 std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
@@ -1124,7 +1105,98 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
     }
-    return "";
+}
+
+std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
+{
+    switch (tokenType)
+    {
+        case TokenType::Identifier: return "identifier";
+        case TokenType::OpenParenthese: return "(";
+        case TokenType::CloseParenthese: return ")";
+        case TokenType::OpenBrace: return "{";
+        case TokenType::CloseBrace: return "}";
+        case TokenType::StringLiteral: return "string literal";
+        case TokenType::Literal: return "literal";
+        case TokenType::SemiColon: return ";";
+        case TokenType::Comma: return ",";
+        case TokenType::Minus: return "-";
+        case TokenType::BitWiseNegation: return "~";
+        case TokenType::LogicalNegation: return "!";
+        case TokenType::Plus: return "+";
+        case TokenType::Asterisk: return "*";
+        case TokenType::Division: return "/";
+        case TokenType::Percent: return "%";
+        case TokenType::LogicAnd: return "&&";
+        case TokenType::LogicOr: return "||";
+        case TokenType::Ampersand: return "&";
+        case TokenType::BitOr: return "|";
+        case TokenType::BitXor: return "^";
+        case TokenType::Equal: return "==";
+        case TokenType::NotEqual: return "!=";
+        case TokenType::LessThan: return "<";
+        case TokenType::LessThanOrEqual: return "<=";
+        case TokenType::GreaterThan: return ">";
+        case TokenType::GreaterThanOrEqual: return ">=";
+        case TokenType::Assignment: return "=";
+        case TokenType::PlusAssign: return "+=";
+        case TokenType::MinusAssign: return "-=";
+        case TokenType::DivideAssign: return "/=";
+        case TokenType::MultiplyAssign: return "*=";
+        case TokenType::ModuloAssign: return "%=";
+        case TokenType::ShiftLeftAssign: return "<<=";
+        case TokenType::ShiftRightAssign: return ">>=";
+        case TokenType::BitAndAssign: return "&=";
+        case TokenType::BitOrAssign: return "|=";
+        case TokenType::BitXorAssign: return "^=";
+        case TokenType::ShiftRight: return ">>";
+        case TokenType::ShiftLeft: return "<<";
+        case TokenType::Increment: return "++";
+        case TokenType::Decrement: return "--";
+        case TokenType::Colon: return ":";
+        case TokenType::QuestionMark: return "?";
+        case TokenType::VoidKeyword: return "void";
+        case TokenType::CharKeyword: return "char";
+        case TokenType::ShortKeyword: return "short";
+        case TokenType::IntKeyword: return "int";
+        case TokenType::LongKeyword: return "long";
+        case TokenType::FloatKeyword: return "float";
+        case TokenType::DoubleKeyword: return "double";
+        case TokenType::SignedKeyword: return "signed";
+        case TokenType::UnsignedKeyword: return "unsigned";
+        case TokenType::TypedefKeyword: return "typedef";
+        case TokenType::ExternKeyword: return "extern";
+        case TokenType::StaticKeyword: return "static";
+        case TokenType::AutoKeyword: return "auto";
+        case TokenType::RegisterKeyword: return "register";
+        case TokenType::ConstKeyword: return "const";
+        case TokenType::SizeofKeyword: return "sizeof";
+        case TokenType::ReturnKeyword: return "return";
+        case TokenType::BreakKeyword: return "break";
+        case TokenType::ContinueKeyword: return "continue";
+        case TokenType::DoKeyword: return "do";
+        case TokenType::ElseKeyword: return "else";
+        case TokenType::ForKeyword: return "for";
+        case TokenType::IfKeyword: return "if";
+        case TokenType::WhileKeyword: return "while";
+        case TokenType::OpenSquareBracket: return "[";
+        case TokenType::CloseSquareBracket: return "]";
+        case TokenType::StructKeyword: return "struct";
+        case TokenType::Dot: return ".";
+        case TokenType::Arrow: return "->";
+        case TokenType::SwitchKeyword: return "switch";
+        case TokenType::CaseKeyword: return "case";
+        case TokenType::DefaultKeyword: return "default";
+        case TokenType::UnionKeyword: return "union";
+        case TokenType::VolatileKeyword: return "volatile";
+        case TokenType::EnumKeyword: return "enum";
+        case TokenType::GotoKeyword: return "goto";
+        case TokenType::Ellipse: return "...";
+        case TokenType::RestrictKeyword: return "restrict";
+        case TokenType::InlineKeyword: return "inline";
+        case TokenType::Pound: return "#";
+        case TokenType::DoublePound: return "##";
+    }
 }
 
 std::uint64_t OpenCL::Lexer::Token::getLength() const

@@ -8,6 +8,10 @@ namespace OpenCL::Parser
 {
     bool isAssignment(Lexer::TokenType type);
 
+    bool isInCommonSet(const Lexer::Token& token);
+
+    bool isInCommonSet(Lexer::TokenType tokenType);
+
     template <class T = void>
     bool expect(Lexer::TokenType expected, std::vector<OpenCL::Lexer::Token>::const_iterator& curr,
                 OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::ParsingContext& context,
@@ -20,8 +24,8 @@ namespace OpenCL::Parser
                 context.logError(
                     OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
                     findSemicolonOrEOL(curr, end),
-                    Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::Token(0, 0, 0, expected).emitBack()},
-                    std::move(notes));
+                                 Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)},
+                                 std::move(notes));
             }
             else
             {

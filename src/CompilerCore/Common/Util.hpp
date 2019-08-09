@@ -45,4 +45,31 @@ namespace OpenCL
     }
 } // namespace OpenCL
 
+#ifdef NDEBUG
+
+#ifndef MSVC
+
+#define OPENCL_UNREACHABLE       \
+    do                           \
+        __builtin_unreachable(); \
+    while (0)
+
+#else
+
+#define OPENCL_UNREACHABLE \
+    do                     \
+        __assume(false);   \
+    while (0)
+
+#endif
+
+#else
+
+#define OPENCL_UNREACHABLE \
+    do                     \
+        std::abort();      \
+    while (0)
+
+#endif
+
 #endif // OPENCLPARSER_UTIL_HPP

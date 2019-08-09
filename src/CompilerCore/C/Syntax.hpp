@@ -1282,7 +1282,8 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <AbstractDeclarator> ::= { <Pointer> } [<DirectAbstractDeclarator>]
+     * <AbstractDeclarator> ::= { <Pointer> } <DirectAbstractDeclarator>
+     *                        | <Pointer> { <Pointer> }
      */
     class AbstractDeclarator final : public Node
     {
@@ -1558,7 +1559,7 @@ namespace OpenCL::Syntax
     /**
      * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
      *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
-     *                       { <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> <TokenType::Comma>
+     *                       { <TokenType::Comma> <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression>
      * } [ <TokenType::Comma> ] <TokenType::CloseBrace>
      */
     class EnumDeclaration final : public Node

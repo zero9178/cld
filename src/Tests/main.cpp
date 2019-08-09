@@ -33,3 +33,23 @@ int main(int argc, char* argv[])
 }
 
 bool OpenCL::colourConsoleOutput = false;
+
+#ifdef __clang__
+#if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0
+
+#include <windows.h>
+
+extern "C" int lprofGetHostName(char* Name, int Len)
+{
+    WCHAR Buffer[128];
+    DWORD BufferSize = sizeof(Buffer);
+    BOOL Result = GetComputerNameExW(ComputerNameDnsFullyQualified, Buffer, &BufferSize);
+    if (!Result)
+        return -1;
+    if (WideCharToMultiByte(CP_UTF8, 0, Buffer, -1, Name, Len, nullptr, nullptr) == 0)
+        return -1;
+    return 0;
+}
+
+#endif
+#endif
