@@ -421,6 +421,10 @@ TEST_CASE("Parse Expressions", "[parser]")
                              && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'43'"))
                              && Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
                              && ProducesNErrors(3) && ProducesNNotes(1));
+        functionProduces(parsePostFixExpression, "i(53,42,32]",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "']'"))
+                             && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
+                             && ProducesNNotes(1));
         functionProduces(
             parsePostFixExpression, "i(53,42,32,[5]",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
@@ -428,10 +432,18 @@ TEST_CASE("Parse Expressions", "[parser]")
                 && ProducesNErrors(2) && ProducesNNotes(1));
 
         functionProduces(parsePostFixExpression, "(int){5}", ProducesNoErrors() && ProducesNoNotes());
+        treeProduces("void foo(){(int[{5};}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "'{'"))
+                         && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && Catch::Contains(EXPECTED_N.args("')'"))
+                         && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(2));
         functionProduces(parsePostFixExpression, "(int){5 8}",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'}'", "'8'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'{'")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
+        functionProduces(parsePostFixExpression, "(int)5}",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'{'", "'5'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "(int){5,}", ProducesNoErrors() && ProducesNoNotes());
 
         functionProduces(parsePostFixExpression, "i[5",
                          Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
@@ -443,9 +455,21 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parsePostFixExpression, "i[5]", ProducesNoErrors() && ProducesNoNotes());
 
         functionProduces(parsePostFixExpression, "i++", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "]++",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i--", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "]--",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
 
         functionProduces(parsePostFixExpression, "i.m", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "].m",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i.",
                          Catch::Contains(EXPECTED_N.args("identifier")) && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i.[]",
@@ -455,6 +479,10 @@ TEST_CASE("Parse Expressions", "[parser]")
                              && ProducesNErrors(2) && ProducesNoNotes());
 
         functionProduces(parsePostFixExpression, "i->m", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "]->m",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i->",
                          Catch::Contains(EXPECTED_N.args("identifier")) && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i->[]",
@@ -476,6 +504,10 @@ TEST_CASE("Parse Expressions", "[parser]")
                              && ProducesNErrors(1) && ProducesNNotes(1));
 
         functionProduces(parseUnaryExpression, "sizeof sizeof(int)", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseUnaryExpression, "sizeof ]",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parseUnaryExpression, "sizeof(int*[)",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "')'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(1)

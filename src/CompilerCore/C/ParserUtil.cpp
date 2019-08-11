@@ -164,6 +164,7 @@ bool OpenCL::Parser::firstIsInInitializer(const Lexer::Token& token, const OpenC
 bool OpenCL::Parser::firstIsInStatement(const Lexer::Token& token, const OpenCL::Parser::Context& context)
 {
     return token.getTokenType() == Lexer::TokenType::IfKeyword || token.getTokenType() == Lexer::TokenType::ForKeyword
+           || token.getTokenType() == Lexer::TokenType::OpenBrace
            || token.getTokenType() == Lexer::TokenType::SwitchKeyword
            || token.getTokenType() == Lexer::TokenType::ContinueKeyword
            || token.getTokenType() == Lexer::TokenType::BreakKeyword

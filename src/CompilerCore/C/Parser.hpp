@@ -211,8 +211,7 @@ namespace OpenCL::Parser
                                                                       Tokens::const_iterator end, Context& context,
                                                                       InRecoverySet recoverySet);
 
-    std::optional<Syntax::Expression> parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                      Context& context, InRecoverySet recoverySet);
+    Syntax::Expression parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Tokens::const_iterator& begin,
                                                                           Tokens::const_iterator end, Context& context,

@@ -1881,7 +1881,8 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
             continue;
         }
         vector.push_back({std::move(*initializer), std::move(designation)});
-    } while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma);
+    } while (begin + 1 < end && begin->getTokenType() == Lexer::TokenType::Comma
+             && firstIsInInitializerList(*(begin + 1), context));
 
     return InitializerList{start, begin, std::move(vector)};
 }
@@ -2067,14 +2068,13 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                     }
                 }
                 if (!expect(Lexer::TokenType::SemiColon, begin, findSemicolonOrEOL(begin, end), context,
-                            std::move(notes))
-                    || !expression)
+                            std::move(notes)))
                 {
                     skipUntil(begin, end, recoverySet);
                     return {};
                 }
                 return Statement(
-                    ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(*expression))));
+                    ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(expression))));
             }
             else
             {
@@ -2120,11 +2120,11 @@ std::optional<HeadWhileStatement> OpenCL::Parser::parseHeadWhileStatement(
         });
     }
     auto statement = parseStatement(begin, end, context, recoverySet);
-    if (!expression || !statement)
+    if (!statement)
     {
         return {};
     }
-    return HeadWhileStatement(start, begin, std::move(*expression), std::make_unique<Statement>(std::move(*statement)));
+    return HeadWhileStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
 }
 
 std::optional<FootWhileStatement> OpenCL::Parser::parseFootWhileStatement(
@@ -2174,11 +2174,11 @@ std::optional<FootWhileStatement> OpenCL::Parser::parseFootWhileStatement(
         skipUntil(begin, end, recoverySet);
     }
 
-    if (!statement || !expression)
+    if (!statement)
     {
         return {};
     }
-    return FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)), std::move(*expression));
+    return FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)), std::move(expression));
 }
 
 std::optional<ReturnStatement>
@@ -2213,15 +2213,11 @@ std::optional<ReturnStatement>
     auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
         return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
     });
-    if (!expect(Lexer::TokenType::SemiColon, begin, end, context) || !expression)
+    if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
     {
         skipUntil(begin, end, recoverySet);
     }
-    if (!expression)
-    {
-        return {};
-    }
-    return ReturnStatement(start, begin, std::make_unique<Expression>(std::move(*expression)));
+    return ReturnStatement(start, begin, std::make_unique<Expression>(std::move(expression)));
 }
 
 std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
@@ -2265,16 +2261,16 @@ std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::
     {
         begin++;
         auto elseStatement = parseStatement(begin, end, context, recoverySet);
-        if (!expression || !statement || !elseStatement)
+        if (!statement || !elseStatement)
         {
             return {};
         }
-        return IfStatement(start, begin, std::move(*expression), std::make_unique<Statement>(std::move(*statement)),
+        return IfStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)),
                            std::make_unique<Statement>(std::move(*elseStatement)));
     }
-    else if (expression && statement)
+    else if (statement)
     {
-        return IfStatement(start, begin, std::move(*expression), std::make_unique<Statement>(std::move(*statement)));
+        return IfStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
     }
     return {};
 }
@@ -2310,11 +2306,11 @@ std::optional<SwitchStatement>
         });
     }
     auto statement = parseStatement(begin, end, context, recoverySet);
-    if (!expression || !statement)
+    if (!statement)
     {
         return {};
     }
-    return SwitchStatement(start, begin, std::move(*expression), std::make_unique<Statement>(std::move(*statement)));
+    return SwitchStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
 }
 
 std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
@@ -2363,10 +2359,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
             return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
                    || recoverySet(token);
         });
-        if (exp)
-        {
-            initial = std::make_unique<Expression>(std::move(*exp));
-        }
+        initial = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
         {
             skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
@@ -2393,10 +2386,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
             return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
                    || recoverySet(token);
         });
-        if (exp)
-        {
-            controlling = std::make_unique<Expression>(std::move(*exp));
-        }
+        controlling = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
         {
             skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
@@ -2422,10 +2412,7 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
         auto exp = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
             return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
         });
-        if (exp)
-        {
-            post = std::make_unique<Expression>(std::move(*exp));
-        }
+        post = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::CloseParenthese, begin, end, context,
                     {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
