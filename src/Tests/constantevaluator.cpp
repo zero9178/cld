@@ -21,10 +21,11 @@ namespace
         std::ostringstream ss;
         std::vector<OpenCL::Lexer::Token> tokens;
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
-        OpenCL::Parser::ParsingContext context(&ss);
+        OpenCL::Parser::Context context(&ss);
         auto ds = context.setDiagnosticStart(tokens.cbegin());
         auto ref = tokens.cbegin();
-        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
+        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context,
+                                                                  [](const OpenCL::Lexer::Token&) { return false; });
         INFO(ss.str());
         REQUIRE((ss.str().empty() && parsing));
         OpenCL::Semantics::SemanticAnalysis analysis(&ss);

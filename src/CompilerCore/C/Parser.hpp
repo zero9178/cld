@@ -2,29 +2,20 @@
 #define OPENCLPARSER_PARSER_HPP
 
 #include <functional>
+#include <tl/function_ref.hpp>
 
 #include "../Common/UniqueResource.hpp"
 #include "Message.hpp"
-#include "ParserResult.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-/**
- * For error recovery we use panic mode which means that if a production fails due to a terminal not being present
- * we return from the function. The caller is the responsible of finding the next sync token.
- *
- * One thing that may seem a bit unintuitive at first is that if we have a production like
- * <E> := .... <A> ...
- * and <A> fails we can't construct an object of type E as we have no A even after successfully syncing and parsing
- * all tokens after A. Therefore we are forced to also return an empty optional from the parser Function for E. The
- * caller will then try to sync but should immediately succeed so this is not seen as an issue.
- */
-
 namespace OpenCL::Parser
 {
-    using Tokens = std::vector<OpenCL::Lexer::Token>;
+    using Tokens = std::vector<Lexer::Token>;
 
-    class ParsingContext final
+    using InRecoverySet = tl::function_ref<bool(const Lexer::Token&)>;
+
+    class Context final
     {
         std::ostream* m_reporter;
         bool m_errorsOccured = false;
@@ -46,7 +37,7 @@ namespace OpenCL::Parser
 
         class Branch
         {
-            ParsingContext& context;
+            Context& context;
             Tokens::const_iterator& m_begin;
             Tokens::const_iterator m_curr;
             std::vector<Message> m_errors;
@@ -54,11 +45,10 @@ namespace OpenCL::Parser
                                                         std::vector<Lexer::Token>::const_iterator)>;
             CriteriaFunction m_criteria;
 
-            friend class ParsingContext;
+            friend class Context;
 
         public:
-            Branch(ParsingContext& context, std::vector<Lexer::Token>::const_iterator& begin,
-                   CriteriaFunction&& criteria);
+            Branch(Context& context, std::vector<Lexer::Token>::const_iterator& begin, CriteriaFunction&& criteria);
 
             ~Branch();
 
@@ -81,21 +71,21 @@ namespace OpenCL::Parser
         void logError(std::string message, Tokens::const_iterator end, std::optional<Modifier> modifier = {},
                       std::vector<Message::Note> notes = {});
 
-        explicit ParsingContext(std::ostream* reporter = &std::cerr) : m_reporter(reporter) {}
+        explicit Context(std::ostream* reporter = &std::cerr) : m_reporter(reporter) {}
 
-        ~ParsingContext() = default;
+        ~Context() = default;
 
-        ParsingContext(const ParsingContext&) = delete;
+        Context(const Context&) = delete;
 
-        ParsingContext(ParsingContext&&) = delete;
+        Context(Context&&) = delete;
 
-        ParsingContext& operator=(const ParsingContext&) = delete;
+        Context& operator=(const Context&) = delete;
 
-        ParsingContext& operator=(ParsingContext&&) = delete;
+        Context& operator=(Context&&) = delete;
 
         void addToScope(const std::string& name, DeclarationLocation declarator);
 
-        [[nodiscard]] const Parser::ParsingContext::DeclarationLocation* getLocationOf(const std::string& name) const;
+        [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(const std::string& name) const;
 
         void pushScope();
 
@@ -126,140 +116,173 @@ namespace OpenCL::Parser
                                                                std::ostream* reporter = &std::cerr);
 
     OpenCL::Syntax::TranslationUnit parseTranslationUnit(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                         ParsingContext& context);
+                                                         Context& context);
 
-    ParserResult<Syntax::ExternalDeclaration>
-        parseExternalDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(Tokens::const_iterator& begin,
+                                                                        Tokens::const_iterator end, Context& context,
+                                                                        InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Declaration> parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                       ParsingContext& context);
+    std::optional<Syntax::Declaration> parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                        Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::DeclarationSpecifier>
-        parseDeclarationSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::DeclarationSpecifier> parseDeclarationSpecifier(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end, Context& context,
+                                                                          InRecoverySet recoverySet);
 
-    ParserResult<Syntax::SpecifierQualifier>
-        parseSpecifierQualifier(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Declarator> parseDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                     ParsingContext& context);
+    std::vector<Syntax::SpecifierQualifier> parseSpecifierQualifierList(Tokens::const_iterator& begin,
+                                                                        Tokens::const_iterator end, Context& context,
+                                                                        InRecoverySet recoverySet);
 
-    ParserResult<Syntax::DirectDeclarator> parseDirectDeclarator(Tokens::const_iterator& begin,
-                                                                 Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::Declarator> parseDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                      Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ParameterTypeList> parseParameterTypeList(Tokens::const_iterator& tokens,
-                                                                   Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end, Context& context,
+                                                                  InRecoverySet recoverySet);
 
-    ParserResult<Syntax::AbstractDeclarator>
-        parseAbstractDeclarator(Tokens::const_iterator& tokens, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::ParameterTypeList> parseParameterTypeList(Tokens::const_iterator& tokens,
+                                                                    Tokens::const_iterator end, Context& context,
+                                                                    InRecoverySet recoverySet);
 
-    ParserResult<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
-                                                                                 Tokens::const_iterator end,
-                                                                                 ParsingContext& context);
+    std::optional<Syntax::AbstractDeclarator> parseAbstractDeclarator(Tokens::const_iterator& tokens,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ParameterList> parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                           ParsingContext& context);
+    std::optional<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
+                                                                                  Tokens::const_iterator end,
+                                                                                  Context& context,
+                                                                                  InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Pointer> parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                               ParsingContext& context);
+    std::optional<Syntax::ParameterList> parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                            Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::StructOrUnionSpecifier>
-        parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::Pointer> parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::EnumSpecifier> parseEnumSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                           ParsingContext& context);
+    std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Tokens::const_iterator& begin,
+                                                                              Tokens::const_iterator end,
+                                                                              Context& context,
+                                                                              InRecoverySet recoverySet);
 
-    ParserResult<Syntax::CompoundStatement> parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
-                                                                   Tokens::const_iterator end,
-                                                                   OpenCL::Parser::ParsingContext& context,
-                                                                   bool pushScope = true);
+    std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                            Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::CompoundItem> parseCompoundItem(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                         ParsingContext& context);
+    std::optional<Syntax::CompoundStatement> parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
+                                                                    Tokens::const_iterator end,
+                                                                    OpenCL::Parser::Context& context,
+                                                                    InRecoverySet recoverySet, bool pushScope = true);
 
-    ParserResult<Syntax::Initializer> parseInitializer(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                       ParsingContext& context);
+    std::optional<Syntax::CompoundItem> parseCompoundItem(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                          Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::InitializerList> parseInitializerList(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::Initializer> parseInitializer(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                        Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                   ParsingContext& context);
+    std::optional<Syntax::InitializerList> parseInitializerList(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ReturnStatement> parseReturnStatement(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                    Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                       ParsingContext& context);
+    std::optional<Syntax::ReturnStatement> parseReturnStatement(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::SwitchStatement> parseSwitchStatement(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                        Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ForStatement> parseForStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                         ParsingContext& context);
+    std::optional<Syntax::SwitchStatement> parseSwitchStatement(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::HeadWhileStatement>
-        parseHeadWhileStatement(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::ForStatement> parseForStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                          Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::FootWhileStatement>
-        parseFootWhileStatement(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Expression> parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                     ParsingContext& context);
+    std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::AssignmentExpression>
-        parseAssignmentExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::Expression> parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                      Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::AssignmentExpressionAssignment>
-        parseAssignmentExpressionAssignment(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                            ParsingContext& context, bool* reachedAssignment);
+    std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end, Context& context,
+                                                                          InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ConditionalExpression>
-        parseConditionalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::AssignmentExpressionAssignment>
+        parseAssignmentExpressionAssignment(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
+                                            bool& reachedAssignment, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::LogicalOrExpression>
-        parseLogicalOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::ConditionalExpression> parseConditionalExpression(Tokens::const_iterator& begin,
+                                                                            Tokens::const_iterator end,
+                                                                            Context& context,
+                                                                            InRecoverySet recoverySet);
 
-    ParserResult<Syntax::LogicalAndExpression>
-        parseLogicalAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::LogicalOrExpression> parseLogicalOrExpression(Tokens::const_iterator& begin,
+                                                                        Tokens::const_iterator end, Context& context,
+                                                                        InRecoverySet recoverySet);
 
-    ParserResult<Syntax::BitOrExpression> parseBitOrExpression(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::LogicalAndExpression> parseLogicalAndExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end, Context& context,
+                                                                          InRecoverySet recoverySet);
 
-    ParserResult<Syntax::BitXorExpression> parseBitXorExpression(Tokens::const_iterator& begin,
-                                                                 Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::BitOrExpression> parseBitOrExpression(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::BitAndExpression> parseBitAndExpression(Tokens::const_iterator& begin,
-                                                                 Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::BitXorExpression> parseBitXorExpression(Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end, Context& context,
+                                                                  InRecoverySet recoverySet);
 
-    ParserResult<Syntax::EqualityExpression>
-        parseEqualityExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::BitAndExpression> parseBitAndExpression(Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end, Context& context,
+                                                                  InRecoverySet recoverySet);
 
-    ParserResult<Syntax::RelationalExpression>
-        parseRelationalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::EqualityExpression> parseEqualityExpression(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::ShiftExpression> parseShiftExpression(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::RelationalExpression> parseRelationalExpression(Tokens::const_iterator& begin,
+                                                                          Tokens::const_iterator end, Context& context,
+                                                                          InRecoverySet recoverySet);
 
-    ParserResult<Syntax::AdditiveExpression>
-        parseAdditiveExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::ShiftExpression> parseShiftExpression(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                         ParsingContext& context);
+    std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context,
+                                                                      InRecoverySet recoverySet);
 
-    ParserResult<Syntax::TypeName> parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                 ParsingContext& context);
+    std::optional<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
+                                          InRecoverySet recoverySet);
 
-    ParserResult<Syntax::CastExpression> parseCastExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                             ParsingContext& context);
+    std::optional<Syntax::TypeName> parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                  Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::UnaryExpression> parseUnaryExpression(Tokens::const_iterator& begin,
-                                                               Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::CastExpression> parseCastExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                              Context& context, InRecoverySet recoverySet);
 
-    ParserResult<Syntax::PostFixExpression> parsePostFixExpression(Tokens::const_iterator& begin,
-                                                                   Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::UnaryExpression> parseUnaryExpression(Tokens::const_iterator& begin,
+                                                                Tokens::const_iterator end, Context& context,
+                                                                InRecoverySet recoverySet);
 
-    ParserResult<Syntax::PrimaryExpression> parsePrimaryExpression(Tokens::const_iterator& begin,
-                                                                   Tokens::const_iterator end, ParsingContext& context);
+    std::optional<Syntax::PostFixExpression> parsePostFixExpression(Tokens::const_iterator& begin,
+                                                                    Tokens::const_iterator end, Context& context,
+                                                                    InRecoverySet recoverySet);
+
+    std::optional<Syntax::PrimaryExpression> parsePrimaryExpression(Tokens::const_iterator& begin,
+                                                                    Tokens::const_iterator end, Context& context,
+                                                                    InRecoverySet recoverySet);
 } // namespace OpenCL::Parser
 
 #endif // OPENCLPARSER_PARSER_HPP

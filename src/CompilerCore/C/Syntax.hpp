@@ -1533,7 +1533,7 @@ namespace OpenCL::Syntax
          * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
          *
          * <StructDeclaration> ::= <SpecifierQualifier> { <SpecifierQualifier> }
-         *                         <StructDeclarator> { <StructDeclarator> } <TokenType::SemiColon>
+         *                         <StructDeclarator> {<TokenType::Comma> <StructDeclarator> } <TokenType::SemiColon>
          */
         struct StructDeclaration
         {

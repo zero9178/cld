@@ -7,12 +7,12 @@
 std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Lexer::Token>& tokens,
                                                                            std::ostream* reporter)
 {
-    ParsingContext context(reporter);
+    Context context(reporter);
     auto begin = tokens.cbegin();
     return {parseTranslationUnit(begin, tokens.cend(), context), !context.isErrorsOccured()};
 }
 
-void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name, DeclarationLocation declarator)
+void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
@@ -25,7 +25,7 @@ void OpenCL::Parser::ParsingContext::addTypedef(const std::string& name, Declara
     }
 }
 
-bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
+bool OpenCL::Parser::Context::isTypedef(const std::string& name) const
 {
     for (auto& iter : m_currentScope)
     {
@@ -37,13 +37,13 @@ bool OpenCL::Parser::ParsingContext::isTypedef(const std::string& name) const
     return false;
 }
 
-void OpenCL::Parser::ParsingContext::logError(std::string message, Tokens::const_iterator end,
-                                              std::optional<Modifier> modifier, std::vector<Message::Note> notes)
+void OpenCL::Parser::Context::logError(std::string message, Tokens::const_iterator end,
+                                       std::optional<Modifier> modifier, std::vector<Message::Note> notes)
 {
     logImpl(Message(std::move(message), m_start.back(), end, std::move(modifier), std::move(notes)));
 }
 
-void OpenCL::Parser::ParsingContext::logImpl(Message&& error)
+void OpenCL::Parser::Context::logImpl(Message&& error)
 {
     if (this->m_branches.empty() || (this->m_branches.size() == 1 && this->m_branches.back().empty()))
     {
@@ -64,7 +64,7 @@ void OpenCL::Parser::ParsingContext::logImpl(Message&& error)
     }
 }
 
-void OpenCL::Parser::ParsingContext::addToScope(const std::string& name, DeclarationLocation declarator)
+void OpenCL::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
 {
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
@@ -77,28 +77,28 @@ void OpenCL::Parser::ParsingContext::addToScope(const std::string& name, Declara
     }
 }
 
-void OpenCL::Parser::ParsingContext::pushScope()
+void OpenCL::Parser::Context::pushScope()
 {
     m_currentScope.emplace_back();
 }
 
-void OpenCL::Parser::ParsingContext::popScope()
+void OpenCL::Parser::Context::popScope()
 {
     m_currentScope.pop_back();
 }
 
-bool OpenCL::Parser::ParsingContext::isErrorsOccured() const
+bool OpenCL::Parser::Context::isErrorsOccured() const
 {
     return m_errorsOccured;
 }
 
-std::unique_ptr<OpenCL::Parser::ParsingContext::Branch>
-    OpenCL::Parser::ParsingContext::createBranch(Tokens::const_iterator& begin, Branch::CriteriaFunction&& criteria)
+std::unique_ptr<OpenCL::Parser::Context::Branch>
+    OpenCL::Parser::Context::createBranch(Tokens::const_iterator& begin, Branch::CriteriaFunction&& criteria)
 {
     return std::make_unique<Branch>(*this, begin, std::move(criteria));
 }
 
-std::size_t OpenCL::Parser::ParsingContext::getCurrentErrorCount() const
+std::size_t OpenCL::Parser::Context::getCurrentErrorCount() const
 {
     if (!m_branches.empty())
     {
@@ -110,8 +110,8 @@ std::size_t OpenCL::Parser::ParsingContext::getCurrentErrorCount() const
     return m_errorCount;
 }
 
-const OpenCL::Parser::ParsingContext::DeclarationLocation*
-    OpenCL::Parser::ParsingContext::getLocationOf(const std::string& name) const
+const OpenCL::Parser::Context::DeclarationLocation*
+    OpenCL::Parser::Context::getLocationOf(const std::string& name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -123,7 +123,7 @@ const OpenCL::Parser::ParsingContext::DeclarationLocation*
     return nullptr;
 }
 
-bool OpenCL::Parser::ParsingContext::isTypedefInScope(const std::string& name) const
+bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -135,25 +135,24 @@ bool OpenCL::Parser::ParsingContext::isTypedefInScope(const std::string& name) c
     return false;
 }
 
-OpenCL::Parser::ParsingContext::Branch::Branch(ParsingContext& context,
-                                               std::vector<Lexer::Token>::const_iterator& begin,
+OpenCL::Parser::Context::Branch::Branch(Context& context, std::vector<Lexer::Token>::const_iterator& begin,
                                                CriteriaFunction&& criteria)
     : context(context), m_begin(begin), m_curr(begin), m_criteria(std::move(criteria))
 {
     context.m_branches.back().push_back(this);
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Parser::ParsingContext::Branch::getCurrent()
+std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Parser::Context::Branch::getCurrent()
 {
     return m_curr;
 }
 
-OpenCL::Parser::ParsingContext::Branch::operator bool() const
+OpenCL::Parser::Context::Branch::operator bool() const
 {
     return m_errors.empty();
 }
 
-OpenCL::Parser::ParsingContext::Branch::~Branch()
+OpenCL::Parser::Context::Branch::~Branch()
 {
     if (!context.m_branches.back().empty())
     {

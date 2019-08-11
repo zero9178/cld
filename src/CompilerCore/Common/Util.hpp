@@ -47,7 +47,7 @@ namespace OpenCL
 
 #ifdef NDEBUG
 
-#ifndef MSVC
+#ifndef _MSC_VER
 
 #define OPENCL_UNREACHABLE       \
     do                           \

@@ -370,12 +370,13 @@ namespace
                                     nestedIfs = 0;
                                     iter = iter.substr(iter[0] == 'i' ? 2 : 4);
                                     auto result = recursivePreprocess(iter, defines, line - 1);
-                                    OpenCL::Parser::ParsingContext context;
+                                    OpenCL::Parser::Context context;
                                     auto tokens = OpenCL::Lexer::tokenize(result);
                                     transformTokens(tokens);
                                     auto begin = tokens.cbegin();
-                                    auto expression =
-                                        OpenCL::Parser::parseAssignmentExpression(begin, tokens.cend(), context);
+                                    auto expression = OpenCL::Parser::parseAssignmentExpression(
+                                        begin, tokens.cend(), context,
+                                        [](const OpenCL::Lexer::Token&) { return false; });
                                     if (!expression)
                                     {
                                         throw std::runtime_error("Invalid expression");

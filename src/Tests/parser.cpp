@@ -27,29 +27,29 @@
         }                                                          \
     } while (0)
 
-#define functionProduces(parser, source, matches)                  \
-    do                                                             \
-    {                                                              \
-        std::ostringstream ss;                                     \
-        std::vector<OpenCL::Lexer::Token> tokens;                  \
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
-        OpenCL::Parser::ParsingContext context(&ss);               \
-        auto begin = tokens.cbegin();                              \
-        auto ds = context.setDiagnosticStart(begin);               \
-        parser(begin, tokens.cend(), context);                     \
-        auto string = ss.str();                                    \
-        CHECK_THAT(string, matches);                               \
-        if (OpenCL::colourConsoleOutput)                           \
-        {                                                          \
-            auto begin2 = tokens.cbegin();                         \
-            OpenCL::Parser::ParsingContext context2;               \
-            auto ds2 = context2.setDiagnosticStart(begin2);        \
-            parser(begin2, tokens.cend(), context2);               \
-            if (!string.empty())                                   \
-            {                                                      \
-                std::cerr << std::endl;                            \
-            }                                                      \
-        }                                                          \
+#define functionProduces(parser, source, matches)                                                       \
+    do                                                                                                  \
+    {                                                                                                   \
+        std::ostringstream ss;                                                                          \
+        std::vector<OpenCL::Lexer::Token> tokens;                                                       \
+        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));                                      \
+        OpenCL::Parser::Context context(&ss);                                                           \
+        auto begin = tokens.cbegin();                                                                   \
+        auto ds = context.setDiagnosticStart(begin);                                                    \
+        parser(begin, tokens.cend(), context, [](const OpenCL::Lexer::Token&) { return false; });       \
+        auto string = ss.str();                                                                         \
+        CHECK_THAT(string, matches);                                                                    \
+        if (OpenCL::colourConsoleOutput)                                                                \
+        {                                                                                               \
+            auto begin2 = tokens.cbegin();                                                              \
+            OpenCL::Parser::Context context2;                                                           \
+            auto ds2 = context2.setDiagnosticStart(begin2);                                             \
+            parser(begin2, tokens.cend(), context2, [](const OpenCL::Lexer::Token&) { return false; }); \
+            if (!string.empty())                                                                        \
+            {                                                                                           \
+                std::cerr << std::endl;                                                                 \
+            }                                                                                           \
+        }                                                                                               \
     } while (0)
 
 namespace
@@ -358,8 +358,10 @@ TEST_CASE("Parse Statements", "[parser]")
                              && ProducesNNotes(1));
         functionProduces(parseFootWhileStatement, "do;(5;",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'while'", "'('"))
-                             && Catch::Contains(TO_MATCH_N_HERE.args("'do'")) && ProducesNErrors(1)
-                             && ProducesNNotes(1));
+                             && Catch::Contains(TO_MATCH_N_HERE.args("'do'"))
+                             && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
+                             && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
+                             && ProducesNNotes(2));
     }
     SECTION("break and continue")
     {
@@ -550,6 +552,14 @@ TEST_CASE("Parse Expressions", "[parser]")
             parseShiftExpression, "5 << >> 5",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseShiftExpression, "5 << ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseShiftExpression, "5 << << 5",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parseShiftExpression, " << >> 5",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                              OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "'<<'"))
@@ -585,21 +595,41 @@ TEST_CASE("Parse Expressions", "[parser]")
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(
+            parseEqualityExpression, "5 == ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
             parseEqualityExpression, " == != 5",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(2) && ProducesNoNotes());
     }
     SECTION("Bitand")
     {
+        functionProduces(
+            parseBitAndExpression, "5 & ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseBitAndExpression, "5 & () & 5",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseBitAndExpression, "() & 5",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parseBitAndExpression, "5 & 5", ProducesNoErrors() && ProducesNoNotes());
         functionProduces(parseBitAndExpression, "5 & &5", ProducesNoErrors() && ProducesNoNotes());
-
         functionProduces(parseBitAndExpression, "5 & & 5", ProducesNoErrors() && ProducesNoNotes());
         functionProduces(parseBitAndExpression, " & & 5", ProducesNoErrors() && ProducesNoNotes());
     }
     SECTION("BitXor")
     {
         functionProduces(parseBitXorExpression, "5 ^ 5", ProducesNoErrors() && ProducesNoNotes());
+
+        functionProduces(
+            parseBitXorExpression, "5 ^ ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
 
         functionProduces(
             parseBitXorExpression, "5 ^ ^ 5",
@@ -619,6 +649,10 @@ TEST_CASE("Parse Expressions", "[parser]")
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(
+            parseBitOrExpression, "5 | ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
             parseBitOrExpression, " | | 5",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(2) && ProducesNoNotes());
@@ -629,6 +663,10 @@ TEST_CASE("Parse Expressions", "[parser]")
 
         functionProduces(
             parseLogicalAndExpression, "5 && && 5",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseLogicalAndExpression, "5 && ()",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parseLogicalAndExpression, " && && 5",
@@ -644,6 +682,10 @@ TEST_CASE("Parse Expressions", "[parser]")
             parseLogicalOrExpression, "5 || || 5",
             Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
                 && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(
+            parseLogicalOrExpression, "5 || ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(1) && ProducesNoNotes());
         functionProduces(parseLogicalOrExpression, " || || 5",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                              OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "'||'"))
@@ -652,6 +694,10 @@ TEST_CASE("Parse Expressions", "[parser]")
     SECTION("Conditional")
     {
         functionProduces(parseConditionalExpression, "5 ? 5 : 5", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseConditionalExpression, "5 ? (5 : 5",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "':'"))
+                             && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
+                             && ProducesNNotes(1));
         functionProduces(parseConditionalExpression, "5 ? 5  5",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "'5'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'?'")) && ProducesNErrors(1)
@@ -660,13 +706,19 @@ TEST_CASE("Parse Expressions", "[parser]")
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "'5'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'?'")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
-        functionProduces(parseConditionalExpression, "5 ? 5 : 5 ? 5",
-                         Catch::Contains(EXPECTED_N.args("':'")) && Catch::Contains(TO_MATCH_N_HERE.args("'?'"))
-                             && ProducesNErrors(1) && ProducesNNotes(1));
+        functionProduces(
+            parseConditionalExpression, "5 ? 5 : 5 ? 5",
+            Catch::Contains(EXPECTED_N.args("':'")) && Catch::Contains(TO_MATCH_N_HERE.args("'?'"))
+                && Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(2) && ProducesNNotes(1));
     }
     SECTION("Assignment")
     {
         functionProduces(parseAssignmentExpression, "5 = 5", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(
+            parseAssignmentExpression, "() = ()",
+            Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")))
+                && ProducesNErrors(2) && ProducesNoNotes());
         functionProduces(parseAssignmentExpression, "5 += 5", ProducesNoErrors() && ProducesNoNotes());
         functionProduces(parseAssignmentExpression, "5 -= 5", ProducesNoErrors() && ProducesNoNotes());
         functionProduces(parseAssignmentExpression, "5 /= 5", ProducesNoErrors() && ProducesNoNotes());
