@@ -17,7 +17,8 @@ namespace OpenCL::Semantics
     class ConstRetType final
     {
     public:
-        using ValueType = std::variant<std::monostate, std::int8_t, std::uint8_t, std::int16_t, std::uint16_t, std::int32_t,
+        using ValueType =
+            std::variant<std::monostate, std::int8_t, std::uint8_t, std::int16_t, std::uint16_t, std::int32_t,
                          std::uint32_t, std::int64_t, std::uint64_t, float, double, VoidStar>;
 
     private:
@@ -119,11 +120,9 @@ namespace OpenCL::Semantics
 
     class ConstantEvaluator final
     {
-        std::vector<Lexer::Token>::const_iterator m_contextStart;
-        std::vector<Lexer::Token>::const_iterator m_contextEnd;
         std::function<Type(const Syntax::TypeName&)> m_typeCallback;
         std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
-        std::function<void(const Message&)> m_loggerCallback;
+        std::function<void(std::string, std::optional<Modifier>)> m_loggerCallback;
 
     public:
         enum Mode
@@ -136,14 +135,13 @@ namespace OpenCL::Semantics
     private:
         Mode m_mode;
 
-        void logError(const Message& message);
+        void logError(std::string message, std::optional<Modifier> modifier = {});
 
     public:
         explicit ConstantEvaluator(
-            std::vector<Lexer::Token>::const_iterator exprStart, std::vector<Lexer::Token>::const_iterator exprEnd,
             std::function<Type(const Syntax::TypeName&)> typeCallback = {},
             std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
-            std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
+            std::function<void(std::string, std::optional<Modifier>)> loggerCallback = {}, Mode mode = Integer);
 
         ConstRetType visit(const Syntax::Expression& node);
 

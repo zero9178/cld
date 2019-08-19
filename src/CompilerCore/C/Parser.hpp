@@ -18,7 +18,6 @@ namespace OpenCL::Parser
     class Context final
     {
         std::ostream* m_reporter;
-        bool m_errorsOccured = false;
         struct DeclarationLocation
         {
             Tokens::const_iterator begin;
@@ -32,7 +31,11 @@ namespace OpenCL::Parser
             bool isTypedef{};
         };
         std::vector<std::map<std::string, Declaration>> m_currentScope{1};
-        std::vector<Tokens::const_iterator> m_start{};
+
+        static bool tokenCompare(const Lexer::Token& lhs, const Lexer::Token& rhs);
+
+        std::map<Lexer::Token, std::pair<Tokens::const_iterator, Tokens::const_iterator>, decltype(&tokenCompare)>
+            m_lines{tokenCompare};
         std::size_t m_errorCount = 0;
 
         class Branch
@@ -40,7 +43,7 @@ namespace OpenCL::Parser
             Context& context;
             Tokens::const_iterator& m_begin;
             Tokens::const_iterator m_curr;
-            std::vector<Message> m_errors;
+            std::vector<Message> m_messages;
             using CriteriaFunction = std::function<bool(std::vector<Lexer::Token>::const_iterator,
                                                         std::vector<Lexer::Token>::const_iterator)>;
             CriteriaFunction m_criteria;
@@ -59,19 +62,9 @@ namespace OpenCL::Parser
 
         std::vector<std::vector<Branch*>> m_branches;
 
-        void logImpl(Message&& error);
-
     public:
-        void addTypedef(const std::string& name, DeclarationLocation declarator);
-
-        [[nodiscard]] bool isTypedef(const std::string& name) const;
-
-        [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
-
-        void logError(std::string message, Tokens::const_iterator end, std::optional<Modifier> modifier = {},
-                      std::vector<Message::Note> notes = {});
-
-        explicit Context(std::ostream* reporter = &std::cerr) : m_reporter(reporter) {}
+        explicit Context(Tokens::const_iterator sourceBegin, Tokens::const_iterator sourceEnd,
+                         std::ostream* reporter = &std::cerr);
 
         ~Context() = default;
 
@@ -83,6 +76,18 @@ namespace OpenCL::Parser
 
         Context& operator=(Context&&) = delete;
 
+        void addTypedef(const std::string& name, DeclarationLocation declarator);
+
+        [[nodiscard]] bool isTypedef(const std::string& name) const;
+
+        [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
+
+        void log(std::vector<Message> messages);
+
+        [[nodiscard]] Tokens::const_iterator getLineStart(Tokens::const_iterator iter) const;
+
+        [[nodiscard]] Tokens::const_iterator getLineEnd(Tokens::const_iterator iter) const;
+
         void addToScope(const std::string& name, DeclarationLocation declarator);
 
         [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(const std::string& name) const;
@@ -90,14 +95,6 @@ namespace OpenCL::Parser
         void pushScope();
 
         void popScope();
-
-        [[nodiscard]] bool isErrorsOccured() const;
-
-        [[nodiscard]] auto setDiagnosticStart(Tokens::const_iterator start)
-        {
-            m_start.push_back(start);
-            return UniqueResource([this] { m_start.pop_back(); });
-        }
 
         template <class F>
         auto doBacktracking(F&& f)
@@ -211,7 +208,8 @@ namespace OpenCL::Parser
                                                                       Tokens::const_iterator end, Context& context,
                                                                       InRecoverySet recoverySet);
 
-    Syntax::Expression parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context, InRecoverySet recoverySet);
+    Syntax::Expression parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
+                                       InRecoverySet recoverySet);
 
     std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Tokens::const_iterator& begin,
                                                                           Tokens::const_iterator end, Context& context,

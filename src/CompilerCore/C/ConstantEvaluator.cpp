@@ -22,8 +22,8 @@ OpenCL::Semantics::ConstRetType
             }
             else
             {
-                logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
-                          m_contextStart, m_contextEnd, Modifier(node.begin(), node.end())});
+                logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
+                         Modifier(node.begin(), node.end()));
                 return {};
             }
         },
@@ -58,17 +58,17 @@ OpenCL::Semantics::ConstRetType
     }
     if (!value.isInteger() && m_mode == Integer)
     {
-        logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                  m_contextEnd, Modifier(node.begin() + 1, node.end())});
+        logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                 Modifier(node.begin() + 1, node.end()));
         return {};
     }
     switch (node.getAnOperator())
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                          '\'' + node.begin()->emitBack() + '\''),
-                      node.begin(), node.end(), Modifier(node.begin(), node.begin() + 1)});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + node.begin()->emitBack()
+                                                                                         + '\''),
+                     Modifier(node.begin(), node.begin() + 1));
             return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
@@ -77,10 +77,9 @@ OpenCL::Semantics::ConstRetType
         {
             if (!value.isArithmetic())
             {
-                logError({ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
-                              "+", value.getType().getFullFormattedTypeName()),
-                          m_contextStart, m_contextEnd,
-                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning)});
+                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                             "+", value.getType().getFullFormattedTypeName()),
+                         Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
             return +value;
@@ -89,10 +88,9 @@ OpenCL::Semantics::ConstRetType
         {
             if (!value.isArithmetic())
             {
-                logError({ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
-                              "-", value.getType().getFullFormattedTypeName()),
-                          m_contextStart, m_contextEnd,
-                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning)});
+                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                             "-", value.getType().getFullFormattedTypeName()),
+                         Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
             return -value;
@@ -101,10 +99,9 @@ OpenCL::Semantics::ConstRetType
         {
             if (!value.isInteger())
             {
-                logError({ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
-                              "~", value.getType().getFullFormattedTypeName()),
-                          m_contextStart, m_contextEnd,
-                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning)});
+                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                             "~", value.getType().getFullFormattedTypeName()),
+                         Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
             return ~value;
@@ -132,7 +129,7 @@ OpenCL::Semantics::ConstRetType
             auto size = Semantics::sizeOf(type);
             if (!size)
             {
-                logError({size.error(), m_contextStart, m_contextEnd, Modifier(typeName->begin(), typeName->end())});
+                logError(size.error(), Modifier(typeName->begin(), typeName->end()));
                 return {};
             }
             return {*size};
@@ -160,15 +157,15 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (m_mode == Integer && (!primitive || primitive->isFloatingPoint() || primitive->getBitCount() == 0))
                 {
-                    logError({ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
-                              m_contextStart, m_contextEnd, Modifier(cast.first.begin(), cast.first.end())});
+                    logError(ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
+                             Modifier(cast.first.begin(), cast.first.end()));
                     return {};
                 }
                 else if (!value.isArithmetic())
                 {
-                    logError({ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
-                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                              m_contextEnd, m_contextEnd, Modifier(cast.first.begin(), cast.first.end())});
+                    logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                                 value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
+                             Modifier(cast.first.begin(), cast.first.end()));
                     return {};
                 }
             }
@@ -176,23 +173,23 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (m_mode != Initialization)
                 {
-                    logError({ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
-                              m_contextStart, m_contextEnd, Modifier(cast.first.begin(), cast.first.end())});
+                    logError(ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
+                             Modifier(cast.first.begin(), cast.first.end()));
                     return {};
                 }
                 else if (!value.isInteger() && value.isArithmetic())
                 {
-                    logError({ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
-                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd, Modifier(cast.first.begin(), cast.first.end())});
+                    logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                                 value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
+                             Modifier(cast.first.begin(), cast.first.end()));
                     return {};
                 }
             }
             else
             {
-                logError({ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
-                              value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                          m_contextStart, m_contextEnd, Modifier(cast.first.begin(), cast.first.end())});
+                logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                             value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
+                         Modifier(cast.first.begin(), cast.first.end()));
                 return {};
             }
 
@@ -207,8 +204,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getCastExpression().begin(), node.getCastExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getCastExpression().begin(), node.getCastExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -218,8 +215,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         switch (op)
@@ -228,11 +225,11 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "*", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "*", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 value *= other;
@@ -242,11 +239,11 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "/", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "/", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 value /= other;
@@ -256,11 +253,11 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "%", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "%", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 value %= other;
@@ -279,8 +276,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getTerm().begin(), node.getTerm().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getTerm().begin(), node.getTerm().end()));
             return {};
         }
         auto other = visit(exp);
@@ -290,8 +287,8 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         switch (op)
@@ -301,11 +298,10 @@ OpenCL::Semantics::ConstRetType
                 if ((!value.isArithmetic() && !other.isArithmetic())
                     || (value.isArithmetic() != other.isArithmetic() && (!value.isInteger() && !other.isInteger())))
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "+", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "+", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 if (value.isArithmetic() != other.isArithmetic())
@@ -315,11 +311,10 @@ OpenCL::Semantics::ConstRetType
                     auto result = sizeOf(elementType);
                     if (!result)
                     {
-                        logError({ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-                                      elementType.getFullFormattedTypeName()),
-                                  m_contextStart, m_contextEnd,
-                                  Modifier(value.isArithmetic() ? exp.begin() : node.begin(),
-                                           value.isArithmetic() ? exp.end() : exp.begin() - 1)});
+                        logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                                     elementType.getFullFormattedTypeName()),
+                                 Modifier(value.isArithmetic() ? exp.begin() : node.begin(),
+                                          value.isArithmetic() ? exp.end() : exp.begin() - 1));
                         return {};
                     }
                 }
@@ -330,11 +325,11 @@ OpenCL::Semantics::ConstRetType
             {
                 if ((value.isArithmetic() || !other.isInteger()) && (value.isArithmetic() != other.isArithmetic()))
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "-", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "-", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 if (!value.isArithmetic() && !other.isArithmetic())
@@ -342,11 +337,11 @@ OpenCL::Semantics::ConstRetType
                     if (std::get<PointerType>(value.getType().get()).getElementType().get()
                         != std::get<PointerType>(other.getType().get()).getElementType().get())
                     {
-                        logError({ErrorMessages::Semantics::
-                                      CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
-                                          "-", value.getType().getFullFormattedTypeName(),
-                                          other.getType().getFullFormattedTypeName()),
-                                  m_contextStart, m_contextEnd, Modifier(exp.begin() - 1, exp.begin())});
+                        logError(ErrorMessages::Semantics::
+                                     CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                                         "-", value.getType().getFullFormattedTypeName(),
+                                         other.getType().getFullFormattedTypeName()),
+                                 Modifier(exp.begin() - 1, exp.begin()));
                         return {};
                     }
                 }
@@ -357,11 +352,11 @@ OpenCL::Semantics::ConstRetType
                     auto result = sizeOf(elementType);
                     if (!result)
                     {
-                        logError({ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-                                      elementType.getFullFormattedTypeName()),
-                                  m_contextStart, m_contextEnd,
-                                  Modifier(value.isArithmetic() ? exp.begin() : node.begin(),
-                                           value.isArithmetic() ? exp.end() : exp.begin() - 1)});
+                        logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                                     elementType.getFullFormattedTypeName()),
+
+                                 Modifier(value.isArithmetic() ? exp.begin() : node.begin(),
+                                          value.isArithmetic() ? exp.end() : exp.begin() - 1));
                         return {};
                     }
                 }
@@ -380,9 +375,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd,
-                      Modifier(node.getAdditiveExpression().begin(), node.getAdditiveExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getAdditiveExpression().begin(), node.getAdditiveExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -392,8 +386,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         switch (op)
@@ -402,11 +396,10 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "<<", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 "<<", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 value <<= other;
@@ -416,11 +409,10 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  ">>", value.getType().getFullFormattedTypeName(),
-                                  other.getType().getFullFormattedTypeName()),
-                              m_contextStart, m_contextEnd,
-                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                                 ">>", value.getType().getFullFormattedTypeName(),
+                                 other.getType().getFullFormattedTypeName()),
+                             Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
                 value >>= other;
@@ -439,9 +431,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd,
-                      Modifier(node.getEqualityExpression().begin(), node.getEqualityExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getEqualityExpression().begin(), node.getEqualityExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -451,16 +442,15 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                          "&", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                      m_contextStart, m_contextEnd,
-                      Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                         "&", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
+                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
             return {};
         }
         value &= other;
@@ -476,8 +466,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getBitAndExpression().begin(), node.getBitAndExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getBitAndExpression().begin(), node.getBitAndExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -487,16 +477,16 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                          "^", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                      m_contextStart, m_contextEnd,
-                      Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                         "^", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
+
+                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
             return {};
         }
         value ^= other;
@@ -511,8 +501,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getBitXorExpression().begin(), node.getBitXorExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getBitXorExpression().begin(), node.getBitXorExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -522,16 +512,15 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                          "|", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                      m_contextStart, m_contextEnd,
-                      Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning)});
+            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                         "|", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
+                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
             return {};
         }
         value |= other;
@@ -547,8 +536,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getBitOrExpression().begin(), node.getBitOrExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getBitOrExpression().begin(), node.getBitOrExpression().end()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool();
@@ -559,8 +548,8 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (!value && !value.isUndefined())
@@ -580,8 +569,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getAndExpression().begin(), node.getAndExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getAndExpression().begin(), node.getAndExpression().end()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool();
@@ -592,8 +581,8 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (value && !value.isUndefined())
@@ -646,8 +635,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(node.getShiftExpression().begin(), node.getShiftExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getShiftExpression().begin(), node.getShiftExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -657,8 +646,8 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         if (!value.isArithmetic() && !other.isArithmetic())
@@ -667,10 +656,10 @@ OpenCL::Semantics::ConstRetType
                 != std::get<PointerType>(other.getType().get()).getElementType().get())
             {
                 logError(
-                    {ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
-                         .args("-", value.getType().getFullFormattedTypeName(),
-                               other.getType().getFullFormattedTypeName()),
-                     m_contextStart, m_contextEnd, Modifier(exp.begin() - 1, exp.begin())});
+                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
+                        .args("-", value.getType().getFullFormattedTypeName(),
+                              other.getType().getFullFormattedTypeName()),
+                    Modifier(exp.begin() - 1, exp.begin()));
                 return {};
             }
         }
@@ -709,9 +698,8 @@ OpenCL::Semantics::ConstRetType
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd,
-                      Modifier(node.getRelationalExpression().begin(), node.getRelationalExpression().end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(node.getRelationalExpression().begin(), node.getRelationalExpression().end()));
             return {};
         }
         auto other = visit(exp);
@@ -721,8 +709,8 @@ OpenCL::Semantics::ConstRetType
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS, m_contextStart,
-                      m_contextEnd, Modifier(exp.begin(), exp.end())});
+            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                     Modifier(exp.begin(), exp.end()));
             return {};
         }
         std::string opName = op == Syntax::EqualityExpression::EqualityOperator::Equal ? "==" : "!=";
@@ -734,10 +722,10 @@ OpenCL::Semantics::ConstRetType
                 && !isVoid(std::get<PointerType>(other.getType().get()).getElementType()))
             {
                 logError(
-                    {ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
-                         .args(opName, value.getType().getFullFormattedTypeName(),
-                               other.getType().getFullFormattedTypeName()),
-                     m_contextStart, m_contextEnd, Modifier(exp.begin() - 1, exp.begin())});
+                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
+                        .args(opName, value.getType().getFullFormattedTypeName(),
+                              other.getType().getFullFormattedTypeName()),
+                    Modifier(exp.begin() - 1, exp.begin()));
                 return {};
             }
         }
@@ -745,10 +733,10 @@ OpenCL::Semantics::ConstRetType
         {
             if (!value.isInteger() && !other.isInteger())
             {
-                logError({ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                              opName, value.getType().getFullFormattedTypeName(),
-                              other.getType().getFullFormattedTypeName()),
-                          m_contextStart, m_contextEnd, Modifier(exp.begin() - 1, exp.begin())});
+                logError(
+                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                        opName, value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
+                    Modifier(exp.begin() - 1, exp.begin()));
                 return {};
             }
             else
@@ -756,10 +744,10 @@ OpenCL::Semantics::ConstRetType
                 auto& null = value.isInteger() ? value : other;
                 if (null.to<std::int64_t>() != 0)
                 {
-                    logError({ErrorMessages::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
-                              m_contextStart, m_contextEnd,
-                              Modifier(value.isInteger() ? node.begin() : exp.begin(),
-                                       value.isInteger() ? exp.begin() - 1 : exp.end())});
+                    logError(ErrorMessages::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
+
+                             Modifier(value.isInteger() ? node.begin() : exp.begin(),
+                                      value.isInteger() ? exp.begin() - 1 : exp.end()));
                     return {};
                 }
             }
@@ -817,8 +805,8 @@ OpenCL::Semantics::ConstRetType
                     return {*value};
                 }
             }
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
-                      m_contextStart, m_contextEnd, Modifier(identifier.begin(), identifier.end())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
+                     Modifier(identifier.begin(), identifier.end()));
             return {};
         });
 }
@@ -829,29 +817,25 @@ OpenCL::Semantics::ConstRetType
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
         [this](const Syntax::PostFixExpressionFunctionCall& call) -> ConstRetType {
-            logError(
-                {ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call"), m_contextStart,
-                 m_contextEnd,
-                 Modifier(Syntax::nodeFromNodeDerivedVariant(call.getPostFixExpression()).begin() + 1, call.end())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call"),
+                     Modifier(Syntax::nodeFromNodeDerivedVariant(call.getPostFixExpression()).begin() + 1, call.end()));
             return {};
         },
         [this](const Syntax::PostFixExpressionIncrement& increment) -> ConstRetType {
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"), m_contextStart,
-                      m_contextEnd,
-                      Modifier(Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
-                               increment.end())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
+                     Modifier(Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
+                              increment.end()));
             return {};
         },
         [this](const Syntax::PostFixExpressionDecrement& decrement) -> ConstRetType {
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"), m_contextStart,
-                      m_contextEnd,
-                      Modifier(Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
-                               decrement.end())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
+                     Modifier(Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
+                              decrement.end()));
             return {};
         },
         [this](const Syntax::PostFixExpressionTypeInitializer& initializer) -> ConstRetType {
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer"),
-                      m_contextStart, m_contextEnd, Modifier(initializer.begin(), initializer.end())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer"),
+                     Modifier(initializer.begin(), initializer.end()));
             return {};
         });
 }
@@ -865,9 +849,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 {
     if (node.getAssignmentExpressions().size() > 1)
     {
-        logError(
-            {ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"), m_contextStart, m_contextEnd,
-             Modifier(node.getAssignmentExpressions()[1].begin() - 1, node.getAssignmentExpressions()[1].begin())});
+        logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
+                 Modifier(node.getAssignmentExpressions()[1].begin() - 1, node.getAssignmentExpressions()[1].begin()));
         return {};
     }
     return visit(node.getAssignmentExpressions()[0]);
@@ -879,34 +862,29 @@ OpenCL::Semantics::ConstRetType
     return match(
         node.getVariant(),
         [this](const Syntax::AssignmentExpressionAssignment& assignmentExpressionAssignment) -> ConstRetType {
-            logError({ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                          '\'' + [&assignmentExpressionAssignment]() -> std::string {
-                              switch (assignmentExpressionAssignment.getAssignOperator())
-                              {
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator: return "=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign: return "+=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign: return "-=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign:
-                                      return "/=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign:
-                                      return "*=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign:
-                                      return "%=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign:
-                                      return "<<=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign:
-                                      return ">>=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign:
-                                      return "&=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign: return "|=";
-                                  case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign:
-                                      return "^=";
-                              }
-                              return "";
-                          }() + '\''),
-                      m_contextStart, m_contextEnd,
-                      Modifier(assignmentExpressionAssignment.getAssignmentExpression().begin() - 1,
-                               assignmentExpressionAssignment.getAssignmentExpression().begin())});
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                         '\'' + [&assignmentExpressionAssignment]() -> std::string {
+                             switch (assignmentExpressionAssignment.getAssignOperator())
+                             {
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator: return "=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign: return "+=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign: return "-=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign: return "/=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign:
+                                     return "*=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign: return "%=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign:
+                                     return "<<=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign:
+                                     return ">>=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign: return "&=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign: return "|=";
+                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign: return "^=";
+                             }
+                             return "";
+                         }() + '\''),
+                     Modifier(assignmentExpressionAssignment.getAssignmentExpression().begin() - 1,
+                              assignmentExpressionAssignment.getAssignmentExpression().begin()));
             return {};
         },
         [this](const Syntax::ConditionalExpression& conditionalExpression) -> ConstRetType {
@@ -915,24 +893,21 @@ OpenCL::Semantics::ConstRetType
 }
 
 OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(
-    std::vector<Lexer::Token>::const_iterator exprStart, std::vector<Lexer::Token>::const_iterator exprEnd,
     std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
-    std::function<void(const Message&)> loggerCallback, Mode mode)
-    : m_contextStart(exprStart),
-      m_contextEnd(exprEnd),
-      m_typeCallback(std::move(typeCallback)),
+    std::function<void(std::string, std::optional<Modifier>)> loggerCallback, Mode mode)
+    : m_typeCallback(std::move(typeCallback)),
       m_declarationCallback(std::move(declarationCallback)),
       m_loggerCallback(std::move(loggerCallback)),
       m_mode(mode)
 {
 }
 
-void OpenCL::Semantics::ConstantEvaluator::logError(const OpenCL::Message& message)
+void OpenCL::Semantics::ConstantEvaluator::logError(std::string message, std::optional<Modifier> modifier)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(message);
+        m_loggerCallback(std::move(message), std::move(modifier));
     }
 }
 

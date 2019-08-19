@@ -1,6 +1,8 @@
 #ifndef OPENCLPARSER_PARSERUTIL_HPP
 #define OPENCLPARSER_PARSERUTIL_HPP
 
+#include <utility>
+
 #include "ErrorMessages.hpp"
 #include "Parser.hpp"
 
@@ -9,27 +11,26 @@ namespace OpenCL::Parser
     bool isAssignment(Lexer::TokenType type);
 
     template <class T = void>
-    bool expect(Lexer::TokenType expected, std::vector<OpenCL::Lexer::Token>::const_iterator& curr,
-                Tokens::const_iterator end, Context& context, std::vector<Message::Note> notes = {}, [[maybe_unused]] T* value = nullptr)
+    bool expect(Lexer::TokenType expected, Tokens::const_iterator begin, Tokens::const_iterator& curr,
+                Tokens::const_iterator end, Context& context, std::vector<Message> additional = {}, T* value = nullptr)
     {
-        if (curr >= end || curr->getTokenType() != expected)
+        if (curr == end || curr->getTokenType() != expected)
         {
-            if (curr >= end)
+            if (curr == end)
             {
-                context.logError(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
-                    findSemicolonOrEOL(curr, end),
-                                 Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)},
-                                 std::move(notes));
+                context.log(
+                    {Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
+                                    context.getLineStart(begin), end,
+                                    Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)})});
             }
             else
             {
-                context.logError(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(Lexer::tokenName(expected),
-                                                                                             '\'' + curr->emitBack())
-                                     + '\'',
-                                 findSemicolonOrEOL(curr, end), Modifier{curr, curr + 1, Modifier::PointAtBeginning},
-                                 std::move(notes));
+                context.log({Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                                Lexer::tokenName(expected), '\'' + curr->emitBack() + '\''),
+                                            context.getLineStart(begin), context.getLineEnd(curr),
+                                            Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
             }
+            context.log(std::move(additional));
             return false;
         }
         else
@@ -47,6 +48,8 @@ namespace OpenCL::Parser
     }
 
     void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet);
+
+    void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, Lexer::TokenType tokenType);
 
     template <typename G>
     struct Y

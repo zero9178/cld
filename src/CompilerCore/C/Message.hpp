@@ -124,41 +124,41 @@ namespace OpenCL
 
     class Message
     {
+    public:
+        enum Severity
+        {
+            Error,
+            Note,
+            Warning
+        };
+
+    private:
+        Severity m_severity;
         std::string m_message;
         std::vector<OpenCL::Lexer::Token>::const_iterator m_begin;
         std::vector<OpenCL::Lexer::Token>::const_iterator m_end;
         std::optional<Modifier> m_modifier;
 
     public:
-        struct Note
-        {
-            std::string message;
-            std::vector<OpenCL::Lexer::Token>::const_iterator begin;
-            std::vector<OpenCL::Lexer::Token>::const_iterator end;
-            std::optional<Modifier> modifier;
-        };
+        Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
-    private:
-        std::vector<Note> m_notes;
+        static Message error(std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                             std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
-    public:
-        enum Severity
-        {
-            Error,
-            Warning
-        };
+        static Message note(std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                            std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
-        Message(std::string message, std::vector<Lexer::Token>::const_iterator begin,
-                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {},
-                std::vector<Note> notes = {});
+        static Message warning(std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                               std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
+
+        [[nodiscard]] Severity getSeverity() const;
 
         [[nodiscard]] const std::string& getMessage() const;
 
         [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
 
         [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
-
-        [[nodiscard]] const std::vector<Note>& getNotes() const;
 
         [[nodiscard]] const std::optional<Modifier>& getModifier() const;
     };
@@ -167,32 +167,6 @@ namespace OpenCL
 
     std::vector<Lexer::Token>::const_iterator findEOL(std::vector<Lexer::Token>::const_iterator begin,
                                                       std::vector<Lexer::Token>::const_iterator end);
-
-    template <class F>
-    std::enable_if_t<!std::is_same_v<std::decay_t<F>, Lexer::TokenType>,
-                     std::vector<OpenCL::Lexer::Token>::const_iterator>
-        findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                  std::vector<OpenCL::Lexer::Token>::const_iterator end, F&& functor)
-    {
-        for (auto curr = begin; curr != end; curr++)
-        {
-            if (curr->getLine() != begin->getLine() || functor(*curr))
-            {
-                return curr;
-            }
-        }
-        return end;
-    }
-
-    std::vector<OpenCL::Lexer::Token>::const_iterator findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                                                std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                                                Lexer::TokenType tokenType);
-
-    std::vector<Lexer::Token>::const_iterator findSemicolon(std::vector<Lexer::Token>::const_iterator begin,
-                                                            std::vector<Lexer::Token>::const_iterator end);
-
-    std::vector<Lexer::Token>::const_iterator findSemicolonOrEOL(std::vector<Lexer::Token>::const_iterator begin,
-                                                                 std::vector<Lexer::Token>::const_iterator end);
 } // namespace OpenCL
 
 #endif // OPENCLPARSER_MESSAGE_HPP

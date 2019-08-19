@@ -9,14 +9,9 @@
 #undef max
 #undef min
 
-OpenCL::Message::Message(std::string message, std::vector<Lexer::Token>::const_iterator begin,
-                         std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier,
-                         std::vector<Note> notes)
-    : m_message(std::move(message)),
-      m_begin(begin),
-      m_end(end),
-      m_modifier(std::move(modifier)),
-      m_notes(std::move(notes))
+OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                         std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
+    : m_severity(severity), m_message(std::move(message)), m_begin(begin), m_end(end), m_modifier(std::move(modifier))
 {
 }
 
@@ -160,13 +155,16 @@ namespace
 
 std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
 {
-    renderSection(os, message.getMessage(), termcolor::red, "error: ", message.getBegin(), message.getAnEnd(),
+    auto [colour, prefix] = [&message]() -> std::pair<std::ostream& (&)(std::ostream&), std::string> {
+        switch (message.getSeverity())
+        {
+            case Message::Error: return {termcolor::red, "error: "};
+            case Message::Note: return {termcolor::cyan, "note: "};
+            case Message::Warning: return {termcolor::magenta, "warning: "};
+        }
+    }();
+    renderSection(os, message.getMessage(), colour, prefix, message.getBegin(), message.getAnEnd(),
                   message.getModifier());
-
-    for (auto& [noteMessage, noteBegin, noteEnd, noteModifiers] : message.getNotes())
-    {
-        renderSection(os, noteMessage, termcolor::cyan, "note: ", noteBegin, noteEnd, noteModifiers);
-    }
     return os;
 }
 
@@ -185,14 +183,37 @@ const std::vector<OpenCL::Lexer::Token>::const_iterator& OpenCL::Message::getAnE
     return m_end;
 }
 
-const std::vector<OpenCL::Message::Note>& OpenCL::Message::getNotes() const
-{
-    return m_notes;
-}
-
 const std::optional<OpenCL::Modifier>& OpenCL::Message::getModifier() const
 {
     return m_modifier;
+}
+
+OpenCL::Message::Severity OpenCL::Message::getSeverity() const
+{
+    return m_severity;
+}
+
+OpenCL::Message OpenCL::Message::error(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                       std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                       std::optional<Modifier> modifier)
+{
+    return OpenCL::Message(Error, std::move(message), begin, end, std::move(modifier));
+}
+
+OpenCL::Message
+    OpenCL::Message::note(std::string message,
+                          std::vector<OpenCL::Lexer::Token, std::allocator<OpenCL::Lexer::Token>>::const_iterator begin,
+                          std::vector<OpenCL::Lexer::Token, std::allocator<OpenCL::Lexer::Token>>::const_iterator end,
+                          std::optional<Modifier> modifier)
+{
+    return OpenCL::Message(Note, std::move(message), begin, end, std::move(modifier));
+}
+
+OpenCL::Message OpenCL::Message::warning(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                         std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                         std::optional<Modifier> modifier)
+{
+    return OpenCL::Message(Warning, std::move(message), begin, end, std::move(modifier));
 }
 
 OpenCL::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
@@ -231,48 +252,6 @@ std::vector<OpenCL::Lexer::Token>::const_iterator
         if (curr->getLine() != begin->getLine())
         {
             return curr;
-        }
-    }
-    return end;
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::findEOLor(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                      std::vector<OpenCL::Lexer::Token>::const_iterator end, OpenCL::Lexer::TokenType tokenType)
-{
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr->getLine() != begin->getLine() || curr->getTokenType() == tokenType)
-        {
-            return curr;
-        }
-    }
-    return end;
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::findSemicolon(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                          std::vector<OpenCL::Lexer::Token>::const_iterator end)
-{
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr->getTokenType() == Lexer::TokenType::SemiColon)
-        {
-            return curr + 1;
-        }
-    }
-    return end;
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::findSemicolonOrEOL(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                               std::vector<OpenCL::Lexer::Token>::const_iterator end)
-{
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr->getTokenType() == Lexer::TokenType::SemiColon || curr->getLine() != begin->getLine())
-        {
-            return curr + 1;
         }
     }
     return end;

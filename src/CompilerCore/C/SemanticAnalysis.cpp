@@ -10,11 +10,14 @@
 #include "ConstantEvaluator.hpp"
 #include "ErrorMessages.hpp"
 
-void OpenCL::Semantics::SemanticAnalysis::logError(const OpenCL::Message& message)
+void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages)
 {
     if (m_reporter)
     {
-        (*m_reporter) << message;
+        for (auto& iter : messages)
+        {
+            (*m_reporter) << iter;
+        }
     }
 }
 
@@ -89,20 +92,19 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
             if (storageClassSpecifier)
             {
                 logError(
-                    {ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER,
-                     node.begin(),
-                     node.getCompoundStatement().begin(),
-                     Modifier(storage->begin(), storage->end(), Modifier::Underline),
-                     {{Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(), node.getCompoundStatement().begin(),
-                       Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end(), Modifier::Underline)}}});
+                    {Message::error(ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
+                                    node.getCompoundStatement().begin(), Modifier(storage->begin(), storage->end())),
+                     Message::note(
+                         Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(), node.getCompoundStatement().begin(),
+                         Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end(), Modifier::Underline))});
                 continue;
             }
             if (storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                 && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
             {
-                logError({ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION, node.begin(),
-                          node.getCompoundStatement().begin(),
-                          Modifier(storage->begin(), storage->end(), Modifier::Underline)});
+                logError({Message::error(ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
+                                         node.begin(), node.getCompoundStatement().begin(),
+                                         Modifier(storage->begin(), storage->end(), Modifier::Underline))});
                 continue;
             }
             storageClassSpecifier = storage;
@@ -112,9 +114,9 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
                                   node.getDeclarator(), node.getDeclarations());
     if (!std::holds_alternative<Semantics::FunctionType>(type.get()))
     {
-        logError({ErrorMessages::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, node.begin(),
-                  node.getCompoundStatement().begin(),
-                  Modifier(node.getDeclarator().begin(), node.getDeclarator().end(), Modifier::Underline)});
+        logError({Message::error(ErrorMessages::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, node.begin(),
+                                 node.getCompoundStatement().begin(),
+                                 Modifier(node.getDeclarator().begin(), node.getDeclarator().end()))});
         return {};
     }
     const auto& functionRP = std::get<Semantics::FunctionType>(type.get());
@@ -169,10 +171,10 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
 
     if (!identifierList && !node.getDeclarations().empty())
     {
-        logError({ErrorMessages::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, node.begin(),
-                  node.getCompoundStatement().end(),
-                  Modifier(node.getDeclarations().front().begin(), node.getDeclarations().back().end(),
-                           Modifier::Underline)});
+        logError(
+            {Message::error(ErrorMessages::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, node.begin(),
+                            node.getCompoundStatement().end(),
+                            Modifier(node.getDeclarations().front().begin(), node.getDeclarations().back().end()))});
     }
 
     std::map<std::string, Semantics::Type> declarationMap;
@@ -225,8 +227,9 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
                                                                     .getParameterDeclarations()[i]
                                                                     .first.front())
                                  .begin();
-                logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
-                          node.begin(), node.getCompoundStatement().begin(), Modifier(begin, (*declarator)->end())});
+                logError({Message::error(
+                    ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
+                    node.begin(), node.getCompoundStatement().begin(), Modifier(begin, (*declarator)->end()))});
             }
         }
         else if (identifierList)
@@ -272,12 +275,11 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
                                                                     return false;
                                                                 });
                                          });
-                logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
-                          node.begin(),
-                          node.getCompoundStatement().begin(),
-                          {},
-                          {{Notes::PREVIOUSLY_DECLARED_HERE, decl->begin(), decl->end(),
-                            Modifier(identifierLoc, identifierLoc + 1)}}});
+                logError({Message::error(
+                              ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
+                              node.begin(), node.getCompoundStatement().begin()),
+                          Message::note(Notes::PREVIOUSLY_DECLARED_HERE, decl->begin(), decl->end(),
+                                        Modifier(identifierLoc, identifierLoc + 1))});
             }
         }
         else
@@ -318,20 +320,18 @@ std::vector<OpenCL::Semantics::Declaration>
             }
             else
             {
-                logError(
-                    {ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER,
-                     node.begin(),
-                     node.end(),
-                     Modifier(storage->begin(), storage->end(), Modifier::Underline),
-                     {{Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(), node.end(),
-                       Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end(), Modifier::Underline)}}});
+                logError({Message::error(ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(), node.end(),
+                                         Modifier(storage->begin(), storage->end())),
+                          Message::note(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(), node.end(),
+                                        Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end()))});
             }
             if (m_declarations.size() == 1
                 && (storage->getSpecifier() == Syntax::StorageClassSpecifier::Auto
                     || storage->getSpecifier() == Syntax::StorageClassSpecifier::Register))
             {
-                logError({ErrorMessages::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER, node.begin(),
-                          node.end(), Modifier(storage->begin(), storage->end(), Modifier::Underline)});
+                logError(
+                    {Message::error(ErrorMessages::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER,
+                                    node.begin(), node.end(), Modifier(storage->begin(), storage->end()))});
             }
         }
     }
@@ -351,8 +351,8 @@ std::vector<OpenCL::Semantics::Declaration>
                 Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().front()).begin(),
                 Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().back()).end(),
                 [](const Lexer::Token& token) { return token.getTokenType() == Lexer::TokenType::VoidKeyword; });
-            logError({ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, node.begin(), node.end(),
-                      Modifier(voidLoc, voidLoc + 1, Modifier::Underline)});
+            logError({Message::error(ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, node.begin(), node.end(),
+                                     Modifier(voidLoc, voidLoc + 1))});
         }
         if (auto* functionType = std::get_if<FunctionType>(&result.get()))
         {
@@ -374,28 +374,30 @@ std::vector<OpenCL::Semantics::Declaration>
                                      return storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                                             && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern;
                                  });
-                logError({ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION, node.begin(),
-                          node.end(),
-                          Modifier(Syntax::nodeFromNodeDerivedVariant(*storageLoc).begin(),
-                                   Syntax::nodeFromNodeDerivedVariant(*storageLoc).end())});
+                logError(
+                    {Message::error(ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION,
+                                    node.begin(), node.end(),
+                                    Modifier(Syntax::nodeFromNodeDerivedVariant(*storageLoc).begin(),
+                                             Syntax::nodeFromNodeDerivedVariant(*storageLoc).end()))});
             }
             if (initializer)
             {
-                logError({ErrorMessages::Semantics::FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER, node.begin(),
-                          node.end(), Modifier(initializer->begin(), initializer->end())});
+                logError(
+                    {Message::error(ErrorMessages::Semantics::FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
+                                    node.begin(), node.end(), Modifier(initializer->begin(), initializer->end()))});
             }
             if (m_declarations.size() > 1 && storageClassSpecifier
                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
-                logError({ErrorMessages::Semantics::STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE,
-                          node.begin(), node.end(),
-                          Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end())});
+                logError({Message::error(
+                    ErrorMessages::Semantics::STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE, node.begin(),
+                    node.end(), Modifier(storageClassSpecifier->begin(), storageClassSpecifier->end()))});
             }
             if (!functionType->hasPrototype() && !functionType->getArguments().empty())
             {
                 // TODO: Recursively walk down direct declarators to find identifier list
-                logError({ErrorMessages::Semantics::IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION, node.begin(),
-                          node.end()});
+                logError({Message::error(ErrorMessages::Semantics::IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION,
+                                         node.begin(), node.end())});
             }
             decls.emplace_back(
                 Declaration(std::move(result),
@@ -438,8 +440,8 @@ std::vector<OpenCL::Semantics::Declaration>
             {
                 auto declLoc = declaratorToLoc(*declarator);
                 // TODO: Note to show previous declaration
-                logError({ErrorMessages::REDEFINITION_OF_SYMBOL_N.args(name), node.begin(), node.end(),
-                          Modifier(declLoc, declLoc + 1)});
+                logError({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args(name), node.begin(), node.end(),
+                                         Modifier(declLoc, declLoc + 1))});
             }
             decls.emplace_back(std::move(declaration));
         }
@@ -470,9 +472,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                          [tokenType](const OpenCL::Lexer::Token& token) { return token.getTokenType() == tokenType; })
                 + 1,
             declEnd, [tokenType](const OpenCL::Lexer::Token& token) { return token.getTokenType() == tokenType; });
-        logError({OpenCL::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N.args(OpenCL::Lexer::tokenName(tokenType),
-                                                                                 amountString),
-                  declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        logError({Message::error(OpenCL::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N.args(
+                                     OpenCL::Lexer::tokenName(tokenType), amountString),
+                                 declStart, declEnd, OpenCL::Modifier(result, result + 1))});
     };
 
     std::array<std::size_t, 9> primitivesCount = {0};
@@ -541,8 +543,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                              return token.getTokenType() == OpenCL::Lexer::TokenType::SignedKeyword
                                     || token.getTokenType() == OpenCL::Lexer::TokenType::UnsignedKeyword;
                          });
-        logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"), declStart,
-                  declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+        logError(
+            {Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"),
+                            declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         return Type{};
     }
 
@@ -575,8 +578,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::VoidKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(
+                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
+                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         return OpenCL::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
     }
@@ -592,9 +596,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::FloatKeyword});
-            logError(
-                {OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"),
-                 declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(
+                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"),
+                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         return OpenCL::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
     }
@@ -610,9 +614,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::DoubleKeyword});
-            logError(
-                {OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'double'", " any other primitives"),
-                 declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(
+                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'double'", " any other primitives"),
+                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         return OpenCL::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
     }
@@ -632,9 +636,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({OpenCL::Lexer::TokenType::CharKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
                                      OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                          "'char'", " any other primitives but signed and unsigned"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'char'", " any other primitives but signed and unsigned"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
@@ -661,9 +665,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
                                      OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                          "'short'", " any other primitives but signed and unsigned"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'short'", " any other primitives but signed and unsigned"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
@@ -690,9 +694,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             auto result = firstPrimitiveNotOf(
                 {OpenCL::Lexer::TokenType::LongKeyword, OpenCL::Lexer::TokenType::IntKeyword,
                  OpenCL::Lexer::TokenType::SignedKeyword, OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                          "'long'", " any other primitives but signed, unsigned, long and int"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'long'", " any other primitives but signed, unsigned, long and int"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
@@ -719,9 +723,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             auto result = firstPrimitiveNotOf(
                 {OpenCL::Lexer::TokenType::LongKeyword, OpenCL::Lexer::TokenType::IntKeyword,
                  OpenCL::Lexer::TokenType::SignedKeyword, OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                          "'long'", " any other primitives but signed, unsigned, long and int"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'long'", " any other primitives but signed, unsigned, long and int"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
@@ -748,9 +752,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
                                      OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                          "'int'", " any other primitives but signed and unsigned"),
-                      declStart, declEnd, OpenCL::Modifier(result, result + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'int'", " any other primitives but signed and unsigned"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
@@ -827,10 +831,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
                                         return typeQualifier->getQualifier() == Syntax::TypeQualifier::Restrict;
                                     });
                                 });
-                            logError(
-                                {ErrorMessages::Semantics::ONLY_POINTERS_CAN_BE_RESTRICTED, declStart, declEnd,
-                                 Modifier(Syntax::nodeFromNodeDerivedVariant(*result).begin(),
-                                          Syntax::nodeFromNodeDerivedVariant(*result).end(), Modifier::Underline)});
+                            logError({Message::error(ErrorMessages::Semantics::ONLY_POINTERS_CAN_BE_RESTRICTED,
+                                                     declStart, declEnd,
+                                                     Modifier(Syntax::nodeFromNodeDerivedVariant(*result).begin(),
+                                                              Syntax::nodeFromNodeDerivedVariant(*result).end()))});
                         }
                         break;
                     }
@@ -855,9 +859,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
     Type baseType;
     if (typeSpecifiers.empty())
     {
-        logError({ErrorMessages::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, declStart, declEnd,
-                  Modifier(declStart, Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.back()).end(),
-                           Modifier::Underline)});
+        logError({Message::error(
+            ErrorMessages::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, declStart, declEnd,
+            Modifier(declStart, Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.back()).end()))});
     }
     else
     {
@@ -883,9 +887,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                                  });
                 result != typeSpecifiers.end())
             {
-                logError({ErrorMessages::Semantics::EXPECTED_ONLY_PRIMITIVES.args(
-                              '\'' + typeSpecifiers[0]->begin()->emitBack() + '\''),
-                          declStart, declEnd, Modifier((*result)->begin(), (*result)->end(), Modifier::Underline)});
+                logError({Message::error(ErrorMessages::Semantics::EXPECTED_ONLY_PRIMITIVES.args(
+                                             '\'' + typeSpecifiers[0]->begin()->emitBack() + '\''),
+                                         declStart, declEnd, Modifier((*result)->begin(), (*result)->end()))});
             }
             std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;
             for (auto& iter : typeSpecifiers)
@@ -900,10 +904,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
         [&](const std::unique_ptr<Syntax::StructOrUnionSpecifier>& structOrUnion) -> Type {
             if (typeSpecifiers.size() > 1)
             {
-                logError({ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args(
-                              "type specifiers", (structOrUnion->isUnion() ? "union specifier" : "struct specifier")),
-                          declStart, declEnd,
-                          Modifier(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end(), Modifier::Underline)});
+                logError({Message::error(
+                    ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args(
+                        "type specifiers", (structOrUnion->isUnion() ? "union specifier" : "struct specifier")),
+                    declStart, declEnd, Modifier(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end()))});
             }
             if (structOrUnion->getStructDeclarations().empty())
             {
@@ -934,9 +938,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                         }
                         else if (!result.isInteger())
                         {
-                            logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                                      iter.second->begin(), iter.second->end(),
-                                      Modifier(iter.second->begin(), iter.second->end())});
+                            logError({Message::error(
+                                ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                iter.second->begin(), iter.second->end(),
+                                Modifier(iter.second->begin(), iter.second->end()))});
                             members.emplace_back(std::move(type), std::move(name), 0);
                         }
                         else
@@ -952,9 +957,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
         [&](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> Type {
             if (typeSpecifiers.size() > 1)
             {
-                logError({ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args("type specifiers", "enum"),
-                          declStart, declEnd,
-                          Modifier(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end(), Modifier::Underline)});
+                logError({Message::error(
+                    ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args("type specifiers", "enum"), declStart,
+                    declEnd, Modifier(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end()))});
             }
             std::vector<std::pair<std::string, std::int32_t>> values;
             auto declName = match(
@@ -976,10 +981,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                             }
                             else if (!value.isInteger())
                             {
-                                logError(
-                                    {ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                                     expression->begin(), expression->end(),
-                                     Modifier(expression->begin(), expression->end())});
+                                logError({Message::error(
+                                    ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                    expression->begin(), expression->end(),
+                                    Modifier(expression->begin(), expression->end()))});
                             }
                             else
                             {
@@ -1094,17 +1099,15 @@ std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
                 [this, declStart, declEnd](const OpenCL::Syntax::StorageClassSpecifier& storageClassSpecifier) {
                     if (storageClassSpecifier.getSpecifier() != OpenCL::Syntax::StorageClassSpecifier::Register)
                     {
-                        logError({OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
-                                  declStart, declEnd,
-                                  OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end(),
-                                                   OpenCL::Modifier::Underline)});
+                        logError({Message::error(
+                            OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT, declStart,
+                            declEnd, OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
                     }
                 },
                 [this, declStart, declEnd](const OpenCL::Syntax::FunctionSpecifier& functionSpecifier) {
-                    logError({OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, declStart,
-                              declEnd,
-                              OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end(),
-                                               OpenCL::Modifier::Underline)});
+                    logError({Message::error(OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
+                                             declStart, declEnd,
+                                             OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
                 });
         }
         auto result = declaratorsToType(
@@ -1127,8 +1130,8 @@ std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
                 Syntax::nodeFromNodeDerivedVariant(pair.first.front()).begin(),
                 Syntax::nodeFromNodeDerivedVariant(pair.first.back()).end(),
                 [](const Lexer::Token& token) { return token.getTokenType() == Lexer::TokenType::VoidKeyword; });
-            logError({OpenCL::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart, declEnd,
-                      OpenCL::Modifier(voidBegin, voidBegin + 1, OpenCL::Modifier::Underline)});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart,
+                                     declEnd, OpenCL::Modifier(voidBegin, voidBegin + 1))});
         }
         else
         {
@@ -1141,12 +1144,12 @@ std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
     }
     return arguments;
 }
+
 OpenCL::Semantics::ConstantEvaluator
     OpenCL::Semantics::SemanticAnalysis::makeEvaluator(std::vector<OpenCL::Lexer::Token>::const_iterator exprBegin,
                                                        std::vector<OpenCL::Lexer::Token>::const_iterator exprEnd)
 {
     return Semantics::ConstantEvaluator(
-        exprBegin, exprEnd,
         [this](const Syntax::TypeName& typeName) -> Type {
             return declaratorsToType(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
@@ -1162,7 +1165,9 @@ OpenCL::Semantics::ConstantEvaluator
             }
             return nullptr;
         },
-        [this](const Message& message) { logError(message); });
+        [this, exprBegin, exprEnd](std::string message, std::optional<Modifier> modifier) {
+            logError({Message::error(std::move(message), exprBegin, exprEnd, std::move(modifier))});
+        });
 }
 
 OpenCL::Semantics::Type
@@ -1196,10 +1201,11 @@ OpenCL::Semantics::Type
                 {
                     if (!size.isInteger())
                     {
-                        logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                                  directAbstractDeclaratorAssignmentExpression.begin(),
-                                  directAbstractDeclaratorAssignmentExpression.end(),
-                                  Modifier(expression->begin(), expression->end())});
+                        logError({Message::error(
+                            ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                            directAbstractDeclaratorAssignmentExpression.begin(),
+                            directAbstractDeclaratorAssignmentExpression.end(),
+                            Modifier(expression->begin(), expression->end()))});
                         baseType = ArrayType::create(false, false, false, std::move(baseType), 0);
                     }
                     else
@@ -1279,9 +1285,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                 {
                     if (!size.isInteger())
                     {
-                        logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                                  dirWithoutStaticOrAsterisk.begin(), dirWithoutStaticOrAsterisk.end(),
-                                  Modifier(expression->begin(), expression->end())});
+                        logError({Message::error(
+                            ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                            dirWithoutStaticOrAsterisk.begin(), dirWithoutStaticOrAsterisk.end(),
+                            Modifier(expression->begin(), expression->end()))});
                         baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), 0);
                     }
                     else
@@ -1308,10 +1315,11 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
             {
                 if (!size.isInteger())
                 {
-                    logError({ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                              directDeclaratorStatic.begin(), directDeclaratorStatic.end(),
-                              Modifier(directDeclaratorStatic.getAssignmentExpression().begin(),
-                                       directDeclaratorStatic.getAssignmentExpression().end())});
+                    logError(
+                        {Message::error(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                        directDeclaratorStatic.begin(), directDeclaratorStatic.end(),
+                                        Modifier(directDeclaratorStatic.getAssignmentExpression().begin(),
+                                                 directDeclaratorStatic.getAssignmentExpression().end()))});
                     baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), 0);
                 }
                 else
@@ -1363,27 +1371,25 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                         [this, declStart, declEnd](const Syntax::StorageClassSpecifier& storageClassSpecifier) {
                             if (storageClassSpecifier.getSpecifier() != Syntax::StorageClassSpecifier::Register)
                             {
-                                logError({OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
-                                          declStart, declEnd,
-                                          OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end(),
-                                                           OpenCL::Modifier::Underline)});
+                                logError({Message::error(
+                                    OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
+                                    declStart, declEnd,
+                                    OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
                             }
                         },
                         [this, declStart, declEnd](const Syntax::FunctionSpecifier& functionSpecifier) {
-                            logError({OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
-                                      declStart, declEnd,
-                                      OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end(),
-                                                       OpenCL::Modifier::Underline)});
+                            logError({Message::error(
+                                OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, declStart,
+                                declEnd, OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
                         });
                 }
                 for (auto& pair : iter.getInitDeclarators())
                 {
                     if (pair.second)
                     {
-                        logError(
-                            {OpenCL::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
-                             declStart, declEnd,
-                             Modifier(pair.second->begin(), pair.second->end(), Modifier::Underline)});
+                        logError({Message::error(
+                            OpenCL::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
+                            declStart, declEnd, Modifier(pair.second->begin(), pair.second->end()))});
                     }
                     auto name = Semantics::declaratorToName(*pair.first);
                     auto result = declaratorsToType(
@@ -1410,8 +1416,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                     }
                     else if (primitive->getBitCount() == 0)
                     {
-                        logError({ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, declStart, declEnd,
-                                  Modifier(result->second.begin, result->second.end, Modifier::Underline)});
+                        logError({Message::error(ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, declStart,
+                                                 declEnd, Modifier(result->second.begin, result->second.end))});
                     }
                     else if (primitive->getBitCount() < 32)
                     {
@@ -1433,9 +1439,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
 
             for (auto& [name, binding] : declarationMap)
             {
-                logError({ErrorMessages::Semantics::N_APPEARING_IN_N_BUT_NOT_IN_N.args(
-                              '\'' + name + '\'', "declarations", "identifier list"),
-                          declStart, declEnd, Modifier(binding.begin, binding.end, Modifier::Underline)});
+                logError({Message::error(ErrorMessages::Semantics::N_APPEARING_IN_N_BUT_NOT_IN_N.args(
+                                             '\'' + name + '\'', "declarations", "identifier list"),
+                                         declStart, declEnd, Modifier(binding.begin, binding.end))});
             }
             baseType = FunctionType::create(std::move(baseType), std::move(arguments), false, false);
             std::visit(directSelf, identifiers.getDirectDeclarator());

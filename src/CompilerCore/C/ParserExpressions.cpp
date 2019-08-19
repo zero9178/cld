@@ -76,7 +76,7 @@ std::optional<AssignmentExpressionAssignment>
         return isAssignment(token.getTokenType()) || recoverySet(token);
     });
     AssignmentExpressionAssignment::AssignOperator assignOperator;
-    if (begin >= end || !isAssignment(begin->getTokenType()))
+    if (begin == end || !isAssignment(begin->getTokenType()))
     {
         return {};
     }
@@ -149,9 +149,10 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
         auto optionalExpression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
             return token.getTokenType() == Lexer::TokenType::Colon || recoverySet(token);
         });
-        if (!expect(Lexer::TokenType::Colon, begin, end, context,
-                    {{Notes::TO_MATCH_N_HERE.args("'?'"), start, findSemicolonOrEOL(begin, end),
-                      Modifier(questionMarkpos, questionMarkpos + 1, Modifier::PointAtBeginning)}}))
+        if (!expect(Lexer::TokenType::Colon, start, begin, end, context,
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), context.getLineStart(questionMarkpos),
+                                   context.getLineEnd(questionMarkpos),
+                                   Modifier(questionMarkpos, questionMarkpos + 1, Modifier::PointAtBeginning))}))
         {
             skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
                 return firstIsInConditionalExpression(token, context) || recoverySet(token);
@@ -537,14 +538,15 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
     {
         if (begin < end)
         {
-            context.logError(
+            context.log({Message::error(
                 ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
-                findSemicolonOrEOL(begin, end), Modifier(begin, begin + 1, Modifier::PointAtBeginning));
+                context.getLineStart(start), context.getLineEnd(begin),
+                Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
         }
         else
         {
-            context.logError(ErrorMessages::Parser::EXPECTED_N.args("typename"), findSemicolonOrEOL(begin, end),
-                             Modifier(begin - 1, begin, Modifier::InsertAtEnd));
+            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), context.getLineStart(start),
+                                        begin, Modifier(begin - 1, begin, Modifier::InsertAtEnd))});
         }
     }
 
@@ -585,15 +587,14 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                 });
             if (castBranch->getCurrent() < end)
             {
-                if (!expect(Lexer::TokenType::CloseParenthese, castBranch->getCurrent(),
-                            findSemicolonOrEOL(castBranch->getCurrent(), end), context))
+                if (!expect(Lexer::TokenType::CloseParenthese, start, castBranch->getCurrent(), end, context))
                 {
                     skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
                         return firstIsInCastExpression(token, context) || recoverySet(token);
                     });
                 }
                 else if (typeName
-                         && (castBranch->getCurrent() >= end
+                         && (castBranch->getCurrent() == end
                              || castBranch->getCurrent()->getTokenType() != Lexer::TokenType::OpenBrace)
                          && context.getCurrentErrorCount() == prevErrorCount)
                 {
@@ -633,16 +634,17 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     {
         begin++;
         if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParenthese
-            && (begin + 1 >= end || firstIsInTypeName(*(begin + 1), context)))
+            && (begin + 1 == end || firstIsInTypeName(*(begin + 1), context)))
         {
             auto openPpos = begin;
             begin++;
             auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
                 return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
             });
-            if (!expect(Lexer::TokenType::CloseParenthese, begin, end, context,
-                        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
-                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+            if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                       context.getLineEnd(openPpos),
+                                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
                 skipUntil(begin, end, recoverySet);
             }
@@ -730,7 +732,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     std::unique_ptr<PostFixExpression> current;
 
     auto start = begin;
-    if (begin >= end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 >= end
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
         auto newPrimary = parsePrimaryExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
@@ -748,9 +750,9 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
             return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
         });
-        if (!expect(Lexer::TokenType::CloseParenthese, begin, end, context,
-                    {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
-                      Modifier(start, start + 1, Modifier::PointAtBeginning)}}))
+        if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                   context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
         {
             skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                 return token.getTokenType() == Lexer::TokenType::OpenBrace || recoverySet(token);
@@ -758,7 +760,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         }
 
         std::optional<Tokens::const_iterator> openBrace;
-        if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
+        if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
         {
             skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
                 return firstIsInInitializerList(token, context) || recoverySet(token);
@@ -777,14 +779,26 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         {
             begin++;
         }
-        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
-                    {{Notes::TO_MATCH_N_HERE.args("'{'"), start, findSemicolonOrEOL(begin, end),
-                      openBrace ? Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning) :
-                                  std::optional<Modifier>{}}}))
+        if (openBrace)
         {
-            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                return isPostFixOperator(token) || recoverySet(token);
-            });
+            if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start),
+                                       context.getLineEnd(*openBrace),
+                                       Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
+            {
+                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    return isPostFixOperator(token) || recoverySet(token);
+                });
+            }
+        }
+        else
+        {
+            if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
+            {
+                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    return isPostFixOperator(token) || recoverySet(token);
+                });
+            }
         }
         if (initializer && type)
         {
@@ -813,7 +827,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 }
                 else if (firstIsInAssignmentExpression(*begin, context))
                 {
-                    expect(Lexer::TokenType::Comma, begin, end, context);
+                    expect(Lexer::TokenType::Comma, start, begin, end, context);
                 }
                 else
                 {
@@ -831,9 +845,10 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 }
             }
 
-            if (!expect(Lexer::TokenType::CloseParenthese, begin, end, context,
-                        {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
-                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+            if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                       context.getLineEnd(openPpos),
+                                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
                 skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                     return isPostFixOperator(token) || recoverySet(token);
@@ -853,9 +868,10 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 return token.getTokenType() == Lexer::TokenType::CloseSquareBracket || recoverySet(token);
             });
 
-            if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                        {{Notes::TO_MATCH_N_HERE.args("'['"), start, findSemicolonOrEOL(begin, end),
-                          Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+            if (!expect(Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), context.getLineStart(start),
+                                       context.getLineEnd(openPpos),
+                                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
                 skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                     return isPostFixOperator(token) || recoverySet(token);
@@ -889,7 +905,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         {
             begin++;
             std::string name;
-            if (!expect(Lexer::TokenType::Identifier, begin, end, context, {}, &name))
+            if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
             {
                 skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                     return isPostFixOperator(token) || recoverySet(token);
@@ -905,7 +921,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         {
             begin++;
             std::string name;
-            if (!expect(Lexer::TokenType::Identifier, begin, end, context, {}, &name))
+            if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
             {
                 skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                     return isPostFixOperator(token) || recoverySet(token);
@@ -948,7 +964,7 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
                 }
                 else
                 {
-                    throw std::runtime_error("Can't convert type of variant to constant expression");
+                    throw std::runtime_error("ICE: Can't convert type of variant to constant expression");
                 }
             },
             begin->getValue());
@@ -972,9 +988,10 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
         auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
             return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
         });
-        if (!expect(Lexer::TokenType::CloseParenthese, begin, end, context,
-                    {{Notes::TO_MATCH_N_HERE.args("'('"), start, findSemicolonOrEOL(begin, end),
-                      Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning)}}))
+        if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                   context.getLineEnd(openPpos),
+                                   Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
         {
             skipUntil(begin, end, recoverySet);
         }
@@ -983,16 +1000,17 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
 
     if (begin == end)
     {
-        context.logError(
+        context.log({Message::error(
             ErrorMessages::Parser::EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")),
-            begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd));
+            context.getLineStart(start), begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
     }
     else
     {
-        context.logError(
+        context.log({Message::error(
             ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                 OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), '\'' + begin->emitBack() + '\''),
-            findSemicolonOrEOL(begin, end), Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning));
+            context.getLineStart(start), context.getLineEnd(begin),
+            Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
     }
     skipUntil(begin, end, recoverySet);
     return {};

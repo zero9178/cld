@@ -21,8 +21,7 @@ namespace
         std::ostringstream ss;
         std::vector<OpenCL::Lexer::Token> tokens;
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
-        OpenCL::Parser::Context context(&ss);
-        auto ds = context.setDiagnosticStart(tokens.cbegin());
+        OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), &ss);
         auto ref = tokens.cbegin();
         auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context,
                                                                   [](const OpenCL::Lexer::Token&) { return false; });
@@ -30,25 +29,33 @@ namespace
         REQUIRE((ss.str().empty() && parsing));
         OpenCL::Semantics::SemanticAnalysis analysis(&ss);
         OpenCL::Semantics::ConstantEvaluator evaluator(
-            tokens.begin(), tokens.end(),
             [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
                 return analysis.declaratorsToType(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
-            {}, [&ss](const OpenCL::Message& message) { ss << message; }, mode);
+            {},
+            [&ss, &tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
+                ss << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(), std::move(modifier));
+            },
+            mode);
         auto ret = evaluator.visit(*parsing);
         auto string = ss.str();
         if (OpenCL::colourConsoleOutput && !string.empty())
         {
             OpenCL::Semantics::ConstantEvaluator(
-                tokens.begin(), tokens.end(),
                 [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
                     return analysis.declaratorsToType(
                         {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                         typeName.getAbstractDeclarator());
                 },
-                {}, [](const OpenCL::Message& message) { std::cerr << message << std::endl; }, mode)
+                {},
+                [&tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
+                    std::cerr << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(),
+                                                        std::move(modifier))
+                              << std::endl;
+                },
+                mode)
                 .visit(*parsing);
         }
         return {ret, string};

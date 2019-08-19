@@ -41,7 +41,7 @@ namespace OpenCL::Semantics
 
         [[nodiscard]] const Semantics::Type* getTypedef(const std::string& name) const;
 
-        void logError(const Message& message);
+        void logError(std::vector<Message> messages);
 
         OpenCL::Semantics::Type
             primitivesToType(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
