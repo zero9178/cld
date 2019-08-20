@@ -1,5 +1,7 @@
 #include "Message.hpp"
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <regex>
 #include <utility>
 
@@ -161,6 +163,7 @@ std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
             case Message::Error: return {termcolor::red, "error: "};
             case Message::Note: return {termcolor::cyan, "note: "};
             case Message::Warning: return {termcolor::magenta, "warning: "};
+            default: OPENCL_UNREACHABLE;
         }
     }();
     renderSection(os, message.getMessage(), colour, prefix, message.getBegin(), message.getAnEnd(),

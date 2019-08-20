@@ -11,10 +11,10 @@ using namespace OpenCL::Syntax;
 
 namespace
 {
-    std::optional<std::vector<DeclarationSpecifier>>
-        parseDeclarationSpecifierList(OpenCL::Parser::Tokens::const_iterator& begin,
-                                      OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::Context& context,
-                                      OpenCL::Parser::InRecoverySet recoverySet)
+    std::vector<DeclarationSpecifier> parseDeclarationSpecifierList(OpenCL::Parser::Tokens::const_iterator& begin,
+                                                                    OpenCL::Parser::Tokens::const_iterator end,
+                                                                    OpenCL::Parser::Context& context,
+                                                                    OpenCL::Parser::InRecoverySet recoverySet)
     {
         bool seenTypeSpecifier = false;
         std::vector<DeclarationSpecifier> declarationSpecifiers;
@@ -90,40 +90,25 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
 {
     auto start = begin;
 
-    bool isTypedef = false;
-    bool declaratorMightActuallyBeTypedef = false;
     auto declarationSpecifiers =
         parseDeclarationSpecifierList(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
             return firstIsInDeclarator(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
                    || recoverySet(token);
         });
-    if (declarationSpecifiers)
-    {
-        isTypedef = std::any_of(declarationSpecifiers->begin(), declarationSpecifiers->end(),
-                                [](const DeclarationSpecifier& declarationSpecifier) {
-                                    auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
-                                    if (!storage)
-                                    {
-                                        return false;
-                                    }
-                                    return storage->getSpecifier() == StorageClassSpecifier::Typedef;
-                                });
-        if (begin < end
-            && std::none_of(
-                declarationSpecifiers->begin(), declarationSpecifiers->end(),
-                [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
-            && begin->getTokenType() == Lexer::TokenType::Identifier
-            && context.isTypedef(std::get<std::string>(begin->getValue())))
-        {
-            declaratorMightActuallyBeTypedef = true;
-        }
-    }
+    bool isTypedef = std::any_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
+                                 [](const DeclarationSpecifier& declarationSpecifier) {
+                                     auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
+                                     if (!storage)
+                                     {
+                                         return false;
+                                     }
+                                     return storage->getSpecifier() == StorageClassSpecifier::Typedef;
+                                 });
 
     if (begin == end || begin->getTokenType() == Lexer::TokenType::SemiColon)
     {
         expect(Lexer::TokenType::SemiColon, start, begin, end, context);
-        return Declaration(start, begin,
-                           std::move(declarationSpecifiers).value_or(std::vector<Syntax::DeclarationSpecifier>{}), {});
+        return Declaration(start, begin, std::move(declarationSpecifiers), {});
     }
 
     auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
@@ -201,10 +186,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
                     }
                     auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
                     auto result = Semantics::declaratorToName(*decl);
-                    if (!result.empty())
-                    {
-                        context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
-                    }
+                    context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
                 }
             }
             else if (auto* identifierList =
@@ -225,10 +207,8 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         }
         context.addToScope(Semantics::declaratorToName(*declarator),
                            {start, compoundStatement->begin(), Semantics::declaratorToLoc(*declarator)});
-        return FunctionDefinition(start, begin,
-                                  declarationSpecifiers ? std::move(*declarationSpecifiers) :
-                                                          std::vector<Syntax::DeclarationSpecifier>{},
-                                  std::move(*declarator), std::move(declarations), std::move(*compoundStatement));
+        return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
+                                  std::move(declarations), std::move(*compoundStatement));
     }
     else
     {
@@ -299,30 +279,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
             }
         }
 
-        if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
+        if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
-            std::vector<Message> notes;
-            if (loc)
-            {
-                notes.push_back(Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                                                  '\'' + Semantics::declaratorToName(*initDeclarators[0].first) + '\''),
-                                              context.getLineStart(loc->begin), context.getLineEnd(loc->end),
-                                              Modifier(loc->identifier, loc->identifier + 1)));
-            }
-            if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context, std::move(notes)))
-            {
-                skipUntil(begin, end, recoverySet);
-                return {};
-            }
-        }
-        else
-        {
-            if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
-            {
-                skipUntil(begin, end, recoverySet);
-                return {};
-            }
+            skipUntil(begin, end, recoverySet);
+            return {};
         }
 
         if (isTypedef)
@@ -334,10 +294,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
             }
         }
 
-        return Declaration(start, begin,
-                           declarationSpecifiers ? std::move(*declarationSpecifiers) :
-                                                   std::vector<Syntax::DeclarationSpecifier>{},
-                           std::move(initDeclarators));
+        return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
     }
 }
 
@@ -346,42 +303,35 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
 {
     auto start = begin;
 
-    bool isTypedef = false;
     bool declaratorMightActuallyBeTypedef = false;
     auto declarationSpecifiers =
         parseDeclarationSpecifierList(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
             return firstIsInDeclarator(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
                    || recoverySet(token);
         });
-    if (declarationSpecifiers)
+    bool isTypedef = std::any_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
+                                 [](const DeclarationSpecifier& declarationSpecifier) {
+                                     auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
+                                     if (!storage)
+                                     {
+                                         return false;
+                                     }
+                                     return storage->getSpecifier() == StorageClassSpecifier::Typedef;
+                                 });
+    if (begin < end
+        && std::none_of(
+            declarationSpecifiers.begin(), declarationSpecifiers.end(),
+            [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
+        && begin->getTokenType() == Lexer::TokenType::Identifier
+        && context.isTypedef(std::get<std::string>(begin->getValue())))
     {
-        isTypedef = std::any_of(declarationSpecifiers->begin(), declarationSpecifiers->end(),
-                                [](const DeclarationSpecifier& declarationSpecifier) {
-                                    auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
-                                    if (!storage)
-                                    {
-                                        return false;
-                                    }
-                                    return storage->getSpecifier() == StorageClassSpecifier::Typedef;
-                                });
-        if (begin < end
-            && std::none_of(
-                declarationSpecifiers->begin(), declarationSpecifiers->end(),
-                [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
-            && begin->getTokenType() == Lexer::TokenType::Identifier
-            && context.isTypedef(std::get<std::string>(begin->getValue())))
-        {
-            declaratorMightActuallyBeTypedef = true;
-        }
+        declaratorMightActuallyBeTypedef = true;
     }
 
     if (begin == end || begin->getTokenType() == Lexer::TokenType::SemiColon)
     {
         expect(Lexer::TokenType::SemiColon, start, begin, end, context);
-        return Declaration(start, begin,
-                           declarationSpecifiers ? std::move(*declarationSpecifiers) :
-                                                   std::vector<Syntax::DeclarationSpecifier>{},
-                           {});
+        return Declaration(start, begin, std::move(declarationSpecifiers), {});
     }
 
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
@@ -471,10 +421,7 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
         }
     }
 
-    return Declaration(start, begin,
-                       declarationSpecifiers ? std::move(*declarationSpecifiers) :
-                                               std::vector<Syntax::DeclarationSpecifier>{},
-                       std::move(initDeclarators));
+    return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
 std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(Tokens::const_iterator& begin,
@@ -1309,11 +1256,7 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
         });
         if (result == end)
         {
-            if (declarationSpecifiers)
-            {
-                parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
-                                                   std::unique_ptr<AbstractDeclarator>());
-            }
+            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
             continue;
         }
 
@@ -1323,10 +1266,10 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                 parseAbstractDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
                     return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
                 });
-            if (abstractDeclarator && declarationSpecifiers)
+            if (abstractDeclarator)
             {
                 parameterDeclarations.emplace_back(
-                    std::move(*declarationSpecifiers),
+                    std::move(declarationSpecifiers),
                     std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
             }
         }
@@ -1335,9 +1278,9 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
             auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
                 return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
             });
-            if (declarator && declarationSpecifiers)
+            if (declarator)
             {
-                parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
+                parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                    std::make_unique<Declarator>(std::move(*declarator)));
             }
         }
@@ -1352,9 +1295,9 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                     auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
                         return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
                     });
-                    if (declarationSpecifiers && declarator)
+                    if (declarator)
                     {
-                        parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
+                        parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                            std::make_unique<Declarator>(std::move(*declarator)));
                     }
                     break;
@@ -1365,20 +1308,19 @@ std::optional<ParameterList> OpenCL::Parser::parseParameterList(OpenCL::Parser::
                         parseAbstractDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
                             return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
                         });
-                    if (abstractDeclarator && declarationSpecifiers)
+                    if (abstractDeclarator)
                     {
                         parameterDeclarations.emplace_back(
-                            std::move(*declarationSpecifiers),
+                            std::move(declarationSpecifiers),
                             std::make_unique<AbstractDeclarator>(std::move(*abstractDeclarator)));
                     }
                     break;
                 }
             }
         }
-        else if (declarationSpecifiers)
+        else
         {
-            parameterDeclarations.emplace_back(std::move(*declarationSpecifiers),
-                                               std::unique_ptr<AbstractDeclarator>());
+            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
         }
     }
     if (first)
@@ -1904,7 +1846,7 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
             continue;
         }
         vector.push_back({std::move(*initializer), std::move(designation)});
-    } while (begin + 1 < end && begin->getTokenType() == Lexer::TokenType::Comma
+    } while (begin < end && begin + 1 < end && begin->getTokenType() == Lexer::TokenType::Comma
              && firstIsInInitializerList(*(begin + 1), context));
 
     return InitializerList{start, begin, std::move(vector)};

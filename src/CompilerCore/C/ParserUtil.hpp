@@ -14,6 +14,7 @@ namespace OpenCL::Parser
     bool expect(Lexer::TokenType expected, Tokens::const_iterator begin, Tokens::const_iterator& curr,
                 Tokens::const_iterator end, Context& context, std::vector<Message> additional = {}, T* value = nullptr)
     {
+        (void)value;
         if (curr == end || curr->getTokenType() != expected)
         {
             if (curr == end)

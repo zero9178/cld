@@ -136,7 +136,26 @@ TEST_CASE("Parse specifier qualifier list", "[parser]")
 {
     treeProduces("void foo(){typedef int i;sizeof(const i f);}",
                  Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "'f'"))
-                     && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1) && ProducesNNotes(1));
+                     && Catch::Contains(TO_MATCH_N_HERE.args("'('")));
+}
+
+TEST_CASE("Parse external declaration", "[parser]")
+{
+    functionProduces(parseExternalDeclaration, "int i",
+                     Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "i{}",
+                     Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "'i'"))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int i() int f;{}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int i(void) {}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int () int f;{}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "')'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int i() int f{}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'{'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int foo(int,int[5]){}",
+                     Catch::Contains(MISSING_PARAMETER_NAME) && ProducesNErrors(2) && ProducesNoNotes());
 }
 
 TEST_CASE("Parse Declaration Specifiers", "[parser]")
@@ -228,18 +247,6 @@ TEST_CASE("Parse Declaration Specifiers", "[parser]")
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "','")) && ProducesNErrors(1)
                              && ProducesNoNotes());
     }
-}
-
-TEST_CASE("Parse Function definitions", "[parser]")
-{
-    functionProduces(parseExternalDeclaration, "i{}",
-                     Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "'i'"))
-                         && ProducesNErrors(1) && ProducesNoNotes());
-    functionProduces(parseExternalDeclaration, "int i() int f{}",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'{'")) && ProducesNErrors(1)
-                         && ProducesNoNotes());
-    functionProduces(parseExternalDeclaration, "int foo(int,int[5]){}",
-                     Catch::Contains(MISSING_PARAMETER_NAME) && ProducesNErrors(2) && ProducesNoNotes());
 }
 
 TEST_CASE("Parse Declaration", "[parser]")

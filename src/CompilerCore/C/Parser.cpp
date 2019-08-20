@@ -1,6 +1,7 @@
 #include "Parser.hpp"
 
 #include <algorithm>
+#include <cassert>
 
 #include "ParserUtil.hpp"
 
@@ -66,6 +67,7 @@ void OpenCL::Parser::Context::log(std::vector<Message> messages)
 
 void OpenCL::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
 {
+    assert(!name.empty());
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
