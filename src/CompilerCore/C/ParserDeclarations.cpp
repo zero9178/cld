@@ -168,7 +168,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
                             auto* loc = context.getLocationOf(name);
                             if (loc)
                             {
-                                notes.push_back(Message::note(Notes::IDENTIFIER_IS_TYPDEF.args('\'' + name + '\''),
+                                notes.push_back(Message::note(Notes::IDENTIFIER_IS_TYPEDEF.args('\'' + name + '\''),
                                                               context.getLineStart(loc->begin),
                                                               context.getLineEnd(loc->end),
                                                               Modifier(loc->identifier, loc->identifier + 1)));
@@ -253,7 +253,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
                 context.addToScope(Semantics::declaratorToName(*declarator),
                                    {start, begin, Semantics::declaratorToLoc(*declarator)});
             }
-            if ((begin == end || begin->getTokenType() != Lexer::TokenType::Assignment))
+            if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
             {
                 if (declarator)
                 {
@@ -507,6 +507,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                 auto expected = parseStructOrUnionSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
+                    skipUntil(begin, end, recoverySet);
                     return {};
                 }
                 return DeclarationSpecifier{TypeSpecifier(
@@ -517,6 +518,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                 auto expected = parseEnumSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
+                    skipUntil(begin, end, recoverySet);
                     return {};
                 }
                 else
@@ -562,7 +564,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
     {
         context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("storage specifier or typename"),
                                     context.getLineStart(start), context.getLineEnd(begin),
-                                    Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
+                                    Modifier{begin - 1, begin, Modifier::PointAtBeginning})});
     }
     skipUntil(begin, end, recoverySet);
     return {};
@@ -777,6 +779,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                 auto expected = parseStructOrUnionSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
+                    skipUntil(begin, end, recoverySet);
                     return {};
                 }
                 return SpecifierQualifier{TypeSpecifier(
@@ -787,6 +790,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                 auto expected = parseEnumSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
+                    skipUntil(begin, end, recoverySet);
                     return {};
                 }
                 return SpecifierQualifier{
@@ -803,8 +807,8 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                 {
                     auto* loc = context.getLocationOf(std::get<std::string>(begin->getValue()));
                     context.log(
-                        {Message::error(ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args(
-                                            "or typename", '\'' + begin->emitBack() + '\''),
+                        {Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                            "typename", '\'' + begin->emitBack() + '\''),
                                         context.getLineStart(start), context.getLineEnd(end),
                                         Modifier{begin, begin + 1, Modifier::PointAtBeginning}),
                          Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + begin->emitBack() + '\''),
@@ -988,7 +992,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                     if (auto* loc = context.getLocationOf(name))
                                     {
                                         notes.push_back(Message::note(
-                                            Notes::IDENTIFIER_IS_TYPDEF.args('\'' + name + '\''),
+                                            Notes::IDENTIFIER_IS_TYPEDEF.args('\'' + name + '\''),
                                             context.getLineStart(loc->begin), context.getLineEnd(loc->end),
                                             Modifier(loc->identifier, loc->identifier + 1, Modifier::Underline)));
                                     }
@@ -1145,7 +1149,7 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                         std::make_unique<AssignmentExpression>(std::move(*assignment))));
                             }
                         }
-                        else
+                        else if (directDeclarator)
                         {
                             directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
                                 start, begin, std::move(directDeclarator), std::move(typeQualifiers), nullptr));

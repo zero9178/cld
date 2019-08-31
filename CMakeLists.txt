@@ -54,7 +54,7 @@ else ()
     if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.15.0")
         cmake_policy(CMP0092 NEW)
     endif ()
-    add_compile_options(/w34716 /bigobj /permissive /W4 /w14640 /wd4068)
+    add_compile_options(/bigobj /permissive /W4 /wd4068)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif ()
 

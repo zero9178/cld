@@ -126,7 +126,7 @@ namespace OpenCL
         constexpr auto TYPEDEF_OVERSHADOWED_BY_DECLARATION =
             Format("{} is a typedef but overshadowed by declaration here:");
 
-        constexpr auto IDENTIFIER_IS_TYPDEF =
+        constexpr auto IDENTIFIER_IS_TYPEDEF =
             Format("{} is a typename and not an identifier due to typedef declaration here:");
 
         constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");

@@ -1,5 +1,7 @@
 #include "Lexer.hpp"
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <regex>
@@ -391,7 +393,7 @@ namespace
 
 std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
 {
-    if (source.back() != ' ')
+    if (source.empty() || source.back() != ' ')
     {
         source += ' ';
     }
@@ -1013,6 +1015,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
     }
+    OPENCL_UNREACHABLE;
 }
 
 std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
@@ -1105,6 +1108,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
     }
+    OPENCL_UNREACHABLE;
 }
 
 std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
@@ -1197,6 +1201,7 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::Pound: return "#";
         case TokenType::DoublePound: return "##";
     }
+    OPENCL_UNREACHABLE;
 }
 
 std::uint64_t OpenCL::Lexer::Token::getLength() const

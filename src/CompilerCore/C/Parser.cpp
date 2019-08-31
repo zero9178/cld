@@ -155,6 +155,10 @@ bool OpenCL::Parser::Context::tokenCompare(const OpenCL::Lexer::Token& lhs, cons
 std::vector<OpenCL::Lexer::Token>::const_iterator
     OpenCL::Parser::Context::getLineStart(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
 {
+    if (m_lines.empty())
+    {
+        return iter;
+    }
     auto& second = m_lines.rbegin()->second;
     if (iter == second.second)
     {
@@ -169,6 +173,10 @@ std::vector<OpenCL::Lexer::Token>::const_iterator
 std::vector<OpenCL::Lexer::Token>::const_iterator
     OpenCL::Parser::Context::getLineEnd(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
 {
+    if (m_lines.empty())
+    {
+        return iter;
+    }
     if (iter == m_lines.rbegin()->second.second)
     {
         return iter;
