@@ -9,6 +9,7 @@
 
 #include "ConstantEvaluator.hpp"
 #include "ErrorMessages.hpp"
+#include "SemanticUtil.hpp"
 
 void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages)
 {
@@ -121,53 +122,39 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
     }
     const auto& functionRP = std::get<Semantics::FunctionType>(type.get());
 
-    auto* paramterTypeList = [&]() -> const Syntax::DirectDeclaratorParentheseParameters* {
-        const Syntax::DirectDeclaratorParentheseParameters* result = nullptr;
-        matchWithSelf(
-            node.getDeclarator().getDirectDeclarator(),
-            [&result](
-                auto&& self,
-                const Syntax::DirectDeclaratorParentheseParameters& directDeclaratorParentheseParameters) -> void {
-                result = &directDeclaratorParentheseParameters;
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParentheseParameters.getDirectDeclarator());
-            },
-            [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese) -> void {
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
-            },
-            [](auto&& self,
-               const Syntax::DirectDeclaratorParentheseIdentifiers& directDeclaratorParentheseIdentifiers) -> void {
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParentheseIdentifiers.getDirectDeclarator());
-            },
-            [](auto&&, auto &&) -> void {});
-        return result;
-    }();
+    auto* parameterTypeList = findRecursively<Syntax::DirectDeclaratorParentheseParameters>(
+        node.getDeclarator().getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
+            {
+                return &value.getDeclarator().getDirectDeclarator();
+            }
+            else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
+            {
+                return &value.getDirectDeclarator();
+            }
+            else
+            {
+                return nullptr;
+            }
+        });
 
-    auto* identifierList = [&]() -> const Syntax::DirectDeclaratorParentheseIdentifiers* {
-        const Syntax::DirectDeclaratorParentheseIdentifiers* result = nullptr;
-        matchWithSelf(
-            node.getDeclarator().getDirectDeclarator(),
-            [](auto&& self,
-               const Syntax::DirectDeclaratorParentheseParameters& directDeclaratorParentheseParameters) -> void {
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParentheseParameters.getDirectDeclarator());
-            },
-            [](auto&& self, const Syntax::DirectDeclaratorParenthese& directDeclaratorParenthese) -> void {
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParenthese.getDeclarator().getDirectDeclarator());
-            },
-            [&result](
-                auto&& self,
-                const Syntax::DirectDeclaratorParentheseIdentifiers& directDeclaratorParentheseIdentifiers) -> void {
-                result = &directDeclaratorParentheseIdentifiers;
-                std::visit([&self](auto&& value) { return self(value); },
-                           directDeclaratorParentheseIdentifiers.getDirectDeclarator());
-            },
-            [](auto&&, auto &&) -> void {});
-        return result;
-    }();
+    auto* identifierList = findRecursively<Syntax::DirectDeclaratorParentheseIdentifiers>(
+        node.getDeclarator().getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
+            {
+                return &value.getDeclarator().getDirectDeclarator();
+            }
+            else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
+            {
+                return &value.getDirectDeclarator();
+            }
+            else
+            {
+                return nullptr;
+            }
+        });
 
     if (!identifierList && !node.getDeclarations().empty())
     {
@@ -195,10 +182,10 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
     std::vector<Declaration> declarations;
     for (std::size_t i = 0; i < functionRP.getArguments().size(); i++)
     {
-        if (paramterTypeList)
+        if (parameterTypeList)
         {
             auto* declarator = std::get_if<std::unique_ptr<Syntax::Declarator>>(
-                &paramterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i].second);
+                &parameterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i].second);
             if (!declarator)
             {
                 throw std::runtime_error("Internal compiler error");
@@ -206,7 +193,7 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
             // declarator cannot be null as otherwise it'd have failed in the parser
             auto argName = declaratorToName(**declarator);
             auto& specifiers =
-                paramterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i].first;
+                parameterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i].first;
             declarations.emplace_back(functionRP.getArguments()[i].first, Linkage::None,
                                       declarationSpecifierHasIf<Syntax::StorageClassSpecifier>(
                                           specifiers.begin(), specifiers.end(),
@@ -222,7 +209,7 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
                 !inserted)
             {
                 // TODO: showing previous one
-                auto begin = Syntax::nodeFromNodeDerivedVariant(paramterTypeList->getParameterTypeList()
+                auto begin = Syntax::nodeFromNodeDerivedVariant(parameterTypeList->getParameterTypeList()
                                                                     .getParameterList()
                                                                     .getParameterDeclarations()[i]
                                                                     .first.front())

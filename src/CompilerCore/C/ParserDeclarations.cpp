@@ -3,9 +3,11 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
+#include <unordered_set>
 
 #include "ConstantEvaluator.hpp"
 #include "ParserUtil.hpp"
+#include "SemanticUtil.hpp"
 
 using namespace OpenCL::Syntax;
 
@@ -139,31 +141,102 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         context.pushScope();
         if (declarator)
         {
-            if (auto* parameters =
-                    std::get_if<DirectDeclaratorParentheseParameters>(&declarator->getDirectDeclarator()))
+            auto [parameters, parameterDepth] =
+                Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParentheseParameters>(
+                    declarator->getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
+                        using T = std::decay_t<decltype(value)>;
+                        if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
+                        {
+                            return &value.getDeclarator().getDirectDeclarator();
+                        }
+                        else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
+                        {
+                            return &value.getDirectDeclarator();
+                        }
+                        else
+                        {
+                            return nullptr;
+                        }
+                    });
+
+            auto [identifierList, identiferDepth] =
+                Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParentheseIdentifiers>(
+                    declarator->getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
+                        using T = std::decay_t<decltype(value)>;
+                        if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
+                        {
+                            return &value.getDeclarator().getDirectDeclarator();
+                        }
+                        else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
+                        {
+                            return &value.getDirectDeclarator();
+                        }
+                        else
+                        {
+                            return nullptr;
+                        }
+                    });
+
+            if (parameters && (!identifierList || parameterDepth > identiferDepth))
             {
                 auto& parameterDeclarations =
                     parameters->getParameterTypeList().getParameterList().getParameterDeclarations();
-                for (auto& [specifier, paramDeclarator] : parameterDeclarations)
+                std::unordered_set<std::string> addedByParameters;
+                for (auto& [specifiers, paramDeclarator] : parameterDeclarations)
                 {
-                    if (parameterDeclarations.size() == 1 && specifier.size() == 1
-                        && std::holds_alternative<TypeSpecifier>(specifier[0]))
+                    if (parameterDeclarations.size() == 1 && specifiers.size() == 1
+                        && std::holds_alternative<TypeSpecifier>(specifiers[0]))
                     {
                         auto* primitive = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(
-                            &std::get<TypeSpecifier>(specifier[0]).getVariant());
+                            &std::get<TypeSpecifier>(specifiers[0]).getVariant());
                         if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
                         {
                             break;
                         }
                     }
 
+                    /**
+                     * Any parameters that overshadow typedefs need to also affect later parameters
+                     */
+                    for (auto& iter : specifiers)
+                    {
+                        auto* typeSpecifier = std::get_if<TypeSpecifier>(&iter);
+                        if (!typeSpecifier)
+                        {
+                            continue;
+                        }
+                        auto* identifier = std::get_if<std::string>(&typeSpecifier->getVariant());
+                        if (!identifier)
+                        {
+                            continue;
+                        }
+                        if (addedByParameters.count(*identifier))
+                        {
+                            auto* loc = context.getLocationOf(*identifier);
+                            std::vector<Message> messages;
+                            messages.push_back(Message::error(
+                                ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args("typename",
+                                                                                    '\'' + *identifier + '\''),
+                                context.getLineStart(typeSpecifier->begin()), context.getLineEnd(typeSpecifier->end()),
+                                Modifier(typeSpecifier->begin(), typeSpecifier->end(), Modifier::PointAtBeginning)));
+                            if (loc)
+                            {
+                                messages.push_back(Message::note(
+                                    Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + *identifier + '\''),
+                                    context.getLineStart(loc->begin), context.getLineEnd(loc->end),
+                                    Modifier(loc->identifier, loc->identifier + 1)));
+                            }
+                            context.log(std::move(messages));
+                        }
+                    }
+
                     if (auto* abstractDecl = std::get_if<std::unique_ptr<AbstractDeclarator>>(&paramDeclarator))
                     {
                         std::vector<Message> notes;
-                        if (specifier.size() == 1 && std::holds_alternative<TypeSpecifier>(specifier[0])
-                            && std::holds_alternative<std::string>(std::get<TypeSpecifier>(specifier[0]).getVariant()))
+                        if (specifiers.size() == 1 && std::holds_alternative<TypeSpecifier>(specifiers[0])
+                            && std::holds_alternative<std::string>(std::get<TypeSpecifier>(specifiers[0]).getVariant()))
                         {
-                            auto& typeSpecifier = std::get<TypeSpecifier>(specifier[0]);
+                            auto& typeSpecifier = std::get<TypeSpecifier>(specifiers[0]);
                             const auto& name = std::get<std::string>(typeSpecifier.getVariant());
                             auto* loc = context.getLocationOf(name);
                             if (loc)
@@ -177,20 +250,20 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
                         notes.insert(notes.begin(),
                                      Message::error(ErrorMessages::Parser::MISSING_PARAMETER_NAME,
                                                     context.getLineStart(start), context.getLineEnd(begin),
-                                                    Modifier(nodeFromNodeDerivedVariant(specifier.back()).begin(),
+                                                    Modifier(nodeFromNodeDerivedVariant(specifiers.back()).begin(),
                                                              *abstractDecl ?
                                                                  (*abstractDecl)->end() :
-                                                                 nodeFromNodeDerivedVariant(specifier.back()).end())));
+                                                                 nodeFromNodeDerivedVariant(specifiers.back()).end())));
                         context.log(std::move(notes));
                         continue;
                     }
                     auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
                     auto result = Semantics::declaratorToName(*decl);
                     context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
+                    addedByParameters.insert(result);
                 }
             }
-            else if (auto* identifierList =
-                         std::get_if<DirectDeclaratorParentheseIdentifiers>(&declarator->getDirectDeclarator()))
+            else if (identifierList)
             {
                 for (auto& [name, loc] : identifierList->getIdentifiers())
                 {
@@ -533,20 +606,6 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                 if (context.isTypedefInScope(name))
                 {
                     return Syntax::DeclarationSpecifier{TypeSpecifier(start, ++begin, name)};
-                }
-                else if (context.isTypedef(name))
-                {
-                    auto* loc = context.getLocationOf(std::get<std::string>(begin->getValue()));
-                    context.log(
-                        {Message::error(ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args(
-                                            "storage specifier or typename", '\'' + begin->emitBack() + '\''),
-                                        context.getLineStart(start), context.getLineEnd(begin),
-                                        Modifier{begin, begin + 1, Modifier::PointAtBeginning}),
-                         Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + begin->emitBack() + '\''),
-                                       context.getLineStart(loc->begin), context.getLineEnd(loc->end),
-                                       Modifier(loc->identifier, loc->identifier + 1))});
-                    skipUntil(begin, end, recoverySet);
-                    return {};
                 }
                 break;
             }

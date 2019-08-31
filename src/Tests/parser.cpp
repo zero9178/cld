@@ -193,6 +193,15 @@ TEST_CASE("Parse external declaration", "[parser]")
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "'['"))
                          && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "';'"))
                          && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(2) && ProducesNNotes(1));
+
+    treeProduces("\n"
+                 "void barFunc(int,char);\n"
+                 "\n"
+                 "void (*foo(foo,i,bar))(int,char) short foo,i,bar;\n"
+                 "{\n"
+                 "    return barFunc;\n"
+                 "}",
+                 ProducesNoErrors() && ProducesNoNotes());
 }
 
 TEST_CASE("Parser typedef scoping and resolution", "[parser]")
@@ -238,7 +247,7 @@ TEST_CASE("Parse Declaration Specifiers", "[parser]")
     treeProduces("typedef int i;void foo(int i,i i)"
                  "{"
                  "}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("storage specifier or typename", "'i'"))
+                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("typename", "'i'"))
                      && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'i'")) && ProducesNErrors(1)
                      && ProducesNNotes(1));
 }
