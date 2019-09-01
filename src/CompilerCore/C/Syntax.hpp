@@ -999,7 +999,7 @@ namespace OpenCL::Syntax
 
         [[nodiscard]] const ConstantExpression& getConstantExpression() const;
 
-        [[nodiscard]] const Statement* getStatement() const;
+        [[nodiscard]] const Statement& getStatement() const;
     };
 
     /**
@@ -1008,10 +1008,13 @@ namespace OpenCL::Syntax
     class LabelStatement final : public Node
     {
         std::string m_identifier;
+        std::unique_ptr<Statement> m_statement;
 
     public:
         LabelStatement(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-                       std::string identifier);
+                       std::string identifier, Statement&& statement);
+
+        [[nodiscard]] const Statement& getStatement() const;
     };
 
     /**

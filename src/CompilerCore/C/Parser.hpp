@@ -141,12 +141,10 @@ namespace OpenCL::Parser
                                                                   Tokens::const_iterator end, Context& context,
                                                                   InRecoverySet recoverySet);
 
-    std::optional<Syntax::ParameterTypeList> parseParameterTypeList(Tokens::const_iterator& tokens,
-                                                                    Tokens::const_iterator end, Context& context,
+    Syntax::ParameterTypeList parseParameterTypeList(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
                                                                     InRecoverySet recoverySet);
 
-    std::optional<Syntax::AbstractDeclarator> parseAbstractDeclarator(Tokens::const_iterator& tokens,
-                                                                      Tokens::const_iterator end, Context& context,
+    Syntax::AbstractDeclarator parseAbstractDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
                                                                       InRecoverySet recoverySet);
 
     std::optional<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
@@ -154,11 +152,10 @@ namespace OpenCL::Parser
                                                                                   Context& context,
                                                                                   InRecoverySet recoverySet);
 
-    std::optional<Syntax::ParameterList> parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                            Context& context, InRecoverySet recoverySet);
+    Syntax::ParameterList parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                             Context& context, InRecoverySet recoverySet);
 
-    std::optional<Syntax::Pointer> parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                Context& context, InRecoverySet recoverySet);
+    Syntax::Pointer parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Tokens::const_iterator& begin,
                                                                               Tokens::const_iterator end,
@@ -186,8 +183,7 @@ namespace OpenCL::Parser
     std::optional<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                     Context& context, InRecoverySet recoverySet);
 
-    std::optional<Syntax::ReturnStatement> parseReturnStatement(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
+    Syntax::ReturnStatement parseReturnStatement(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
                                                                 InRecoverySet recoverySet);
 
     std::optional<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,

@@ -37,6 +37,7 @@
         auto begin = tokens.cbegin();                                                                   \
         parser(begin, tokens.cend(), context, [](const OpenCL::Lexer::Token&) { return false; });       \
         auto string = ss.str();                                                                         \
+        CHECK((!string.empty() || begin == tokens.cend()));                                             \
         CHECK_THAT(string, matches);                                                                    \
         if (OpenCL::colourConsoleOutput)                                                                \
         {                                                                                               \
@@ -141,6 +142,7 @@ TEST_CASE("Parse specifier qualifier list", "[parser]")
 
 TEST_CASE("Parse external declaration", "[parser]")
 {
+    functionProduces(parseExternalDeclaration, "int;", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int i",
                      Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "i{}",
@@ -157,6 +159,8 @@ TEST_CASE("Parse external declaration", "[parser]")
     functionProduces(parseExternalDeclaration, "int foo(int,int[5]){}",
                      Catch::Contains(MISSING_PARAMETER_NAME) && ProducesNErrors(2) && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int foo = 5;", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseExternalDeclaration, "int foo = 5",
+                     Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int foo =;",
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                          OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "';'"))
@@ -193,7 +197,13 @@ TEST_CASE("Parse external declaration", "[parser]")
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "'['"))
                          && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "';'"))
                          && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(2) && ProducesNNotes(1));
-
+    treeProduces("typedef int i;void foo(i){}", Catch::Contains(MISSING_PARAMETER_NAME)
+                                                    && Catch::Contains(IDENTIFIER_IS_TYPEDEF.args("'i'"))
+                                                    && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseExternalDeclaration, "typedef int [;",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "'['"))
+                         && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "';'"))
+                         && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(2) && ProducesNNotes(1));
     treeProduces("\n"
                  "void barFunc(int,char);\n"
                  "\n"
@@ -202,30 +212,22 @@ TEST_CASE("Parse external declaration", "[parser]")
                  "    return barFunc;\n"
                  "}",
                  ProducesNoErrors() && ProducesNoNotes());
+    treeProduces("typedef int i;void foo(int i,i i)"
+                 "{"
+                 "}",
+                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("typename", "'i'"))
+                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'i'")) && ProducesNErrors(1)
+                     && ProducesNNotes(1));
+    treeProduces("typedef int i,bar;void foo(int i,bar i)"
+                 "{"
+                 "}",
+                 ProducesNoErrors() && ProducesNoNotes());
 }
 
 TEST_CASE("Parser typedef scoping and resolution", "[parser]")
 {
     treeProduces("typedef int aa;void foo(){aa aa;}", ProducesNoErrors() && ProducesNoNotes());
-    treeProduces("typedef int aa;void foo(){aa aa;aa bb;}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
-                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
-                     && ProducesNNotes(1));
-    treeProduces("typedef int aa;void foo(){aa aa;const aa bb;}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
-                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
-                     && ProducesNNotes(1));
     treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNoErrors() && ProducesNoNotes());
-    treeProduces("typedef int i;void foo(i){}", Catch::Contains(MISSING_PARAMETER_NAME)
-                                                    && Catch::Contains(IDENTIFIER_IS_TYPEDEF.args("'i'"))
-                                                    && ProducesNErrors(1) && ProducesNNotes(1));
-    treeProduces("typedef int i;void foo(a,i){}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "typename"))
-                     && Catch::Contains(IDENTIFIER_IS_TYPEDEF.args("'i'")) && ProducesNErrors(1) && ProducesNNotes(1));
-    treeProduces("typedef int aa;int foo(int aa){aa i;}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'"))
-                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
-                     && ProducesNNotes(1));
     treeProduces("typedef int aa;"
                  "enum aa; aa r;",
                  ProducesNoErrors() && ProducesNoNotes());
@@ -244,19 +246,13 @@ TEST_CASE("Parse Declaration Specifiers", "[parser]")
     functionProduces(parseDeclarationSpecifier, "struct i", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseDeclarationSpecifier, "union i", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseDeclarationSpecifier, "enum i", ProducesNoErrors() && ProducesNoNotes());
-    treeProduces("typedef int i;void foo(int i,i i)"
-                 "{"
-                 "}",
-                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("typename", "'i'"))
-                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'i'")) && ProducesNErrors(1)
-                     && ProducesNNotes(1));
 }
 
 TEST_CASE("Parse Specifier Qualifiers", "[parser]")
 {
     functionProduces(
         parseSpecifierQualifierList,
-        "const void long float double signed restrict volatile inline void char short int long float double signed unsigned",
+        "const void long float double signed restrict volatile char short int long float double signed unsigned",
         ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseSpecifierQualifier, "struct i", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseSpecifierQualifier, "union i", ProducesNoErrors() && ProducesNoNotes());
@@ -330,14 +326,17 @@ TEST_CASE("Parse enums", "[parser]")
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "';'")) && ProducesNErrors(1)
                          && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum i", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseEnumSpecifier, "enum i{i};", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseEnumSpecifier, "enum i{i}", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum {}",
                      Catch::Contains(N_REQUIRES_AT_LEAST_ONE_N.args("enum", "value")) && ProducesNErrors(1)
                          && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum i{test}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseEnumSpecifier, "enum i{test = 5}", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum {test,}", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum {test,ft}", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum {test,ft,}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseEnumSpecifier, "enum i{test = 5",
+                     Catch::Contains(EXPECTED_N.args("'}'")) && ProducesNErrors(1) && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum i{test ft}",
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'ft'")) && ProducesNErrors(1)
                          && ProducesNoNotes());
@@ -348,48 +347,8 @@ TEST_CASE("Parse enums", "[parser]")
 
 TEST_CASE("Parse Declaration", "[parser]")
 {
-    functionProduces(parseDeclaration, "int * const * volatile *i;", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int * const * volatile *(i;",
-                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
-                         && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int * const * volatile *i(int f;",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
-                         && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int foo(int,int[5]);", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(int i,int f[5],);",
-                     Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "')'"))
-                         && ProducesNErrors(1) && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(i,f e);",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(1)
-                         && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(i,f e,r)",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(2)
-                         && Catch::Contains(EXPECTED_N.args("';'")) && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(i,f;",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
-                         && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int foo[;",
-                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "';'"))
-                         && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int foo[static 5];", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclaration, "int foo;", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseDeclaration, "int;", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[static const 5];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[const static 5];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[const *];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[*];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[5];", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo[*[];",
-                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
-                         && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int foo(int();",
-                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
-                         && ProducesNErrors(1) && ProducesNNotes(1));
-    functionProduces(parseDeclaration, "int foo(int(int));", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(int([5]));", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(int());", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(int[*]);", ProducesNoErrors() && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo(int (i)(int));", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseDeclaration, "int foo,bar;", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseDeclaration, "int[ =;",
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "'['"))
@@ -402,89 +361,314 @@ TEST_CASE("Parse Declaration", "[parser]")
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or identifier", "'['"))
                          && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "';'"))
                          && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && ProducesNErrors(2) && ProducesNNotes(1));
+    functionProduces(parseDeclaration, "int foo =;",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                         OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "';'"))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseDeclaration, "int foo = 5;", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclaration, "int foo = 5",
+                     Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseDeclaration, "typedef int foo;", ProducesNoErrors() && ProducesNoNotes());
+    treeProduces("typedef int aa;void foo(){aa aa;const aa bb;}",
+                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
+                     && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
+                     && ProducesNNotes(1));
+    treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNoErrors() && ProducesNoNotes());
+}
+
+TEST_CASE("Parse Declarators and DirectDeclarators", "[parser]")
+{
+    functionProduces(parseDeclarator, "* const * volatile *i", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "* const * volatile *(i",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "* const * volatile *i(int f",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo(int,int[5])", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(int i,int f[5],)",
+                     Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "')'"))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(i,f e)",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(i,int)",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'int'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(i,int)",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'int'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(i,f e,r)",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'e'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(i,f",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo[",
+                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "*",
+                     Catch::Contains(EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier")))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)(int)",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)()",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo()", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(foo bar int)",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'bar'")) && ProducesNErrors(2)
+                         && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "'int'"))
+                         && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo[static const volatile restrict 5]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)[static 5]",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)[const static 5]",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)[*]",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)[5]",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(
+        parseDeclarator, "(int)[]",
+        Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier"), "'int'"))
+            && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[const static 5]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[const *]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[const restrict volatile",
+                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo[*]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[5]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo[*[]",
+                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo(int()",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseDeclarator, "foo(int(int))", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(int([5]))", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(int())", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(int[*])", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseDeclarator, "foo(int (i)(int))", ProducesNoErrors() && ProducesNoNotes());
+    treeProduces("typedef int i;void foo(a,i){}",
+                 Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "typename"))
+                     && Catch::Contains(IDENTIFIER_IS_TYPEDEF.args("'i'")) && ProducesNErrors(1) && ProducesNNotes(1));
+}
+
+TEST_CASE("Parse parameter (type) list", "[parser]")
+{
+    functionProduces(parseParameterTypeList, "int,...", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int,int", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *[]",
+                     ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *foo",
+                     ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(((foo)))",
+                     ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*foo)))",
+                     ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*)))",
+                     ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseParameterTypeList, "int,",
+                     Catch::Contains(EXPECTED_N.args("storage specifier or typename")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+}
+
+TEST_CASE("Abstract Declarator and Direct Abstract Declarator", "[parser]")
+{
+    functionProduces(parseAbstractDeclarator, "* const * volatile *", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "* const * volatile *(",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "* const * volatile *(int f",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "(int,int[5])", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(int i,int f[5],)",
+                     Catch::Contains(EXPECTED_N_BEFORE_N.args("storage specifier or typename", "')'"))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "[",
+                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "*", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "()", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "[]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "[*]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "[5]", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "[*[]",
+                     Catch::Contains(EXPECTED_N.args("']'")) && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "(int()",
+                     Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))
+                         && ProducesNErrors(1) && ProducesNNotes(1));
+    functionProduces(parseAbstractDeclarator, "(int(int))", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(int([5]))", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(int())", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(int[*])", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "(int (i)(int))", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseAbstractDeclarator, "]",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'(' or '['", "']'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
 }
 
 TEST_CASE("Parse Statements", "[parser]")
 {
     SECTION("Return")
     {
-        functionProduces(parseReturnStatement, "return;", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseReturnStatement, "return 5;", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseReturnStatement, "return",
+        functionProduces(parseStatement, "return;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "return 5;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "return",
                          Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
-        functionProduces(parseReturnStatement, "return 5",
+        functionProduces(parseStatement, "return 5",
                          Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
-        functionProduces(parseReturnStatement, "return 5",
+        functionProduces(parseStatement, "return 5",
                          Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseReturnStatement, "5;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'return'", "'5'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
     }
     SECTION("if")
     {
-        functionProduces(parseIfStatement, "if 5);",
+        functionProduces(parseStatement, "if 5);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseIfStatement, "if(5;int i",
+        functionProduces(parseStatement, "if(5;int i",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
-        functionProduces(parseIfStatement, "if(5);else;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "if(5);else;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "if(5)case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "if(5)case:;else;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseIfStatement, "(5);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'if'", "'('")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
     }
     SECTION("switch")
     {
-        functionProduces(parseSwitchStatement, "switch(5);", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseSwitchStatement, "switch 5);",
+        functionProduces(parseStatement, "switch(5);", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "switch 5);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseSwitchStatement, "switch(5;int i",
+        functionProduces(parseStatement, "switch(5;int i",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
+        functionProduces(parseStatement, "switch(5)case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseSwitchStatement, "(5);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'switch'", "'('")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
     }
     SECTION("for")
     {
-        functionProduces(parseForStatement, "for int i = 0; i < 5; i++);",
+        functionProduces(parseStatement, "for int i = 0; i < 5; i++);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'int'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseForStatement, "for i = 0; i < 5; i++);",
+        functionProduces(parseStatement, "for i = 0; i < 5; i++);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'i'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseForStatement, "for(int i = 0 i < 5; i++);",
+        functionProduces(parseStatement, "for(int i = 0 i < 5; i++);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseForStatement, "for(int i = 0; i < 5 i++);",
+        functionProduces(parseStatement, "for(i = 0 i < 5; i++);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseForStatement, "for(int i = 0 i < 5 i++);",
+        functionProduces(parseStatement, "for(int i = 0; i < 5 i++);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "for(int i = 0 i < 5 i++);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'")) && ProducesNErrors(2)
                              && ProducesNoNotes());
-        functionProduces(parseForStatement, "for(int i = 0;i < 5;i++;",
+        functionProduces(parseStatement, "for(int i = 0;i < 5;i++;",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
+        functionProduces(parseStatement, "for(",
+                         Catch::Contains(EXPECTED_N.args("expression or declaration")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "for(i = 0;",
+                         Catch::Contains(EXPECTED_N.args("expression")) && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "for(i = 0;i < 0;",
+                         Catch::Contains(EXPECTED_N.args("expression")) && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseForStatement, "(;;);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'for'", "'('")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "for(;;)case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
     }
-    SECTION("while, do ... while")
+    SECTION("Head while")
     {
-        functionProduces(parseHeadWhileStatement, "while(5);", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseFootWhileStatement, "do;while(5);}", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseHeadWhileStatement, "while 5);",
+        functionProduces(parseStatement, "while(5);", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "while 5);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseHeadWhileStatement, "while(5;",
+        functionProduces(parseStatement, "while(5;",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
-        functionProduces(parseFootWhileStatement, "do;while 5);",
+        functionProduces(parseHeadWhileStatement, "(5);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'while'", "'('")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "while(5)case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+    }
+    SECTION("Foot while")
+    {
+        functionProduces(parseStatement, "do;while(5);", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "do;while(5)",
+                         Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "do;while 5);",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'('", "'5'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
-        functionProduces(parseFootWhileStatement, "do;while(5;",
+        functionProduces(parseStatement, "do;while(5;",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(1)
                              && ProducesNNotes(1));
-        functionProduces(parseFootWhileStatement, "do;(5;",
+        functionProduces(parseStatement, "do;(5;",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'while'", "'('"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'do'"))
                              && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "';'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
                              && ProducesNNotes(2));
+        functionProduces(parseStatement, "do case:;while(5);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseFootWhileStatement, ";while(5);",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'do'", "';'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
     }
     SECTION("break and continue")
     {
@@ -495,16 +679,73 @@ TEST_CASE("Parse Statements", "[parser]")
         functionProduces(parseStatement, "continue",
                          Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
     }
+    SECTION("Default and case")
+    {
+        functionProduces(parseStatement, "default:;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "default;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "';'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "default:case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "case 5:;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "case 5;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("':'", "';'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "case 5:case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+    }
     SECTION("Label and goto")
     {
-        functionProduces(parseCompoundStatement, "{test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseCompoundStatement, "{typedef int test;test:;goto test;}",
+        functionProduces(parseStatement, "test:;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "test:case:;",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "goto test;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "goto test",
+                         Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+        functionProduces(parseStatement, "{test:;goto test;}", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "{typedef int test;test:;goto test;}",
                          ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parseCompoundStatement, "{test:;goto 0x3;}",
+        functionProduces(parseStatement, "{test:;goto 0x3;}",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'0x3'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
     }
+    SECTION("Expression Statement")
+    {
+        functionProduces(parseStatement, "test;", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "test",
+                         Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(1) && ProducesNoNotes());
+        treeProduces("typedef int aa;void foo(){aa aa;aa bb;}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'bb'"))
+                         && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
+                         && ProducesNNotes(1));
+        treeProduces("typedef int aa;int foo(int aa){aa i;}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("';'", "'i'"))
+                         && Catch::Contains(TYPEDEF_OVERSHADOWED_BY_DECLARATION.args("'aa'")) && ProducesNErrors(1)
+                         && ProducesNNotes(1));
+    }
+    SECTION("Compound statement")
+    {
+        functionProduces(parseStatement, "{}", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parseStatement, "{",
+                         Catch::Contains(EXPECTED_N.args("'}'")) && Catch::Contains(TO_MATCH_N_HERE.args("'{'"))
+                             && ProducesNErrors(1) && ProducesNNotes(1));
+        functionProduces(parseCompoundStatement, "}",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'{'", "'}'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
+        functionProduces(parseStatement, "{case:;}",
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "':'"))
+                             && ProducesNErrors(1) && ProducesNoNotes());
+    }
 }
+
+TEST_CASE("Initializer", "[parser]") {}
 
 TEST_CASE("Parse Expressions", "[parser]")
 {

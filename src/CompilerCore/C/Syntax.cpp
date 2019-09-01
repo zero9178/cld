@@ -688,9 +688,9 @@ OpenCL::Syntax::CaseStatement::CaseStatement(std::vector<Lexer::Token>::const_it
 {
 }
 
-const OpenCL::Syntax::Statement* OpenCL::Syntax::CaseStatement::getStatement() const
+const OpenCL::Syntax::Statement& OpenCL::Syntax::CaseStatement::getStatement() const
 {
-    return m_statement.get();
+    return *m_statement;
 }
 
 const OpenCL::Syntax::AssignmentExpression& OpenCL::Syntax::CaseStatement::getConstantExpression() const
@@ -1106,9 +1106,17 @@ const std::string& OpenCL::Syntax::GotoStatement::getIdentifier() const
 }
 
 OpenCL::Syntax::LabelStatement::LabelStatement(std::vector<Lexer::Token>::const_iterator begin,
-                                               std::vector<Lexer::Token>::const_iterator end, std::string identifier)
-    : Node(begin, end), m_identifier(std::move(identifier))
+                                               std::vector<Lexer::Token>::const_iterator end, std::string identifier,
+                                               Statement&& statement)
+    : Node(begin, end),
+      m_identifier(std::move(identifier)),
+      m_statement(std::make_unique<Statement>(std::move(statement)))
 {
+}
+
+const OpenCL::Syntax::Statement& OpenCL::Syntax::LabelStatement::getStatement() const
+{
+    return *m_statement;
 }
 
 OpenCL::Syntax::TranslationUnit::TranslationUnit(std::vector<OpenCL::Syntax::ExternalDeclaration>&& globals) noexcept

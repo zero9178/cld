@@ -553,12 +553,8 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
     if (begin < end && firstIsInAbstractDeclarator(*begin, context))
     {
         auto abstractDec = parseAbstractDeclarator(begin, end, context, recoverySet);
-        if (!abstractDec)
-        {
-            return {};
-        }
         return TypeName(start, begin, std::move(specifierQualifiers),
-                        std::make_unique<AbstractDeclarator>(std::move(*abstractDec)));
+                        std::make_unique<AbstractDeclarator>(std::move(abstractDec)));
     }
 
     return TypeName(start, begin, std::move(specifierQualifiers), nullptr);
