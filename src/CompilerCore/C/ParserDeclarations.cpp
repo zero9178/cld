@@ -1778,13 +1778,12 @@ std::optional<Initializer> OpenCL::Parser::parseInitializer(Tokens::const_iterat
         if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
         {
             skipUntil(begin, end, recoverySet);
+        }
+        if (!initializerList)
+        {
             return {};
         }
-        if (initializerList)
-        {
-            return Initializer{start, begin, std::move(*initializerList)};
-        }
-        return {};
+        return Initializer{start, begin, std::move(*initializerList)};
     }
 }
 
@@ -1801,16 +1800,18 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
         {
             first = false;
         }
-        else if (!expect(Lexer::TokenType::Comma, start, begin, end, context))
+        else
         {
-            break;
+            expect(Lexer::TokenType::Comma, start, begin, end, context);
         }
 
         std::vector<std::variant<ConstantExpression, std::string>> designation;
+        bool hasDesignation = false;
         while (begin < end
                && (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket
                    || begin->getTokenType() == Lexer::TokenType::Dot))
         {
+            hasDesignation = true;
             if (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
             {
                 auto openPpos = begin;
@@ -1828,25 +1829,35 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    continue;
+                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                        return token.getTokenType() == Lexer::TokenType::Assignment
+                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
+                               || token.getTokenType() == Lexer::TokenType::Dot || recoverySet(token);
+                    });
                 }
             }
-            else if (begin->getTokenType() == Lexer::TokenType::Dot)
+            else
             {
                 begin++;
                 std::string name;
                 if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                 {
-                    continue;
+                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                        return token.getTokenType() == Lexer::TokenType::Assignment
+                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
+                               || token.getTokenType() == Lexer::TokenType::Dot || recoverySet(token);
+                    });
                 }
                 designation.emplace_back(std::move(name));
             }
         }
-        if (!designation.empty())
+        if (hasDesignation)
         {
             if (!expect(Lexer::TokenType::Assignment, start, begin, end, context))
             {
-                continue;
+                skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+                    return firstIsInInitializer(token, context) || recoverySet(token);
+                });
             }
         }
         auto initializer = parseInitializer(begin, end, context, [recoverySet](const Lexer::Token& token) {
@@ -1857,8 +1868,9 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
             continue;
         }
         vector.push_back({std::move(*initializer), std::move(designation)});
-    } while (begin < end && begin + 1 < end && begin->getTokenType() == Lexer::TokenType::Comma
-             && firstIsInInitializerList(*(begin + 1), context));
+    } while (begin < end && begin + 1 < end
+             && (firstIsInInitializerList(begin->getTokenType() == Lexer::TokenType::Comma ? *(begin + 1) : *begin,
+                                          context)));
 
     return InitializerList{start, begin, std::move(vector)};
 }

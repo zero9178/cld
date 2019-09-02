@@ -745,7 +745,33 @@ TEST_CASE("Parse Statements", "[parser]")
     }
 }
 
-TEST_CASE("Initializer", "[parser]") {}
+TEST_CASE("Parse Initializer and Initializer List", "[parser]")
+{
+    functionProduces(parseInitializer, "5", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5,}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5,3}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseInitializer, "{[5].m = 5}", ProducesNoErrors() && ProducesNoNotes());
+    functionProduces(parseInitializer, "]",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                         OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
+                         && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5,",
+                     Catch::Contains(EXPECTED_N.args("'}'")) && ProducesNErrors(1) && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5 3}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'3'")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+    functionProduces(parseInitializer, "{5,[3}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("']'", "'}'"))
+                         && Catch::Contains(TO_MATCH_N_HERE.args("'['"))
+                         && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'='", "'}'"))
+                         && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
+                             OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "'}'"))
+                         && ProducesNErrors(3) && ProducesNNotes(1));
+    functionProduces(parseInitializer, "{[5]. = 5}",
+                     Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'='")) && ProducesNErrors(1)
+                         && ProducesNoNotes());
+}
 
 TEST_CASE("Parse Expressions", "[parser]")
 {
@@ -801,9 +827,8 @@ TEST_CASE("Parse Expressions", "[parser]")
                          && Catch::Contains(TO_MATCH_N_HERE.args("'['")) && Catch::Contains(EXPECTED_N.args("')'"))
                          && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2) && ProducesNNotes(2));
         functionProduces(parsePostFixExpression, "(int){5 8}",
-                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'}'", "'8'"))
-                             && Catch::Contains(TO_MATCH_N_HERE.args("'{'")) && ProducesNErrors(1)
-                             && ProducesNNotes(1));
+                         Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("','", "'8'")) && ProducesNErrors(1)
+                             && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "(int)5}",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("'{'", "'5'")) && ProducesNErrors(1)
                              && ProducesNoNotes());
