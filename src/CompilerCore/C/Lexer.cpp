@@ -6,10 +6,89 @@
 #include <cctype>
 #include <regex>
 #include <sstream>
+#include <unordered_map>
+
+#include "ErrorMessages.hpp"
+#include "termcolor.hpp"
 
 namespace
 {
-    std::int32_t charactersToCharLiteral(const std::string& characters)
+    enum class HighlightEffect
+    {
+        Underline,
+        PointAtBeginning,
+        PointAtEnd,
+        InsertAtEnd,
+    };
+
+    void reportError(std::ostream* reporter, const std::string& message, std::uint64_t line, std::uint64_t column,
+                     const std::string& lineText,
+                     std::optional<std::pair<std::uint64_t, std::uint64_t>> highLightRange = {},
+                     HighlightEffect highlightEffect = HighlightEffect::Underline)
+    {
+        if (!reporter)
+        {
+            return;
+        }
+#ifdef NDEBUG
+        auto normalColour = termcolor::white;
+#else
+        auto normalColour = termcolor::grey;
+#endif
+        auto lineNumberText = std::to_string(line);
+        *reporter << normalColour << lineNumberText << ':' << column << ": " << termcolor::red
+                  << "error: " << normalColour << message << '\n';
+        auto numSize = lineNumberText.size();
+        auto remainder = numSize % 4;
+        if (remainder)
+        {
+            numSize += 4 - remainder;
+        }
+        *reporter << normalColour << std::string(numSize - lineNumberText.size(), ' ') << lineNumberText << '|';
+        if (!highLightRange || highLightRange->first == highLightRange->second)
+        {
+            *reporter << lineText << std::endl;
+            return;
+        }
+        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->first > highLightRange->second)
+        {
+            std::cerr << "Highlight column range start greater than end" << std::endl;
+            std::terminate();
+        }
+        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > +lineText.size())
+        {
+            std::cerr << "Highlight column range end greater than line size" << std::endl;
+            std::terminate();
+        }
+        if (highlightEffect != HighlightEffect::InsertAtEnd)
+        {
+            *reporter << lineText.substr(0, highLightRange->first) << termcolor::red
+                      << lineText.substr(highLightRange->first, highLightRange->second - highLightRange->first)
+                      << normalColour << lineText.substr(highLightRange->second) << '\n';
+        }
+        else
+        {
+            *reporter << lineText << '\n';
+        }
+        *reporter << std::string(numSize, ' ') << '|' << std::string(highLightRange->first, ' ') << termcolor::red;
+        switch (highlightEffect)
+        {
+            case HighlightEffect::Underline:
+                *reporter << std::string(highLightRange->second - highLightRange->first, '~');
+                break;
+            case HighlightEffect::PointAtBeginning:
+                *reporter << '^' << std::string(highLightRange->second - highLightRange->first - 1, '~');
+                break;
+            case HighlightEffect::PointAtEnd:
+                *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
+                break;
+            case HighlightEffect::InsertAtEnd: *reporter << std::string(lineText.size() - 1, ' ') << '^'; break;
+        }
+        *reporter << normalColour << std::endl;
+    }
+
+    std::int32_t charactersToCharLiteral(std::ostream* reporter, const std::string& characters, std::uint64_t line,
+                                         std::uint64_t column, const std::string& lineText)
     {
         if (characters.size() == 1)
         {
@@ -65,7 +144,10 @@ namespace
             {
                 if (characters.size() <= 2)
                 {
-                    throw std::runtime_error("At least one hexadecimal digit required");
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, line,
+                                column - characters.size() + 1, lineText,
+                                {{column - characters.size() - 1, column - 1}});
+                    return 0;
                 }
                 std::istringstream ss(characters.substr(2, characters.size() - 1));
                 std::int32_t number;
@@ -391,7 +473,7 @@ namespace
     };
 } // namespace
 
-std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
+std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, std::ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
@@ -403,13 +485,20 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
     std::vector<Token> result;
     std::uint64_t line = 1, column = 0;
     bool lastTokenIsAmbiguous = false;
+    auto lineMap = [&source]() -> std::unordered_map<std::uint64_t, std::string> {
+        std::unordered_map<std::uint64_t, std::string> result;
+        std::stringstream ss(source);
+        while (std::getline(ss, result[result.size() + 1], '\n'))
+            ;
+        return result;
+    }();
 
     for (auto iter : source)
     {
-        bool handeled;
+        bool handled;
         do
         {
-            handeled = true;
+            handled = true;
             switch (currentState)
             {
                 case State::Start:
@@ -451,7 +540,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                                 lastTokenIsAmbiguous = false;
                                 break;
                             }
-                            handeled = false;
+                            handled = false;
                             characters.clear();
                             if ((iter >= 'a' && iter <= 'z') || (iter >= 'A' && iter <= 'Z') || (iter == '_'))
                             {
@@ -474,15 +563,17 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     if (iter == '\'' && (characters.empty() || characters.back() != '\\'))
                     {
                         currentState = State::Start;
-                        result.emplace_back(line, column - characters.size() - 1, characters.size() + 2,
-                                            TokenType::Literal, charactersToCharLiteral(characters),
-                                            '\'' + characters + '\'');
+                        result.emplace_back(
+                            line, column - characters.size() - 1, characters.size() + 2, TokenType::Literal,
+                            charactersToCharLiteral(reporter, characters, line, column + 1, lineMap[line]),
+                            '\'' + characters + '\'');
                         characters.clear();
                         continue;
                     }
                     if (iter == '\n')
                     {
-                        throw std::runtime_error("Newline in character literal, use \\n instead");
+                        reportError(reporter, "Newline in character literal, use \\n instead", line, column,
+                                    lineMap[line], {{column, column + 1}}, HighlightEffect::InsertAtEnd);
                     }
                     characters += iter;
                     break;
@@ -502,10 +593,11 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                             {
                                 auto size = matches.suffix().first - characters.cbegin()
                                             - (matches[0].second - matches[0].first) + 1;
-                                characters =
-                                    std::string(characters.cbegin(), matches[0].first)
-                                    + static_cast<char>(charactersToCharLiteral({matches[0].first, matches[0].second}))
-                                    + std::string(matches[0].second, characters.cend());
+                                characters = std::string(characters.cbegin(), matches[0].first)
+                                             + static_cast<char>(charactersToCharLiteral(
+                                                 reporter, {matches[0].first, matches[0].second}, line,
+                                                 column - characters.size() + size, lineMap[line]))
+                                             + std::string(matches[0].second, characters.cend());
                                 start = characters.cbegin() + size;
                             }
                         }
@@ -516,7 +608,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                     }
                     if (iter == '\n')
                     {
-                        throw std::runtime_error("Newline in string literal, use \\n instead");
+                        reportError(reporter, "Newline in string literal, use \\n instead", line, column, lineMap[line],
+                                    {{column, column + 1}}, HighlightEffect::InsertAtEnd);
                     }
                     characters += iter;
                     break;
@@ -542,7 +635,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                         }
                         characters.clear();
                         currentState = State::Start;
-                        handeled = false;
+                        handled = false;
                     }
                     break;
                 }
@@ -565,7 +658,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                         result.push_back(charactersToNumber(characters, line, column - characters.size()));
                         characters.clear();
                         currentState = State::Start;
-                        handeled = false;
+                        handled = false;
                     }
                     break;
                 }
@@ -890,17 +983,17 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source)
                             {
                                 currentState = State::Start;
                             }
-                            handeled = false;
+                            handled = false;
                             break;
                     }
-                    if (handeled)
+                    if (handled)
                     {
                         lastTokenIsAmbiguous = true;
                     }
                     break;
                 }
             }
-        } while (!handeled);
+        } while (!handled);
         if (iter == '\n')
         {
             lastTokenIsAmbiguous = false;

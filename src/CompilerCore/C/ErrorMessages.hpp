@@ -119,7 +119,13 @@ namespace OpenCL
             constexpr auto INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER =
                 "Integer must evaluate to null to be compared with pointer";
         } // namespace Semantics
-    }     // namespace ErrorMessages
+
+        namespace Lexer
+        {
+            constexpr auto AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED = "At least one hexadecimal digit required";
+
+        }
+    } // namespace ErrorMessages
 
     namespace Notes
     {

@@ -5,6 +5,8 @@
 #include <array>
 #include <sstream>
 
+#include "TestConfig.hpp"
+
 using namespace Catch::Matchers;
 
 CATCH_REGISTER_ENUM(
@@ -43,6 +45,19 @@ CATCH_REGISTER_ENUM(
     OpenCL::Lexer::TokenType::SwitchKeyword, OpenCL::Lexer::TokenType::CaseKeyword,
     OpenCL::Lexer::TokenType::DefaultKeyword, OpenCL::Lexer::TokenType::UnionKeyword,
     OpenCL::Lexer::TokenType::EnumKeyword, OpenCL::Lexer::TokenType::GotoKeyword, OpenCL::Lexer::TokenType::Ellipse)
+
+#define LEXER_FAILS_WITH(string, match)                \
+    do                                                 \
+    {                                                  \
+        std::stringstream ss;                          \
+        OpenCL::Lexer::tokenize(string, &ss);          \
+        auto s = ss.str();                             \
+        CHECK_THAT(s, match);                          \
+        if (!s.empty() && OpenCL::colourConsoleOutput) \
+        {                                              \
+            OpenCL::Lexer::tokenize(string);           \
+        }                                              \
+    } while (0)
 
 TEST_CASE("Lexing Number Literals", "[lexer]")
 {
@@ -337,7 +352,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Hex")
     {
         CHECK_THROWS(OpenCL::Lexer::tokenize("'\\xG'"));
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\x'"));
+        LEXER_FAILS_WITH("'\\x'", Catch::Contains("At least one hexadecimal digit required"));
         CHECK_THROWS(OpenCL::Lexer::tokenize("'\\x0700'"));
         auto result = OpenCL::Lexer::tokenize("'\\x070'");
         REQUIRE(result.size() == 1);
@@ -345,9 +360,11 @@ TEST_CASE("Lexing character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result[0].getValue()) == '\x070');
     }
-    CHECK_THROWS_WITH(OpenCL::Lexer::tokenize("'\n'"),
-                      Catch::Contains("Newline in character literal, use \\n instead"));
-    CHECK_THROWS(OpenCL::Lexer::tokenize("'aa'"));
+    SECTION("Fails")
+    {
+        LEXER_FAILS_WITH("'\n'", Catch::Contains("Newline in character literal, use \\n instead"));
+        CHECK_THROWS(OpenCL::Lexer::tokenize("'aa'"));
+    }
 }
 
 TEST_CASE("Lexing string literals", "[lexer]")
@@ -368,7 +385,10 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::string>(result[0].getValue()));
         CHECK(std::get<std::string>(result[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
     }
-    CHECK_THROWS_WITH(OpenCL::Lexer::tokenize("\"\n\""), "Newline in string literal, use \\n instead");
+    SECTION("Fails")
+    {
+        LEXER_FAILS_WITH("\"\n\"", Catch::Contains("Newline in string literal, use \\n instead"));
+    }
 }
 
 TEST_CASE("Lexing keywords", "[lexer]")

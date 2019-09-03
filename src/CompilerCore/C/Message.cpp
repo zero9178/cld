@@ -35,7 +35,8 @@ namespace
             os << normalColour << begin->getLine() << ':' << begin->getColumn() << ": ";
             if (modifier && modifier->getAnEnd() > end)
             {
-                throw std::runtime_error("Trying to apply action to text not rendered");
+                std::cerr << "Trying to apply action to text not rendered" << std::flush;
+                std::terminate();
             }
 
             for (auto curr = begin; curr != end;)
@@ -101,7 +102,9 @@ namespace
                     {
                         if (modifierBegin + 1 != highlightedEOL)
                         {
-                            throw std::runtime_error("End must be one higher than begin when using in between actions");
+                            std::cerr << "End must be one higher than begin when using in between actions"
+                                      << std::flush;
+                            std::terminate();
                         }
                         auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
                         if (start >= text.size() || std::isspace(text[start]))
@@ -278,7 +281,8 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
         }
         if (args.empty())
         {
-            throw std::runtime_error("Not enough arguments specified to substitute in format");
+            std::cerr << "Not enough arguments specified to substitute in format" << std::flush;
+            std::terminate();
         }
         result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
                  + std::string(matches[0].second, result.cend());
@@ -287,7 +291,8 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
     }
     if (!args.empty())
     {
-        throw std::runtime_error("More arguments specified than needed to substitute");
+        std::cerr << "More arguments specified than needed to substitute" << std::flush;
+        std::terminate();
     }
     return result;
 }

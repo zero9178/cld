@@ -1,6 +1,7 @@
 #ifndef OPENCLPARSER_LEXER_HPP
 #define OPENCLPARSER_LEXER_HPP
 
+#include <iostream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -98,7 +99,7 @@ namespace OpenCL::Lexer
 
     class Token;
 
-    std::vector<Token> tokenize(std::string source);
+    std::vector<Token> tokenize(std::string source, std::ostream* reporter = &std::cerr);
 
     class Token
     {
@@ -111,7 +112,7 @@ namespace OpenCL::Lexer
         variant m_value;
         std::string m_valueRepresentation;
 
-        friend std::vector<Token> tokenize(std::string source);
+        friend std::vector<Token> tokenize(std::string source, std::ostream* reporter);
 
     public:
         using ValueType = variant;
