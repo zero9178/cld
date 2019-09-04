@@ -6,10 +6,12 @@
 #include <utility>
 
 #include "Parser.hpp"
+#define WIN32_LEAN_AND_MEAN
+#ifdef NOMINMAX // MinGW redefines this in a header somewhere and I want to be the next chef in the kitchen
+#undef NOMINMAX
+#endif
+#define NOMINMAX
 #include "termcolor.hpp"
-
-#undef max
-#undef min
 
 OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
                          std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)

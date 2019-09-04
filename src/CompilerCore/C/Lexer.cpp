@@ -9,6 +9,12 @@
 #include <unordered_map>
 
 #include "ErrorMessages.hpp"
+
+#define WIN32_LEAN_AND_MEAN
+#ifdef NOMINMAX
+#undef NOMINMAX
+#endif
+
 #include "termcolor.hpp"
 
 namespace
@@ -140,6 +146,7 @@ namespace
         }
         else if (characters.front() == '\\')
         {
+            std::int32_t number = 0;
             if (characters[1] == 'x')
             {
                 if (characters.size() <= 2)
@@ -150,35 +157,35 @@ namespace
                     return 0;
                 }
                 std::istringstream ss(characters.substr(2, characters.size() - 1));
-                std::int32_t number;
                 if (!(ss >> std::hex >> number))
                 {
-                    throw std::runtime_error("Failed to convert " + ss.str() + " to hex character");
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_HEXADECIMAL_CHARACTER.args(ss.str()),
+                                line, column - characters.size() + 1, lineText,
+                                {{column - characters.size() - 1, column - 1}});
                 }
-                if (number > std::numeric_limits<std::uint8_t>::max())
-                {
-                    throw std::runtime_error(
-                        "Character constant is not allowed to have a value higher than the maximum value of unsigned char");
-                }
-                return number;
             }
             else
             {
                 std::istringstream ss(characters.substr(1, characters.size() - 1));
-                std::int32_t number;
                 if (!(ss >> std::oct >> number))
                 {
-                    throw std::runtime_error("Failed to convert " + ss.str() + " to octal character");
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(ss.str()), line,
+                                column - characters.size() + 1, lineText,
+                                {{column - characters.size() - 1, column - 1}});
                 }
-                if (number > std::numeric_limits<std::uint8_t>::max())
-                {
-                    throw std::runtime_error(
-                        "Character constant is not allowed to have a value higher than the maximum value of unsigned char");
-                }
-                return number;
             }
+            if (number > std::numeric_limits<std::uint8_t>::max())
+            {
+                reportError(
+                    reporter,
+                    OpenCL::ErrorMessages::Lexer::CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR, line,
+                    column - characters.size() - 2, lineText, {{column - characters.size() - 2, column}});
+            }
+            return number;
         }
-        throw std::runtime_error("Incorrect sequence for character literal:" + characters);
+        reportError(reporter, OpenCL::ErrorMessages::Lexer::INCORRECT_CHARACTER_LITERAL.args(characters), line,
+                    column - characters.size() - 2, lineText, {{column - characters.size() - 2, column}});
+        return 0;
     }
 
     bool isKeyword(const std::string& characters)
@@ -353,8 +360,17 @@ namespace
 
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (suffix.empty() || suffix == "l" || suffix == "L")
+                if (suffix == "ll" || suffix == "LL")
                 {
+                    return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
+                                                number, lastText);
+                }
+                else
+                {
+                    if (!suffix.empty() && suffix != "l" && suffix != "L")
+                    {
+                        throw std::runtime_error("Invalid suffix " + suffix);
+                    }
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
                         return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
@@ -365,15 +381,6 @@ namespace
                         return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
                                                     static_cast<std::uint32_t>(number), lastText);
                     }
-                }
-                else if (suffix == "ll" || suffix == "LL")
-                {
-                    return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                number, lastText);
-                }
-                else
-                {
-                    throw std::runtime_error("Invalid suffix " + suffix);
                 }
             }
             else

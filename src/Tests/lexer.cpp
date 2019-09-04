@@ -1,11 +1,14 @@
 #include "catch.hpp"
 
+#include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Lexer.hpp>
 
 #include <array>
 #include <sstream>
 
 #include "TestConfig.hpp"
+
+using namespace OpenCL::ErrorMessages::Lexer;
 
 using namespace Catch::Matchers;
 
@@ -341,8 +344,8 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Octals")
     {
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\9'"));
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\0700'"));
+        LEXER_FAILS_WITH("'\\9'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
+        LEXER_FAILS_WITH("'\\0700'", Catch::Contains(CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR));
         auto result = OpenCL::Lexer::tokenize("'\\070'");
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -351,9 +354,9 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Hex")
     {
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\xG'"));
-        LEXER_FAILS_WITH("'\\x'", Catch::Contains("At least one hexadecimal digit required"));
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'\\x0700'"));
+        LEXER_FAILS_WITH("'\\xG'", Catch::Contains(INVALID_HEXADECIMAL_CHARACTER.args("G")));
+        LEXER_FAILS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
+        LEXER_FAILS_WITH("'\\x0700'", Catch::Contains(CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR));
         auto result = OpenCL::Lexer::tokenize("'\\x070'");
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -363,7 +366,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Fails")
     {
         LEXER_FAILS_WITH("'\n'", Catch::Contains("Newline in character literal, use \\n instead"));
-        CHECK_THROWS(OpenCL::Lexer::tokenize("'aa'"));
+        LEXER_FAILS_WITH("'aa'", Catch::Contains(INCORRECT_CHARACTER_LITERAL.args("aa")));
     }
 }
 

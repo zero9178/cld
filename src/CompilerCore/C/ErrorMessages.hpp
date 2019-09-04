@@ -124,8 +124,18 @@ namespace OpenCL
         {
             constexpr auto AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED = "At least one hexadecimal digit required";
 
-        }
-    } // namespace ErrorMessages
+            constexpr auto INVALID_HEXADECIMAL_CHARACTER = Format("Invalid hexadecimal character '{}'");
+
+            constexpr auto CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR =
+                "Character mustn't have a higher value than the maximum value of unsigned char";
+
+            constexpr auto INVALID_OCTAL_CHARACTER = Format("Invalid octal character '{}'");
+
+            constexpr auto INCORRECT_CHARACTER_LITERAL = Format("Incorrect character literal '{}'");
+
+            constexpr auto INVALID_INTEGER_LITERAL_SUFFIX = Format("Invalid integer literal suffix '{}'");
+        } // namespace Lexer
+    }     // namespace ErrorMessages
 
     namespace Notes
     {
