@@ -139,6 +139,8 @@ namespace OpenCL
 
             constexpr auto BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT =
                 "Binary floating point literal must contain an exponent";
+
+            constexpr auto UNEXPECTED_CHARACTER = Format("Unexpected character '{}'");
         } // namespace Lexer
     }     // namespace ErrorMessages
 

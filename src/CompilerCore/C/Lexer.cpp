@@ -88,7 +88,9 @@ namespace
             case HighlightEffect::PointAtEnd:
                 *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
                 break;
-            case HighlightEffect::InsertAtEnd: *reporter << std::string(lineText.size() - 1, ' ') << '^'; break;
+            case HighlightEffect::InsertAtEnd:
+                *reporter << std::string(lineText.size() == 0 ? 0 : lineText.size() - 1, ' ') << '^';
+                break;
         }
         *reporter << normalColour << std::endl;
     }
@@ -468,7 +470,7 @@ namespace
                 if (endptr != literal.c_str() + literal.size())
                 {
                     reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
-                                line, column, lineText, {{column, column + lineText.size()}});
+                                line, column, lineText, {{column, column + literal.size()}});
                 }
                 return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
                                             literal);
@@ -566,9 +568,17 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             {
                                 currentState = State::Number;
                             }
-                            else
+                            else if (iter >= ' ' && iter < '~' && iter != '`' && iter != '`' && iter != '@'
+                                     && iter != '$' && iter != '\\')
                             {
                                 currentState = State::Ambiguous;
+                            }
+                            else
+                            {
+                                reportError(reporter,
+                                            ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(std::to_string(iter)), line,
+                                            column, lineMap[line]);
+                                handled = true;
                             }
                             break;
                     }
@@ -989,6 +999,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                         }
                         default:
                             lastTokenIsAmbiguous = false;
+                            handled = false;
                             if (!result.empty() && result.back().getTokenType() == TokenType::Dot && iter >= '0'
                                 && iter <= '9')
                             {
@@ -1000,7 +1011,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             {
                                 currentState = State::Start;
                             }
-                            handled = false;
                             break;
                     }
                     if (handled)

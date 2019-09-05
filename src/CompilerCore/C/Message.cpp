@@ -37,7 +37,7 @@ namespace
             os << normalColour << begin->getLine() << ':' << begin->getColumn() << ": ";
             if (modifier && modifier->getAnEnd() > end)
             {
-                std::cerr << "Trying to apply action to text not rendered" << std::flush;
+                std::cerr << "Trying to apply action to text not rendered" << std::endl;
                 std::terminate();
             }
 
@@ -104,8 +104,7 @@ namespace
                     {
                         if (modifierBegin + 1 != highlightedEOL)
                         {
-                            std::cerr << "End must be one higher than begin when using in between actions"
-                                      << std::flush;
+                            std::cerr << "End must be one higher than begin when using in between actions" << std::endl;
                             std::terminate();
                         }
                         auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
@@ -283,7 +282,7 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
         }
         if (args.empty())
         {
-            std::cerr << "Not enough arguments specified to substitute in format" << std::flush;
+            std::cerr << "Not enough arguments specified to substitute in format" << std::endl;
             std::terminate();
         }
         result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
@@ -293,7 +292,7 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
     }
     if (!args.empty())
     {
-        std::cerr << "More arguments specified than needed to substitute" << std::flush;
+        std::cerr << "More arguments specified than needed to substitute" << std::endl;
         std::terminate();
     }
     return result;

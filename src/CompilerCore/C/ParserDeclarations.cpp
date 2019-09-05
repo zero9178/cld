@@ -1716,9 +1716,11 @@ std::optional<CompoundStatement> OpenCL::Parser::parseCompoundStatement(OpenCL::
     {
         context.popScope();
     }
-    if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start),
-                               context.getLineEnd(begin), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
+    if (!expect(
+            Lexer::TokenType::CloseBrace, start, begin, end, context,
+            {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start), context.getLineEnd(begin),
+                           Modifier(start == end ? start - 1 : start, start == end ? start : start + 1,
+                                    Modifier::PointAtBeginning))}))
     {
         skipUntil(begin, end, recoverySet);
         return {};

@@ -1,10 +1,8 @@
 
 if (WIN32)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined")
-    link_libraries(clang_rt.fuzzer-x86_64)
-    link_libraries(clang_rt.stats-x86_64)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=fuzzer,undefined,address")
 else ()
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined,fuzzer,address")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=fuzzer,undefined,address,leak")
 endif ()
 
 add_executable(parserFuzzer parserFuzzer.cpp)
