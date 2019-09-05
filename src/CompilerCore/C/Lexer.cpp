@@ -339,20 +339,22 @@ namespace
         return TokenType::InlineKeyword;
     }
 
-    OpenCL::Lexer::Token charactersToNumber(const std::string& lastText, std::uint64_t line, std::uint64_t column)
+    OpenCL::Lexer::Token charactersToNumber(std::ostream* reporter, const std::string& literal, std::uint64_t line,
+                                            std::uint64_t column, const std::string& lineText)
     {
-        if (lastText.find('.') == std::string::npos
-            && ((lastText.size() >= 2 && (lastText.substr(0, 2) == "0x" || lastText.substr(0, 2) == "0X"))
-                || (lastText.find('e') == std::string::npos && lastText.find('E') == std::string::npos))
-            && lastText.find('p') == std::string::npos && lastText.find('P') == std::string::npos)
+        if (literal.find('.') == std::string::npos
+            && ((literal.size() >= 2 && (literal.substr(0, 2) == "0x" || literal.substr(0, 2) == "0X"))
+                || (literal.find('e') == std::string::npos && literal.find('E') == std::string::npos))
+            && literal.find('p') == std::string::npos && literal.find('P') == std::string::npos)
         {
             static std::regex numbers("(0x)?[0-9a-fA-F]+");
-            bool isHexOrOctal = lastText[0] == '0';
+            bool isHexOrOctal = literal[0] == '0';
             std::smatch match;
-            std::regex_search(lastText, match, numbers);
+            std::regex_search(literal, match, numbers);
             std::string filtered = match[0];
 
-            std::string suffix = lastText.substr(filtered.size(), lastText.size() - filtered.size());
+            std::string suffix = literal.substr(filtered.size(), literal.size() - filtered.size());
+            auto originalSuffix = suffix;
             if (std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u'; }))
             {
                 auto erase = std::remove(suffix.begin(), suffix.end(), 'u');
@@ -362,24 +364,27 @@ namespace
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
                 if (suffix == "ll" || suffix == "LL")
                 {
-                    return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                number, lastText);
+                    return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
+                                                literal);
                 }
                 else
                 {
                     if (!suffix.empty() && suffix != "l" && suffix != "L")
                     {
-                        throw std::runtime_error("Invalid suffix " + suffix);
+                        reportError(reporter,
+                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
+                                    line, column, lineText,
+                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
                     }
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
-                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    number, lastText);
+                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    number, literal);
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::uint32_t>(number), lastText);
+                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::uint32_t>(number), literal);
                     }
                 }
             }
@@ -387,82 +392,86 @@ namespace
             {
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (suffix.empty() || suffix == "l" || suffix == "L")
-                {
-                    if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
-                    {
-                        if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
-                        {
-                            return OpenCL::Lexer::Token(line, column, lastText.size(),
-                                                        OpenCL::Lexer::TokenType::Literal,
-                                                        static_cast<std::uint32_t>(number), lastText);
-                        }
-                        else if (isHexOrOctal
-                                 && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-                        {
-                            return OpenCL::Lexer::Token(line, column, lastText.size(),
-                                                        OpenCL::Lexer::TokenType::Literal, number, lastText);
-                        }
-                        else
-                        {
-                            return OpenCL::Lexer::Token(line, column, lastText.size(),
-                                                        OpenCL::Lexer::TokenType::Literal,
-                                                        static_cast<std::int64_t>(number), lastText);
-                        }
-                    }
-                    else
-                    {
-                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::int32_t>(number), lastText);
-                    }
-                }
-                else if (suffix == "ll" || suffix == "LL")
+                if (suffix == "ll" || suffix == "LL")
                 {
                     if (isHexOrOctal && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                     {
-                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    number, lastText);
+                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    number, literal);
                     }
                     else
                     {
-                        return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::int64_t>(number), lastText);
+                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::int64_t>(number), literal);
                     }
                 }
                 else
                 {
-                    throw std::runtime_error("Invalid suffix " + suffix);
+                    if (!suffix.empty() && suffix != "l" && suffix != "L")
+                    {
+                        reportError(reporter,
+                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
+                                    line, column, lineText,
+                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
+                    }
+                    if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
+                    {
+                        if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
+                        {
+                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                        static_cast<std::uint32_t>(number), literal);
+                        }
+                        else if (isHexOrOctal
+                                 && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+                        {
+                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                        number, literal);
+                        }
+                        else
+                        {
+                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                        static_cast<std::int64_t>(number), literal);
+                        }
+                    }
+                    else
+                    {
+                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                    static_cast<std::int32_t>(number), literal);
+                    }
                 }
             }
         }
         else
         {
             char* endptr = nullptr;
-            if (lastText.back() == 'f' || lastText.back() == 'F')
+            if (literal.back() == 'f' || literal.back() == 'F')
             {
-                auto filtered = lastText.substr(0, lastText.size() - 1);
+                auto filtered = literal.substr(0, literal.size() - 1);
                 float number = std::strtof(filtered.c_str(), &endptr);
                 if (endptr != filtered.c_str() + filtered.size())
                 {
-                    throw std::runtime_error("Invalid floating point constant " + lastText);
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
+                                line, column, lineText, {{column, column + lineText.size()}});
                 }
-                return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal, number,
-                                            lastText);
+                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
+                                            literal);
             }
             else
             {
-                if (lastText.size() >= 2 && lastText[0] == '0' && std::tolower(lastText[1]) == 'x'
-                    && std::none_of(lastText.begin(), lastText.end(), [](char c) { return c == 'p' || c == 'P'; }))
+                if (literal.size() >= 2 && literal[0] == '0' && std::tolower(literal[1]) == 'x'
+                    && std::none_of(literal.begin(), literal.end(), [](char c) { return c == 'p' || c == 'P'; }))
                 {
-                    throw std::runtime_error("Binary floating point constant must contain exponent");
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+                                line, column, lineText, {{column, column + literal.size()}});
                 }
-                double number = std::strtod(lastText.c_str(), &endptr);
-                if (endptr != lastText.c_str() + lastText.size())
+                double number = std::strtod(literal.c_str(), &endptr);
+                if (endptr != literal.c_str() + literal.size())
                 {
-                    throw std::runtime_error("Invalid floating point constant " + lastText);
+                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
+                                line, column, lineText, {{column, column + lineText.size()}});
                 }
-                return OpenCL::Lexer::Token(line, column, lastText.size(), OpenCL::Lexer::TokenType::Literal, number,
-                                            lastText);
+                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
+                                            literal);
             }
         }
     }
@@ -662,7 +671,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                     }
                     else
                     {
-                        result.push_back(charactersToNumber(characters, line, column - characters.size()));
+                        result.push_back(
+                            charactersToNumber(reporter, characters, line, column - characters.size(), lineMap[line]));
                         characters.clear();
                         currentState = State::Start;
                         handled = false;

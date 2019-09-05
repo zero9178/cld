@@ -134,6 +134,11 @@ namespace OpenCL
             constexpr auto INCORRECT_CHARACTER_LITERAL = Format("Incorrect character literal '{}'");
 
             constexpr auto INVALID_INTEGER_LITERAL_SUFFIX = Format("Invalid integer literal suffix '{}'");
+
+            constexpr auto INVALID_FLOATING_POINT_LITERAL = Format("Invalid floating point literal '{}'");
+
+            constexpr auto BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT =
+                "Binary floating point literal must contain an exponent";
         } // namespace Lexer
     }     // namespace ErrorMessages
 
