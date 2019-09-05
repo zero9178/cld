@@ -613,14 +613,16 @@ TEST_CASE("Lexing input reconstruction", "[lexer]")
 
 TEST_CASE("Lexing multiline token", "[lexer]")
 {
-    std::string source = "\"test\"\n\t\"yes\"";
+    std::string source = "\"test\"\n\"yes\"";
     auto result = OpenCL::Lexer::tokenize(source);
     REQUIRE(result.size() == 2);
     CHECK(result[0].getColumn() == 0);
     CHECK(result[0].getLine() == 1);
     CHECK(result[0].getLength() == 6);
-    CHECK(result[1].getColumn() == 4);
+    CHECK(result[1].getColumn() == 0);
     CHECK(result[1].getLine() == 2);
     CHECK(result[1].getLength() == 5);
-    REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == "\"test\"\n    \"yes\"");
+    REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end())
+            == "\"test\"\n"
+               "\"yes\"");
 }

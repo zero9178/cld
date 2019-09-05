@@ -86,7 +86,7 @@ namespace OpenCL::Semantics
                          std::reference_wrapper<const OpenCL::Syntax::SpecifierQualifier>>;
 
         Type declaratorsToType(const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
-                               PossiblyAbstractQualifierRef declarator = {},
+                               const PossiblyAbstractQualifierRef& declarator = {},
                                const std::vector<Syntax::Declaration>& declarations = {});
 
         TranslationUnit visit(const Syntax::TranslationUnit& node);

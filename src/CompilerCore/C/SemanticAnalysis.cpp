@@ -765,7 +765,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
 
 OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
     const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
-    OpenCL::Semantics::PossiblyAbstractQualifierRef declarator, const std::vector<Syntax::Declaration>& declarations)
+    const OpenCL::Semantics::PossiblyAbstractQualifierRef& declarator,
+    const std::vector<Syntax::Declaration>& declarations)
 {
     auto declStart = Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.front()).begin();
     auto declEnd = match(

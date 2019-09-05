@@ -44,92 +44,50 @@ std::optional<AssignmentExpression> OpenCL::Parser::parseAssignmentExpression(To
                                                                               InRecoverySet recoverySet)
 {
     auto start = begin;
-    return context.doBacktracking([&]() -> std::optional<Syntax::AssignmentExpression> {
-        bool reachedAssignment = false;
-        auto assignmentBranch = context.createBranch(
-            begin, [&reachedAssignment](Tokens::const_iterator, Tokens::const_iterator) { return reachedAssignment; });
-        auto assignmentAssignment = parseAssignmentExpressionAssignment(assignmentBranch->getCurrent(), end, context,
-                                                                        reachedAssignment, recoverySet);
-        if (*assignmentBranch && assignmentAssignment)
-        {
-            return AssignmentExpression(start, begin, std::move(*assignmentAssignment));
-        }
-
-        auto condBranch = context.createBranch(begin);
-        auto cond = parseConditionalExpression(condBranch->getCurrent(), end, context, recoverySet);
-        if (!cond)
-        {
-            return {};
-        }
-        return AssignmentExpression(start, begin, std::move(*cond));
-    });
-}
-
-std::optional<AssignmentExpressionAssignment>
-    OpenCL::Parser::parseAssignmentExpressionAssignment(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                        Context& context, bool& reachedAssignment,
-                                                        InRecoverySet recoverySet)
-{
-    auto start = begin;
-    reachedAssignment = false;
-    auto unary = parseUnaryExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
+    auto result = parseConditionalExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
         return isAssignment(token.getTokenType()) || recoverySet(token);
     });
-    AssignmentExpressionAssignment::AssignOperator assignOperator;
-    if (begin == end || !isAssignment(begin->getTokenType()))
+
+    std::vector<std::pair<AssignmentExpression::AssignOperator, ConditionalExpression>> list;
+    while (begin != end && isAssignment(begin->getTokenType()))
     {
-        return {};
-    }
-    else
-    {
-        reachedAssignment = true;
-        switch (begin->getTokenType())
-        {
-            case Lexer::TokenType::Assignment:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::NoOperator;
-                break;
-            case Lexer::TokenType::PlusAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::PlusAssign;
-                break;
-            case Lexer::TokenType::MinusAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::MinusAssign;
-                break;
-            case Lexer::TokenType::DivideAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::DivideAssign;
-                break;
-            case Lexer::TokenType::MultiplyAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::MultiplyAssign;
-                break;
-            case Lexer::TokenType::ModuloAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::ModuloAssign;
-                break;
-            case Lexer::TokenType::ShiftLeftAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign;
-                break;
-            case Lexer::TokenType::ShiftRightAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::RightShiftAssign;
-                break;
-            case Lexer::TokenType::BitAndAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::BitAndAssign;
-                break;
-            case Lexer::TokenType::BitOrAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::BitOrAssign;
-                break;
-            case Lexer::TokenType::BitXorAssign:
-                assignOperator = AssignmentExpressionAssignment::AssignOperator::BitXorAssign;
-                break;
-            default: OPENCL_UNREACHABLE;
-        }
+        auto token = begin->getTokenType();
         begin++;
+        auto newConditional = parseConditionalExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
+            return isAssignment(token.getTokenType()) || recoverySet(token);
+        });
+        if (newConditional)
+        {
+            list.emplace_back(
+                [token]() -> AssignmentExpression::AssignOperator {
+                    switch (token)
+                    {
+                        case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
+                        case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
+                        case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
+                        case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
+                        case Lexer::TokenType::MultiplyAssign:
+                            return AssignmentExpression::AssignOperator::MultiplyAssign;
+                        case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
+                        case Lexer::TokenType::ShiftLeftAssign:
+                            return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                        case Lexer::TokenType::ShiftRightAssign:
+                            return AssignmentExpression::AssignOperator::RightShiftAssign;
+                        case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
+                        case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
+                        case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
+                        default: OPENCL_UNREACHABLE;
+                    }
+                }(),
+                std::move(*newConditional));
+        }
     }
 
-    auto assignment = parseAssignmentExpression(begin, end, context, recoverySet);
-    if (!unary || !assignment)
+    if (!result)
     {
         return {};
     }
-    return AssignmentExpressionAssignment(start, begin, std::move(*unary), assignOperator,
-                                          std::make_unique<AssignmentExpression>(std::move(*assignment)));
+    return AssignmentExpression(start, begin, std::move(*result), std::move(list));
 }
 
 std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin,

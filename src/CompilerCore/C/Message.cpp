@@ -287,8 +287,8 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
         }
         result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
                  + std::string(matches[0].second, result.cend());
+        start = result.cbegin() + args.back().size() + (size - 1);
         args.pop_back();
-        start = result.cbegin() + size;
     }
     if (!args.empty())
     {

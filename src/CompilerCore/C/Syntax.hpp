@@ -38,8 +38,6 @@ namespace OpenCL::Syntax
 
     class PostFixExpressionTypeInitializer;
 
-    class AssignmentExpressionAssignment;
-
     class UnaryExpressionPostFixExpression;
 
     class UnaryExpressionUnaryOperator;
@@ -73,8 +71,6 @@ namespace OpenCL::Syntax
     class AssignmentExpression;
 
     using ConstantExpression = AssignmentExpression;
-
-    class AssignmentExpressionAssignment;
 
     class ReturnStatement;
 
@@ -487,49 +483,6 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <AssignmentExpression> ::= <UnaryExpression> <AssignmentExpression::AssignOperator> <AssignmentExpression>
-     */
-    class AssignmentExpressionAssignment final : public Node
-    {
-        UnaryExpression m_unaryFactor;
-
-    public:
-        /**
-         * <AssignmentExpression::AssignOperator>
-         */
-        enum class AssignOperator
-        {
-            NoOperator,       ///<<TokenType::Assignment>
-            PlusAssign,       ///<<TokenType::PlusAssign>
-            MinusAssign,      ///<<TokenType::MinusAssign>
-            DivideAssign,     ///< TokenType::DivideAssign>
-            MultiplyAssign,   ///<<TokenType::MultiplyAssign>
-            ModuloAssign,     ///<<TokenType::ModuloAssign>
-            LeftShiftAssign,  ///<<TokenType::LeftShiftAssign>
-            RightShiftAssign, ///<<TokenType::RightShiftAssign>
-            BitAndAssign,     ///<<TokenType::BitAndAssign>
-            BitOrAssign,      ///<<TokenType::BitOrAssign>
-            BitXorAssign      ///<<TokenType::BitXorAssign>
-        };
-
-    private:
-        AssignOperator m_assignOperator;
-        std::unique_ptr<AssignmentExpression> m_assignmentExpression;
-
-    public:
-        AssignmentExpressionAssignment(std::vector<Lexer::Token>::const_iterator begin,
-                                       std::vector<Lexer::Token>::const_iterator end, UnaryExpression&& unaryFactor,
-                                       AssignOperator assignOperator,
-                                       std::unique_ptr<AssignmentExpression>&& assignmentExpression);
-
-        [[nodiscard]] const UnaryExpression& getUnaryFactor() const;
-
-        [[nodiscard]] AssignOperator getAssignOperator() const;
-
-        [[nodiscard]] const AssignmentExpression& getAssignmentExpression() const;
-    };
-
-    /**
      * <TypeQualifier> ::= <TokenType::ConstKeyword> | <TokenType::RestrictKeyword> | <TokenType::VolatileKeyword>
      */
     class TypeQualifier final : public Node
@@ -866,18 +819,50 @@ namespace OpenCL::Syntax
     };
 
     /**
+     * According to C99:
      * <AssignmentExpression> ::= <AssignmentExpressionAssignment> | <ConditionalExpression>
+     *
+     * Instead we are doing something similar to clang here though:
+     * We'll be using the grammar of the form:
+     *
+     * <AssignmentExpression> ::= <ConditionalExpression> { <AssignOperator> <ConditionalExpression> }
+     *
+     * Checking if the left operand is an LValue will be done in Semantics
      */
     class AssignmentExpression final : public Node
     {
-        std::variant<AssignmentExpressionAssignment, ConditionalExpression> m_variant;
+    public:
+        /**
+         * <AssignmentExpression::AssignOperator>
+         */
+        enum class AssignOperator
+        {
+            NoOperator,       ///<<TokenType::Assignment>
+            PlusAssign,       ///<<TokenType::PlusAssign>
+            MinusAssign,      ///<<TokenType::MinusAssign>
+            DivideAssign,     ///< TokenType::DivideAssign>
+            MultiplyAssign,   ///<<TokenType::MultiplyAssign>
+            ModuloAssign,     ///<<TokenType::ModuloAssign>
+            LeftShiftAssign,  ///<<TokenType::LeftShiftAssign>
+            RightShiftAssign, ///<<TokenType::RightShiftAssign>
+            BitAndAssign,     ///<<TokenType::BitAndAssign>
+            BitOrAssign,      ///<<TokenType::BitOrAssign>
+            BitXorAssign      ///<<TokenType::BitXorAssign>
+        };
+
+    private:
+        ConditionalExpression m_conditionalExpression;
+        std::vector<std::pair<AssignOperator, ConditionalExpression>> m_assignments;
 
     public:
         AssignmentExpression(std::vector<Lexer::Token>::const_iterator begin,
                              std::vector<Lexer::Token>::const_iterator end,
-                             std::variant<AssignmentExpressionAssignment, ConditionalExpression>&& variant);
+                             ConditionalExpression&& conditionalExpression,
+                             std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments);
 
-        [[nodiscard]] const std::variant<AssignmentExpressionAssignment, ConditionalExpression>& getVariant() const;
+        [[nodiscard]] const ConditionalExpression& getConditionalExpression() const;
+
+        [[nodiscard]] const std::vector<std::pair<AssignOperator, ConditionalExpression>>& getAssignments() const;
     };
 
     /**

@@ -14,7 +14,7 @@
 #ifdef NOMINMAX
 #undef NOMINMAX
 #endif
-
+#define NOMINMAX
 #include "termcolor.hpp"
 
 namespace
@@ -61,7 +61,7 @@ namespace
             std::cerr << "Highlight column range start greater than end" << std::endl;
             std::terminate();
         }
-        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > +lineText.size())
+        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > lineText.size())
         {
             std::cerr << "Highlight column range end greater than line size" << std::endl;
             std::terminate();
@@ -453,7 +453,7 @@ namespace
                 if (endptr != filtered.c_str() + filtered.size())
                 {
                     reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
-                                line, column, lineText, {{column, column + lineText.size()}});
+                                line, column, lineText, {{column, column + literal.size()}});
                 }
                 return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
                                             literal);
@@ -553,7 +553,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             lastTokenIsAmbiguous = true;
                             break;
                         default:
-                            if (std::isspace(iter))
+                            if (iter > 0 && std::isspace(iter)) // Its UB to pass negative value to std::isspace. TIL
                             {
                                 lastTokenIsAmbiguous = false;
                                 break;
@@ -1034,10 +1034,6 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
             line++;
             column = 0;
             continue;
-        }
-        else if (iter == '\t')
-        {
-            column += 4;
         }
         else
         {

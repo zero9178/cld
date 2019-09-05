@@ -859,37 +859,32 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
 {
-    return match(
-        node.getVariant(),
-        [this](const Syntax::AssignmentExpressionAssignment& assignmentExpressionAssignment) -> ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                         '\'' + [&assignmentExpressionAssignment]() -> std::string {
-                             switch (assignmentExpressionAssignment.getAssignOperator())
-                             {
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::NoOperator: return "=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::PlusAssign: return "+=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::MinusAssign: return "-=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::DivideAssign: return "/=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::MultiplyAssign:
-                                     return "*=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::ModuloAssign: return "%=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::LeftShiftAssign:
-                                     return "<<=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::RightShiftAssign:
-                                     return ">>=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitAndAssign: return "&=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitOrAssign: return "|=";
-                                 case Syntax::AssignmentExpressionAssignment::AssignOperator::BitXorAssign: return "^=";
-                             }
-                             return "";
-                         }() + '\''),
-                     Modifier(assignmentExpressionAssignment.getAssignmentExpression().begin() - 1,
-                              assignmentExpressionAssignment.getAssignmentExpression().begin()));
-            return {};
-        },
-        [this](const Syntax::ConditionalExpression& conditionalExpression) -> ConstRetType {
-            return visit(conditionalExpression);
-        });
+    for (auto& [op, cond] : node.getAssignments())
+    {
+        logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + [op = op]() -> std::string {
+            switch (op)
+            {
+                case Syntax::AssignmentExpression::AssignOperator::NoOperator: return "=";
+                case Syntax::AssignmentExpression::AssignOperator::PlusAssign: return "+=";
+                case Syntax::AssignmentExpression::AssignOperator::MinusAssign: return "-=";
+                case Syntax::AssignmentExpression::AssignOperator::DivideAssign: return "/=";
+                case Syntax::AssignmentExpression::AssignOperator::MultiplyAssign: return "*=";
+                case Syntax::AssignmentExpression::AssignOperator::ModuloAssign: return "%=";
+                case Syntax::AssignmentExpression::AssignOperator::LeftShiftAssign: return "<<=";
+                case Syntax::AssignmentExpression::AssignOperator::RightShiftAssign: return ">>=";
+                case Syntax::AssignmentExpression::AssignOperator::BitAndAssign: return "&=";
+                case Syntax::AssignmentExpression::AssignOperator::BitOrAssign: return "|=";
+                case Syntax::AssignmentExpression::AssignOperator::BitXorAssign: return "^=";
+                default: OPENCL_UNREACHABLE;
+            }
+        }() + '\''),
+                 Modifier(cond.begin() - 1, cond.begin()));
+    }
+    if (!node.getAssignments().empty())
+    {
+        return {};
+    }
+    return visit(node.getConditionalExpression());
 }
 
 OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(

@@ -212,36 +212,6 @@ const OpenCL::Syntax::UnaryExpressionSizeOf::variant& OpenCL::Syntax::UnaryExpre
     return m_variant;
 }
 
-OpenCL::Syntax::AssignmentExpressionAssignment::AssignmentExpressionAssignment(
-    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-    OpenCL::Syntax::UnaryExpression&& unaryFactor,
-    OpenCL::Syntax::AssignmentExpressionAssignment::AssignOperator assignOperator,
-    std::unique_ptr<OpenCL::Syntax::AssignmentExpression>&& assignmentExpression)
-    : Node(begin, end),
-      m_unaryFactor(std::move(unaryFactor)),
-      m_assignOperator(assignOperator),
-      m_assignmentExpression(std::move(assignmentExpression))
-{
-    assert(m_assignmentExpression);
-}
-
-const OpenCL::Syntax::UnaryExpression& OpenCL::Syntax::AssignmentExpressionAssignment::getUnaryFactor() const
-{
-    return m_unaryFactor;
-}
-
-OpenCL::Syntax::AssignmentExpressionAssignment::AssignOperator
-    OpenCL::Syntax::AssignmentExpressionAssignment::getAssignOperator() const
-{
-    return m_assignOperator;
-}
-
-const OpenCL::Syntax::AssignmentExpression&
-    OpenCL::Syntax::AssignmentExpressionAssignment::getAssignmentExpression() const
-{
-    return *m_assignmentExpression;
-}
-
 OpenCL::Syntax::CastExpression::CastExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                std::vector<Lexer::Token>::const_iterator end,
                                                OpenCL::Syntax::CastExpression::variant&& variant)
@@ -729,19 +699,6 @@ const std::vector<std::pair<std::string, std::optional<OpenCL::Syntax::ConstantE
     return m_values;
 }
 
-OpenCL::Syntax::AssignmentExpression::AssignmentExpression(
-    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-    std::variant<OpenCL::Syntax::AssignmentExpressionAssignment, OpenCL::Syntax::ConditionalExpression>&& variant)
-    : Node(begin, end), m_variant(std::move(variant))
-{
-}
-
-const std::variant<OpenCL::Syntax::AssignmentExpressionAssignment, OpenCL::Syntax::ConditionalExpression>&
-    OpenCL::Syntax::AssignmentExpression::getVariant() const
-{
-    return m_variant;
-}
-
 OpenCL::Syntax::Initializer::Initializer(std::vector<Lexer::Token>::const_iterator begin,
                                          std::vector<Lexer::Token>::const_iterator end,
                                          OpenCL::Syntax::Initializer::variant&& variant)
@@ -794,7 +751,7 @@ OpenCL::Syntax::Declaration::Declaration(
       m_initDeclarators(std::move(initDeclarators))
 {
     assert(std::all_of(m_initDeclarators.begin(), m_initDeclarators.end(),
-                       [](const auto& pair) -> bool { return pair.first.get(); }));
+                       [](const auto& pair) -> bool { return pair.first.get() != nullptr; }));
 }
 
 const std::vector<OpenCL::Syntax::DeclarationSpecifier>& OpenCL::Syntax::Declaration::getDeclarationSpecifiers() const
@@ -1261,4 +1218,21 @@ const std::unique_ptr<OpenCL::Syntax::DirectAbstractDeclarator>&
     OpenCL::Syntax::DirectAbstractDeclaratorAsterisk::getDirectAbstractDeclarator() const
 {
     return m_directAbstractDeclarator;
+}
+OpenCL::Syntax::AssignmentExpression::AssignmentExpression(
+    std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
+    OpenCL::Syntax::ConditionalExpression&& conditionalExpression,
+    std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments)
+    : Node(begin, end), m_conditionalExpression(std::move(conditionalExpression)), m_assignments(std::move(assignments))
+{
+}
+const OpenCL::Syntax::ConditionalExpression& OpenCL::Syntax::AssignmentExpression::getConditionalExpression() const
+{
+    return m_conditionalExpression;
+}
+const std::vector<
+    std::pair<OpenCL::Syntax::AssignmentExpression::AssignOperator, OpenCL::Syntax::ConditionalExpression>>&
+    OpenCL::Syntax::AssignmentExpression::getAssignments() const
+{
+    return m_assignments;
 }
