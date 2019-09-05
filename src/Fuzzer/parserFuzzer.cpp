@@ -15,7 +15,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::string input(size, ' ');
     std::transform(data, data + size, input.begin(), [](std::uint8_t byte) -> char { return static_cast<char>(byte); });
 
-    std::cout << '\"' << input << '\"' << std::endl;
     std::stringstream ss;
     auto tokens = OpenCL::Lexer::tokenize(input, &ss);
     if (!ss.str().empty() || tokens.empty())
@@ -23,7 +22,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
         return 0;
     }
 
-    OpenCL::Parser::buildTree(tokens);
+    OpenCL::Parser::buildTree(tokens, &ss);
 
     return 0;
 }

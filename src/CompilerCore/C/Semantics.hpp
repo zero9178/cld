@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "CompilerCore/Common/Expected.hpp"
-#include "CompilerCore/Common/FailureReason.hpp"
 
 #include "Message.hpp"
 #include "Syntax.hpp"

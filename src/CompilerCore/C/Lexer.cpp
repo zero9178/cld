@@ -589,10 +589,13 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                     if (iter == '\'' && (characters.empty() || characters.back() != '\\'))
                     {
                         currentState = State::Start;
-                        result.emplace_back(
-                            line, column - characters.size() - 1, characters.size() + 2, TokenType::Literal,
-                            charactersToCharLiteral(reporter, characters, line, column + 1, lineMap[line]),
-                            '\'' + characters + '\'');
+                        if (std::none_of(characters.begin(), characters.end(), [](char c) { return c == '\n'; }))
+                        {
+                            result.emplace_back(
+                                line, column - characters.size() - 1, characters.size() + 2, TokenType::Literal,
+                                charactersToCharLiteral(reporter, characters, line, column + 1, lineMap[line]),
+                                '\'' + characters + '\'');
+                        }
                         characters.clear();
                         continue;
                     }

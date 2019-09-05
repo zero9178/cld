@@ -26,4 +26,8 @@ TEST_CASE("Fuzzer discoveries", "[fuzzer]")
 
 
 I=')");
+    parse("YYu{\x0a:");
+    parse("(n{-((do(n");
+    parse("+goto2n[0(sizeof(");
+    parse("({(switch");
 }

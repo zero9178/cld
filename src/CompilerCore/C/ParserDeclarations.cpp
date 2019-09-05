@@ -890,7 +890,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
     else
     {
         context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), context.getLineStart(start),
-                                    end, Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
+                                    end, Modifier{begin - 1, begin, Modifier::PointAtBeginning})});
     }
     skipUntil(begin, end, recoverySet);
     return {};
@@ -2132,20 +2132,28 @@ std::optional<FootWhileStatement>
             return token.getTokenType() == Lexer::TokenType::OpenParenthese || recoverySet(token);
         });
     }
-    auto openPpos = begin;
+    std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenParenthese, start, begin, end, context))
     {
         skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
             return firstIsInExpression(token, context) || recoverySet(token);
         });
     }
+    else
+    {
+        openPpos = begin - 1;
+    }
     auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
         return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
     });
-    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(openPpos),
-                               context.getLineEnd(openPpos),
-                               Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
+    std::vector<Message> notes;
+    if (openPpos)
+    {
+        notes = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(*openPpos),
+                               context.getLineEnd(*openPpos),
+                               Modifier(*openPpos, *openPpos + 1, Modifier::PointAtBeginning))};
+    }
+    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context, std::move(notes)))
     {
         skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
             return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
@@ -2263,20 +2271,28 @@ std::optional<SwitchStatement>
             return token.getTokenType() == Lexer::TokenType::OpenParenthese || recoverySet(token);
         });
     }
-    auto openPpos = begin;
+    std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenParenthese, start, begin, end, context))
     {
         skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
             return firstIsInExpression(token, context) || recoverySet(token);
         });
     }
+    else
+    {
+        openPpos = begin - 1;
+    }
     auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
         return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
     });
-    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(openPpos),
-                               context.getLineEnd(openPpos),
-                               Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
+    std::vector<Message> note;
+    if (openPpos)
+    {
+        note = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(*openPpos),
+                              context.getLineEnd(*openPpos),
+                              Modifier(*openPpos, *openPpos + 1, Modifier::PointAtBeginning))};
+    }
+    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context, std::move(note)))
     {
         skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
             return firstIsInStatement(token, context) || recoverySet(token);

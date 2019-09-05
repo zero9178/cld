@@ -7,7 +7,6 @@
 #include <map>
 
 #include "../Common/Expected.hpp"
-#include "../Common/FailureReason.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
