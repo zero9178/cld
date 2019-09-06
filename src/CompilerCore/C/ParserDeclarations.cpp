@@ -1704,7 +1704,7 @@ std::optional<CompoundStatement> OpenCL::Parser::parseCompoundStatement(OpenCL::
     {
         context.pushScope();
     }
-    while (begin < end && begin->getTokenType() != Lexer::TokenType::CloseBrace)
+    while (begin < end && firstIsInCompoundItem(*begin, context))
     {
         auto result = parseCompoundItem(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
             return firstIsInCompoundItem(token, context) || token.getTokenType() == Lexer::TokenType::CloseBrace

@@ -611,6 +611,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                 {
                     if (iter == '"' && (characters.empty() || characters.back() != '\\'))
                     {
+                        auto originalCharacters = characters;
                         auto csize = characters.size();
                         currentState = State::Start;
                         {
@@ -631,7 +632,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             }
                         }
                         result.emplace_back(line, column - 1 - csize, 2 + csize, TokenType::StringLiteral, characters,
-                                            '\"' + characters + '\"');
+                                            '\"' + std::move(originalCharacters) + '\"');
                         characters.clear();
                         continue;
                     }

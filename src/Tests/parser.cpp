@@ -491,7 +491,7 @@ TEST_CASE("Parse parameter (type) list", "[parser]")
                          && ProducesNoNotes());
 }
 
-TEST_CASE("Abstract Declarator and Direct Abstract Declarator", "[parser]")
+TEST_CASE("Parse Abstract Declarator and Direct Abstract Declarator", "[parser]")
 {
     functionProduces(parseAbstractDeclarator, "* const * volatile *", ProducesNoErrors() && ProducesNoNotes());
     functionProduces(parseAbstractDeclarator, "* const * volatile *(",
