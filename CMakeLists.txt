@@ -70,8 +70,6 @@ add_executable(OpenCLParser src/main.cpp)
 target_link_libraries(OpenCLParser CompilerCore Frontend)
 target_compile_definitions(OpenCLParser PUBLIC __STDC_FORMAT_MACROS)
 
-add_executable(DemoC EXCLUDE_FROM_ALL src/input.c)
-
 if (${BUILD_TESTS})
     add_subdirectory(src/Tests)
     if (FUZZER AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT MINGW)

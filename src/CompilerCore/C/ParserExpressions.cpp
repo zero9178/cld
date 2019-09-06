@@ -3,6 +3,7 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
+#include <c++/8/vector>
 
 #include "ParserUtil.hpp"
 
@@ -518,65 +519,254 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
     return TypeName(start, begin, std::move(specifierQualifiers), nullptr);
 }
 
+namespace
+{
+    bool isPostFixOperator(const OpenCL::Lexer::Token& token)
+    {
+        switch (token.getTokenType())
+        {
+            case OpenCL::Lexer::TokenType::Arrow:
+            case OpenCL::Lexer::TokenType::Dot:
+            case OpenCL::Lexer::TokenType::OpenSquareBracket:
+            case OpenCL::Lexer::TokenType::OpenParenthese:
+            case OpenCL::Lexer::TokenType::Increment:
+            case OpenCL::Lexer::TokenType::Decrement: return true;
+            default: break;
+        }
+        return false;
+    }
+
+    void parsePostFixExpressionSuffix(std::vector<OpenCL::Lexer::Token>::const_iterator start,
+                                      OpenCL::Parser::Tokens::const_iterator& begin,
+                                      OpenCL::Parser::Tokens::const_iterator end,
+                                      std::unique_ptr<PostFixExpression>& current, OpenCL::Parser::Context& context,
+                                      OpenCL::Parser::InRecoverySet recoverySet)
+    {
+        while (begin != end && isPostFixOperator(*begin))
+        {
+            if (begin->getTokenType() == OpenCL::Lexer::TokenType::OpenParenthese)
+            {
+                auto openPpos = begin;
+                begin++;
+                std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
+                bool first = true;
+                while (begin < end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseParenthese)
+                {
+                    if (first)
+                    {
+                        first = false;
+                    }
+                    else if (begin->getTokenType() == OpenCL::Lexer::TokenType::Comma)
+                    {
+                        begin++;
+                    }
+                    else if (firstIsInAssignmentExpression(*begin, context))
+                    {
+                        expect(OpenCL::Lexer::TokenType::Comma, start, begin, end, context);
+                    }
+                    else
+                    {
+                        break;
+                    }
+
+                    auto assignment = parseAssignmentExpression(
+                        begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
+                            return token.getTokenType() == OpenCL::Lexer::TokenType::CloseParenthese
+                                   || token.getTokenType() == OpenCL::Lexer::TokenType::Comma || recoverySet(token);
+                        });
+                    if (assignment)
+                    {
+                        nonCommaExpressions.push_back(std::make_unique<AssignmentExpression>(std::move(*assignment)));
+                    }
+                }
+
+                if (!expect(OpenCL::Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                            {OpenCL::Message::note(
+                                OpenCL::Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                context.getLineEnd(openPpos),
+                                OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
+                {
+                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
+                        return isPostFixOperator(token) || recoverySet(token);
+                    });
+                }
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(PostFixExpressionFunctionCall(
+                        start, begin, std::move(current), std::move(nonCommaExpressions)));
+                }
+            }
+            else if (begin->getTokenType() == OpenCL::Lexer::TokenType::OpenSquareBracket)
+            {
+                auto openPpos = begin;
+                begin++;
+                auto expression =
+                    parseExpression(begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
+                        return token.getTokenType() == OpenCL::Lexer::TokenType::CloseSquareBracket
+                               || recoverySet(token);
+                    });
+
+                if (!expect(OpenCL::Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
+                            {OpenCL::Message::note(
+                                OpenCL::Notes::TO_MATCH_N_HERE.args("'['"), context.getLineStart(start),
+                                context.getLineEnd(openPpos),
+                                OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
+                {
+                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
+                        return isPostFixOperator(token) || recoverySet(token);
+                    });
+                }
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(
+                        PostFixExpressionSubscript(start, begin, std::move(current), std::move(expression)));
+                }
+            }
+            else if (begin->getTokenType() == OpenCL::Lexer::TokenType::Increment)
+            {
+                begin++;
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(
+                        PostFixExpressionIncrement(start, begin, std::move(current)));
+                }
+            }
+            else if (begin->getTokenType() == OpenCL::Lexer::TokenType::Decrement)
+            {
+                begin++;
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(
+                        PostFixExpressionDecrement(start, begin, std::move(current)));
+                }
+            }
+            else if (begin->getTokenType() == OpenCL::Lexer::TokenType::Dot)
+            {
+                begin++;
+                std::string name;
+                if (!expect(OpenCL::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
+                {
+                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
+                        return isPostFixOperator(token) || recoverySet(token);
+                    });
+                }
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(
+                        PostFixExpressionDot(start, begin, std::move(current), name));
+                }
+            }
+            else
+            {
+                begin++;
+                std::string name;
+                if (!expect(OpenCL::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
+                {
+                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
+                        return isPostFixOperator(token) || recoverySet(token);
+                    });
+                }
+                if (current)
+                {
+                    current = std::make_unique<PostFixExpression>(
+                        PostFixExpressionArrow(start, begin, std::move(current), name));
+                }
+            }
+        }
+    }
+} // namespace
+
 std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_iterator& begin,
                                                                   Tokens::const_iterator end, Context& context,
                                                                   InRecoverySet recoverySet)
 {
-    return context.doBacktracking([&]() -> std::optional<CastExpression> {
-        auto start = begin;
-
-        bool isNotTypeInitializer = false;
-        auto castBranch =
-            context.createBranch(begin, [&isNotTypeInitializer](Tokens::const_iterator, Tokens::const_iterator) {
-                return isNotTypeInitializer;
-            });
-        if (castBranch->getCurrent() < end
-            && castBranch->getCurrent()->getTokenType() == Lexer::TokenType::OpenParenthese)
-        {
-            auto prevErrorCount = context.getCurrentErrorCount();
-            castBranch->getCurrent()++;
-            auto typeName =
-                parseTypeName(castBranch->getCurrent(), end, context, [recoverySet](const Lexer::Token& token) {
-                    return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
-                });
-            if (castBranch->getCurrent() < end)
-            {
-                if (!expect(Lexer::TokenType::CloseParenthese, start, castBranch->getCurrent(), end, context))
-                {
-                    skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-                        return firstIsInCastExpression(token, context) || recoverySet(token);
-                    });
-                }
-                else if (typeName
-                         && (castBranch->getCurrent() == end
-                             || castBranch->getCurrent()->getTokenType() != Lexer::TokenType::OpenBrace)
-                         && context.getCurrentErrorCount() == prevErrorCount)
-                {
-                    isNotTypeInitializer = true;
-                }
-                auto cast = parseCastExpression(castBranch->getCurrent(), end, context, recoverySet);
-                if (cast && typeName && *castBranch)
-                {
-                    return CastExpression(
-                        start, castBranch->getCurrent(),
-                        std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
-                }
-                else if (isNotTypeInitializer)
-                {
-                    return {};
-                }
-            }
-        }
-
-        auto unaryBranch = context.createBranch(begin);
-        auto unary = parseUnaryExpression(unaryBranch->getCurrent(), end, context, recoverySet);
+    auto start = begin;
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 == end
+        || !firstIsInTypeName(*(begin + 1), context))
+    {
+        auto unary = parseUnaryExpression(begin, end, context, recoverySet);
         if (!unary)
         {
             return {};
         }
-
-        return CastExpression(start, unaryBranch->getCurrent(), std::move(*unary));
+        return CastExpression(start, begin, std::move(*unary));
+    }
+    begin++;
+    auto typeName = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
+        return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
     });
+    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                               context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
+    {
+        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+            return firstIsInCastExpression(token, context) || recoverySet(token);
+        });
+    }
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
+    {
+        auto cast = parseCastExpression(begin, end, context, recoverySet);
+        if (!cast || !typeName)
+        {
+            return {};
+        }
+        return CastExpression(start, begin,
+                              std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
+    }
+
+    std::optional<Tokens::const_iterator> openBrace;
+    if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
+    {
+        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+            return firstIsInInitializerList(token, context) || recoverySet(token);
+        });
+    }
+    else
+    {
+        openBrace = begin - 1;
+    }
+
+    auto initializer = parseInitializerList(begin, end, context, [recoverySet](const Lexer::Token& token) {
+        return token.getTokenType() == Lexer::TokenType::CloseBrace || token.getTokenType() == Lexer::TokenType::Comma
+               || recoverySet(token);
+    });
+    if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
+    {
+        begin++;
+    }
+    if (openBrace)
+    {
+        if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start),
+                                   context.getLineEnd(*openBrace),
+                                   Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
+        {
+            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                return isPostFixOperator(token) || recoverySet(token);
+            });
+        }
+    }
+    else
+    {
+        if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
+        {
+            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                return isPostFixOperator(token) || recoverySet(token);
+            });
+        }
+    }
+    std::unique_ptr<PostFixExpression> current;
+    if (initializer && typeName)
+    {
+        current = std::make_unique<PostFixExpression>(
+            PostFixExpressionTypeInitializer(start, begin, std::move(*typeName), std::move(*initializer)));
+    }
+    parsePostFixExpressionSuffix(start, begin, end, current, context, recoverySet);
+    if (!current)
+    {
+        return {};
+    }
+    return CastExpression(start, begin, UnaryExpressionPostFixExpression(start, begin, std::move(*current)));
 }
 
 std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::const_iterator& begin,
@@ -661,24 +851,6 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     return UnaryExpression(UnaryExpressionPostFixExpression(start, begin, std::move(*postFix)));
 }
 
-namespace
-{
-    bool isPostFixOperator(const OpenCL::Lexer::Token& token)
-    {
-        switch (token.getTokenType())
-        {
-            case OpenCL::Lexer::TokenType::Arrow:
-            case OpenCL::Lexer::TokenType::Dot:
-            case OpenCL::Lexer::TokenType::OpenSquareBracket:
-            case OpenCL::Lexer::TokenType::OpenParenthese:
-            case OpenCL::Lexer::TokenType::Increment:
-            case OpenCL::Lexer::TokenType::Decrement: return true;
-            default: break;
-        }
-        return false;
-    }
-} // namespace
-
 std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::const_iterator& begin,
                                                                         Tokens::const_iterator end, Context& context,
                                                                         InRecoverySet recoverySet)
@@ -761,133 +933,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         }
     }
 
-    while (begin != end && isPostFixOperator(*begin))
-    {
-        if (begin->getTokenType() == Lexer::TokenType::OpenParenthese)
-        {
-            auto openPpos = begin;
-            begin++;
-            std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
-            bool first = true;
-            while (begin < end && begin->getTokenType() != Lexer::TokenType::CloseParenthese)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else if (begin->getTokenType() == Lexer::TokenType::Comma)
-                {
-                    begin++;
-                }
-                else if (firstIsInAssignmentExpression(*begin, context))
-                {
-                    expect(Lexer::TokenType::Comma, start, begin, end, context);
-                }
-                else
-                {
-                    break;
-                }
-
-                auto assignment =
-                    parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::CloseParenthese
-                               || token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-                    });
-                if (assignment)
-                {
-                    nonCommaExpressions.push_back(std::make_unique<AssignmentExpression>(std::move(*assignment)));
-                }
-            }
-
-            if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                       context.getLineEnd(openPpos),
-                                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
-            {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
-            }
-            if (current)
-            {
-                current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionFunctionCall(start, begin, std::move(current), std::move(nonCommaExpressions)));
-            }
-        }
-        else if (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
-        {
-            auto openPpos = begin;
-            begin++;
-            auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::CloseSquareBracket || recoverySet(token);
-            });
-
-            if (!expect(Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), context.getLineStart(start),
-                                       context.getLineEnd(openPpos),
-                                       Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
-            {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
-            }
-            if (current)
-            {
-                current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionSubscript(start, begin, std::move(current), std::move(expression)));
-            }
-        }
-        else if (begin->getTokenType() == Lexer::TokenType::Increment)
-        {
-            begin++;
-            if (current)
-            {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionIncrement(start, begin, std::move(current)));
-            }
-        }
-        else if (begin->getTokenType() == Lexer::TokenType::Decrement)
-        {
-            begin++;
-            if (current)
-            {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionDecrement(start, begin, std::move(current)));
-            }
-        }
-        else if (begin->getTokenType() == Lexer::TokenType::Dot)
-        {
-            begin++;
-            std::string name;
-            if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
-            {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
-            }
-            if (current)
-            {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionDot(start, begin, std::move(current), name));
-            }
-        }
-        else
-        {
-            begin++;
-            std::string name;
-            if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
-            {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
-            }
-            if (current)
-            {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionArrow(start, begin, std::move(current), name));
-            }
-        }
-    }
+    parsePostFixExpressionSuffix(start, begin, end, current, context, recoverySet);
 
     if (!current)
     {

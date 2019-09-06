@@ -248,7 +248,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
 
 TEST_CASE("Lexing weird characters", "[lexer]")
 {
-    OpenCL::Lexer::tokenize("\xAA test");
+    OpenCL::Lexer::tokenize("\xAA test", nullptr);
 }
 
 TEST_CASE("Lexing Punctuators", "[lexer]")

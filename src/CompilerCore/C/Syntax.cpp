@@ -1187,6 +1187,7 @@ OpenCL::Syntax::DirectDeclaratorParenthese::DirectDeclaratorParenthese(std::vect
                                                                        std::unique_ptr<Declarator>&& declarator)
     : Node(begin, end), m_declarator(std::move(declarator))
 {
+    assert(m_declarator);
 }
 
 const OpenCL::Syntax::Declarator& OpenCL::Syntax::DirectDeclaratorParenthese::getDeclarator() const

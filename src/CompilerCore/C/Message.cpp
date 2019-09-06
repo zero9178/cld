@@ -78,9 +78,13 @@ namespace
                                                         - modifierBegin->getColumn();
                         os << text.substr(0, modifierBegin->getColumn() - curr->getColumn()) << colour
                            << text.substr(modifierBegin->getColumn() - curr->getColumn(), highlightedSectionLength)
-                           << normalColour
-                           << text.substr(modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength)
-                           << '\n';
+                           << normalColour;
+                        if (modifierBegin->getColumn() - curr->getColumn() + highlightedSectionLength <= text.size())
+                        {
+                            os << text.substr(modifierBegin->getColumn() - curr->getColumn()
+                                              + highlightedSectionLength);
+                        }
+                        os << '\n';
 
                         os << normalColour << std::string(numSize, ' ') << '|'
                            << std::string(

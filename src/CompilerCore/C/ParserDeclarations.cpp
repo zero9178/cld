@@ -364,10 +364,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
 
         if (isTypedef)
         {
-            for (auto& [declator, init] : initDeclarators)
+            for (auto& [initDeclarator, init] : initDeclarators)
             {
-                context.addTypedef(Semantics::declaratorToName(*declator),
-                                   {start, begin, Semantics::declaratorToLoc(*declarator)});
+                context.addTypedef(Semantics::declaratorToName(*initDeclarator),
+                                   {start, begin, Semantics::declaratorToLoc(*initDeclarator)});
             }
         }
 
@@ -1775,7 +1775,7 @@ std::optional<Initializer> OpenCL::Parser::parseInitializer(Tokens::const_iterat
             return token.getTokenType() == Lexer::TokenType::Comma
                    || token.getTokenType() == Lexer::TokenType::CloseBrace || recoverySet(token);
         });
-        if (begin->getTokenType() == Lexer::TokenType::Comma)
+        if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
             begin++;
         }
