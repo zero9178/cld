@@ -38,30 +38,6 @@ namespace OpenCL::Parser
             m_lines{tokenCompare};
         std::size_t m_errorCount = 0;
 
-        class Branch
-        {
-            Context& context;
-            Tokens::const_iterator& m_begin;
-            Tokens::const_iterator m_curr;
-            std::vector<Message> m_messages;
-            using CriteriaFunction = std::function<bool(std::vector<Lexer::Token>::const_iterator,
-                                                        std::vector<Lexer::Token>::const_iterator)>;
-            CriteriaFunction m_criteria;
-
-            friend class Context;
-
-        public:
-            Branch(Context& context, std::vector<Lexer::Token>::const_iterator& begin, CriteriaFunction&& criteria);
-
-            ~Branch();
-
-            explicit operator bool() const;
-
-            std::vector<Lexer::Token>::const_iterator& getCurrent();
-        };
-
-        std::vector<std::vector<Branch*>> m_branches;
-
     public:
         explicit Context(Tokens::const_iterator sourceBegin, Tokens::const_iterator sourceEnd,
                          std::ostream* reporter = &std::cerr);
@@ -95,16 +71,6 @@ namespace OpenCL::Parser
         void pushScope();
 
         void popScope();
-
-        template <class F>
-        auto doBacktracking(F&& f)
-        {
-            m_branches.emplace_back();
-            UniqueResource resource([this] { m_branches.pop_back(); });
-            return std::forward<F>(f)();
-        }
-
-        std::unique_ptr<Branch> createBranch(Tokens::const_iterator& begin, Branch::CriteriaFunction&& criteria = {});
 
         [[nodiscard]] std::size_t getCurrentErrorCount() const;
     };
