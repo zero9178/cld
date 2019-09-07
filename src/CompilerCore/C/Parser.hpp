@@ -1,7 +1,6 @@
 #ifndef OPENCLPARSER_PARSER_HPP
 #define OPENCLPARSER_PARSER_HPP
 
-#include <functional>
 #include <tl/function_ref.hpp>
 
 #include "../Common/UniqueResource.hpp"
@@ -107,11 +106,11 @@ namespace OpenCL::Parser
                                                                   Tokens::const_iterator end, Context& context,
                                                                   InRecoverySet recoverySet);
 
-    Syntax::ParameterTypeList parseParameterTypeList(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet);
+    Syntax::ParameterTypeList parseParameterTypeList(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                     Context& context, InRecoverySet recoverySet);
 
-    Syntax::AbstractDeclarator parseAbstractDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+    Syntax::AbstractDeclarator parseAbstractDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                       Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
                                                                                   Tokens::const_iterator end,
@@ -121,7 +120,8 @@ namespace OpenCL::Parser
     Syntax::ParameterList parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                              Context& context, InRecoverySet recoverySet);
 
-    Syntax::Pointer parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context, InRecoverySet recoverySet);
+    Syntax::Pointer parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
+                                 InRecoverySet recoverySet);
 
     std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Tokens::const_iterator& begin,
                                                                               Tokens::const_iterator end,
@@ -149,8 +149,8 @@ namespace OpenCL::Parser
     std::optional<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                     Context& context, InRecoverySet recoverySet);
 
-    Syntax::ReturnStatement parseReturnStatement(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+    Syntax::ReturnStatement parseReturnStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                 Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                         Context& context, InRecoverySet recoverySet);
@@ -220,6 +220,31 @@ namespace OpenCL::Parser
 
     std::optional<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
                                           InRecoverySet recoverySet);
+
+    template <class... Args>
+    using VariantOfOptionals = std::variant<std::monostate, std::optional<Args>...>;
+
+    using StateVariant = VariantOfOptionals<Syntax::Term, Syntax::AdditiveExpression, Syntax::ShiftExpression,
+                                            Syntax::RelationalExpression, Syntax::EqualityExpression,
+                                            Syntax::BitAndExpression, Syntax::BitXorExpression, Syntax::BitOrExpression,
+                                            Syntax::LogicalAndExpression, Syntax::LogicalOrExpression>;
+
+    enum class EndState
+    {
+        Term,
+        Additive,
+        Shift,
+        Relational,
+        Equality,
+        BitAnd,
+        BitXor,
+        BitOr,
+        LogicalAnd,
+        LogicalOr
+    };
+
+    StateVariant parseBinaryOperators(EndState endState, Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                      Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::TypeName> parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                   Context& context, InRecoverySet recoverySet);

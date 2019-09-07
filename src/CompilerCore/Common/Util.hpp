@@ -38,6 +38,12 @@ namespace OpenCL
     }
 
     template <typename Variant, typename... Matchers>
+    auto stateMachine(Variant& variant, Matchers&&... matchers)
+    {
+        variant = std::visit(detail::overload{std::forward<Matchers>(matchers)...}, variant);
+    }
+
+    template <typename Variant, typename... Matchers>
     auto matchWithSelf(Variant&& variant, Matchers&&... matchers)
     {
         return std::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},

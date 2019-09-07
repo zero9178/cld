@@ -3,7 +3,6 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
-#include <c++/8/vector>
 
 #include "ParserUtil.hpp"
 
@@ -97,9 +96,10 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
                                                                                 InRecoverySet recoverySet)
 {
     auto start = begin;
-    auto logicalOrExperssion = parseLogicalOrExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::QuestionMark || recoverySet(token);
-    });
+    auto logicalOrExperssion = std::get<std::optional<LogicalOrExpression>>(
+        parseBinaryOperators(EndState::LogicalOr, begin, end, context, [recoverySet](const Lexer::Token& token) {
+            return token.getTokenType() == Lexer::TokenType::QuestionMark || recoverySet(token);
+        }));
 
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
     {
@@ -483,6 +483,479 @@ std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tok
         return {};
     }
     return Term(start, begin, std::move(*result), std::move(list));
+}
+
+namespace
+{
+    template <typename T, typename... Ts>
+    constexpr size_t getIndex(std::variant<Ts...> const&)
+    {
+        size_t r = 0;
+        auto test = [&](bool b) {
+            if (!b)
+                ++r;
+            return b;
+        };
+        (test(std::is_same_v<T, Ts>) || ...);
+        return r;
+    }
+} // namespace
+
+OpenCL::Parser::StateVariant OpenCL::Parser::parseBinaryOperators(EndState endState, Tokens::const_iterator& begin,
+                                                                  Tokens::const_iterator end, Context& context,
+                                                                  InRecoverySet recoverySet)
+{
+    StateVariant state;
+    auto isFirstIn = [endState](const Lexer::Token& token) -> bool {
+        switch (endState)
+        {
+            case EndState::LogicalOr:
+                if (token.getTokenType() == Lexer::TokenType::LogicOr)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::LogicalAnd:
+                if (token.getTokenType() == Lexer::TokenType::LogicAnd)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::BitOr:
+                if (token.getTokenType() == Lexer::TokenType::BitOr)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::BitXor:
+                if (token.getTokenType() == Lexer::TokenType::BitXor)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::BitAnd:
+                if (token.getTokenType() == Lexer::TokenType::Ampersand)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::Equality:
+                if (token.getTokenType() == Lexer::TokenType::Equal
+                    || token.getTokenType() == Lexer::TokenType::NotEqual)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::Relational:
+                if (token.getTokenType() == Lexer::TokenType::LessThan
+                    || token.getTokenType() == Lexer::TokenType::LessThanOrEqual
+                    || token.getTokenType() == Lexer::TokenType::GreaterThan
+                    || token.getTokenType() == Lexer::TokenType::GreaterThanOrEqual)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::Shift:
+                if (token.getTokenType() == Lexer::TokenType::ShiftLeft
+                    || token.getTokenType() == Lexer::TokenType::ShiftRight)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::Additive:
+                if (token.getTokenType() == Lexer::TokenType::Plus || token.getTokenType() == Lexer::TokenType::Minus)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            case EndState::Term:
+                if (token.getTokenType() == Lexer::TokenType::Asterisk
+                    || token.getTokenType() == Lexer::TokenType::Division
+                    || token.getTokenType() == Lexer::TokenType::Percent)
+                {
+                    return true;
+                }
+                [[fallthrough]];
+            default: return false;
+        }
+    };
+    while ([&state, endState]() -> bool {
+        switch (endState)
+        {
+            case EndState::Term: return !std::holds_alternative<std::optional<Term>>(state);
+            case EndState::Additive: return !std::holds_alternative<std::optional<AdditiveExpression>>(state);
+            case EndState::Shift: return !std::holds_alternative<std::optional<ShiftExpression>>(state);
+            case EndState::Relational: return !std::holds_alternative<std::optional<RelationalExpression>>(state);
+            case EndState::Equality: return !std::holds_alternative<std::optional<EqualityExpression>>(state);
+            case EndState::BitAnd: return !std::holds_alternative<std::optional<BitAndExpression>>(state);
+            case EndState::BitXor: return !std::holds_alternative<std::optional<BitXorExpression>>(state);
+            case EndState::BitOr: return !std::holds_alternative<std::optional<BitOrExpression>>(state);
+            case EndState::LogicalAnd: return !std::holds_alternative<std::optional<LogicalAndExpression>>(state);
+            case EndState::LogicalOr: return !std::holds_alternative<std::optional<LogicalOrExpression>>(state);
+        }
+        return false;
+    }())
+    {
+        // We are using an index instead of visit to save on stack space and increase speed
+        switch (state.index())
+        {
+            case getIndex<std::monostate>(state):
+            {
+                auto start = begin;
+                auto result =
+                    parseCastExpression(begin, end, context, [recoverySet, &isFirstIn](const Lexer::Token& token) {
+                        return isFirstIn(token) || recoverySet(token);
+                    });
+
+                std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
+                while (begin != end
+                       && (begin->getTokenType() == Lexer::TokenType::Asterisk
+                           || begin->getTokenType() == Lexer::TokenType::Division
+                           || begin->getTokenType() == Lexer::TokenType::Percent))
+                {
+                    auto token = begin->getTokenType();
+                    begin++;
+                    auto newCast =
+                        parseCastExpression(begin, end, context, [recoverySet, &isFirstIn](const Lexer::Token& token) {
+                            return isFirstIn(token) || recoverySet(token);
+                        });
+                    if (newCast)
+                    {
+                        list.emplace_back(
+                            [token] {
+                                switch (token)
+                                {
+                                    case Lexer::TokenType::Asterisk: return Term::BinaryDotOperator::BinaryMultiply;
+                                    case Lexer::TokenType::Division: return Term::BinaryDotOperator::BinaryDivide;
+                                    case Lexer::TokenType::Percent: return Term::BinaryDotOperator::BinaryRemainder;
+                                    default: OPENCL_UNREACHABLE;
+                                }
+                            }(),
+                            std::move(*newCast));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<Term>{};
+                }
+                else
+                {
+                    state = Term(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<Term>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<Term>>(state);
+
+                std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
+                while (begin != end
+                       && (begin->getTokenType() == Lexer::TokenType::Plus
+                           || begin->getTokenType() == Lexer::TokenType::Minus))
+                {
+                    auto token = begin->getTokenType();
+                    begin++;
+                    auto newTerm = std::get<std::optional<Term>>(parseBinaryOperators(
+                        EndState::Term, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::Minus
+                                   || token.getTokenType() == Lexer::TokenType::Plus || recoverySet(token);
+                        }));
+                    if (newTerm)
+                    {
+                        list.emplace_back(token == Lexer::TokenType::Plus ?
+                                              AdditiveExpression::BinaryDashOperator::BinaryPlus :
+                                              AdditiveExpression::BinaryDashOperator::BinaryMinus,
+                                          std::move(*newTerm));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<AdditiveExpression>{};
+                }
+                else
+                {
+                    state = AdditiveExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<AdditiveExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<AdditiveExpression>>(state);
+
+                std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
+                while (begin != end
+                       && (begin->getTokenType() == Lexer::TokenType::ShiftRight
+                           || begin->getTokenType() == Lexer::TokenType::ShiftLeft))
+                {
+                    auto token = begin->getTokenType();
+                    begin++;
+                    auto newAdd = std::get<std::optional<AdditiveExpression>>(parseBinaryOperators(
+                        EndState::Additive, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::ShiftRight
+                                   || token.getTokenType() == Lexer::TokenType::ShiftLeft || recoverySet(token);
+                        }));
+                    if (newAdd)
+                    {
+                        list.emplace_back(token == Lexer::TokenType::ShiftRight ?
+                                              ShiftExpression::ShiftOperator::Right :
+                                              ShiftExpression::ShiftOperator::Left,
+                                          std::move(*newAdd));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<ShiftExpression>{};
+                }
+                else
+                {
+                    state = ShiftExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<ShiftExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<ShiftExpression>>(state);
+
+                std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
+                while (begin != end
+                       && (begin->getTokenType() == Lexer::TokenType::LessThan
+                           || begin->getTokenType() == Lexer::TokenType::LessThanOrEqual
+                           || begin->getTokenType() == Lexer::TokenType::GreaterThan
+                           || begin->getTokenType() == Lexer::TokenType::GreaterThanOrEqual))
+                {
+                    auto token = begin->getTokenType();
+                    begin++;
+                    auto newShift = std::get<std::optional<ShiftExpression>>(parseBinaryOperators(
+                        EndState::Shift, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::LessThan
+                                   || token.getTokenType() == Lexer::TokenType::LessThanOrEqual
+                                   || token.getTokenType() == Lexer::TokenType::GreaterThan
+                                   || token.getTokenType() == Lexer::TokenType::GreaterThanOrEqual
+                                   || recoverySet(token);
+                        }));
+                    if (newShift)
+                    {
+                        list.emplace_back(
+                            [token]() -> RelationalExpression::RelationalOperator {
+                                switch (token)
+                                {
+                                    case Lexer::TokenType::LessThan:
+                                        return RelationalExpression::RelationalOperator::LessThan;
+                                    case Lexer::TokenType::LessThanOrEqual:
+                                        return RelationalExpression::RelationalOperator::LessThanOrEqual;
+                                    case Lexer::TokenType::GreaterThan:
+                                        return RelationalExpression::RelationalOperator::GreaterThan;
+                                    case Lexer::TokenType::GreaterThanOrEqual:
+                                        return RelationalExpression::RelationalOperator::GreaterThanOrEqual;
+                                    default: OPENCL_UNREACHABLE;
+                                }
+                            }(),
+                            std::move(*newShift));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<RelationalExpression>{};
+                }
+                else
+                {
+                    state = RelationalExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<RelationalExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<RelationalExpression>>(state);
+
+                std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> list;
+                while (begin != end
+                       && (begin->getTokenType() == Lexer::TokenType::Equal
+                           || begin->getTokenType() == Lexer::TokenType::NotEqual))
+                {
+                    auto token = begin->getTokenType();
+                    begin++;
+                    auto newRelational = std::get<std::optional<RelationalExpression>>(parseBinaryOperators(
+                        EndState::Relational, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::Equal
+                                   || token.getTokenType() == Lexer::TokenType::NotEqual || recoverySet(token);
+                        }));
+                    if (newRelational)
+                    {
+                        list.emplace_back(token == Lexer::TokenType::Equal ?
+                                              EqualityExpression::EqualityOperator::Equal :
+                                              EqualityExpression::EqualityOperator::NotEqual,
+                                          std::move(*newRelational));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<EqualityExpression>{};
+                }
+                else
+                {
+                    state = EqualityExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<EqualityExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<EqualityExpression>>(state);
+
+                std::vector<EqualityExpression> list;
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::Ampersand)
+                {
+                    begin++;
+                    auto newEqual = std::get<std::optional<EqualityExpression>>(parseBinaryOperators(
+                        EndState::Equality, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::Ampersand || recoverySet(token);
+                        }));
+                    if (newEqual)
+                    {
+                        list.push_back(std::move(*newEqual));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<BitAndExpression>{};
+                }
+                else
+                {
+                    state = BitAndExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<BitAndExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<BitAndExpression>>(state);
+
+                std::vector<BitAndExpression> list;
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::BitXor)
+                {
+                    begin++;
+                    auto newAnd = std::get<std::optional<BitAndExpression>>(parseBinaryOperators(
+                        EndState::BitAnd, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::BitXor || recoverySet(token);
+                        }));
+                    if (newAnd)
+                    {
+                        list.push_back(std::move(*newAnd));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<BitXorExpression>{};
+                }
+                else
+                {
+                    state = BitXorExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<BitXorExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<BitXorExpression>>(state);
+
+                std::vector<BitXorExpression> list;
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::BitOr)
+                {
+                    begin++;
+                    auto newXor = std::get<std::optional<BitXorExpression>>(parseBinaryOperators(
+                        EndState::BitXor, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::BitOr || recoverySet(token);
+                        }));
+                    if (newXor)
+                    {
+                        list.push_back(std::move(*newXor));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<BitOrExpression>{};
+                }
+                else
+                {
+                    state = BitOrExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<BitOrExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<BitOrExpression>>(state);
+
+                std::vector<BitOrExpression> list;
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::LogicAnd)
+                {
+                    begin++;
+                    auto newOr = std::get<std::optional<BitOrExpression>>(parseBinaryOperators(
+                        EndState::BitOr, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::LogicAnd || recoverySet(token);
+                        }));
+                    if (newOr)
+                    {
+                        list.push_back(std::move(*newOr));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<LogicalAndExpression>{};
+                }
+                else
+                {
+                    state = LogicalAndExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            case getIndex<std::optional<LogicalAndExpression>>(state):
+            {
+                auto start = begin;
+                auto& result = std::get<std::optional<LogicalAndExpression>>(state);
+
+                std::vector<LogicalAndExpression> list;
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::LogicOr)
+                {
+                    begin++;
+                    auto newAnd = std::get<std::optional<LogicalAndExpression>>(parseBinaryOperators(
+                        EndState::LogicalAnd, begin, end, context, [recoverySet](const Lexer::Token& token) {
+                            return token.getTokenType() == Lexer::TokenType::LogicOr || recoverySet(token);
+                        }));
+                    if (newAnd)
+                    {
+                        list.push_back(std::move(*newAnd));
+                    }
+                }
+
+                if (!result)
+                {
+                    state = std::optional<LogicalOrExpression>{};
+                }
+                else
+                {
+                    state = LogicalOrExpression(start, begin, std::move(*result), std::move(list));
+                }
+                break;
+            }
+            default: break;
+        }
+    }
+
+    return state;
 }
 
 std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
