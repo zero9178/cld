@@ -64,7 +64,7 @@ namespace
             auto line = std::to_string(curr->getLine());
             os << normalColour << std::string(numSize - line.size(), ' ') << line << '|'
                << std::string(curr->getColumn() - sideOffset, ' ');
-            if (modifier && modifierBegin->getLine() == curr->getLine() && modifierBegin != modifier->getAnEnd())
+            if (modifier && modifierBegin != modifier->getAnEnd() && modifierBegin->getLine() == curr->getLine())
             {
                 auto highlightedEOL = OpenCL::findEOL(modifierBegin, modifier->getAnEnd());
                 switch (modifier->getAction())

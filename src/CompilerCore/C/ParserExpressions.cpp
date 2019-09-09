@@ -795,7 +795,7 @@ namespace
             case OpenCL::Lexer::TokenType::Arrow:
             case OpenCL::Lexer::TokenType::Dot:
             case OpenCL::Lexer::TokenType::OpenSquareBracket:
-            case OpenCL::Lexer::TokenType::OpenParenthese:
+            case OpenCL::Lexer::TokenType::OpenBracket:
             case OpenCL::Lexer::TokenType::Increment:
             case OpenCL::Lexer::TokenType::Decrement: return true;
             default: break;
@@ -811,13 +811,13 @@ namespace
     {
         while (begin != end && isPostFixOperator(*begin))
         {
-            if (begin->getTokenType() == OpenCL::Lexer::TokenType::OpenParenthese)
+            if (begin->getTokenType() == OpenCL::Lexer::TokenType::OpenBracket)
             {
                 auto openPpos = begin;
                 begin++;
                 std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
                 bool first = true;
-                while (begin < end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseParenthese)
+                while (begin < end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseBracket)
                 {
                     if (first)
                     {
@@ -838,7 +838,7 @@ namespace
 
                     auto assignment = parseAssignmentExpression(
                         begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                            return token.getTokenType() == OpenCL::Lexer::TokenType::CloseParenthese
+                            return token.getTokenType() == OpenCL::Lexer::TokenType::CloseBracket
                                    || token.getTokenType() == OpenCL::Lexer::TokenType::Comma || recoverySet(token);
                         });
                     if (assignment)
@@ -847,7 +847,7 @@ namespace
                     }
                 }
 
-                if (!expect(OpenCL::Lexer::TokenType::CloseParenthese, start, begin, end, context,
+                if (!expect(OpenCL::Lexer::TokenType::CloseBracket, start, begin, end, context,
                             {OpenCL::Message::note(
                                 OpenCL::Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                 context.getLineEnd(openPpos),
@@ -948,7 +948,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                                                                   InRecoverySet recoverySet)
 {
     auto start = begin;
-    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 == end
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBracket || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
         auto unary = parseUnaryExpression(begin, end, context, recoverySet);
@@ -960,9 +960,9 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
     }
     begin++;
     auto typeName = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
+        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
     });
-    if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+    if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                 {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
     {
@@ -1044,15 +1044,15 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SizeofKeyword)
     {
         begin++;
-        if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParenthese
+        if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenBracket
             && (begin + 1 == end || firstIsInTypeName(*(begin + 1), context)))
         {
             auto openPpos = begin;
             begin++;
             auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
+                return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
             });
-            if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+            if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                        context.getLineEnd(openPpos),
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
@@ -1125,7 +1125,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     std::unique_ptr<PostFixExpression> current;
 
     auto start = begin;
-    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParenthese || begin + 1 == end
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBracket || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
         auto newPrimary = parsePrimaryExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
@@ -1141,9 +1141,9 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     {
         begin++;
         auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
+            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
         });
-        if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+        if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                    context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
         {
@@ -1249,13 +1249,13 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
         }
         return PrimaryExpression(PrimaryExpressionConstant(start, begin, result));
     }
-    else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParenthese)
+    else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenBracket)
     {
         auto openPpos = begin++;
         auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseParenthese || recoverySet(token);
+            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
         });
-        if (!expect(Lexer::TokenType::CloseParenthese, start, begin, end, context,
+        if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                    context.getLineEnd(openPpos),
                                    Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))

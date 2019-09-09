@@ -160,3 +160,21 @@ std::vector<OpenCL::Lexer::Token>::const_iterator
         return m_lines.at(*iter).second;
     }
 }
+
+OpenCL::Parser::Context::TokenBitReseter
+    OpenCL::Parser::Context::withRecoveryTokens(const OpenCL::Parser::Context::TokenBitSet& tokenBitSet)
+{
+    auto oldSet = m_recoverySet;
+    m_recoverySet |= tokenBitSet;
+    return OpenCL::Parser::Context::TokenBitReseter(oldSet, *this);
+}
+
+OpenCL::Parser::Context::TokenBitReseter::TokenBitReseter(TokenBitSet original, Context& context)
+    : m_original(original), m_context(context)
+{
+}
+
+OpenCL::Parser::Context::TokenBitReseter::~TokenBitReseter()
+{
+    m_context.m_recoverySet = m_original;
+}

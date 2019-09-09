@@ -67,7 +67,70 @@ namespace OpenCL::Parser
     template <typename G>
     Y(G)->Y<G>;
 
-    // firstIsInTranslationUnit not needed
+    constexpr Context::TokenBitSet firstSpecifierQualifierSet = Context::fromTokenTypes(
+        Lexer::TokenType::VoidKeyword, Lexer::TokenType::CharKeyword, Lexer::TokenType::ShortKeyword,
+        Lexer::TokenType::IntKeyword, Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword,
+        Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword,
+        Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword,
+        Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword,
+        Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
+
+    constexpr Context::TokenBitSet firstDeclarationSpecifierSet = Context::fromTokenTypes(
+        Lexer::TokenType::TypedefKeyword, Lexer::TokenType::ExternKeyword, Lexer::TokenType::StaticKeyword,
+        Lexer::TokenType::AutoKeyword, Lexer::TokenType::RegisterKeyword, Lexer::TokenType::VoidKeyword,
+        Lexer::TokenType::CharKeyword, Lexer::TokenType::ShortKeyword, Lexer::TokenType::IntKeyword,
+        Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword, Lexer::TokenType::DoubleKeyword,
+        Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword, Lexer::TokenType::EnumKeyword,
+        Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword, Lexer::TokenType::ConstKeyword,
+        Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword, Lexer::TokenType::InlineKeyword,
+        Lexer::TokenType::Identifier);
+
+    constexpr Context::TokenBitSet firstPointerSet = Context::fromTokenTypes(Lexer::TokenType::Asterisk);
+
+    constexpr Context::TokenBitSet firstParameterListSet = firstDeclarationSpecifierSet;
+
+    constexpr Context::TokenBitSet firstDirectAbstractDeclaratorSet =
+        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket);
+
+    constexpr Context::TokenBitSet firstAbstractDeclaratorSet = firstPointerSet | firstDirectAbstractDeclaratorSet;
+
+    constexpr Context::TokenBitSet firstParameterTypeListSet = firstParameterListSet;
+
+    constexpr Context::TokenBitSet firstDirectDeclaratorSet =
+        Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::OpenBracket);
+
+    constexpr Context::TokenBitSet firstDeclaratorSet = firstPointerSet | firstDirectDeclaratorSet;
+
+    constexpr Context::TokenBitSet firstDeclarationSet = firstDeclarationSpecifierSet;
+
+    constexpr Context::TokenBitSet firstAssignmentExpressionSet = Context::fromTokenTypes(
+        Lexer::TokenType::OpenBracket, Lexer::TokenType::Identifier, Lexer::TokenType::Literal,
+        Lexer::TokenType::StringLiteral, Lexer::TokenType::Increment, Lexer::TokenType::Decrement,
+        Lexer::TokenType::Minus, Lexer::TokenType::Plus, Lexer::TokenType::Ampersand, Lexer::TokenType::BitWiseNegation,
+        Lexer::TokenType::LogicalNegation, Lexer::TokenType::SizeofKeyword);
+
+    constexpr Context::TokenBitSet firstExpressionSet = firstAssignmentExpressionSet;
+
+    constexpr Context::TokenBitSet firstInitializerSet =
+        firstAssignmentExpressionSet | Context::fromTokenTypes(Lexer::TokenType::OpenBrace);
+
+    constexpr Context::TokenBitSet firstInitializerListSet =
+        firstInitializerSet | Context::fromTokenTypes(Lexer::TokenType::OpenSquareBracket, Lexer::TokenType::Dot);
+
+    constexpr Context::TokenBitSet firstStatementSet =
+        Context::fromTokenTypes(
+            Lexer::TokenType::IfKeyword, Lexer::TokenType::ForKeyword, Lexer::TokenType::OpenBrace,
+            Lexer::TokenType::SwitchKeyword, Lexer::TokenType::ContinueKeyword, Lexer::TokenType::BreakKeyword,
+            Lexer::TokenType::CaseKeyword, Lexer::TokenType::DefaultKeyword, Lexer::TokenType::Identifier,
+            Lexer::TokenType::DoKeyword, Lexer::TokenType::WhileKeyword, Lexer::TokenType::ReturnKeyword,
+            Lexer::TokenType::GotoKeyword, Lexer::TokenType::SemiColon)
+        | firstExpressionSet;
+
+    constexpr Context::TokenBitSet firstCompoundItem = firstDeclarationSet | firstStatementSet;
+
+    constexpr Context::TokenBitSet firstFunctionDefinitionSet = firstDeclarationSpecifierSet;
+
+    constexpr Context::TokenBitSet firstExternalDeclarationSet = firstDeclarationSet | firstFunctionDefinitionSet;
 
     bool firstIsInExternalDeclaration(const Lexer::Token& token, const OpenCL::Parser::Context& context);
 
@@ -92,14 +155,6 @@ namespace OpenCL::Parser
     bool firstIsInParameterList(const Lexer::Token& token, const OpenCL::Parser::Context& context);
 
     bool firstIsInPointer(const Lexer::Token& token, const OpenCL::Parser::Context& context);
-
-    bool firstIsInStructOrUnionSpecifier(const Lexer::Token& token, const OpenCL::Parser::Context& context);
-
-    bool firstIsInEnumSpecifier(const Lexer::Token& token, const OpenCL::Parser::Context& context);
-
-    bool firstIsInEnumDeclaration(const Lexer::Token& token, const OpenCL::Parser::Context& context);
-
-    bool firstIsInCompoundStatement(const Lexer::Token& token, const OpenCL::Parser::Context& context);
 
     bool firstIsInCompoundItem(const Lexer::Token& token, const OpenCL::Parser::Context& context);
 

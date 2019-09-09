@@ -8,11 +8,11 @@
 
 namespace OpenCL::Lexer
 {
-    enum class TokenType
+    enum class TokenType : std::uint8_t
     {
         Identifier,
-        OpenParenthese,
-        CloseParenthese,
+        OpenBracket,
+        CloseBracket,
         OpenBrace,
         CloseBrace,
         Literal,
@@ -94,7 +94,8 @@ namespace OpenCL::Lexer
         GotoKeyword,
         Ellipse,
         Pound,
-        DoublePound
+        DoublePound,
+        TOKEN_MAX_VALUE = DoublePound
     };
 
     class Token;

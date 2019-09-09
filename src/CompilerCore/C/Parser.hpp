@@ -1,6 +1,7 @@
 #ifndef OPENCLPARSER_PARSER_HPP
 #define OPENCLPARSER_PARSER_HPP
 
+#include <bitset2.hpp>
 #include <tl/function_ref.hpp>
 
 #include "Message.hpp"
@@ -37,6 +38,46 @@ namespace OpenCL::Parser
         std::size_t m_errorCount = 0;
 
     public:
+        using TokenBitSet =
+            Bitset2::bitset2<static_cast<std::underlying_type_t<Lexer::TokenType>>(Lexer::TokenType::TOKEN_MAX_VALUE)
+                             + 1>;
+
+    private:
+        TokenBitSet m_recoverySet{false};
+
+        friend class TokenBitReseter;
+
+        class TokenBitReseter final
+        {
+            TokenBitSet m_original;
+            Context& m_context;
+
+        public:
+            explicit TokenBitReseter(TokenBitSet original, Context& context);
+
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "hicpp-explicit-conversions"
+            operator Context&()
+            {
+                return m_context;
+            }
+#pragma clang diagnostic pop
+
+            ~TokenBitReseter();
+
+            TokenBitReseter(const TokenBitReseter&) = delete;
+
+            TokenBitReseter(TokenBitReseter&&) = delete;
+
+            TokenBitReseter& operator=(const TokenBitReseter&) = delete;
+
+            TokenBitReseter& operator=(TokenBitReseter&&) noexcept = delete;
+        };
+
+    public:
+        template <class... Args>
+        constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
+
         explicit Context(Tokens::const_iterator sourceBegin, Tokens::const_iterator sourceEnd,
                          std::ostream* reporter = &std::cerr);
 
@@ -49,6 +90,8 @@ namespace OpenCL::Parser
         Context& operator=(const Context&) = delete;
 
         Context& operator=(Context&&) = delete;
+
+        TokenBitReseter withRecoveryTokens(const TokenBitSet& tokenBitSet);
 
         void addTypedef(const std::string& name, DeclarationLocation declarator);
 
@@ -238,5 +281,13 @@ namespace OpenCL::Parser
                                                                     Tokens::const_iterator end, Context& context,
                                                                     InRecoverySet recoverySet);
 } // namespace OpenCL::Parser
+
+template <class... Args>
+constexpr OpenCL::Parser::Context::TokenBitSet OpenCL::Parser::Context::fromTokenTypes(Args&&... tokenTypes)
+{
+    static_assert((std::is_same_v<std::decay_t<Args>, Lexer::TokenType> && ...));
+    return (TokenBitSet() | ...
+            | TokenBitSet().set(static_cast<std::underlying_type_t<Lexer::TokenType>>(tokenTypes), true));
+}
 
 #endif // OPENCLPARSER_PARSER_HPP
