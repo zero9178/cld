@@ -3,7 +3,6 @@
 
 #include <tl/function_ref.hpp>
 
-#include "../Common/UniqueResource.hpp"
 #include "Message.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
@@ -220,31 +219,6 @@ namespace OpenCL::Parser
 
     std::optional<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
                                           InRecoverySet recoverySet);
-
-    template <class... Args>
-    using VariantOfOptionals = std::variant<std::monostate, std::optional<Args>...>;
-
-    using StateVariant = VariantOfOptionals<Syntax::Term, Syntax::AdditiveExpression, Syntax::ShiftExpression,
-                                            Syntax::RelationalExpression, Syntax::EqualityExpression,
-                                            Syntax::BitAndExpression, Syntax::BitXorExpression, Syntax::BitOrExpression,
-                                            Syntax::LogicalAndExpression, Syntax::LogicalOrExpression>;
-
-    enum class EndState
-    {
-        Term,
-        Additive,
-        Shift,
-        Relational,
-        Equality,
-        BitAnd,
-        BitXor,
-        BitOr,
-        LogicalAnd,
-        LogicalOr
-    };
-
-    StateVariant parseBinaryOperators(EndState endState, Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                      Context& context, InRecoverySet recoverySet);
 
     std::optional<Syntax::TypeName> parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
                                                   Context& context, InRecoverySet recoverySet);
