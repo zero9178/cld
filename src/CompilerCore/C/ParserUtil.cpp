@@ -252,13 +252,7 @@ bool OpenCL::Parser::firstIsInPrimaryExpression(const Lexer::Token& token, const
            || token.getTokenType() == Lexer::TokenType::StringLiteral;
 }
 
-void OpenCL::Parser::skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet)
-{
-    begin = std::find_if(begin, end, recoverySet);
-}
-
-void OpenCL::Parser::skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, Lexer::TokenType tokenType)
-{
-    begin =
-        std::find_if(begin, end, [tokenType](const Lexer::Token& token) { return token.getTokenType() == tokenType; });
-}
+// void OpenCL::Parser::skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet)
+//{
+//    begin = std::find_if(begin, end, recoverySet);
+//}

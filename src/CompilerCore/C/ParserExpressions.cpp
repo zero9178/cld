@@ -13,9 +13,9 @@ Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens
 {
     auto start = begin;
     std::vector<AssignmentExpression> expressions;
-    auto assignment = parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-    });
+    auto assignment = parseAssignmentExpression(
+        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+        [](const Lexer::Token&) { return false; });
     if (assignment)
     {
         expressions.push_back(std::move(*assignment));
@@ -26,9 +26,9 @@ Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens
         while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
             begin++;
-            assignment = parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-            });
+            assignment = parseAssignmentExpression(
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                [](const Lexer::Token&) { return false; });
             if (assignment)
             {
                 expressions.push_back(std::move(*assignment));
@@ -112,9 +112,10 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
                                    context.getLineEnd(questionMarkpos),
                                    Modifier(questionMarkpos, questionMarkpos + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-                return firstIsInConditionalExpression(token, context) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+            //                return firstIsInConditionalExpression(token, context) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, firstExpressionSet);
         }
         auto optionalConditional = parseConditionalExpression(begin, end, context, recoverySet);
         if (!logicalOrExperssion || !optionalConditional)
@@ -853,9 +854,16 @@ namespace
                                 context.getLineEnd(openPpos),
                                 OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
                 {
-                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
-                        return isPostFixOperator(token) || recoverySet(token);
-                    });
+                    //                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const
+                    //                    OpenCL::Lexer::Token& token) {
+                    //                        return isPostFixOperator(token) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      OpenCL::Parser::Context::fromTokenTypes(
+                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                          OpenCL::Lexer::TokenType::Decrement));
                 }
                 if (current)
                 {
@@ -879,9 +887,16 @@ namespace
                                 context.getLineEnd(openPpos),
                                 OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
                 {
-                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
-                        return isPostFixOperator(token) || recoverySet(token);
-                    });
+                    //                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const
+                    //                    OpenCL::Lexer::Token& token) {
+                    //                        return isPostFixOperator(token) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      OpenCL::Parser::Context::fromTokenTypes(
+                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                          OpenCL::Lexer::TokenType::Decrement));
                 }
                 if (current)
                 {
@@ -913,9 +928,16 @@ namespace
                 std::string name;
                 if (!expect(OpenCL::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                 {
-                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
-                        return isPostFixOperator(token) || recoverySet(token);
-                    });
+                    //                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const
+                    //                    OpenCL::Lexer::Token& token) {
+                    //                        return isPostFixOperator(token) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      OpenCL::Parser::Context::fromTokenTypes(
+                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                          OpenCL::Lexer::TokenType::Decrement));
                 }
                 if (current)
                 {
@@ -929,9 +951,16 @@ namespace
                 std::string name;
                 if (!expect(OpenCL::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                 {
-                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const OpenCL::Lexer::Token& token) {
-                        return isPostFixOperator(token) || recoverySet(token);
-                    });
+                    //                    OpenCL::Parser::skipUntil(begin, end, [recoverySet](const
+                    //                    OpenCL::Lexer::Token& token) {
+                    //                        return isPostFixOperator(token) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      OpenCL::Parser::Context::fromTokenTypes(
+                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                          OpenCL::Lexer::TokenType::Decrement));
                 }
                 if (current)
                 {
@@ -966,9 +995,10 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                 {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
     {
-        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInCastExpression(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+        //            return firstIsInCastExpression(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet);
     }
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
@@ -984,9 +1014,10 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
     std::optional<Tokens::const_iterator> openBrace;
     if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInInitializerList(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInInitializerList(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstInitializerListSet);
     }
     else
     {
@@ -1008,18 +1039,28 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
                                    context.getLineEnd(*openBrace),
                                    Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                return isPostFixOperator(token) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+            //                return isPostFixOperator(token) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end,
+                              OpenCL::Parser::Context::fromTokenTypes(
+                                  OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                  OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
+                                  OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement));
         }
     }
     else
     {
         if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
         {
-            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                return isPostFixOperator(token) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+            //                return isPostFixOperator(token) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end,
+                              OpenCL::Parser::Context::fromTokenTypes(
+                                  OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                  OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
+                                  OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement));
         }
     }
     std::unique_ptr<PostFixExpression> current;
@@ -1057,7 +1098,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
                                        context.getLineEnd(openPpos),
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
-                skipUntil(begin, end, recoverySet);
+                context.skipUntil(begin, end);
             }
             if (!type)
             {
@@ -1147,17 +1188,19 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                    context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::OpenBrace || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+            //                return token.getTokenType() == Lexer::TokenType::OpenBrace || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBrace));
         }
 
         std::optional<Tokens::const_iterator> openBrace;
         if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
         {
-            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-                return firstIsInInitializerList(token, context) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+            //                return firstIsInInitializerList(token, context) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, firstInitializerListSet);
         }
         else
         {
@@ -1179,18 +1222,30 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                                        context.getLineEnd(*openBrace),
                                        Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
             {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
+                //                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                //                    return isPostFixOperator(token) || recoverySet(token);
+                //                });
+                context.skipUntil(begin, end,
+                                  OpenCL::Parser::Context::fromTokenTypes(
+                                      OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                      OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                      OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                      OpenCL::Lexer::TokenType::Decrement));
             }
         }
         else
         {
             if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
             {
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return isPostFixOperator(token) || recoverySet(token);
-                });
+                //                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                //                    return isPostFixOperator(token) || recoverySet(token);
+                //                });
+                context.skipUntil(begin, end,
+                                  OpenCL::Parser::Context::fromTokenTypes(
+                                      OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                      OpenCL::Lexer::TokenType::OpenSquareBracket,
+                                      OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
+                                      OpenCL::Lexer::TokenType::Decrement));
             }
         }
         if (initializer && type)
@@ -1260,7 +1315,7 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
                                    context.getLineEnd(openPpos),
                                    Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
         }
         return PrimaryExpression(PrimaryExpressionParenthese(start, begin, std::move(expression)));
     }
@@ -1279,6 +1334,6 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
             context.getLineStart(start), context.getLineEnd(begin),
             Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
     }
-    skipUntil(begin, end, recoverySet);
+    context.skipUntil(begin, end);
     return {};
 }

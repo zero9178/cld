@@ -23,7 +23,8 @@ namespace
         do
         {
             auto result = parseDeclarationSpecifier(
-                begin, end, context, [&context, seenTypeSpecifier, recoverySet](const OpenCL::Lexer::Token& token) {
+                begin, end, context.withRecoveryTokens(OpenCL::Parser::firstDeclarationSpecifierSet),
+                [&context, seenTypeSpecifier, recoverySet](const OpenCL::Lexer::Token& token) {
                     return (OpenCL::Parser::firstIsInDeclarationSpecifier(token, context)
                             && (token.getTokenType() != OpenCL::Lexer::TokenType::Identifier || !seenTypeSpecifier))
                            || recoverySet(token);
@@ -50,12 +51,9 @@ std::vector<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifierList(Toke
     std::vector<SpecifierQualifier> specifierQualifiers;
     do
     {
-        auto result = parseSpecifierQualifier(
-            begin, end, context, [&context, seenTypeSpecifier, recoverySet](const Lexer::Token& token) {
-                return (firstIsInSpecifierQualifier(token, context)
-                        && (token.getTokenType() != Lexer::TokenType::Identifier || !seenTypeSpecifier))
-                       || recoverySet(token);
-            });
+        auto result =
+            parseSpecifierQualifier(begin, end, context.withRecoveryTokens(OpenCL::Parser::firstSpecifierQualifierSet),
+                                    [](const Lexer::Token&) { return false; });
         if (result)
         {
             if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
@@ -75,9 +73,8 @@ TranslationUnit OpenCL::Parser::parseTranslationUnit(Tokens::const_iterator& beg
     std::vector<Syntax::ExternalDeclaration> global;
     while (begin < end)
     {
-        auto result = parseExternalDeclaration(begin, end, context, [&context](const Lexer::Token& token) {
-            return firstIsInExternalDeclaration(token, context);
-        });
+        auto result = parseExternalDeclaration(begin, end, context.withRecoveryTokens(firstExternalDeclarationSet),
+                                               [](const Lexer::Token&) { return false; });
         if (result)
         {
             global.push_back(std::move(*result));
@@ -92,11 +89,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
 {
     auto start = begin;
 
-    auto declarationSpecifiers =
-        parseDeclarationSpecifierList(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInDeclarator(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || recoverySet(token);
-        });
+    auto declarationSpecifiers = parseDeclarationSpecifierList(
+        begin, end,
+        context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+        [](const Lexer::Token&) { return false; });
     bool isTypedef = std::any_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
                                  [](const DeclarationSpecifier& declarationSpecifier) {
                                      auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
@@ -117,12 +113,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         begin, end,
         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::SemiColon,
                                                            Lexer::TokenType::OpenBrace, Lexer::TokenType::Assignment)),
-        [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::Comma
-                   || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || token.getTokenType() == Lexer::TokenType::OpenBrace
-                   || token.getTokenType() == Lexer::TokenType::Assignment || recoverySet(token);
-        });
+        [](const Lexer::Token&) { return false; });
     if (begin == end)
     {
         expect(Lexer::TokenType::SemiColon, start, begin, end, context);
@@ -133,10 +124,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         std::vector<Declaration> declarations;
         while (begin < end && firstIsInDeclaration(*begin, context))
         {
-            auto result = parseDeclaration(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(token, context)
-                       || recoverySet(token);
-            });
+            auto result = parseDeclaration(
+                begin, end,
+                context.withRecoveryTokens(firstDeclarationSet | Context::fromTokenTypes(Lexer::TokenType::OpenBrace)),
+                [](const Lexer::Token&) { return false; });
             if (result)
             {
                 declarations.push_back(std::move(*result));
@@ -303,10 +294,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         if (begin->getTokenType() == Lexer::TokenType::Assignment)
         {
             begin++;
-            auto initializer = parseInitializer(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma
-                       || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-            });
+            auto initializer = parseInitializer(begin, end,
+                                                context.withRecoveryTokens(Context::fromTokenTypes(
+                                                    Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)),
+                                                [](const Lexer::Token&) { return false; });
             if (declarator && initializer)
             {
                 initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
@@ -325,11 +316,11 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
         while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
             begin++;
-            declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma
-                       || token.getTokenType() == Lexer::TokenType::SemiColon
-                       || token.getTokenType() == Lexer::TokenType::Assignment || recoverySet(token);
-            });
+            declarator = parseDeclarator(
+                begin, end,
+                context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::SemiColon,
+                                                                   Lexer::TokenType::Assignment)),
+                [](const Lexer::Token&) { return false; });
             if (!isTypedef && declarator)
             {
                 context.addToScope(Semantics::declaratorToName(*declarator),
@@ -345,10 +336,10 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
             else
             {
                 begin++;
-                auto initializer = parseInitializer(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                    return token.getTokenType() == Lexer::TokenType::Comma
-                           || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-                });
+                auto initializer = parseInitializer(begin, end,
+                                                    context.withRecoveryTokens(Context::fromTokenTypes(
+                                                        Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)),
+                                                    [](const Lexer::Token&) { return false; });
                 if (declarator && initializer)
                 {
                     initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
@@ -363,7 +354,7 @@ std::optional<ExternalDeclaration> OpenCL::Parser::parseExternalDeclaration(Toke
 
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
             return {};
         }
 
@@ -386,11 +377,10 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
     auto start = begin;
 
     bool declaratorMightActuallyBeTypedef = false;
-    auto declarationSpecifiers =
-        parseDeclarationSpecifierList(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInDeclarator(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || recoverySet(token);
-        });
+    auto declarationSpecifiers = parseDeclarationSpecifierList(
+        begin, end,
+        context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+        [](const Lexer::Token&) { return false; });
     bool isTypedef = std::any_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
                                  [](const DeclarationSpecifier& declarationSpecifier) {
                                      auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
@@ -432,11 +422,11 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
         {
             break;
         }
-        auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::Comma
-                   || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || token.getTokenType() == Lexer::TokenType::Assignment || recoverySet(token);
-        });
+        auto declarator =
+            parseDeclarator(begin, end,
+                            context.withRecoveryTokens(Context::fromTokenTypes(
+                                Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)),
+                            [](const Lexer::Token&) { return false; });
         if (!isTypedef && declarator)
         {
             context.addToScope(Semantics::declaratorToName(*declarator),
@@ -452,10 +442,10 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
         else
         {
             begin++;
-            auto initializer = parseInitializer(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::SemiColon
-                       || token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-            });
+            auto initializer = parseInitializer(begin, end,
+                                                context.withRecoveryTokens(Context::fromTokenTypes(
+                                                    Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)),
+                                                [](const Lexer::Token&) { return false; });
             if (declarator && initializer)
             {
                 initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
@@ -481,7 +471,7 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
         }
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context, std::move(notes)))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
             return {};
         }
     }
@@ -489,7 +479,7 @@ std::optional<Declaration> OpenCL::Parser::parseDeclaration(Tokens::const_iterat
     {
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
             return {};
         }
     }
@@ -589,7 +579,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                 auto expected = parseStructOrUnionSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 return DeclarationSpecifier{TypeSpecifier(
@@ -600,7 +590,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                 auto expected = parseEnumSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 else
@@ -634,7 +624,7 @@ std::optional<DeclarationSpecifier> OpenCL::Parser::parseDeclarationSpecifier(To
                                     context.getLineStart(start), context.getLineEnd(begin),
                                     Modifier{begin - 1, begin, Modifier::InsertAtEnd})});
     }
-    skipUntil(begin, end, recoverySet);
+    context.skipUntil(begin, end);
     return {};
 }
 
@@ -661,7 +651,7 @@ std::optional<StructOrUnionSpecifier> OpenCL::Parser::parseStructOrUnionSpecifie
             {Message::error(ErrorMessages::Parser::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
                             context.getLineStart(start), context.getLineEnd(begin + 1),
                             Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
         return {};
     }
 
@@ -685,7 +675,7 @@ std::optional<StructOrUnionSpecifier> OpenCL::Parser::parseStructOrUnionSpecifie
         if (name.empty())
         {
             expect(Lexer::TokenType::Identifier, start, begin, end, context);
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
             return {};
         }
         return StructOrUnionSpecifier(start, begin, isUnion, name, {});
@@ -696,10 +686,10 @@ std::optional<StructOrUnionSpecifier> OpenCL::Parser::parseStructOrUnionSpecifie
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     while (begin < end && begin->getTokenType() != Lexer::TokenType::CloseBrace)
     {
-        auto specifierQualifiers =
-            parseSpecifierQualifierList(begin, end, context, [&context](const Lexer::Token& token) {
-                return firstIsInDeclarator(token, context) || token.getTokenType() == Lexer::TokenType::Colon;
-            });
+        auto specifierQualifiers = parseSpecifierQualifierList(
+            begin, end,
+            context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::Colon)),
+            [&](const Lexer::Token&) { return false; });
 
         std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> declarators;
         bool first = true;
@@ -720,30 +710,28 @@ std::optional<StructOrUnionSpecifier> OpenCL::Parser::parseStructOrUnionSpecifie
             if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
             {
                 begin++;
-                auto constant =
-                    parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Comma
-                               || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-                    });
+                auto constant = parseAssignmentExpression(begin, end,
+                                                          context.withRecoveryTokens(Context::fromTokenTypes(
+                                                              Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)),
+                                                          [](const Lexer::Token&) { return false; });
                 if (constant)
                 {
                     declarators.emplace_back(nullptr, std::move(*constant));
                 }
                 continue;
             }
-            auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma
-                       || token.getTokenType() == Lexer::TokenType::SemiColon
-                       || token.getTokenType() == Lexer::TokenType::Colon || recoverySet(token);
-            });
+            auto declarator =
+                parseDeclarator(begin, end,
+                                context.withRecoveryTokens(Context::fromTokenTypes(
+                                    Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Colon)),
+                                [](const Lexer::Token&) { return false; });
             if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
             {
                 begin++;
-                auto constant =
-                    parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Comma
-                               || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-                    });
+                auto constant = parseAssignmentExpression(begin, end,
+                                                          context.withRecoveryTokens(Context::fromTokenTypes(
+                                                              Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)),
+                                                          [](const Lexer::Token&) { return false; });
                 if (constant && declarator)
                 {
                     declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
@@ -758,16 +746,18 @@ std::optional<StructOrUnionSpecifier> OpenCL::Parser::parseStructOrUnionSpecifie
         } while (true);
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::CloseBrace
-                       || firstIsInDeclarationSpecifier(token, context) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+            //                return token.getTokenType() == Lexer::TokenType::CloseBrace
+            //                       || firstIsInDeclarationSpecifier(token, context) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end,
+                              firstDeclarationSpecifierSet | Context::fromTokenTypes(Lexer::TokenType::CloseBrace));
         }
         structDeclarations.push_back({std::move(specifierQualifiers), std::move(declarators)});
     }
     if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
     {
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
     }
     if (structDeclarations.empty())
     {
@@ -845,7 +835,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                 auto expected = parseStructOrUnionSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 return SpecifierQualifier{TypeSpecifier(
@@ -856,7 +846,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                 auto expected = parseEnumSpecifier(begin, end, context, recoverySet);
                 if (!expected)
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 return SpecifierQualifier{
@@ -880,7 +870,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
                          Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + begin->emitBack() + '\''),
                                        context.getLineStart(loc->begin), context.getLineEnd(loc->end),
                                        Modifier(loc->identifier, loc->identifier + 1))});
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 break;
@@ -900,7 +890,7 @@ std::optional<SpecifierQualifier> OpenCL::Parser::parseSpecifierQualifier(Tokens
         context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), context.getLineStart(start),
                                     end, Modifier{begin - 1, begin, Modifier::PointAtBeginning})});
     }
-    skipUntil(begin, end, recoverySet);
+    context.skipUntil(begin, end);
     return {};
 }
 
@@ -911,10 +901,8 @@ std::optional<Declarator> OpenCL::Parser::parseDeclarator(Tokens::const_iterator
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
     {
-        auto result = parsePointer(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::Asterisk || firstIsInDirectDeclarator(token, context)
-                   || recoverySet(token);
-        });
+        auto result = parsePointer(begin, end, context.withRecoveryTokens(firstDeclaratorSet),
+                                   [](const Lexer::Token&) { return false; });
         pointers.push_back(std::move(result));
     }
     auto directDeclarator = parseDirectDeclarator(begin, end, context, recoverySet);
@@ -943,9 +931,9 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
     {
         auto openPpos = begin;
         begin++;
-        auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-        });
+        auto declarator = parseDeclarator(
+            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+            [](const Lexer::Token&) { return false; });
         if (declarator)
         {
             directDeclarator = std::make_unique<DirectDeclarator>(
@@ -956,10 +944,14 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                    context.getLineEnd(openPpos),
                                    Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::OpenBracket
-                       || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+            //                return token.getTokenType() == Lexer::TokenType::OpenBracket
+            //                       || token.getTokenType() == Lexer::TokenType::OpenSquareBracket ||
+            //                       recoverySet(token);
+            //            });
+            context.skipUntil(
+                begin, end,
+                Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
         }
     }
     else
@@ -978,10 +970,12 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 context.getLineStart(start), context.getLineEnd(begin),
                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket
-                   || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket
+        //                   || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end,
+                          Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
     }
 
     while (begin < end
@@ -996,10 +990,9 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                 begin++;
                 if (begin < end && firstIsInParameterTypeList(*begin, context))
                 {
-                    auto parameterTypeList =
-                        parseParameterTypeList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-                        });
+                    auto parameterTypeList = parseParameterTypeList(
+                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
                     if (directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheseParameters(
@@ -1019,20 +1012,32 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         {
                             if (!expect(Lexer::TokenType::Comma, start, begin, end, context))
                             {
-                                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                                    return token.getTokenType() == Lexer::TokenType::Identifier
-                                           || token.getTokenType() == Lexer::TokenType::CloseBracket
-                                           || recoverySet(token);
-                                });
+                                //                                skipUntil(begin, end, [recoverySet](const
+                                //                                Lexer::Token& token) {
+                                //                                    return token.getTokenType() ==
+                                //                                    Lexer::TokenType::Identifier
+                                //                                           || token.getTokenType() ==
+                                //                                           Lexer::TokenType::CloseBracket
+                                //                                           || recoverySet(token);
+                                //                                });
+                                context.skipUntil(begin, end,
+                                                  Context::fromTokenTypes(Lexer::TokenType::Identifier,
+                                                                          Lexer::TokenType::CloseBracket));
                             }
                             std::string name;
                             if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                             {
-                                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                                    return token.getTokenType() == Lexer::TokenType::Comma
-                                           || token.getTokenType() == Lexer::TokenType::CloseBracket
-                                           || recoverySet(token);
-                                });
+                                //                                skipUntil(begin, end, [recoverySet](const
+                                //                                Lexer::Token& token) {
+                                //                                    return token.getTokenType() ==
+                                //                                    Lexer::TokenType::Comma
+                                //                                           || token.getTokenType() ==
+                                //                                           Lexer::TokenType::CloseBracket
+                                //                                           || recoverySet(token);
+                                //                                });
+                                context.skipUntil(
+                                    begin, end,
+                                    Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::CloseBracket));
                             }
                             else
                             {
@@ -1069,10 +1074,14 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::OpenBracket
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::OpenBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(
+                        begin, end,
+                        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
                 }
                 break;
             }
@@ -1114,9 +1123,9 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         begin++;
                     }
                     auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(
-                        begin, end, context, [recoverySet](const Lexer::Token& token) {
-                            return token.getTokenType() == Lexer::TokenType::CloseSquareBracket || recoverySet(token);
-                        });
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)),
+                        [](const Lexer::Token&) { return false; });
                     if (assignmentExpression && directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(
@@ -1153,10 +1162,10 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         {
                             begin++;
                             auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(
-                                begin, end, context, [recoverySet](const Lexer::Token& token) {
-                                    return token.getTokenType() == Lexer::TokenType::CloseSquareBracket
-                                           || recoverySet(token);
-                                });
+                                begin, end,
+                                context.withRecoveryTokens(
+                                    Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)),
+                                [](const Lexer::Token&) { return false; });
                             if (assignmentExpression && directDeclarator)
                             {
                                 directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorStatic(
@@ -1176,10 +1185,10 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                         else if (firstIsInAssignmentExpression(*begin, context))
                         {
                             auto assignment = OpenCL::Parser::parseAssignmentExpression(
-                                begin, end, context, [recoverySet](const Lexer::Token& token) {
-                                    return token.getTokenType() == Lexer::TokenType::CloseSquareBracket
-                                           || recoverySet(token);
-                                });
+                                begin, end,
+                                context.withRecoveryTokens(
+                                    Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)),
+                                [](const Lexer::Token&) { return false; });
                             if (assignment && directDeclarator)
                             {
                                 directDeclarator =
@@ -1201,10 +1210,14 @@ std::optional<DirectDeclarator> OpenCL::Parser::parseDirectDeclarator(Tokens::co
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::OpenBracket
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::OpenBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(
+                        begin, end,
+                        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
                     if (begin == end
                         || (begin->getTokenType() != Lexer::TokenType::OpenBracket
                             && begin->getTokenType() != Lexer::TokenType::OpenSquareBracket))
@@ -1228,9 +1241,9 @@ ParameterTypeList OpenCL::Parser::parseParameterTypeList(Tokens::const_iterator&
                                                          OpenCL::Parser::Context& context, InRecoverySet recoverySet)
 {
     auto start = begin;
-    auto parameterList = parseParameterList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-    });
+    auto parameterList =
+        parseParameterList(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                           [](const Lexer::Token&) { return false; });
     bool hasEllipse = false;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
     {
@@ -1272,11 +1285,11 @@ ParameterList OpenCL::Parser::parseParameterList(OpenCL::Parser::Tokens::const_i
         {
             break;
         }
-        auto declarationSpecifiers =
-            parseDeclarationSpecifierList(begin, end, context, [recoverySet, &context](const Lexer::Token& token) {
-                return firstIsInAbstractDeclarator(token, context) || firstIsInDeclarator(token, context)
-                       || token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-            });
+        auto declarationSpecifiers = parseDeclarationSpecifierList(
+            begin, end,
+            context.withRecoveryTokens(firstAbstractDeclaratorSet | firstDeclaratorSet
+                                       | Context::fromTokenTypes(Lexer::TokenType::Comma)),
+            [](const Lexer::Token&) { return false; });
 
         // Skip past everything that is part of the pointer declaration inside of the (possibly abstract) declarator
         auto result = std::find_if(begin, end, [](const Lexer::Token& token) {
@@ -1299,18 +1312,17 @@ ParameterList OpenCL::Parser::parseParameterList(OpenCL::Parser::Tokens::const_i
 
         if (result->getTokenType() == Lexer::TokenType::OpenSquareBracket)
         {
-            auto abstractDeclarator =
-                parseAbstractDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                    return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-                });
+            auto abstractDeclarator = parseAbstractDeclarator(
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                [](const Lexer::Token&) { return false; });
             parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
                                                std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator)));
         }
         else if (result->getTokenType() == Lexer::TokenType::Identifier)
         {
-            auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-            });
+            auto declarator = parseDeclarator(
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                [](const Lexer::Token&) { return false; });
             if (declarator)
             {
                 parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
@@ -1336,9 +1348,9 @@ ParameterList OpenCL::Parser::parseParameterList(OpenCL::Parser::Tokens::const_i
                 });
                 if (result < end && result->getTokenType() == Lexer::TokenType::Identifier)
                 {
-                    auto declarator = parseDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-                    });
+                    auto declarator = parseDeclarator(
+                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                        [](const Lexer::Token&) { return false; });
                     if (declarator)
                     {
                         parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
@@ -1348,10 +1360,9 @@ ParameterList OpenCL::Parser::parseParameterList(OpenCL::Parser::Tokens::const_i
                 }
                 else if (result < end && result->getTokenType() != Lexer::TokenType::OpenBracket)
                 {
-                    auto abstractDeclarator =
-                        parseAbstractDeclarator(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                            return token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-                        });
+                    auto abstractDeclarator = parseAbstractDeclarator(
+                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
+                        [](const Lexer::Token&) { return false; });
                     parameterDeclarations.emplace_back(
                         std::move(declarationSpecifiers),
                         std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator)));
@@ -1379,11 +1390,14 @@ Pointer OpenCL::Parser::parsePointer(Tokens::const_iterator& begin, Tokens::cons
     auto start = begin;
     if (!expect(Lexer::TokenType::Asterisk, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::ConstKeyword
-                   || token.getTokenType() == Lexer::TokenType::RestrictKeyword
-                   || token.getTokenType() == Lexer::TokenType::VolatileKeyword || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::ConstKeyword
+        //                   || token.getTokenType() == Lexer::TokenType::RestrictKeyword
+        //                   || token.getTokenType() == Lexer::TokenType::VolatileKeyword || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end,
+                          Context::fromTokenTypes(Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword,
+                                                  Lexer::TokenType::VolatileKeyword));
     }
     std::vector<TypeQualifier> typeQualifier;
     while (begin < end
@@ -1417,10 +1431,8 @@ AbstractDeclarator OpenCL::Parser::parseAbstractDeclarator(OpenCL::Parser::Token
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
     {
-        auto result = parsePointer(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInPointer(token, context) || firstIsInDirectAbstractDeclarator(token, context)
-                   || recoverySet(token);
-        });
+        auto result = parsePointer(begin, end, context.withRecoveryTokens(firstAbstractDeclaratorSet),
+                                   [](const Lexer::Token&) { return false; });
         pointers.push_back(std::move(result));
     }
     if (begin < end ? !firstIsInDirectAbstractDeclarator(*begin, context) && !pointers.empty() : !pointers.empty())
@@ -1452,10 +1464,9 @@ std::optional<DirectAbstractDeclarator>
                 begin++;
                 if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
-                    auto parameterTypeList =
-                        parseParameterTypeList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-                        });
+                    auto parameterTypeList = parseParameterTypeList(
+                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParameterTypeList(
                             start, begin, std::move(directAbstractDeclarator),
@@ -1482,10 +1493,14 @@ std::optional<DirectAbstractDeclarator>
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::OpenBracket
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::OpenBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(
+                        begin, end,
+                        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
                 }
                 break;
             }
@@ -1503,11 +1518,10 @@ std::optional<DirectAbstractDeclarator>
                 {
                     if (begin < end && firstIsInAssignmentExpression(*begin, context))
                     {
-                        auto assignment =
-                            parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                                return token.getTokenType() == Lexer::TokenType::CloseSquareBracket
-                                       || recoverySet(token);
-                            });
+                        auto assignment = parseAssignmentExpression(
+                            begin, end,
+                            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                            [](const Lexer::Token&) { return false; });
                         if (assignment)
                         {
                             directAbstractDeclarator =
@@ -1529,10 +1543,14 @@ std::optional<DirectAbstractDeclarator>
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::OpenBracket
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::OpenBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(
+                        begin, end,
+                        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket));
                 }
                 break;
             }
@@ -1556,7 +1574,7 @@ std::optional<DirectAbstractDeclarator>
                                 context.getLineStart(start), context.getLineEnd(begin),
                                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
         return {};
     }
     if (!directAbstractDeclarator)
@@ -1574,10 +1592,12 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
     auto start = begin;
     if (!expect(Lexer::TokenType::EnumKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBrace
-                   || token.getTokenType() == Lexer::TokenType::Identifier || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBrace
+        //                   || token.getTokenType() == Lexer::TokenType::Identifier || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end,
+                          Context::fromTokenTypes(Lexer::TokenType::OpenBrace, Lexer::TokenType::Identifier));
     }
     std::string name;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
@@ -1590,7 +1610,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         context.log(
             {Message::error(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("identifier", "enum"),
                             context.getLineStart(start), begin, Modifier(begin - 1, begin, Modifier::InsertAtEnd))});
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
         return {};
     }
 
@@ -1600,7 +1620,7 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         if (name.empty())
         {
             expect(Lexer::TokenType::Identifier, start, begin, end, context);
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
             return {};
         }
         return EnumSpecifier(start, begin, std::move(name));
@@ -1619,11 +1639,14 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         std::string valueName;
         if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &valueName))
         {
-            skipUntil(begin, end, [](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Assignment
-                       || token.getTokenType() == Lexer::TokenType::Comma
-                       || token.getTokenType() == Lexer::TokenType::CloseBrace;
-            });
+            //            skipUntil(begin, end, [](const Lexer::Token& token) {
+            //                return token.getTokenType() == Lexer::TokenType::Assignment
+            //                       || token.getTokenType() == Lexer::TokenType::Comma
+            //                       || token.getTokenType() == Lexer::TokenType::CloseBrace;
+            //            });
+            context.skipUntil(begin, end,
+                              Context::fromTokenTypes(Lexer::TokenType::Assignment, Lexer::TokenType::Comma,
+                                                      Lexer::TokenType::CloseBrace));
         }
         else
         {
@@ -1633,10 +1656,10 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Assignment)
         {
             begin++;
-            auto constant = parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::Comma
-                       || token.getTokenType() == Lexer::TokenType::CloseBrace || recoverySet(token);
-            });
+            auto constant = parseAssignmentExpression(begin, end,
+                                                      context.withRecoveryTokens(Context::fromTokenTypes(
+                                                          Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)),
+                                                      [](const Lexer::Token&) { return false; });
             if (constant && !valueName.empty())
             {
                 values.back().second = std::move(*constant);
@@ -1667,10 +1690,13 @@ std::optional<EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(OpenCL::Parser::
                     ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args("','", '\'' + begin->emitBack() + '\''),
                     context.getLineStart(start), context.getLineEnd(begin),
                     Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
-                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                    return token.getTokenType() == Lexer::TokenType::Identifier
-                           || token.getTokenType() == Lexer::TokenType::CloseBrace || recoverySet(token);
-                });
+                //                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                //                    return token.getTokenType() == Lexer::TokenType::Identifier
+                //                           || token.getTokenType() == Lexer::TokenType::CloseBrace ||
+                //                           recoverySet(token);
+                //                });
+                context.skipUntil(begin, end,
+                                  Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::CloseBrace));
             }
         }
     }
@@ -1699,10 +1725,12 @@ std::optional<CompoundStatement> OpenCL::Parser::parseCompoundStatement(OpenCL::
     auto start = begin;
     if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
     {
-        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseBrace || firstIsInCompoundItem(token, context)
-                   || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::CloseBrace || firstIsInCompoundItem(token,
+        //            context)
+        //                   || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstCompoundItem | Context::fromTokenTypes(Lexer::TokenType::CloseBrace));
     }
     std::vector<CompoundItem> items;
     if (pushScope)
@@ -1711,10 +1739,10 @@ std::optional<CompoundStatement> OpenCL::Parser::parseCompoundStatement(OpenCL::
     }
     while (begin < end && firstIsInCompoundItem(*begin, context))
     {
-        auto result = parseCompoundItem(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInCompoundItem(token, context) || token.getTokenType() == Lexer::TokenType::CloseBrace
-                   || recoverySet(token);
-        });
+        auto result = parseCompoundItem(
+            begin, end,
+            context.withRecoveryTokens(firstCompoundItem | Context::fromTokenTypes(Lexer::TokenType::CloseBrace)),
+            [](const Lexer::Token&) { return false; });
         if (result)
         {
             items.push_back(std::move(*result));
@@ -1730,7 +1758,7 @@ std::optional<CompoundStatement> OpenCL::Parser::parseCompoundStatement(OpenCL::
                            Modifier(start == end ? start - 1 : start, start == end ? start : start + 1,
                                     Modifier::PointAtBeginning))}))
     {
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
     }
     return CompoundStatement(start, begin, std::move(items));
 }
@@ -1776,17 +1804,17 @@ std::optional<Initializer> OpenCL::Parser::parseInitializer(Tokens::const_iterat
     else
     {
         begin++;
-        auto initializerList = parseInitializerList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::Comma
-                   || token.getTokenType() == Lexer::TokenType::CloseBrace || recoverySet(token);
-        });
+        auto initializerList = parseInitializerList(
+            begin, end,
+            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)),
+            [](const Lexer::Token&) { return false; });
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
             begin++;
         }
         if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
         }
         if (!initializerList)
         {
@@ -1825,10 +1853,10 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
             {
                 auto openPpos = begin;
                 begin++;
-                auto constant =
-                    parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::CloseSquareBracket || recoverySet(token);
-                    });
+                auto constant = parseAssignmentExpression(
+                    begin, end,
+                    context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)),
+                    [](const Lexer::Token&) { return false; });
                 if (constant)
                 {
                     designation.emplace_back(std::move(*constant));
@@ -1838,11 +1866,16 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
                                            context.getLineEnd(openPpos),
                                            Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Assignment
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
-                               || token.getTokenType() == Lexer::TokenType::Dot || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::Assignment
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::Dot ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      Context::fromTokenTypes(Lexer::TokenType::Assignment,
+                                                              Lexer::TokenType::OpenSquareBracket,
+                                                              Lexer::TokenType::Dot));
                 }
             }
             else
@@ -1851,11 +1884,16 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
                 std::string name;
                 if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                 {
-                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Assignment
-                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
-                               || token.getTokenType() == Lexer::TokenType::Dot || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::Assignment
+                    //                               || token.getTokenType() == Lexer::TokenType::OpenSquareBracket
+                    //                               || token.getTokenType() == Lexer::TokenType::Dot ||
+                    //                               recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end,
+                                      Context::fromTokenTypes(Lexer::TokenType::Assignment,
+                                                              Lexer::TokenType::OpenSquareBracket,
+                                                              Lexer::TokenType::Dot));
                 }
                 designation.emplace_back(std::move(name));
             }
@@ -1864,9 +1902,10 @@ std::optional<InitializerList> OpenCL::Parser::parseInitializerList(Tokens::cons
         {
             if (!expect(Lexer::TokenType::Assignment, start, begin, end, context))
             {
-                skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-                    return firstIsInInitializer(token, context) || recoverySet(token);
-                });
+                //                skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+                //                    return firstIsInInitializer(token, context) || recoverySet(token);
+                //                });
+                context.skipUntil(begin, end, firstInitializerSet);
             }
         }
         auto initializer = parseInitializer(begin, end, context, [recoverySet](const Lexer::Token& token) {
@@ -1956,7 +1995,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 begin++;
                 if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 return Statement(BreakStatement(start, begin));
@@ -1966,7 +2005,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 begin++;
                 if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                     return {};
                 }
                 return Statement(ContinueStatement(start, begin));
@@ -1976,9 +2015,10 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 begin++;
                 if (!expect(Lexer::TokenType::Colon, start, begin, end, context))
                 {
-                    skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-                        return firstIsInStatement(token, context) || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+                    //                        return firstIsInStatement(token, context) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end, firstStatementSet);
                 }
                 auto statement = parseStatement(begin, end, context, recoverySet);
                 if (!statement)
@@ -1990,15 +2030,15 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
             case Lexer::TokenType::CaseKeyword:
             {
                 begin++;
-                auto expression =
-                    parseAssignmentExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::Colon || recoverySet(token);
-                    });
+                auto expression = parseAssignmentExpression(
+                    begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon)),
+                    [](const Lexer::Token&) { return false; });
                 if (!expect(Lexer::TokenType::Colon, start, begin, end, context))
                 {
-                    skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-                        return firstIsInStatement(token, context) || recoverySet(token);
-                    });
+                    //                    skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+                    //                        return firstIsInStatement(token, context) || recoverySet(token);
+                    //                    });
+                    context.skipUntil(begin, end, firstStatementSet);
                 }
                 auto statement = parseStatement(begin, end, context, recoverySet);
                 if (!statement || !expression)
@@ -2014,13 +2054,14 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
                 std::string name;
                 if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
                 {
-                    skipUntil(begin, end, [](const Lexer::Token& token) {
-                        return token.getTokenType() == Lexer::TokenType::SemiColon;
-                    });
+                    //                    skipUntil(begin, end, [](const Lexer::Token& token) {
+                    //                        return token.getTokenType() == Lexer::TokenType::SemiColon;
+                    //                    });
+                    context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::SemiColon));
                 }
                 if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
                 {
-                    skipUntil(begin, end, recoverySet);
+                    context.skipUntil(begin, end);
                 }
                 return Statement(GotoStatement(start, begin, name));
             }
@@ -2047,9 +2088,9 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
     }
     if (begin != end && begin->getTokenType() != Lexer::TokenType::SemiColon)
     {
-        auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-        });
+        auto expression = parseExpression(
+            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+            [](const Lexer::Token&) { return false; });
         std::vector<Message> notes;
         if (start + 1 == begin && start->getTokenType() == Lexer::TokenType::Identifier
             && context.isTypedef(std::get<std::string>(start->getValue()))
@@ -2066,7 +2107,7 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
         }
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context, std::move(notes)))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
         }
         return Statement(ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(expression))));
     }
@@ -2074,38 +2115,40 @@ std::optional<Statement> OpenCL::Parser::parseStatement(Tokens::const_iterator& 
     {
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, recoverySet);
+            context.skipUntil(begin, end);
         }
         return Statement(ExpressionStatement(start, begin));
     }
 }
 
-std::optional<HeadWhileStatement> OpenCL::Parser::parseHeadWhileStatement(
-    std::vector<OpenCL::Lexer::Token, std::allocator<OpenCL::Lexer::Token>>::const_iterator& begin,
-    std::vector<OpenCL::Lexer::Token, std::allocator<OpenCL::Lexer::Token>>::const_iterator end,
-    OpenCL::Parser::Context& context, InRecoverySet recoverySet)
+std::optional<HeadWhileStatement>
+    OpenCL::Parser::parseHeadWhileStatement(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                            std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                            OpenCL::Parser::Context& context, InRecoverySet recoverySet)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::WhileKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBracket));
     }
     std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenBracket, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInExpression(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet);
     }
     else
     {
         openPpos = begin - 1;
     }
-    auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-    });
+    auto expression =
+        parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
     std::vector<Message> note;
     if (openPpos)
     {
@@ -2115,9 +2158,10 @@ std::optional<HeadWhileStatement> OpenCL::Parser::parseHeadWhileStatement(
     }
     if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context, std::move(note)))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInStatement(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInStatement(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstStatementSet);
     }
     auto statement = parseStatement(begin, end, context, recoverySet);
     if (!statement)
@@ -2136,35 +2180,38 @@ std::optional<FootWhileStatement>
     auto doPos = begin;
     if (!expect(Lexer::TokenType::DoKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInStatement(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInStatement(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstStatementSet);
     }
-    auto statement = parseStatement(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::WhileKeyword || recoverySet(token);
-    });
+    auto statement =
+        parseStatement(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::WhileKeyword)),
+                       [](const Lexer::Token&) { return false; });
     if (!expect(Lexer::TokenType::WhileKeyword, start, begin, end, context,
                 {Message::note(Notes::TO_MATCH_N_HERE.args("'do'"), context.getLineStart(doPos),
                                context.getLineEnd(doPos), Modifier(doPos, doPos + 1, Modifier::PointAtBeginning))}))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBracket));
     }
     std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenBracket, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInExpression(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet);
     }
     else
     {
         openPpos = begin - 1;
     }
-    auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-    });
+    auto expression =
+        parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
     std::vector<Message> notes;
     if (openPpos)
     {
@@ -2174,13 +2221,14 @@ std::optional<FootWhileStatement>
     }
     if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context, std::move(notes)))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::SemiColon));
     }
     if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
     {
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
     }
 
     if (!statement)
@@ -2197,10 +2245,11 @@ ReturnStatement OpenCL::Parser::parseReturnStatement(std::vector<OpenCL::Lexer::
     auto start = begin;
     if (!expect(Lexer::TokenType::ReturnKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context)
-                   || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context)
+        //                   || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon));
     }
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SemiColon)
     {
@@ -2210,15 +2259,15 @@ ReturnStatement OpenCL::Parser::parseReturnStatement(std::vector<OpenCL::Lexer::
     else if (begin == end || !firstIsInExpression(*begin, context))
     {
         expect(Lexer::TokenType::SemiColon, start, begin, end, context);
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
         return ReturnStatement(start, begin, nullptr);
     }
-    auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-    });
+    auto expression =
+        parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+                        [](const Lexer::Token&) { return false; });
     if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
     {
-        skipUntil(begin, end, recoverySet);
+        context.skipUntil(begin, end);
     }
     return ReturnStatement(start, begin, std::make_unique<Expression>(std::move(expression)));
 }
@@ -2230,24 +2279,26 @@ std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::
     auto start = begin;
     if (!expect(Lexer::TokenType::IfKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBracket));
     }
     std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenBracket, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInExpression(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet);
     }
     else
     {
         openPpos = begin - 1;
     }
-    auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-    });
+    auto expression =
+        parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
     std::vector<Message> note;
     if (openPpos)
     {
@@ -2257,13 +2308,14 @@ std::optional<IfStatement> OpenCL::Parser::parseIfStatement(std::vector<OpenCL::
     }
     if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context, std::move(note)))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInStatement(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInStatement(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstStatementSet);
     }
-    auto statement = parseStatement(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::ElseKeyword || recoverySet(token);
-    });
+    auto statement =
+        parseStatement(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::ElseKeyword)),
+                       [](const Lexer::Token&) { return false; });
     if (!statement && (begin == end || begin->getTokenType() != Lexer::TokenType::ElseKeyword))
     {
         return {};
@@ -2294,24 +2346,26 @@ std::optional<SwitchStatement>
     auto start = begin;
     if (!expect(Lexer::TokenType::SwitchKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBracket));
     }
     std::optional<Tokens::const_iterator> openPpos;
     if (!expect(Lexer::TokenType::OpenBracket, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInExpression(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstExpressionSet);
     }
     else
     {
         openPpos = begin - 1;
     }
-    auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-    });
+    auto expression =
+        parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)),
+                        [](const Lexer::Token&) { return false; });
     std::vector<Message> note;
     if (openPpos)
     {
@@ -2321,9 +2375,10 @@ std::optional<SwitchStatement>
     }
     if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context, std::move(note)))
     {
-        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInStatement(token, context) || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+        //            return firstIsInStatement(token, context) || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, firstStatementSet);
     }
     auto statement = parseStatement(begin, end, context, recoverySet);
     if (!statement)
@@ -2341,17 +2396,21 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     auto start = begin;
     if (!expect(Lexer::TokenType::ForKeyword, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
+        //            return token.getTokenType() == Lexer::TokenType::OpenBracket || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBracket));
     }
     auto openPpos = begin;
     if (!expect(Lexer::TokenType::OpenBracket, start, begin, end, context))
     {
-        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || firstIsInDeclaration(token, context)
-                   || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
-        });
+        //        skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+        //            return firstIsInExpression(token, context) || firstIsInDeclaration(token, context)
+        //                   || token.getTokenType() == Lexer::TokenType::SemiColon || recoverySet(token);
+        //        });
+        context.skipUntil(begin, end,
+                          firstExpressionSet | firstDeclarationSet
+                              | Context::fromTokenTypes(Lexer::TokenType::SemiColon));
     }
     if (begin == end)
     {
@@ -2364,10 +2423,10 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     std::variant<Declaration, std::unique_ptr<Expression>> initial{nullptr};
     if (firstIsInDeclaration(*begin, context))
     {
-        auto decl = parseDeclaration(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || recoverySet(token);
-        });
+        auto decl = parseDeclaration(
+            begin, end,
+            context.withRecoveryTokens(firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+            [](const Lexer::Token&) { return false; });
         if (decl)
         {
             initial = std::move(*decl);
@@ -2375,17 +2434,19 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     }
     else if (begin->getTokenType() != Lexer::TokenType::SemiColon)
     {
-        auto exp = parseExpression(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || recoverySet(token);
-        });
+        auto exp = parseExpression(
+            begin, end,
+            context.withRecoveryTokens(firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+            [](const Lexer::Token&) { return false; });
         initial = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-                return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                       || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+            //                return firstIsInExpression(token, context) || token.getTokenType() ==
+            //                Lexer::TokenType::SemiColon
+            //                       || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon));
         }
     }
     else
@@ -2402,17 +2463,19 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
     }
     else if (begin->getTokenType() != Lexer::TokenType::SemiColon)
     {
-        auto exp = parseExpression(begin, end, context, [&context, recoverySet](const Lexer::Token& token) {
-            return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::SemiColon
-                   || recoverySet(token);
-        });
+        auto exp = parseExpression(
+            begin, end,
+            context.withRecoveryTokens(firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon)),
+            [](const Lexer::Token&) { return false; });
         controlling = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::SemiColon, start, begin, end, context))
         {
-            skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
-                return firstIsInExpression(token, context) || token.getTokenType() == Lexer::TokenType::CloseBracket
-                       || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [&context, recoverySet](const Lexer::Token& token) {
+            //                return firstIsInExpression(token, context) || token.getTokenType() ==
+            //                Lexer::TokenType::CloseBracket
+            //                       || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::CloseBracket));
         }
     }
     else
@@ -2438,9 +2501,10 @@ std::optional<ForStatement> OpenCL::Parser::parseForStatement(std::vector<OpenCL
                                    context.getLineEnd(openPpos),
                                    Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
         {
-            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
-                return firstIsInStatement(token, context) || recoverySet(token);
-            });
+            //            skipUntil(begin, end, [recoverySet, &context](const Lexer::Token& token) {
+            //                return firstIsInStatement(token, context) || recoverySet(token);
+            //            });
+            context.skipUntil(begin, end, firstStatementSet);
         }
     }
     else

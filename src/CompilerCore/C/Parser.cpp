@@ -178,3 +178,12 @@ OpenCL::Parser::Context::TokenBitReseter::~TokenBitReseter()
 {
     m_context.m_recoverySet = m_original;
 }
+
+void OpenCL::Parser::Context::skipUntil(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                        std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                        OpenCL::Parser::Context::TokenBitSet additional)
+{
+    begin = std::find_if(begin, end, [bitset = m_recoverySet | additional](const Lexer::Token& token) {
+        return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
+    });
+}

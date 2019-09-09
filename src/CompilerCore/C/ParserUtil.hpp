@@ -48,9 +48,7 @@ namespace OpenCL::Parser
         }
     }
 
-    void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet);
-
-    void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, Lexer::TokenType tokenType);
+    // void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet);
 
     template <typename G>
     struct Y
@@ -103,16 +101,14 @@ namespace OpenCL::Parser
 
     constexpr Context::TokenBitSet firstDeclarationSet = firstDeclarationSpecifierSet;
 
-    constexpr Context::TokenBitSet firstAssignmentExpressionSet = Context::fromTokenTypes(
+    constexpr Context::TokenBitSet firstExpressionSet = Context::fromTokenTypes(
         Lexer::TokenType::OpenBracket, Lexer::TokenType::Identifier, Lexer::TokenType::Literal,
         Lexer::TokenType::StringLiteral, Lexer::TokenType::Increment, Lexer::TokenType::Decrement,
         Lexer::TokenType::Minus, Lexer::TokenType::Plus, Lexer::TokenType::Ampersand, Lexer::TokenType::BitWiseNegation,
         Lexer::TokenType::LogicalNegation, Lexer::TokenType::SizeofKeyword);
 
-    constexpr Context::TokenBitSet firstExpressionSet = firstAssignmentExpressionSet;
-
     constexpr Context::TokenBitSet firstInitializerSet =
-        firstAssignmentExpressionSet | Context::fromTokenTypes(Lexer::TokenType::OpenBrace);
+        firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::OpenBrace);
 
     constexpr Context::TokenBitSet firstInitializerListSet =
         firstInitializerSet | Context::fromTokenTypes(Lexer::TokenType::OpenSquareBracket, Lexer::TokenType::Dot);

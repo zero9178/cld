@@ -114,6 +114,8 @@ namespace OpenCL::Parser
         void popScope();
 
         [[nodiscard]] std::size_t getCurrentErrorCount() const;
+
+        void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, TokenBitSet additional = {});
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
