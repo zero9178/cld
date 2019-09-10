@@ -34,16 +34,16 @@
         std::vector<OpenCL::Lexer::Token> tokens;                                                       \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));                                      \
         OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), &ss);                           \
-        auto begin = tokens.cbegin();                                                                   \
-        parser(begin, tokens.cend(), context, [](const OpenCL::Lexer::Token&) { return false; });       \
+        auto begin = tokens.cbegin();                                         \
+        parser(begin, tokens.cend(), context);                                \
         auto string = ss.str();                                                                         \
         CHECK((!string.empty() || begin == tokens.cend()));                                             \
         CHECK_THAT(string, matches);                                                                    \
         if (OpenCL::colourConsoleOutput)                                                                \
         {                                                                                               \
             auto begin2 = tokens.cbegin();                                                              \
-            OpenCL::Parser::Context context2(tokens.cbegin(), tokens.cend());                           \
-            parser(begin2, tokens.cend(), context2, [](const OpenCL::Lexer::Token&) { return false; }); \
+            OpenCL::Parser::Context context2(tokens.cbegin(), tokens.cend()); \
+            parser(begin2, tokens.cend(), context2);                          \
             if (!string.empty())                                                                        \
             {                                                                                           \
                 std::cerr << std::endl;                                                                 \

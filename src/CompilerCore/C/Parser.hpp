@@ -12,8 +12,6 @@ namespace OpenCL::Parser
 {
     using Tokens = std::vector<Lexer::Token>;
 
-    using InRecoverySet = tl::function_ref<bool(const Lexer::Token&)>;
-
     class Context final
     {
         std::ostream* m_reporter;
@@ -125,163 +123,132 @@ namespace OpenCL::Parser
                                                          Context& context);
 
     std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(Tokens::const_iterator& begin,
-                                                                        Tokens::const_iterator end, Context& context,
-                                                                        InRecoverySet recoverySet);
+                                                                        Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::Declaration> parseDeclaration(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                        Context& context, InRecoverySet recoverySet);
+                                                        Context& context);
 
     std::optional<Syntax::DeclarationSpecifier> parseDeclarationSpecifier(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet);
+                                                                          Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+                                                                      Tokens::const_iterator end, Context& context);
 
     std::vector<Syntax::SpecifierQualifier> parseSpecifierQualifierList(Tokens::const_iterator& begin,
-                                                                        Tokens::const_iterator end, Context& context,
-                                                                        InRecoverySet recoverySet);
+                                                                        Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::Declarator> parseDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                      Context& context, InRecoverySet recoverySet);
+                                                      Context& context);
 
     std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(Tokens::const_iterator& begin,
-                                                                  Tokens::const_iterator end, Context& context,
-                                                                  InRecoverySet recoverySet);
+                                                                  Tokens::const_iterator end, Context& context);
 
     Syntax::ParameterTypeList parseParameterTypeList(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                     Context& context, InRecoverySet recoverySet);
+                                                     Context& context);
 
     Syntax::AbstractDeclarator parseAbstractDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                       Context& context, InRecoverySet recoverySet);
+                                                       Context& context);
 
-    std::optional<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(Tokens::const_iterator& begin,
-                                                                                  Tokens::const_iterator end,
-                                                                                  Context& context,
-                                                                                  InRecoverySet recoverySet);
+    std::optional<Syntax::DirectAbstractDeclarator>
+        parseDirectAbstractDeclarator(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
     Syntax::ParameterList parseParameterList(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                             Context& context, InRecoverySet recoverySet);
+                                             Context& context);
 
-    Syntax::Pointer parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                 InRecoverySet recoverySet);
+    Syntax::Pointer parsePointer(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
-    std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Tokens::const_iterator& begin,
-                                                                              Tokens::const_iterator end,
-                                                                              Context& context,
-                                                                              InRecoverySet recoverySet);
+    std::optional<Syntax::StructOrUnionSpecifier>
+        parseStructOrUnionSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                            Context& context, InRecoverySet recoverySet);
+                                                            Context& context);
 
     std::optional<Syntax::CompoundStatement> parseCompoundStatement(OpenCL::Parser::Tokens::const_iterator& begin,
                                                                     Tokens::const_iterator end,
                                                                     OpenCL::Parser::Context& context,
-                                                                    InRecoverySet recoverySet, bool pushScope = true);
+                                                                    bool pushScope = true);
 
     std::optional<Syntax::CompoundItem> parseCompoundItem(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                          Context& context, InRecoverySet recoverySet);
+                                                          Context& context);
 
     std::optional<Syntax::Initializer> parseInitializer(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                        Context& context, InRecoverySet recoverySet);
+                                                        Context& context);
 
     std::optional<Syntax::InitializerList> parseInitializerList(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+                                                                Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::Statement> parseStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                    Context& context, InRecoverySet recoverySet);
+                                                    Context& context);
 
     Syntax::ReturnStatement parseReturnStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                 Context& context, InRecoverySet recoverySet);
+                                                 Context& context);
 
     std::optional<Syntax::IfStatement> parseIfStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                        Context& context, InRecoverySet recoverySet);
+                                                        Context& context);
 
     std::optional<Syntax::SwitchStatement> parseSwitchStatement(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+                                                                Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::ForStatement> parseForStatement(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                          Context& context, InRecoverySet recoverySet);
+                                                          Context& context);
 
     std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+                                                                      Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+                                                                      Tokens::const_iterator end, Context& context);
 
-    Syntax::Expression parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                       InRecoverySet recoverySet);
+    Syntax::Expression parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet);
+                                                                          Tokens::const_iterator end, Context& context);
 
-    std::optional<Syntax::ConditionalExpression> parseConditionalExpression(Tokens::const_iterator& begin,
-                                                                            Tokens::const_iterator end,
-                                                                            Context& context,
-                                                                            InRecoverySet recoverySet);
+    std::optional<Syntax::ConditionalExpression>
+        parseConditionalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::LogicalOrExpression> parseLogicalOrExpression(Tokens::const_iterator& begin,
-                                                                        Tokens::const_iterator end, Context& context,
-                                                                        InRecoverySet recoverySet);
+                                                                        Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::LogicalAndExpression> parseLogicalAndExpression(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet);
+                                                                          Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::BitOrExpression> parseBitOrExpression(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+                                                                Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::BitXorExpression> parseBitXorExpression(Tokens::const_iterator& begin,
-                                                                  Tokens::const_iterator end, Context& context,
-                                                                  InRecoverySet recoverySet);
+                                                                  Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::BitAndExpression> parseBitAndExpression(Tokens::const_iterator& begin,
-                                                                  Tokens::const_iterator end, Context& context,
-                                                                  InRecoverySet recoverySet);
+                                                                  Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::EqualityExpression> parseEqualityExpression(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+                                                                      Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::RelationalExpression> parseRelationalExpression(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet);
+                                                                          Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::ShiftExpression> parseShiftExpression(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+                                                                Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet);
+                                                                      Tokens::const_iterator end, Context& context);
 
-    std::optional<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                          InRecoverySet recoverySet);
+    std::optional<Syntax::Term> parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::TypeName> parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                  Context& context, InRecoverySet recoverySet);
+                                                  Context& context);
 
     std::optional<Syntax::CastExpression> parseCastExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                              Context& context, InRecoverySet recoverySet);
+                                                              Context& context);
 
     std::optional<Syntax::UnaryExpression> parseUnaryExpression(Tokens::const_iterator& begin,
-                                                                Tokens::const_iterator end, Context& context,
-                                                                InRecoverySet recoverySet);
+                                                                Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::PostFixExpression> parsePostFixExpression(Tokens::const_iterator& begin,
-                                                                    Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet);
+                                                                    Tokens::const_iterator end, Context& context);
 
     std::optional<Syntax::PrimaryExpression> parsePrimaryExpression(Tokens::const_iterator& begin,
-                                                                    Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet);
+                                                                    Tokens::const_iterator end, Context& context);
 } // namespace OpenCL::Parser
 
 template <class... Args>

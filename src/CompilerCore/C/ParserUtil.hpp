@@ -65,6 +65,17 @@ namespace OpenCL::Parser
     template <typename G>
     Y(G)->Y<G>;
 
+    constexpr Context::TokenBitSet firstPostfixSet =
+        Context::fromTokenTypes(OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
+                                OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
+                                OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement);
+
+    constexpr Context::TokenBitSet assignmentSet = Context::fromTokenTypes(
+        Lexer::TokenType::Assignment, Lexer::TokenType::PlusAssign, Lexer::TokenType::MinusAssign,
+        Lexer::TokenType::DivideAssign, Lexer::TokenType::MultiplyAssign, Lexer::TokenType::ModuloAssign,
+        Lexer::TokenType::ShiftLeftAssign, Lexer::TokenType::ShiftRightAssign, Lexer::TokenType::BitAndAssign,
+        Lexer::TokenType::BitOrAssign, Lexer::TokenType::BitXorAssign);
+
     constexpr Context::TokenBitSet firstSpecifierQualifierSet = Context::fromTokenTypes(
         Lexer::TokenType::VoidKeyword, Lexer::TokenType::CharKeyword, Lexer::TokenType::ShortKeyword,
         Lexer::TokenType::IntKeyword, Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword,

@@ -374,9 +374,8 @@ namespace
                                     transformTokens(tokens);
                                     OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), nullptr);
                                     auto begin = tokens.cbegin();
-                                    auto expression = OpenCL::Parser::parseAssignmentExpression(
-                                        begin, tokens.cend(), context,
-                                        [](const OpenCL::Lexer::Token&) { return false; });
+                                    auto expression =
+                                        OpenCL::Parser::parseAssignmentExpression(begin, tokens.cend(), context);
                                     if (!expression)
                                     {
                                         throw std::runtime_error("Invalid expression");

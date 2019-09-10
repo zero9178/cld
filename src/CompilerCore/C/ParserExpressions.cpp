@@ -8,14 +8,13 @@
 
 using namespace OpenCL::Syntax;
 
-Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context,
-                                           InRecoverySet recoverySet)
+OpenCL::Syntax::Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                           Context& context)
 {
     auto start = begin;
     std::vector<AssignmentExpression> expressions;
     auto assignment = parseAssignmentExpression(
-        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
-        [](const Lexer::Token&) { return false; });
+        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
     if (assignment)
     {
         expressions.push_back(std::move(*assignment));
@@ -27,8 +26,7 @@ Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens
         {
             begin++;
             assignment = parseAssignmentExpression(
-                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)),
-                [](const Lexer::Token&) { return false; });
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
             if (assignment)
             {
                 expressions.push_back(std::move(*assignment));
@@ -38,24 +36,19 @@ Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens
     return Expression(start, begin, std::move(expressions));
 }
 
-std::optional<AssignmentExpression> OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin,
-                                                                              Tokens::const_iterator end,
-                                                                              Context& context,
-                                                                              InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::AssignmentExpression>
+    OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                              Context& context)
 {
     auto start = begin;
-    auto result = parseConditionalExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return isAssignment(token.getTokenType()) || recoverySet(token);
-    });
+    auto result = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
 
     std::vector<std::pair<AssignmentExpression::AssignOperator, ConditionalExpression>> list;
     while (begin != end && isAssignment(begin->getTokenType()))
     {
         auto token = begin->getTokenType();
         begin++;
-        auto newConditional = parseConditionalExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return isAssignment(token.getTokenType()) || recoverySet(token);
-        });
+        auto newConditional = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
         if (newConditional)
         {
             list.emplace_back(
@@ -90,23 +83,20 @@ std::optional<AssignmentExpression> OpenCL::Parser::parseAssignmentExpression(To
     return AssignmentExpression(start, begin, std::move(*result), std::move(list));
 }
 
-std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin,
-                                                                                Tokens::const_iterator end,
-                                                                                Context& context,
-                                                                                InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::ConditionalExpression>
+    OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                               Context& context)
 {
     auto start = begin;
-    auto logicalOrExperssion = parseLogicalOrExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::QuestionMark || recoverySet(token);
-    });
+    auto logicalOrExperssion = parseLogicalOrExpression(
+        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::QuestionMark)));
 
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
     {
         auto questionMarkpos = begin;
         begin++;
-        auto optionalExpression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::Colon || recoverySet(token);
-        });
+        auto optionalExpression =
+            parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon)));
         if (!expect(Lexer::TokenType::Colon, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), context.getLineStart(questionMarkpos),
                                    context.getLineEnd(questionMarkpos),
@@ -117,7 +107,7 @@ std::optional<ConditionalExpression> OpenCL::Parser::parseConditionalExpression(
             //            });
             context.skipUntil(begin, end, firstExpressionSet);
         }
-        auto optionalConditional = parseConditionalExpression(begin, end, context, recoverySet);
+        auto optionalConditional = parseConditionalExpression(begin, end, context);
         if (!logicalOrExperssion || !optionalConditional)
         {
             return {};
@@ -170,118 +160,87 @@ namespace
     }
 
     StateVariant parseBinaryOperators(EndState endState, OpenCL::Parser::Tokens::const_iterator& begin,
-                                      OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::Context& context,
-                                      OpenCL::Parser::InRecoverySet recoverySet)
+                                      OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::Context& context)
     {
         StateVariant state;
-        auto isFirstIn = [endState, &state](const OpenCL::Lexer::Token& token) -> bool {
+        auto firstSet = [endState, &state]() -> OpenCL::Parser::Context::TokenBitSet {
+            OpenCL::Parser::Context::TokenBitSet result;
             switch (endState)
             {
                 case EndState::LogicalOr:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::LogicOr)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::LogicOr);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::LogicalAnd:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::LogicAnd)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::LogicAnd);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::BitOr:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::BitOr)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::BitOr);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::BitXor:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::BitXor)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::BitXor);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::BitAnd:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::Ampersand)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Ampersand);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::Equality:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::Equal
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::NotEqual)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Equal,
+                                                                      OpenCL::Lexer::TokenType::NotEqual);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::Relational:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::LessThan
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::LessThanOrEqual
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::GreaterThan
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::GreaterThanOrEqual)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(
+                        OpenCL::Lexer::TokenType::LessThan, OpenCL::Lexer::TokenType::LessThanOrEqual,
+                        OpenCL::Lexer::TokenType::GreaterThan, OpenCL::Lexer::TokenType::GreaterThanOrEqual);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::Shift:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::ShiftLeft
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::ShiftRight)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::ShiftLeft,
+                                                                      OpenCL::Lexer::TokenType::ShiftRight);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::Additive:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::Plus
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::Minus)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Plus,
+                                                                      OpenCL::Lexer::TokenType::Minus);
                     if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                     {
-                        return false;
+                        return result;
                     }
                     [[fallthrough]];
                 case EndState::Term:
-                    if (token.getTokenType() == OpenCL::Lexer::TokenType::Asterisk
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::Division
-                        || token.getTokenType() == OpenCL::Lexer::TokenType::Percent)
-                    {
-                        return true;
-                    }
+                    result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Asterisk,
+                                                                      OpenCL::Lexer::TokenType::Division,
+                                                                      OpenCL::Lexer::TokenType::Percent);
                     [[fallthrough]];
-                default: return false;
+                default: return result;
             }
         };
         while ([&state, endState]() -> bool {
@@ -307,10 +266,7 @@ namespace
                 case getIndex<std::monostate>(state):
                 {
                     auto start = begin;
-                    auto result = parseCastExpression(begin, end, context,
-                                                      [recoverySet, &isFirstIn](const OpenCL::Lexer::Token& token) {
-                                                          return isFirstIn(token) || recoverySet(token);
-                                                      });
+                    auto result = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
 
                     std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
                     while (begin != end
@@ -320,10 +276,7 @@ namespace
                     {
                         auto token = begin->getTokenType();
                         begin++;
-                        auto newCast = parseCastExpression(
-                            begin, end, context, [recoverySet, &isFirstIn](const OpenCL::Lexer::Token& token) {
-                                return isFirstIn(token) || recoverySet(token);
-                            });
+                        auto newCast = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newCast)
                         {
                             list.emplace_back(
@@ -365,11 +318,7 @@ namespace
                     {
                         auto token = begin->getTokenType();
                         begin++;
-                        auto newTerm = std::get<std::optional<Term>>(parseBinaryOperators(
-                            EndState::Term, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::Minus
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::Plus || recoverySet(token);
-                            }));
+                        auto newTerm = parseTerm(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newTerm)
                         {
                             list.emplace_back(token == OpenCL::Lexer::TokenType::Plus ?
@@ -401,12 +350,7 @@ namespace
                     {
                         auto token = begin->getTokenType();
                         begin++;
-                        auto newAdd = std::get<std::optional<AdditiveExpression>>(parseBinaryOperators(
-                            EndState::Additive, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::ShiftRight
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::ShiftLeft
-                                       || recoverySet(token);
-                            }));
+                        auto newAdd = parseAdditiveExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newAdd)
                         {
                             list.emplace_back(token == OpenCL::Lexer::TokenType::ShiftRight ?
@@ -440,14 +384,7 @@ namespace
                     {
                         auto token = begin->getTokenType();
                         begin++;
-                        auto newShift = std::get<std::optional<ShiftExpression>>(parseBinaryOperators(
-                            EndState::Shift, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::LessThan
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::LessThanOrEqual
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::GreaterThan
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::GreaterThanOrEqual
-                                       || recoverySet(token);
-                            }));
+                        auto newShift = parseShiftExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newShift)
                         {
                             list.emplace_back(
@@ -491,13 +428,8 @@ namespace
                     {
                         auto token = begin->getTokenType();
                         begin++;
-                        auto newRelational = std::get<std::optional<RelationalExpression>>(parseBinaryOperators(
-                            EndState::Relational, begin, end, context,
-                            [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::Equal
-                                       || token.getTokenType() == OpenCL::Lexer::TokenType::NotEqual
-                                       || recoverySet(token);
-                            }));
+                        auto newRelational =
+                            parseRelationalExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newRelational)
                         {
                             list.emplace_back(token == OpenCL::Lexer::TokenType::Equal ?
@@ -526,11 +458,7 @@ namespace
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Ampersand)
                     {
                         begin++;
-                        auto newEqual = std::get<std::optional<EqualityExpression>>(parseBinaryOperators(
-                            EndState::Equality, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::Ampersand
-                                       || recoverySet(token);
-                            }));
+                        auto newEqual = parseEqualityExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newEqual)
                         {
                             list.push_back(std::move(*newEqual));
@@ -556,10 +484,7 @@ namespace
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitXor)
                     {
                         begin++;
-                        auto newAnd = std::get<std::optional<BitAndExpression>>(parseBinaryOperators(
-                            EndState::BitAnd, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::BitXor || recoverySet(token);
-                            }));
+                        auto newAnd = parseBitAndExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newAnd)
                         {
                             list.push_back(std::move(*newAnd));
@@ -585,10 +510,7 @@ namespace
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitOr)
                     {
                         begin++;
-                        auto newXor = std::get<std::optional<BitXorExpression>>(parseBinaryOperators(
-                            EndState::BitXor, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::BitOr || recoverySet(token);
-                            }));
+                        auto newXor = parseBitXorExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newXor)
                         {
                             list.push_back(std::move(*newXor));
@@ -614,10 +536,7 @@ namespace
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicAnd)
                     {
                         begin++;
-                        auto newOr = std::get<std::optional<BitOrExpression>>(parseBinaryOperators(
-                            EndState::BitOr, begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::LogicAnd || recoverySet(token);
-                            }));
+                        auto newOr = parseBitOrExpression(begin, end, context.withRecoveryTokens(firstSet()));
                         if (newOr)
                         {
                             list.push_back(std::move(*newOr));
@@ -643,11 +562,7 @@ namespace
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicOr)
                     {
                         begin++;
-                        auto newAnd = std::get<std::optional<LogicalAndExpression>>(parseBinaryOperators(
-                            EndState::LogicalAnd, begin, end, context,
-                            [recoverySet](const OpenCL::Lexer::Token& token) {
-                                return token.getTokenType() == OpenCL::Lexer::TokenType::LogicOr || recoverySet(token);
-                            }));
+                        auto newAnd = parseLogicalAndExpression(begin, end, context);
                         if (newAnd)
                         {
                             list.push_back(std::move(*newAnd));
@@ -673,94 +588,77 @@ namespace
 
 } // namespace
 
-std::optional<LogicalOrExpression> OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin,
-                                                                            Tokens::const_iterator end,
-                                                                            Context& context, InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::LogicalOrExpression>
+    OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                             Context& context)
 {
-    return std::get<std::optional<LogicalOrExpression>>(
-        parseBinaryOperators(EndState::LogicalOr, begin, end, context, recoverySet));
+    return std::get<std::optional<LogicalOrExpression>>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
-std::optional<LogicalAndExpression> OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin,
-                                                                              Tokens::const_iterator end,
-                                                                              Context& context,
-                                                                              InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::LogicalAndExpression>
+    OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                              Context& context)
 {
     return std::get<std::optional<LogicalAndExpression>>(
-        parseBinaryOperators(EndState::LogicalAnd, begin, end, context, recoverySet));
+        parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
-std::optional<BitOrExpression> OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin,
-                                                                    Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::BitOrExpression>
+    OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitOrExpression>>(
-        parseBinaryOperators(EndState::BitOr, begin, end, context, recoverySet));
+    return std::get<std::optional<BitOrExpression>>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
-std::optional<BitXorExpression> OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::BitXorExpression>
+    OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitXorExpression>>(
-        parseBinaryOperators(EndState::BitXor, begin, end, context, recoverySet));
+    return std::get<std::optional<BitXorExpression>>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
-std::optional<BitAndExpression> OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context,
-                                                                      InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::BitAndExpression>
+    OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitAndExpression>>(
-        parseBinaryOperators(EndState::BitAnd, begin, end, context, recoverySet));
+    return std::get<std::optional<BitAndExpression>>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
-std::optional<EqualityExpression> OpenCL::Parser::parseEqualityExpression(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::EqualityExpression>
+    OpenCL::Parser::parseEqualityExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<EqualityExpression>>(
-        parseBinaryOperators(EndState::Equality, begin, end, context, recoverySet));
+    return std::get<std::optional<EqualityExpression>>(parseBinaryOperators(EndState::Equality, begin, end, context));
 }
 
-std::optional<RelationalExpression> OpenCL::Parser::parseRelationalExpression(Tokens::const_iterator& begin,
-                                                                              Tokens::const_iterator end,
-                                                                              Context& context,
-                                                                              InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::RelationalExpression>
+    OpenCL::Parser::parseRelationalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                              Context& context)
 {
     return std::get<std::optional<RelationalExpression>>(
-        parseBinaryOperators(EndState::Relational, begin, end, context, recoverySet));
+        parseBinaryOperators(EndState::Relational, begin, end, context));
 }
 
-std::optional<ShiftExpression> OpenCL::Parser::parseShiftExpression(Tokens::const_iterator& begin,
-                                                                    Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::ShiftExpression>
+    OpenCL::Parser::parseShiftExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<ShiftExpression>>(
-        parseBinaryOperators(EndState::Shift, begin, end, context, recoverySet));
+    return std::get<std::optional<ShiftExpression>>(parseBinaryOperators(EndState::Shift, begin, end, context));
 }
 
-std::optional<AdditiveExpression> OpenCL::Parser::parseAdditiveExpression(Tokens::const_iterator& begin,
-                                                                          Tokens::const_iterator end, Context& context,
-                                                                          InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::AdditiveExpression>
+    OpenCL::Parser::parseAdditiveExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<AdditiveExpression>>(
-        parseBinaryOperators(EndState::Additive, begin, end, context, recoverySet));
+    return std::get<std::optional<AdditiveExpression>>(parseBinaryOperators(EndState::Additive, begin, end, context));
 }
 
-std::optional<Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                              Context& context, InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                              Context& context)
 {
-    return std::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context, recoverySet));
+    return std::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context));
 }
 
-std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                      OpenCL::Parser::Context& context, InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& begin,
+                                                                      Tokens::const_iterator end, Context& context)
 {
     auto start = begin;
     auto specifierQualifiers =
-        parseSpecifierQualifierList(begin, end, context, [recoverySet, &context](const Lexer::Token& token) {
-            return firstIsInAbstractDeclarator(token, context) || recoverySet(token);
-        });
+        parseSpecifierQualifierList(begin, end, context.withRecoveryTokens(firstAbstractDeclaratorSet));
     if (specifierQualifiers.empty())
     {
         if (begin < end)
@@ -779,7 +677,7 @@ std::optional<TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& be
 
     if (begin < end && firstIsInAbstractDeclarator(*begin, context))
     {
-        auto abstractDec = parseAbstractDeclarator(begin, end, context, recoverySet);
+        auto abstractDec = parseAbstractDeclarator(begin, end, context);
         return TypeName(start, begin, std::move(specifierQualifiers),
                         std::make_unique<AbstractDeclarator>(std::move(abstractDec)));
     }
@@ -807,8 +705,7 @@ namespace
     void parsePostFixExpressionSuffix(std::vector<OpenCL::Lexer::Token>::const_iterator start,
                                       OpenCL::Parser::Tokens::const_iterator& begin,
                                       OpenCL::Parser::Tokens::const_iterator end,
-                                      std::unique_ptr<PostFixExpression>& current, OpenCL::Parser::Context& context,
-                                      OpenCL::Parser::InRecoverySet recoverySet)
+                                      std::unique_ptr<PostFixExpression>& current, OpenCL::Parser::Context& context)
     {
         while (begin != end && isPostFixOperator(*begin))
         {
@@ -838,10 +735,9 @@ namespace
                     }
 
                     auto assignment = parseAssignmentExpression(
-                        begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                            return token.getTokenType() == OpenCL::Lexer::TokenType::CloseBracket
-                                   || token.getTokenType() == OpenCL::Lexer::TokenType::Comma || recoverySet(token);
-                        });
+                        begin, end,
+                        context.withRecoveryTokens(OpenCL::Parser::Context::fromTokenTypes(
+                            OpenCL::Lexer::TokenType::CloseBracket, OpenCL::Lexer::TokenType::Comma)));
                     if (assignment)
                     {
                         nonCommaExpressions.push_back(std::make_unique<AssignmentExpression>(std::move(*assignment)));
@@ -858,12 +754,7 @@ namespace
                     //                    OpenCL::Lexer::Token& token) {
                     //                        return isPostFixOperator(token) || recoverySet(token);
                     //                    });
-                    context.skipUntil(begin, end,
-                                      OpenCL::Parser::Context::fromTokenTypes(
-                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                          OpenCL::Lexer::TokenType::Decrement));
+                    context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
                 }
                 if (current)
                 {
@@ -875,11 +766,9 @@ namespace
             {
                 auto openPpos = begin;
                 begin++;
-                auto expression =
-                    parseExpression(begin, end, context, [recoverySet](const OpenCL::Lexer::Token& token) {
-                        return token.getTokenType() == OpenCL::Lexer::TokenType::CloseSquareBracket
-                               || recoverySet(token);
-                    });
+                auto expression = parseExpression(begin, end,
+                                                  context.withRecoveryTokens(OpenCL::Parser::Context::fromTokenTypes(
+                                                      OpenCL::Lexer::TokenType::CloseSquareBracket)));
 
                 if (!expect(OpenCL::Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
                             {OpenCL::Message::note(
@@ -891,12 +780,7 @@ namespace
                     //                    OpenCL::Lexer::Token& token) {
                     //                        return isPostFixOperator(token) || recoverySet(token);
                     //                    });
-                    context.skipUntil(begin, end,
-                                      OpenCL::Parser::Context::fromTokenTypes(
-                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                          OpenCL::Lexer::TokenType::Decrement));
+                    context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
                 }
                 if (current)
                 {
@@ -932,12 +816,7 @@ namespace
                     //                    OpenCL::Lexer::Token& token) {
                     //                        return isPostFixOperator(token) || recoverySet(token);
                     //                    });
-                    context.skipUntil(begin, end,
-                                      OpenCL::Parser::Context::fromTokenTypes(
-                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                          OpenCL::Lexer::TokenType::Decrement));
+                    context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
                 }
                 if (current)
                 {
@@ -955,12 +834,7 @@ namespace
                     //                    OpenCL::Lexer::Token& token) {
                     //                        return isPostFixOperator(token) || recoverySet(token);
                     //                    });
-                    context.skipUntil(begin, end,
-                                      OpenCL::Parser::Context::fromTokenTypes(
-                                          OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                          OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                          OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                          OpenCL::Lexer::TokenType::Decrement));
+                    context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
                 }
                 if (current)
                 {
@@ -972,15 +846,14 @@ namespace
     }
 } // namespace
 
-std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_iterator& begin,
-                                                                  Tokens::const_iterator end, Context& context,
-                                                                  InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::CastExpression>
+    OpenCL::Parser::parseCastExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
     auto start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBracket || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
-        auto unary = parseUnaryExpression(begin, end, context, recoverySet);
+        auto unary = parseUnaryExpression(begin, end, context);
         if (!unary)
         {
             return {};
@@ -988,9 +861,8 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
         return CastExpression(start, begin, std::move(*unary));
     }
     begin++;
-    auto typeName = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-    });
+    auto typeName =
+        parseTypeName(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)));
     if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                 {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
@@ -1002,7 +874,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
     }
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
-        auto cast = parseCastExpression(begin, end, context, recoverySet);
+        auto cast = parseCastExpression(begin, end, context);
         if (!cast || !typeName)
         {
             return {};
@@ -1024,10 +896,9 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
         openBrace = begin - 1;
     }
 
-    auto initializer = parseInitializerList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-        return token.getTokenType() == Lexer::TokenType::CloseBrace || token.getTokenType() == Lexer::TokenType::Comma
-               || recoverySet(token);
-    });
+    auto initializer = parseInitializerList(
+        begin, end,
+        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)));
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
     {
         begin++;
@@ -1042,11 +913,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
             //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
             //                return isPostFixOperator(token) || recoverySet(token);
             //            });
-            context.skipUntil(begin, end,
-                              OpenCL::Parser::Context::fromTokenTypes(
-                                  OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                  OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
-                                  OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement));
+            context.skipUntil(begin, end, firstPostfixSet);
         }
     }
     else
@@ -1056,11 +923,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
             //            skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
             //                return isPostFixOperator(token) || recoverySet(token);
             //            });
-            context.skipUntil(begin, end,
-                              OpenCL::Parser::Context::fromTokenTypes(
-                                  OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                  OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
-                                  OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement));
+            context.skipUntil(begin, end, firstPostfixSet);
         }
     }
     std::unique_ptr<PostFixExpression> current;
@@ -1069,7 +932,7 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
         current = std::make_unique<PostFixExpression>(
             PostFixExpressionTypeInitializer(start, begin, std::move(*typeName), std::move(*initializer)));
     }
-    parsePostFixExpressionSuffix(start, begin, end, current, context, recoverySet);
+    parsePostFixExpressionSuffix(start, begin, end, current, context);
     if (!current)
     {
         return {};
@@ -1077,9 +940,8 @@ std::optional<CastExpression> OpenCL::Parser::parseCastExpression(Tokens::const_
     return CastExpression(start, begin, UnaryExpressionPostFixExpression(start, begin, std::move(*current)));
 }
 
-std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::const_iterator& begin,
-                                                                    Tokens::const_iterator end, Context& context,
-                                                                    InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::UnaryExpression>
+    OpenCL::Parser::parseUnaryExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
     auto start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SizeofKeyword)
@@ -1090,9 +952,8 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
         {
             auto openPpos = begin;
             begin++;
-            auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-                return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-            });
+            auto type = parseTypeName(
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)));
             if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                        context.getLineEnd(openPpos),
@@ -1108,7 +969,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
         }
         else
         {
-            auto unary = parseUnaryExpression(begin, end, context, recoverySet);
+            auto unary = parseUnaryExpression(begin, end, context);
             if (!unary)
             {
                 return {};
@@ -1142,7 +1003,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
                 default: OPENCL_UNREACHABLE;
             }
         }();
-        auto cast = parseCastExpression(begin, end, context, recoverySet);
+        auto cast = parseCastExpression(begin, end, context);
         if (!cast)
         {
             return {};
@@ -1151,7 +1012,7 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
             UnaryExpressionUnaryOperator(start, begin, op, std::make_unique<CastExpression>(std::move(*cast))));
     }
 
-    auto postFix = parsePostFixExpression(begin, end, context, recoverySet);
+    auto postFix = parsePostFixExpression(begin, end, context);
     if (!postFix)
     {
         return {};
@@ -1159,9 +1020,8 @@ std::optional<UnaryExpression> OpenCL::Parser::parseUnaryExpression(Tokens::cons
     return UnaryExpression(UnaryExpressionPostFixExpression(start, begin, std::move(*postFix)));
 }
 
-std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::const_iterator& begin,
-                                                                        Tokens::const_iterator end, Context& context,
-                                                                        InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::PostFixExpression>
+    OpenCL::Parser::parsePostFixExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
     std::unique_ptr<PostFixExpression> current;
 
@@ -1169,9 +1029,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBracket || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
-        auto newPrimary = parsePrimaryExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return isPostFixOperator(token) || recoverySet(token);
-        });
+        auto newPrimary = parsePrimaryExpression(begin, end, context.withRecoveryTokens(firstPostfixSet));
         if (newPrimary)
         {
             current = std::make_unique<PostFixExpression>(
@@ -1181,9 +1039,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     else
     {
         begin++;
-        auto type = parseTypeName(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-        });
+        auto type = parseTypeName(begin, end, context);
         if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                    context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
@@ -1207,10 +1063,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
             openBrace = begin - 1;
         }
 
-        auto initializer = parseInitializerList(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseBrace
-                   || token.getTokenType() == Lexer::TokenType::Comma || recoverySet(token);
-        });
+        auto initializer = parseInitializerList(begin, end, context);
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
             begin++;
@@ -1225,12 +1078,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 //                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                 //                    return isPostFixOperator(token) || recoverySet(token);
                 //                });
-                context.skipUntil(begin, end,
-                                  OpenCL::Parser::Context::fromTokenTypes(
-                                      OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                      OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                      OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                      OpenCL::Lexer::TokenType::Decrement));
+                context.skipUntil(begin, end, firstPostfixSet);
             }
         }
         else
@@ -1240,12 +1088,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
                 //                skipUntil(begin, end, [recoverySet](const Lexer::Token& token) {
                 //                    return isPostFixOperator(token) || recoverySet(token);
                 //                });
-                context.skipUntil(begin, end,
-                                  OpenCL::Parser::Context::fromTokenTypes(
-                                      OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                      OpenCL::Lexer::TokenType::OpenSquareBracket,
-                                      OpenCL::Lexer::TokenType::OpenBracket, OpenCL::Lexer::TokenType::Increment,
-                                      OpenCL::Lexer::TokenType::Decrement));
+                context.skipUntil(begin, end, firstPostfixSet);
             }
         }
         if (initializer && type)
@@ -1255,7 +1098,7 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
         }
     }
 
-    parsePostFixExpressionSuffix(start, begin, end, current, context, recoverySet);
+    parsePostFixExpressionSuffix(start, begin, end, current, context);
 
     if (!current)
     {
@@ -1264,9 +1107,8 @@ std::optional<PostFixExpression> OpenCL::Parser::parsePostFixExpression(Tokens::
     return std::move(*current);
 }
 
-std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::const_iterator& begin,
-                                                                        Tokens::const_iterator end, Context& context,
-                                                                        InRecoverySet recoverySet)
+std::optional<OpenCL::Syntax::PrimaryExpression>
+    OpenCL::Parser::parsePrimaryExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
 {
     auto start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
@@ -1307,9 +1149,8 @@ std::optional<PrimaryExpression> OpenCL::Parser::parsePrimaryExpression(Tokens::
     else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenBracket)
     {
         auto openPpos = begin++;
-        auto expression = parseExpression(begin, end, context, [recoverySet](const Lexer::Token& token) {
-            return token.getTokenType() == Lexer::TokenType::CloseBracket || recoverySet(token);
-        });
+        auto expression = parseExpression(
+            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBracket)));
         if (!expect(Lexer::TokenType::CloseBracket, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
                                    context.getLineEnd(openPpos),

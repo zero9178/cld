@@ -23,8 +23,7 @@ namespace
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
         OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), &ss);
         auto ref = tokens.cbegin();
-        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context,
-                                                                  [](const OpenCL::Lexer::Token&) { return false; });
+        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
         INFO(ss.str());
         REQUIRE((ss.str().empty() && parsing));
         OpenCL::Semantics::SemanticAnalysis analysis(&ss);
