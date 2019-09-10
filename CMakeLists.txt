@@ -20,7 +20,11 @@ if (DEFINED SANITIZER)
 endif ()
 
 if (WIN32)
-    add_compile_definitions(_WIN32_WINNT=0x0600 WINVER=0x0600)
+    if (NOT MSVC)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--stack,8000000")
+    else ()
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8000000")
+    endif ()
 endif ()
 
 option(BUILD_TESTS "Build tests" ON)
