@@ -89,7 +89,7 @@ bool OpenCL::Parser::firstIsInDeclarator(const Lexer::Token& token, const OpenCL
 bool OpenCL::Parser::firstIsInDirectDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context&)
 {
     return token.getTokenType() == Lexer::TokenType::Identifier
-           || token.getTokenType() == Lexer::TokenType::OpenBracket;
+           || token.getTokenType() == Lexer::TokenType::OpenParentheses;
 }
 
 [[maybe_unused]] bool OpenCL::Parser::firstIsInParameterTypeList(const Lexer::Token& token,
@@ -105,7 +105,7 @@ bool OpenCL::Parser::firstIsInAbstractDeclarator(const Lexer::Token& token, cons
 
 bool OpenCL::Parser::firstIsInDirectAbstractDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context&)
 {
-    return token.getTokenType() == Lexer::TokenType::OpenBracket
+    return token.getTokenType() == Lexer::TokenType::OpenParentheses
            || token.getTokenType() == Lexer::TokenType::OpenSquareBracket;
 }
 
@@ -227,7 +227,7 @@ bool OpenCL::Parser::firstIsInTerm(const Lexer::Token& token, const OpenCL::Pars
 
 bool OpenCL::Parser::firstIsInCastExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context)
 {
-    return token.getTokenType() == Lexer::TokenType::OpenBracket || firstIsInUnaryExpression(token, context);
+    return token.getTokenType() == Lexer::TokenType::OpenParentheses || firstIsInUnaryExpression(token, context);
 }
 
 bool OpenCL::Parser::firstIsInUnaryExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context)
@@ -242,13 +242,13 @@ bool OpenCL::Parser::firstIsInUnaryExpression(const Lexer::Token& token, const O
 
 bool OpenCL::Parser::firstIsInPostFixExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context)
 {
-    return token.getTokenType() == Lexer::TokenType::OpenBracket || firstIsInPrimaryExpression(token, context);
+    return token.getTokenType() == Lexer::TokenType::OpenParentheses || firstIsInPrimaryExpression(token, context);
 }
 
 bool OpenCL::Parser::firstIsInPrimaryExpression(const Lexer::Token& token, const OpenCL::Parser::Context&)
 {
-    return token.getTokenType() == Lexer::TokenType::OpenBracket || token.getTokenType() == Lexer::TokenType::Identifier
-           || token.getTokenType() == Lexer::TokenType::Literal
+    return token.getTokenType() == Lexer::TokenType::OpenParentheses
+           || token.getTokenType() == Lexer::TokenType::Identifier || token.getTokenType() == Lexer::TokenType::Literal
            || token.getTokenType() == Lexer::TokenType::StringLiteral;
 }
 

@@ -11,8 +11,8 @@ namespace OpenCL::Lexer
     enum class TokenType : std::uint8_t
     {
         Identifier,
-        OpenBracket,
-        CloseBracket,
+        OpenParentheses,
+        CloseParentheses,
         OpenBrace,
         CloseBrace,
         Literal,

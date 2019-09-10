@@ -67,7 +67,7 @@ namespace OpenCL::Parser
 
     constexpr Context::TokenBitSet firstPostfixSet =
         Context::fromTokenTypes(OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                                OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenBracket,
+                                OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenParentheses,
                                 OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement);
 
     constexpr Context::TokenBitSet assignmentSet = Context::fromTokenTypes(
@@ -99,21 +99,21 @@ namespace OpenCL::Parser
     constexpr Context::TokenBitSet firstParameterListSet = firstDeclarationSpecifierSet;
 
     constexpr Context::TokenBitSet firstDirectAbstractDeclaratorSet =
-        Context::fromTokenTypes(Lexer::TokenType::OpenBracket, Lexer::TokenType::OpenSquareBracket);
+        Context::fromTokenTypes(Lexer::TokenType::OpenParentheses, Lexer::TokenType::OpenSquareBracket);
 
     constexpr Context::TokenBitSet firstAbstractDeclaratorSet = firstPointerSet | firstDirectAbstractDeclaratorSet;
 
     constexpr Context::TokenBitSet firstParameterTypeListSet = firstParameterListSet;
 
     constexpr Context::TokenBitSet firstDirectDeclaratorSet =
-        Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::OpenBracket);
+        Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::OpenParentheses);
 
     constexpr Context::TokenBitSet firstDeclaratorSet = firstPointerSet | firstDirectDeclaratorSet;
 
     constexpr Context::TokenBitSet firstDeclarationSet = firstDeclarationSpecifierSet;
 
     constexpr Context::TokenBitSet firstExpressionSet = Context::fromTokenTypes(
-        Lexer::TokenType::OpenBracket, Lexer::TokenType::Identifier, Lexer::TokenType::Literal,
+        Lexer::TokenType::OpenParentheses, Lexer::TokenType::Identifier, Lexer::TokenType::Literal,
         Lexer::TokenType::StringLiteral, Lexer::TokenType::Increment, Lexer::TokenType::Decrement,
         Lexer::TokenType::Minus, Lexer::TokenType::Plus, Lexer::TokenType::Ampersand, Lexer::TokenType::BitWiseNegation,
         Lexer::TokenType::LogicalNegation, Lexer::TokenType::SizeofKeyword);

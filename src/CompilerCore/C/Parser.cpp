@@ -187,3 +187,54 @@ void OpenCL::Parser::Context::skipUntil(std::vector<OpenCL::Lexer::Token>::const
         return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
     });
 }
+
+void OpenCL::Parser::Context::parenthesesEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+{
+    if (++m_parenthesesDepth <= m_bracketMax)
+    {
+        return;
+    }
+    log({Message::error(
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
+        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    throw FatalParserError();
+}
+
+void OpenCL::Parser::Context::parenthesesLeft()
+{
+    m_parenthesesDepth--;
+}
+
+void OpenCL::Parser::Context::squareBracketEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+{
+    if (++m_squareBracketDepth <= m_bracketMax)
+    {
+        return;
+    }
+    log({Message::error(
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
+        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    throw FatalParserError();
+}
+
+void OpenCL::Parser::Context::squareBracketLeft()
+{
+    m_squareBracketDepth--;
+}
+
+void OpenCL::Parser::Context::braceEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+{
+    if (++m_braceDepth <= m_bracketMax)
+    {
+        return;
+    }
+    log({Message::error(
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
+        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    throw FatalParserError();
+}
+
+void OpenCL::Parser::Context::braceLeft()
+{
+    m_braceDepth--;
+}

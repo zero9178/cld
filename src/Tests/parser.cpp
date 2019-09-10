@@ -777,17 +777,17 @@ TEST_CASE("Parse Expressions", "[parser]")
 {
     SECTION("Primary expressions")
     {
-        functionProduces(parsePrimaryExpression, "0", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parsePrimaryExpression, "wdawd", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parsePrimaryExpression, "\"wdawd\"", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parsePrimaryExpression, "((((5))))", ProducesNoErrors() && ProducesNoNotes());
-        functionProduces(parsePrimaryExpression, "((((]))]))",
+        functionProduces(parsePostFixExpression, "0", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "wdawd", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "\"wdawd\"", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "((((5))))", ProducesNoErrors() && ProducesNoNotes());
+        functionProduces(parsePostFixExpression, "((((]))]))",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                              OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
                              && Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args("')'", "']'"))
                              && Catch::Contains(TO_MATCH_N_HERE.args("'('")) && ProducesNErrors(2)
                              && ProducesNNotes(1));
-        functionProduces(parsePrimaryExpression, "((((]",
+        functionProduces(parsePostFixExpression, "((((]",
                          Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                              OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"), "']'"))
                              && Catch::Contains(EXPECTED_N.args("')'")) && Catch::Contains(TO_MATCH_N_HERE.args("'('"))

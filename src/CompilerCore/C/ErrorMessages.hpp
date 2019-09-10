@@ -23,6 +23,8 @@ namespace OpenCL
             constexpr auto MISSING_PARAMETER_NAME = "Parameter name omitted in function definition";
 
             constexpr auto N_REQUIRES_AT_LEAST_ONE_N = Format("{} requires at least one {}");
+
+            constexpr auto MAXIMUM_N_DEPTH_OF_N_EXCEEDED = Format("Maximum {} depth of {} exceeded");
         } // namespace Parser
 
         constexpr auto REDEFINITION_OF_SYMBOL_N = Format("Redefinition of symbol {}");

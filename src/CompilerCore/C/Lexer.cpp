@@ -531,8 +531,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             characters.clear();
                             currentState = State::StringLiteral;
                             break;
-                        case '(': result.emplace_back(line, column, 1, TokenType::OpenBracket); break;
-                        case ')': result.emplace_back(line, column, 1, TokenType::CloseBracket); break;
+                        case '(': result.emplace_back(line, column, 1, TokenType::OpenParentheses); break;
+                        case ')': result.emplace_back(line, column, 1, TokenType::CloseParentheses); break;
                         case '{': result.emplace_back(line, column, 1, TokenType::OpenBrace); break;
                         case '}': result.emplace_back(line, column, 1, TokenType::CloseBrace); break;
                         case '[': result.emplace_back(line, column, 1, TokenType::OpenSquareBracket); break;
@@ -614,6 +614,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                         auto originalCharacters = characters;
                         auto csize = characters.size();
                         currentState = State::Start;
+                        if (std::none_of(characters.begin(), characters.end(), [](char c) { return c == '\n'; }))
                         {
                             static std::regex escapes(R"(\\([0-7]{1,3}|x[0-9a-fA-F]+|.))");
                             std::smatch matches;
@@ -1050,8 +1051,8 @@ std::string OpenCL::Lexer::Token::emitBack() const
     switch (getTokenType())
     {
         case TokenType::Identifier: return std::get<std::string>(getValue());
-        case TokenType::OpenBracket: return "(";
-        case TokenType::CloseBracket: return ")";
+        case TokenType::OpenParentheses: return "(";
+        case TokenType::CloseParentheses: return ")";
         case TokenType::OpenBrace: return m_valueRepresentation.empty() ? "{" : m_valueRepresentation;
         case TokenType::CloseBrace: return m_valueRepresentation.empty() ? "}" : m_valueRepresentation;
         case TokenType::DoublePound:
@@ -1143,8 +1144,8 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
     switch (tokenType)
     {
         case TokenType::Identifier: return "identifier";
-        case TokenType::OpenBracket: return "'('";
-        case TokenType::CloseBracket: return "')'";
+        case TokenType::OpenParentheses: return "'('";
+        case TokenType::CloseParentheses: return "')'";
         case TokenType::OpenBrace: return "'{'";
         case TokenType::CloseBrace: return "'}'";
         case TokenType::StringLiteral: return "string literal";
@@ -1236,8 +1237,8 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
     switch (tokenType)
     {
         case TokenType::Identifier: return "identifier";
-        case TokenType::OpenBracket: return "(";
-        case TokenType::CloseBracket: return ")";
+        case TokenType::OpenParentheses: return "(";
+        case TokenType::CloseParentheses: return ")";
         case TokenType::OpenBrace: return "{";
         case TokenType::CloseBrace: return "}";
         case TokenType::StringLiteral: return "string literal";

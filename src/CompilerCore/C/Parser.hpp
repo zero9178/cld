@@ -12,6 +12,10 @@ namespace OpenCL::Parser
 {
     using Tokens = std::vector<Lexer::Token>;
 
+    class FatalParserError : public std::exception
+    {
+    };
+
     class Context final
     {
         std::ostream* m_reporter;
@@ -72,6 +76,11 @@ namespace OpenCL::Parser
             TokenBitReseter& operator=(TokenBitReseter&&) noexcept = delete;
         };
 
+        std::uint64_t m_bracketMax = 256;
+        std::uint64_t m_parenthesesDepth = 0;
+        std::uint64_t m_squareBracketDepth = 0;
+        std::uint64_t m_braceDepth = 0;
+
     public:
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
@@ -114,6 +123,18 @@ namespace OpenCL::Parser
         [[nodiscard]] std::size_t getCurrentErrorCount() const;
 
         void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, TokenBitSet additional = {});
+
+        void parenthesesEntered(Tokens::const_iterator bracket);
+
+        void parenthesesLeft();
+
+        void squareBracketEntered(Tokens::const_iterator bracket);
+
+        void squareBracketLeft();
+
+        void braceEntered(Tokens::const_iterator bracket);
+
+        void braceLeft();
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
