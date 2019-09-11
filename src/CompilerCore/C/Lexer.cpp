@@ -626,9 +626,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                                             - (matches[0].second - matches[0].first) + 1;
                                 characters = std::string(characters.cbegin(), matches[0].first)
                                              + static_cast<char>(charactersToCharLiteral(
-                                                 reporter, {matches[0].first, matches[0].second}, line,
-                                                 column - characters.size() + size, lineMap[line]))
-                                             + std::string(matches[0].second, characters.cend());
+                                                 reporter, {matches[0].first, matches[0].second}, line, column, lineMap[line]))
+                                    + std::string(matches[0].second, characters.cend());
                                 start = characters.cbegin() + size;
                             }
                         }

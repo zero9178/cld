@@ -112,6 +112,7 @@ namespace
                                       OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::Context& context)
     {
         StateVariant state;
+        auto start = begin;
         auto firstSet = [endState, &state]() -> OpenCL::Parser::Context::TokenBitSet {
             OpenCL::Parser::Context::TokenBitSet result;
             switch (endState)
@@ -214,7 +215,6 @@ namespace
             {
                 case getIndex<std::monostate>(state):
                 {
-                    auto start = begin;
                     auto result = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
 
                     std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
@@ -257,7 +257,6 @@ namespace
                 }
                 case getIndex<std::optional<Term>>(state):
                 {
-                    auto start = begin;
                     auto& result = std::get<std::optional<Term>>(state);
 
                     std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
@@ -289,7 +288,6 @@ namespace
                 }
                 case getIndex<std::optional<AdditiveExpression>>(state):
                 {
-                    auto start = begin;
                     auto& result = std::get<std::optional<AdditiveExpression>>(state);
 
                     std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
@@ -321,7 +319,6 @@ namespace
                 }
                 case getIndex<std::optional<ShiftExpression>>(state):
                 {
-                    auto start = begin;
                     auto& result = std::get<std::optional<ShiftExpression>>(state);
 
                     std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
@@ -367,7 +364,6 @@ namespace
                 }
                 case getIndex<std::optional<RelationalExpression>>(state):
                 {
-                    auto start = begin;
                     auto& result = std::get<std::optional<RelationalExpression>>(state);
 
                     std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> list;
@@ -400,7 +396,6 @@ namespace
                 }
                 case getIndex<std::optional<EqualityExpression>>(state):
                 {
-                    auto start = begin;
                     auto& result = std::get<std::optional<EqualityExpression>>(state);
 
                     std::vector<EqualityExpression> list;
@@ -423,7 +418,6 @@ namespace
                 }
                 case getIndex<BitAndExpression>(state):
                 {
-                    auto start = begin;
                     std::vector<BitAndExpression> list;
                     list.push_back(std::move(std::get<BitAndExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitXor)
@@ -437,8 +431,6 @@ namespace
                 }
                 case getIndex<BitXorExpression>(state):
                 {
-                    auto start = begin;
-
                     std::vector<BitXorExpression> list;
                     list.push_back(std::move(std::get<BitXorExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitOr)
@@ -451,7 +443,6 @@ namespace
                 }
                 case getIndex<BitOrExpression>(state):
                 {
-                    auto start = begin;
                     std::vector<BitOrExpression> list;
                     list.push_back(std::move(std::get<BitOrExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicAnd)
@@ -465,8 +456,6 @@ namespace
                 }
                 case getIndex<LogicalAndExpression>(state):
                 {
-                    auto start = begin;
-
                     std::vector<LogicalAndExpression> list;
                     list.push_back(std::move(std::get<LogicalAndExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicOr)

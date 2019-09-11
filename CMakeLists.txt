@@ -21,13 +21,11 @@ endif ()
 
 option(BUILD_TESTS "Build tests" ON)
 
-option(DISABLE_RTTI "Disable runtime type information" ON)
-
-if (${DISABLE_RTTI})
-    if (MSVC)
-        add_compile_options(/GR-)
+if (WIN32)
+    if (NOT MSVC)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--stack,8000000")
     else ()
-        add_compile_options(-fno-rtti)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8000000")
     endif ()
 endif ()
 

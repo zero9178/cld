@@ -75,14 +75,17 @@ I=')");
         "                                                                                                                                                                                               ");
     parse("IN[\"*[\\* 8F*\n"
           "\"(] 4");
-    excludeFromAddressSanitizer();
+    parse(R"("\S")");
     // Causes stack overflow when using address sanitizer due to address sanitizer possibly using 3x as much stack space
     // according to documentations
+    // Also causes __chckstk to throw on windows when compiling in debug mode
+#if defined(NDEBUG) || !defined(_WIN32)
 #if !defined(__has_feature)
     excludeFromAddressSanitizer();
 #else
 #if !__has_feature(address_sanitizer)
     excludeFromAddressSanitizer();
+#endif
 #endif
 #endif
 }
