@@ -91,13 +91,10 @@ namespace OpenCL
         }
     };
 
-    class Modifier
+    class Modifier final
     {
-        std::vector<Lexer::Token>::const_iterator m_begin;
-        std::vector<Lexer::Token>::const_iterator m_end;
-
     public:
-        enum Action
+        enum Action : std::uint8_t
         {
             Underline,
             PointAtBeginning,
@@ -106,8 +103,10 @@ namespace OpenCL
         };
 
     private:
-        Action m_action;
         std::string m_actionArgument;
+        std::vector<Lexer::Token>::const_iterator m_begin;
+        std::vector<Lexer::Token>::const_iterator m_end;
+        Action m_action;
 
     public:
         Modifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator anEnd,
@@ -122,10 +121,10 @@ namespace OpenCL
         [[nodiscard]] const std::string& getActionArgument() const;
     };
 
-    class Message
+    class Message final
     {
     public:
-        enum Severity
+        enum Severity : std::uint8_t
         {
             Error,
             Note,
@@ -133,11 +132,11 @@ namespace OpenCL
         };
 
     private:
-        Severity m_severity;
+        std::optional<Modifier> m_modifier;
         std::string m_message;
         std::vector<OpenCL::Lexer::Token>::const_iterator m_begin;
         std::vector<OpenCL::Lexer::Token>::const_iterator m_end;
-        std::optional<Modifier> m_modifier;
+        Severity m_severity;
 
     public:
         Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,

@@ -1474,7 +1474,7 @@
 //        return result;
 //    }
 //    auto[value, type] = *result;
-//    for (auto& andExpression : node.getOptionalBitOrExpressions())
+//    for (auto& andExpression : node.getBitOrExpressions())
 //    {
 //        auto* function = builder.GetInsertBlock()->getParent();
 //        value = toBool(value);
@@ -1521,7 +1521,7 @@
 //        return result;
 //    }
 //    auto[value, type] = *result;
-//    for (auto& andExpression : node.getOptionalAndExpressions())
+//    for (auto& andExpression : node.getAndExpressions())
 //    {
 //        auto* function = builder.GetInsertBlock()->getParent();
 //        value = toBool(value);

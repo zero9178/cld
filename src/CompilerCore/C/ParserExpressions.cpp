@@ -48,51 +48,40 @@ std::optional<OpenCL::Syntax::AssignmentExpression>
     {
         auto token = begin->getTokenType();
         begin++;
-        auto newConditional = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
-        if (newConditional)
-        {
-            list.emplace_back(
-                [token]() -> AssignmentExpression::AssignOperator {
-                    switch (token)
-                    {
-                        case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
-                        case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
-                        case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
-                        case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
-                        case Lexer::TokenType::MultiplyAssign:
-                            return AssignmentExpression::AssignOperator::MultiplyAssign;
-                        case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
-                        case Lexer::TokenType::ShiftLeftAssign:
-                            return AssignmentExpression::AssignOperator::LeftShiftAssign;
-                        case Lexer::TokenType::ShiftRightAssign:
-                            return AssignmentExpression::AssignOperator::RightShiftAssign;
-                        case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
-                        case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
-                        case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
-                        default: OPENCL_UNREACHABLE;
-                    }
-                }(),
-                std::move(*newConditional));
-        }
+        list.emplace_back(
+            [token]() -> AssignmentExpression::AssignOperator {
+                switch (token)
+                {
+                    case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
+                    case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
+                    case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
+                    case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
+                    case Lexer::TokenType::MultiplyAssign: return AssignmentExpression::AssignOperator::MultiplyAssign;
+                    case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
+                    case Lexer::TokenType::ShiftLeftAssign:
+                        return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                    case Lexer::TokenType::ShiftRightAssign:
+                        return AssignmentExpression::AssignOperator::RightShiftAssign;
+                    case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
+                    case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
+                    case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
+                    default: OPENCL_UNREACHABLE;
+                }
+            }(),
+            parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet)));
     }
 
-    if (!result)
-    {
-        return {};
-    }
-    return AssignmentExpression(start, begin, std::move(*result), std::move(list));
+    return AssignmentExpression(start, begin, std::move(result), std::move(list));
 }
 
 namespace
 {
-    template <class... Args>
-    using VariantOfOptionals = std::variant<std::monostate, std::optional<Args>...>;
+    using StateVariant = std::variant<std::monostate, std::optional<Term>, std::optional<AdditiveExpression>,
+                                      std::optional<ShiftExpression>, std::optional<RelationalExpression>,
+                                      std::optional<EqualityExpression>, BitAndExpression, BitXorExpression,
+                                      BitOrExpression, LogicalAndExpression, LogicalOrExpression>;
 
-    using StateVariant = VariantOfOptionals<Term, AdditiveExpression, ShiftExpression, RelationalExpression,
-                                            EqualityExpression, BitAndExpression, BitXorExpression, BitOrExpression,
-                                            LogicalAndExpression, LogicalOrExpression>;
-
-    enum class EndState
+    enum class EndState : std::uint8_t
     {
         Term,
         Additive,
@@ -129,35 +118,35 @@ namespace
             {
                 case EndState::LogicalOr:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::LogicOr);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<LogicalOrExpression>(state))
                     {
                         return result;
                     }
                     [[fallthrough]];
                 case EndState::LogicalAnd:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::LogicAnd);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<LogicalAndExpression>(state))
                     {
                         return result;
                     }
                     [[fallthrough]];
                 case EndState::BitOr:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::BitOr);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<BitOrExpression>(state))
                     {
                         return result;
                     }
                     [[fallthrough]];
                 case EndState::BitXor:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::BitXor);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<BitXorExpression>(state))
                     {
                         return result;
                     }
                     [[fallthrough]];
                 case EndState::BitAnd:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Ampersand);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<BitAndExpression>(state))
                     {
                         return result;
                     }
@@ -165,7 +154,7 @@ namespace
                 case EndState::Equality:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Equal,
                                                                       OpenCL::Lexer::TokenType::NotEqual);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<std::optional<EqualityExpression>>(state))
                     {
                         return result;
                     }
@@ -174,7 +163,7 @@ namespace
                     result |= OpenCL::Parser::Context::fromTokenTypes(
                         OpenCL::Lexer::TokenType::LessThan, OpenCL::Lexer::TokenType::LessThanOrEqual,
                         OpenCL::Lexer::TokenType::GreaterThan, OpenCL::Lexer::TokenType::GreaterThanOrEqual);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<std::optional<RelationalExpression>>(state))
                     {
                         return result;
                     }
@@ -182,7 +171,7 @@ namespace
                 case EndState::Shift:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::ShiftLeft,
                                                                       OpenCL::Lexer::TokenType::ShiftRight);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<std::optional<ShiftExpression>>(state))
                     {
                         return result;
                     }
@@ -190,7 +179,7 @@ namespace
                 case EndState::Additive:
                     result |= OpenCL::Parser::Context::fromTokenTypes(OpenCL::Lexer::TokenType::Plus,
                                                                       OpenCL::Lexer::TokenType::Minus);
-                    if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
+                    if (std::holds_alternative<std::optional<AdditiveExpression>>(state))
                     {
                         return result;
                     }
@@ -211,11 +200,11 @@ namespace
                 case EndState::Shift: return !std::holds_alternative<std::optional<ShiftExpression>>(state);
                 case EndState::Relational: return !std::holds_alternative<std::optional<RelationalExpression>>(state);
                 case EndState::Equality: return !std::holds_alternative<std::optional<EqualityExpression>>(state);
-                case EndState::BitAnd: return !std::holds_alternative<std::optional<BitAndExpression>>(state);
-                case EndState::BitXor: return !std::holds_alternative<std::optional<BitXorExpression>>(state);
-                case EndState::BitOr: return !std::holds_alternative<std::optional<BitOrExpression>>(state);
-                case EndState::LogicalAnd: return !std::holds_alternative<std::optional<LogicalAndExpression>>(state);
-                case EndState::LogicalOr: return !std::holds_alternative<std::optional<LogicalOrExpression>>(state);
+                case EndState::BitAnd: return !std::holds_alternative<BitAndExpression>(state);
+                case EndState::BitXor: return !std::holds_alternative<BitXorExpression>(state);
+                case EndState::BitOr: return !std::holds_alternative<BitOrExpression>(state);
+                case EndState::LogicalAnd: return !std::holds_alternative<LogicalAndExpression>(state);
+                case EndState::LogicalOr: return !std::holds_alternative<LogicalOrExpression>(state);
             }
             return false;
         }())
@@ -415,6 +404,10 @@ namespace
                     auto& result = std::get<std::optional<EqualityExpression>>(state);
 
                     std::vector<EqualityExpression> list;
+                    if (result)
+                    {
+                        list.push_back(std::move(*result));
+                    }
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Ampersand)
                     {
                         begin++;
@@ -425,118 +418,64 @@ namespace
                         }
                     }
 
-                    if (!result)
-                    {
-                        state = std::optional<BitAndExpression>{};
-                    }
-                    else
-                    {
-                        state = BitAndExpression(start, begin, std::move(*result), std::move(list));
-                    }
+                    state = BitAndExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<std::optional<BitAndExpression>>(state):
+                case getIndex<BitAndExpression>(state):
                 {
                     auto start = begin;
-                    auto& result = std::get<std::optional<BitAndExpression>>(state);
-
                     std::vector<BitAndExpression> list;
+                    list.push_back(std::move(std::get<BitAndExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitXor)
                     {
                         begin++;
-                        auto newAnd = parseBitAndExpression(begin, end, context.withRecoveryTokens(firstSet()));
-                        if (newAnd)
-                        {
-                            list.push_back(std::move(*newAnd));
-                        }
+                        list.push_back(parseBitAndExpression(begin, end, context.withRecoveryTokens(firstSet())));
                     }
 
-                    if (!result)
-                    {
-                        state = std::optional<BitXorExpression>{};
-                    }
-                    else
-                    {
-                        state = BitXorExpression(start, begin, std::move(*result), std::move(list));
-                    }
+                    state = BitXorExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<std::optional<BitXorExpression>>(state):
+                case getIndex<BitXorExpression>(state):
                 {
                     auto start = begin;
-                    auto& result = std::get<std::optional<BitXorExpression>>(state);
 
                     std::vector<BitXorExpression> list;
+                    list.push_back(std::move(std::get<BitXorExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::BitOr)
                     {
                         begin++;
-                        auto newXor = parseBitXorExpression(begin, end, context.withRecoveryTokens(firstSet()));
-                        if (newXor)
-                        {
-                            list.push_back(std::move(*newXor));
-                        }
+                        list.push_back(parseBitXorExpression(begin, end, context.withRecoveryTokens(firstSet())));
                     }
-
-                    if (!result)
-                    {
-                        state = std::optional<BitOrExpression>{};
-                    }
-                    else
-                    {
-                        state = BitOrExpression(start, begin, std::move(*result), std::move(list));
-                    }
+                    state = BitOrExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<std::optional<BitOrExpression>>(state):
+                case getIndex<BitOrExpression>(state):
                 {
                     auto start = begin;
-                    auto& result = std::get<std::optional<BitOrExpression>>(state);
-
                     std::vector<BitOrExpression> list;
+                    list.push_back(std::move(std::get<BitOrExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicAnd)
                     {
                         begin++;
-                        auto newOr = parseBitOrExpression(begin, end, context.withRecoveryTokens(firstSet()));
-                        if (newOr)
-                        {
-                            list.push_back(std::move(*newOr));
-                        }
+                        list.push_back(parseBitOrExpression(begin, end, context.withRecoveryTokens(firstSet())));
                     }
 
-                    if (!result)
-                    {
-                        state = std::optional<LogicalAndExpression>{};
-                    }
-                    else
-                    {
-                        state = LogicalAndExpression(start, begin, std::move(*result), std::move(list));
-                    }
+                    state = LogicalAndExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<std::optional<LogicalAndExpression>>(state):
+                case getIndex<LogicalAndExpression>(state):
                 {
                     auto start = begin;
-                    auto& result = std::get<std::optional<LogicalAndExpression>>(state);
 
                     std::vector<LogicalAndExpression> list;
+                    list.push_back(std::move(std::get<LogicalAndExpression>(state)));
                     while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::LogicOr)
                     {
                         begin++;
-                        auto newAnd = parseLogicalAndExpression(begin, end, context);
-                        if (newAnd)
-                        {
-                            list.push_back(std::move(*newAnd));
-                        }
+                        list.push_back(parseLogicalAndExpression(begin, end, context));
                     }
 
-                    if (!result)
-                    {
-                        state = std::optional<LogicalOrExpression>{};
-                    }
-                    else
-                    {
-                        state = LogicalOrExpression(start, begin, std::move(*result), std::move(list));
-                    }
+                    state = LogicalOrExpression(start, begin, std::move(list));
                     break;
                 }
                 default: break;
@@ -548,21 +487,20 @@ namespace
 
 } // namespace
 
-std::optional<OpenCL::Syntax::ConditionalExpression>
-    OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                               Context& context)
+OpenCL::Syntax::ConditionalExpression OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin,
+                                                                                 Tokens::const_iterator end,
+                                                                                 Context& context)
 {
     auto start = begin;
-    auto logicalOrExpression = std::get<std::optional<LogicalOrExpression>>(
+    auto logicalOrExpression = std::get<LogicalOrExpression>(
         parseBinaryOperators(EndState::LogicalOr, begin, end,
                              context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::QuestionMark))));
-
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
     {
         auto questionMarkpos = begin;
         begin++;
-        auto optionalExpression =
-            parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon)));
+        auto optionalExpression = std::make_unique<Expression>(
+            parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
         if (!expect(Lexer::TokenType::Colon, start, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), context.getLineStart(questionMarkpos),
                                    context.getLineEnd(questionMarkpos),
@@ -570,53 +508,43 @@ std::optional<OpenCL::Syntax::ConditionalExpression>
         {
             context.skipUntil(begin, end, firstExpressionSet);
         }
-        auto optionalConditional = parseConditionalExpression(begin, end, context);
-        if (!logicalOrExpression || !optionalConditional)
-        {
-            return {};
-        }
-        return ConditionalExpression(start, begin, std::move(*logicalOrExpression),
-                                     std::make_unique<Expression>(std::move(optionalExpression)),
-                                     std::make_unique<ConditionalExpression>(std::move(*optionalConditional)));
+        return ConditionalExpression(
+            start, begin, std::move(logicalOrExpression), std::move(optionalExpression),
+            std::make_unique<ConditionalExpression>(parseConditionalExpression(begin, end, context)));
     }
-    if (!logicalOrExpression)
-    {
-        return {};
-    }
-    return ConditionalExpression(start, begin, std::move(*logicalOrExpression));
+    return ConditionalExpression(start, begin, std::move(logicalOrExpression));
 }
 
-std::optional<OpenCL::Syntax::LogicalOrExpression>
-    OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                             Context& context)
+OpenCL::Syntax::LogicalOrExpression OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin,
+                                                                             Tokens::const_iterator end,
+                                                                             Context& context)
 {
-    return std::get<std::optional<LogicalOrExpression>>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
+    return std::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::LogicalAndExpression>
-    OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                              Context& context)
+OpenCL::Syntax::LogicalAndExpression OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin,
+                                                                               Tokens::const_iterator end,
+                                                                               Context& context)
 {
-    return std::get<std::optional<LogicalAndExpression>>(
-        parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
+    return std::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::BitOrExpression>
-    OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitOrExpression OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin,
+                                                                     Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitOrExpression>>(parseBinaryOperators(EndState::BitOr, begin, end, context));
+    return std::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::BitXorExpression>
-    OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitXorExpression OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin,
+                                                                       Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitXorExpression>>(parseBinaryOperators(EndState::BitXor, begin, end, context));
+    return std::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::BitAndExpression>
-    OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitAndExpression OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin,
+                                                                       Tokens::const_iterator end, Context& context)
 {
-    return std::get<std::optional<BitAndExpression>>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
+    return std::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
 std::optional<OpenCL::Syntax::EqualityExpression>
@@ -675,9 +603,8 @@ std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(Tokens::co
 
     if (begin < end && firstIsInAbstractDeclarator(*begin, context))
     {
-        auto abstractDec = parseAbstractDeclarator(begin, end, context);
         return TypeName(start, begin, std::move(specifierQualifiers),
-                        std::make_unique<AbstractDeclarator>(std::move(abstractDec)));
+                        std::make_unique<AbstractDeclarator>(parseAbstractDeclarator(begin, end, context)));
     }
 
     return TypeName(start, begin, std::move(specifierQualifiers), nullptr);

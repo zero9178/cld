@@ -75,6 +75,7 @@ I=')");
         "                                                                                                                                                                                               ");
     parse("IN[\"*[\\* 8F*\n"
           "\"(] 4");
+    excludeFromAddressSanitizer();
     // Causes stack overflow when using address sanitizer due to address sanitizer possibly using 3x as much stack space
     // according to documentations
 #if !defined(__has_feature)

@@ -160,13 +160,13 @@ namespace OpenCL::Syntax
     public:
         Node(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end);
 
-        virtual ~Node() = default;
+        ~Node() = default;
 
-        Node(const Node&) = default;
+        Node(const Node&) = delete;
 
         Node(Node&&) noexcept = default;
 
-        Node& operator=(const Node&) = default;
+        Node& operator=(const Node&) = delete;
 
         Node& operator=(Node&&) noexcept = default;
 
@@ -415,7 +415,7 @@ namespace OpenCL::Syntax
      */
     class UnaryExpressionPostFixExpression final : public Node
     {
-        PostFixExpression m_postFixExpression;
+        std::unique_ptr<PostFixExpression> m_postFixExpression;
 
     public:
         UnaryExpressionPostFixExpression(std::vector<Lexer::Token>::const_iterator begin,
@@ -438,7 +438,7 @@ namespace OpenCL::Syntax
     class UnaryExpressionUnaryOperator final : public Node
     {
     public:
-        enum class UnaryOperator
+        enum class UnaryOperator : std::uint8_t
         {
             Increment,
             Decrement,
@@ -451,8 +451,8 @@ namespace OpenCL::Syntax
         };
 
     private:
-        UnaryOperator m_operator;
         std::unique_ptr<CastExpression> m_castExpression;
+        UnaryOperator m_operator;
 
     public:
         UnaryExpressionUnaryOperator(std::vector<Lexer::Token>::const_iterator begin,
@@ -709,17 +709,13 @@ namespace OpenCL::Syntax
      */
     class BitAndExpression final : public Node
     {
-        EqualityExpression m_equalityExpression;
-        std::vector<EqualityExpression> m_optionalEqualityExpressions;
+        std::vector<EqualityExpression> m_equalityExpressions;
 
     public:
         BitAndExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-                         EqualityExpression&& equalityExpression,
-                         std::vector<EqualityExpression>&& optionalEqualityExpressions);
+                         std::vector<EqualityExpression>&& equalityExpressions);
 
-        [[nodiscard]] const EqualityExpression& getEqualityExpression() const;
-
-        [[nodiscard]] const std::vector<EqualityExpression>& getOptionalEqualityExpressions() const;
+        [[nodiscard]] const std::vector<EqualityExpression>& getEqualityExpressions() const;
     };
 
     /**
@@ -727,17 +723,13 @@ namespace OpenCL::Syntax
      */
     class BitXorExpression final : public Node
     {
-        BitAndExpression m_bitAndExpression;
-        std::vector<BitAndExpression> m_optionalBitAndExpressions;
+        std::vector<BitAndExpression> m_bitAndExpressions;
 
     public:
         BitXorExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-                         BitAndExpression&& bitAndExpression,
-                         std::vector<BitAndExpression>&& optionalBitAndExpressions);
+                         std::vector<BitAndExpression>&& bitAndExpressions);
 
-        [[nodiscard]] const BitAndExpression& getBitAndExpression() const;
-
-        [[nodiscard]] const std::vector<BitAndExpression>& getOptionalBitAndExpressions() const;
+        [[nodiscard]] const std::vector<BitAndExpression>& getBitAndExpressions() const;
     };
 
     /**
@@ -745,16 +737,13 @@ namespace OpenCL::Syntax
      */
     class BitOrExpression final : public Node
     {
-        BitXorExpression m_bitXorExpression;
-        std::vector<BitXorExpression> m_optionalBitXorExpressions;
+        std::vector<BitXorExpression> m_bitXorExpressions;
 
     public:
         BitOrExpression(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
-                        BitXorExpression&& bitXorExpression, std::vector<BitXorExpression>&& optionalBitXorExpressions);
+                        std::vector<BitXorExpression>&& bitXorExpressions);
 
-        [[nodiscard]] const BitXorExpression& getBitXorExpression() const;
-
-        [[nodiscard]] const std::vector<BitXorExpression>& getOptionalBitXorExpressions() const;
+        [[nodiscard]] const std::vector<BitXorExpression>& getBitXorExpressions() const;
     };
 
     /**
@@ -762,17 +751,14 @@ namespace OpenCL::Syntax
      */
     class LogicalAndExpression final : public Node
     {
-        BitOrExpression m_bitOrExpression;
-        std::vector<BitOrExpression> m_optionalBitOrExpressions;
+        std::vector<BitOrExpression> m_bitOrExpressions;
 
     public:
         LogicalAndExpression(std::vector<Lexer::Token>::const_iterator begin,
-                             std::vector<Lexer::Token>::const_iterator end, BitOrExpression&& equalityExpression,
-                             std::vector<BitOrExpression>&& optionalEqualityExpressions);
+                             std::vector<Lexer::Token>::const_iterator end,
+                             std::vector<BitOrExpression>&& equalityExpressions);
 
-        [[nodiscard]] const BitOrExpression& getBitOrExpression() const;
-
-        [[nodiscard]] const std::vector<BitOrExpression>& getOptionalBitOrExpressions() const;
+        [[nodiscard]] const std::vector<BitOrExpression>& getBitOrExpressions() const;
     };
 
     /**
@@ -780,17 +766,14 @@ namespace OpenCL::Syntax
      */
     class LogicalOrExpression final : public Node
     {
-        LogicalAndExpression m_andExpression;
-        std::vector<LogicalAndExpression> m_optionalAndExpressions;
+        std::vector<LogicalAndExpression> m_andExpressions;
 
     public:
         LogicalOrExpression(std::vector<Lexer::Token>::const_iterator begin,
-                            std::vector<Lexer::Token>::const_iterator end, LogicalAndExpression&& andExpression,
-                            std::vector<LogicalAndExpression>&& optionalAndExpressions);
+                            std::vector<Lexer::Token>::const_iterator end,
+                            std::vector<LogicalAndExpression>&& andExpressions);
 
-        [[nodiscard]] const LogicalAndExpression& getAndExpression() const;
-
-        [[nodiscard]] const std::vector<LogicalAndExpression>& getOptionalAndExpressions() const;
+        [[nodiscard]] const std::vector<LogicalAndExpression>& getAndExpressions() const;
     };
 
     /**

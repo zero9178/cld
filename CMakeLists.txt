@@ -19,11 +19,17 @@ if (DEFINED SANITIZER)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZER}")
 endif ()
 
-if (WIN32)
-    add_compile_definitions(_WIN32_WINNT=0x0600 WINVER=0x0600)
-endif ()
-
 option(BUILD_TESTS "Build tests" ON)
+
+option(DISABLE_RTTI "Disable runtime type information" ON)
+
+if (${DISABLE_RTTI})
+    if (MSVC)
+        add_compile_options(/GR-)
+    else ()
+        add_compile_options(-fno-rtti)
+    endif ()
+endif ()
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)

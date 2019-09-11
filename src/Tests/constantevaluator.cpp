@@ -25,7 +25,7 @@ namespace
         auto ref = tokens.cbegin();
         auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
         INFO(ss.str());
-        REQUIRE((ss.str().empty() && parsing));
+        REQUIRE((ss.str().empty()));
         OpenCL::Semantics::SemanticAnalysis analysis(&ss);
         OpenCL::Semantics::ConstantEvaluator evaluator(
             [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
@@ -38,7 +38,7 @@ namespace
                 ss << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(), std::move(modifier));
             },
             mode);
-        auto ret = evaluator.visit(*parsing);
+        auto ret = evaluator.visit(parsing);
         auto string = ss.str();
         if (OpenCL::colourConsoleOutput && !string.empty())
         {
@@ -55,7 +55,7 @@ namespace
                               << std::endl;
                 },
                 mode)
-                .visit(*parsing);
+                .visit(parsing);
         }
         return {ret, string};
     }

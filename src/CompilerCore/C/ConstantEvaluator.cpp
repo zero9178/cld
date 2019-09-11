@@ -426,16 +426,16 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
 {
-    auto value = visit(node.getEqualityExpression());
-    for (auto& exp : node.getOptionalEqualityExpressions())
+    auto value = visit(node.getEqualityExpressions()[0]);
+    for (auto iter = node.getEqualityExpressions().cbegin() + 1; iter != node.getEqualityExpressions().cend(); iter++)
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(node.getEqualityExpression().begin(), node.getEqualityExpression().end()));
+                     Modifier(node.getEqualityExpressions()[0].begin(), node.getEqualityExpressions()[0].end()));
             return {};
         }
-        auto other = visit(exp);
+        auto other = visit(*iter);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
@@ -443,14 +443,14 @@ OpenCL::Semantics::ConstRetType
         if (!other.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(exp.begin(), exp.end()));
+                     Modifier(iter->begin(), iter->end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "&", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
+                     Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
         value &= other;
@@ -461,16 +461,16 @@ OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
 {
-    auto value = visit(node.getBitAndExpression());
-    for (auto& exp : node.getOptionalBitAndExpressions())
+    auto value = visit(node.getBitAndExpressions()[0]);
+    for (auto iter = node.getBitAndExpressions().begin() + 1; iter != node.getBitAndExpressions().end(); iter++)
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(node.getBitAndExpression().begin(), node.getBitAndExpression().end()));
+                     Modifier(node.getBitAndExpressions()[0].begin(), node.getBitAndExpressions()[0].end()));
             return {};
         }
-        auto other = visit(exp);
+        auto other = visit(*iter);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
@@ -478,7 +478,7 @@ OpenCL::Semantics::ConstRetType
         if (!other.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(exp.begin(), exp.end()));
+                     Modifier(iter->begin(), iter->end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
@@ -486,7 +486,7 @@ OpenCL::Semantics::ConstRetType
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "^", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
 
-                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
+                     Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
         value ^= other;
@@ -496,16 +496,16 @@ OpenCL::Semantics::ConstRetType
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
 {
-    auto value = visit(node.getBitXorExpression());
-    for (auto& exp : node.getOptionalBitXorExpressions())
+    auto value = visit(node.getBitXorExpressions()[0]);
+    for (auto iter = node.getBitXorExpressions().begin() + 1; iter != node.getBitXorExpressions().end(); iter++)
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(node.getBitXorExpression().begin(), node.getBitXorExpression().end()));
+                     Modifier(node.getBitXorExpressions()[0].begin(), node.getBitXorExpressions()[0].end()));
             return {};
         }
-        auto other = visit(exp);
+        auto other = visit(*iter);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
@@ -513,14 +513,14 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
         if (!other.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(exp.begin(), exp.end()));
+                     Modifier(iter->begin(), iter->end()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "|", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                     Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
+                     Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
         value |= other;
@@ -531,17 +531,17 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 {
-    auto value = visit(node.getBitOrExpression());
-    for (auto& exp : node.getOptionalBitOrExpressions())
+    auto value = visit(node.getBitOrExpressions()[0]);
+    for (auto iter = node.getBitOrExpressions().begin() + 1; iter != node.getBitOrExpressions().end(); iter++)
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(node.getBitOrExpression().begin(), node.getBitOrExpression().end()));
+                     Modifier(node.getBitOrExpressions()[0].begin(), node.getBitOrExpressions()[0].end()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool();
-        auto other = visit(exp);
+        auto other = visit(*iter);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
@@ -549,7 +549,7 @@ OpenCL::Semantics::ConstRetType
         if (!other.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(exp.begin(), exp.end()));
+                     Modifier(iter->begin(), iter->end()));
             return {};
         }
         if (!value && !value.isUndefined())
@@ -564,17 +564,17 @@ OpenCL::Semantics::ConstRetType
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 {
-    auto value = visit(node.getAndExpression());
-    for (auto& exp : node.getOptionalAndExpressions())
+    auto value = visit(node.getAndExpressions()[0]);
+    for (auto iter = node.getAndExpressions().begin() + 1; iter != node.getAndExpressions().end(); iter++)
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(node.getAndExpression().begin(), node.getAndExpression().end()));
+                     Modifier(node.getAndExpressions()[0].begin(), node.getAndExpressions()[0].end()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool();
-        auto other = visit(exp);
+        auto other = visit(*iter);
         if (other.isUndefined() || other.isUndefined())
         {
             continue;
@@ -582,7 +582,7 @@ OpenCL::Semantics::ConstRetType
         if (!other.isInteger() && m_mode == Integer)
         {
             logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                     Modifier(exp.begin(), exp.end()));
+                     Modifier(iter->begin(), iter->end()));
             return {};
         }
         if (value && !value.isUndefined())

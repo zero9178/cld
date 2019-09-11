@@ -15,7 +15,7 @@
 
 OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
                          std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
-    : m_severity(severity), m_message(std::move(message)), m_begin(begin), m_end(end), m_modifier(std::move(modifier))
+    : m_modifier(std::move(modifier)), m_message(std::move(message)), m_begin(begin), m_end(end), m_severity(severity)
 {
 }
 
@@ -230,7 +230,7 @@ OpenCL::Message OpenCL::Message::warning(std::string message, std::vector<OpenCL
 OpenCL::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
                            std::vector<Lexer::Token>::const_iterator anEnd, OpenCL::Modifier::Action action,
                            std::string actionArgument)
-    : m_begin(begin), m_end(anEnd), m_action(action), m_actionArgument(std::move(actionArgument))
+    : m_actionArgument(std::move(actionArgument)), m_begin(begin), m_end(anEnd), m_action(action)
 {
 }
 

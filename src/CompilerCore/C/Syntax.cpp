@@ -172,20 +172,20 @@ const OpenCL::Syntax::TypeName& OpenCL::Syntax::PostFixExpressionTypeInitializer
 OpenCL::Syntax::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(
     std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
     OpenCL::Syntax::PostFixExpression&& postFixExpression)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
+    : Node(begin, end), m_postFixExpression(std::make_unique<PostFixExpression>(std::move(postFixExpression)))
 {
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::UnaryExpressionPostFixExpression::getPostFixExpression() const
 {
-    return m_postFixExpression;
+    return *m_postFixExpression;
 }
 
 OpenCL::Syntax::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(
     std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator end,
     OpenCL::Syntax::UnaryExpressionUnaryOperator::UnaryOperator anOperator,
     std::unique_ptr<OpenCL::Syntax::CastExpression>&& unaryExpression)
-    : Node(begin, end), m_operator(anOperator), m_castExpression(std::move(unaryExpression))
+    : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator)
 {
 }
 
@@ -473,44 +473,28 @@ const std::vector<
 
 OpenCL::Syntax::LogicalAndExpression::LogicalAndExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                            std::vector<Lexer::Token>::const_iterator end,
-                                                           BitOrExpression&& equalityExpression,
-                                                           std::vector<BitOrExpression>&& optionalEqualityExpressions)
-    : Node(begin, end),
-      m_bitOrExpression(std::move(equalityExpression)),
-      m_optionalBitOrExpressions(std::move(optionalEqualityExpressions))
+                                                           std::vector<BitOrExpression>&& equalityExpressions)
+    : Node(begin, end), m_bitOrExpressions(std::move(equalityExpressions))
 {
+    assert(!m_bitOrExpressions.empty());
 }
 
-const OpenCL::Syntax::BitOrExpression& OpenCL::Syntax::LogicalAndExpression::getBitOrExpression() const
+const std::vector<OpenCL::Syntax::BitOrExpression>& OpenCL::Syntax::LogicalAndExpression::getBitOrExpressions() const
 {
-    return m_bitOrExpression;
-}
-
-const std::vector<OpenCL::Syntax::BitOrExpression>&
-    OpenCL::Syntax::LogicalAndExpression::getOptionalBitOrExpressions() const
-{
-    return m_optionalBitOrExpressions;
+    return m_bitOrExpressions;
 }
 
 OpenCL::Syntax::LogicalOrExpression::LogicalOrExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                          std::vector<Lexer::Token>::const_iterator end,
-                                                         LogicalAndExpression&& andExpression,
-                                                         std::vector<LogicalAndExpression>&& optionalAndExpressions)
-    : Node(begin, end),
-      m_andExpression(std::move(andExpression)),
-      m_optionalAndExpressions(std::move(optionalAndExpressions))
+                                                         std::vector<LogicalAndExpression>&& andExpressions)
+    : Node(begin, end), m_andExpressions(std::move(andExpressions))
 {
+
 }
 
-const OpenCL::Syntax::LogicalAndExpression& OpenCL::Syntax::LogicalOrExpression::getAndExpression() const
+const std::vector<OpenCL::Syntax::LogicalAndExpression>& OpenCL::Syntax::LogicalOrExpression::getAndExpressions() const
 {
-    return m_andExpression;
-}
-
-const std::vector<OpenCL::Syntax::LogicalAndExpression>&
-    OpenCL::Syntax::LogicalOrExpression::getOptionalAndExpressions() const
-{
-    return m_optionalAndExpressions;
+    return m_andExpressions;
 }
 
 OpenCL::Syntax::ConditionalExpression::ConditionalExpression(
@@ -547,65 +531,41 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::ForStatement::getStatement() co
 
 OpenCL::Syntax::BitAndExpression::BitAndExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                    std::vector<Lexer::Token>::const_iterator end,
-                                                   EqualityExpression&& equalityExpression,
-                                                   std::vector<EqualityExpression>&& optionalEqualityExpressions)
-    : Node(begin, end),
-      m_equalityExpression(std::move(equalityExpression)),
-      m_optionalEqualityExpressions(std::move(optionalEqualityExpressions))
+                                                   std::vector<EqualityExpression>&& equalityExpressions)
+    : Node(begin, end), m_equalityExpressions(std::move(equalityExpressions))
 {
+
 }
 
-const OpenCL::Syntax::EqualityExpression& OpenCL::Syntax::BitAndExpression::getEqualityExpression() const
+const std::vector<OpenCL::Syntax::EqualityExpression>& OpenCL::Syntax::BitAndExpression::getEqualityExpressions() const
 {
-    return m_equalityExpression;
-}
-
-const std::vector<OpenCL::Syntax::EqualityExpression>&
-    OpenCL::Syntax::BitAndExpression::getOptionalEqualityExpressions() const
-{
-    return m_optionalEqualityExpressions;
+    return m_equalityExpressions;
 }
 
 OpenCL::Syntax::BitXorExpression::BitXorExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                    std::vector<Lexer::Token>::const_iterator end,
-                                                   BitAndExpression&& bitAndExpression,
-                                                   std::vector<BitAndExpression>&& optionalBitAndExpressions)
-    : Node(begin, end),
-      m_bitAndExpression(std::move(bitAndExpression)),
-      m_optionalBitAndExpressions(std::move(optionalBitAndExpressions))
+                                                   std::vector<BitAndExpression>&& bitAndExpressions)
+    : Node(begin, end), m_bitAndExpressions(std::move(bitAndExpressions))
 {
+
 }
 
-const OpenCL::Syntax::BitAndExpression& OpenCL::Syntax::BitXorExpression::getBitAndExpression() const
+const std::vector<OpenCL::Syntax::BitAndExpression>& OpenCL::Syntax::BitXorExpression::getBitAndExpressions() const
 {
-    return m_bitAndExpression;
-}
-
-const std::vector<OpenCL::Syntax::BitAndExpression>&
-    OpenCL::Syntax::BitXorExpression::getOptionalBitAndExpressions() const
-{
-    return m_optionalBitAndExpressions;
+    return m_bitAndExpressions;
 }
 
 OpenCL::Syntax::BitOrExpression::BitOrExpression(std::vector<Lexer::Token>::const_iterator begin,
                                                  std::vector<Lexer::Token>::const_iterator end,
-                                                 BitXorExpression&& bitXorExpression,
-                                                 std::vector<BitXorExpression>&& optionalBitXorExpressions)
-    : Node(begin, end),
-      m_bitXorExpression(std::move(bitXorExpression)),
-      m_optionalBitXorExpressions(std::move(optionalBitXorExpressions))
+                                                 std::vector<BitXorExpression>&& bitXorExpressions)
+    : Node(begin, end), m_bitXorExpressions(std::move(bitXorExpressions))
 {
+
 }
 
-const OpenCL::Syntax::BitXorExpression& OpenCL::Syntax::BitOrExpression::getBitXorExpression() const
+const std::vector<OpenCL::Syntax::BitXorExpression>& OpenCL::Syntax::BitOrExpression::getBitXorExpressions() const
 {
-    return m_bitXorExpression;
-}
-
-const std::vector<OpenCL::Syntax::BitXorExpression>&
-    OpenCL::Syntax::BitOrExpression::getOptionalBitXorExpressions() const
-{
-    return m_optionalBitXorExpressions;
+    return m_bitXorExpressions;
 }
 
 const OpenCL::Syntax::PostFixExpression& OpenCL::Syntax::PostFixExpressionFunctionCall::getPostFixExpression() const
