@@ -19,15 +19,17 @@ if (DEFINED SANITIZER)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZER}")
 endif ()
 
-if (WIN32)
-    if (NOT MSVC)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--stack,8000000")
+option(BUILD_TESTS "Build tests" ON)
+
+option(DISABLE_RTTI "Disable runtime type information" ON)
+
+if (${DISABLE_RTTI})
+    if (MSVC)
+        add_compile_options(/GR-)
     else ()
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8000000")
+        add_compile_options(-fno-rtti)
     endif ()
 endif ()
-
-option(BUILD_TESTS "Build tests" ON)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)

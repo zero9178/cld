@@ -15,21 +15,22 @@ using namespace Catch::Matchers;
 CATCH_REGISTER_ENUM(
     OpenCL::Lexer::TokenType, OpenCL::Lexer::TokenType::Identifier, OpenCL::Lexer::TokenType::OpenParentheses,
     OpenCL::Lexer::TokenType::CloseParentheses, OpenCL::Lexer::TokenType::OpenBrace,
-    OpenCL::Lexer::TokenType::CloseBrace, OpenCL::Lexer::TokenType::Literal, OpenCL::Lexer::TokenType::StringLiteral, OpenCL::Lexer::TokenType::SemiColon,
-    OpenCL::Lexer::TokenType::Comma, OpenCL::Lexer::TokenType::Minus, OpenCL::Lexer::TokenType::BitWiseNegation,
-    OpenCL::Lexer::TokenType::LogicalNegation, OpenCL::Lexer::TokenType::Plus, OpenCL::Lexer::TokenType::Asterisk,
-    OpenCL::Lexer::TokenType::Division, OpenCL::Lexer::TokenType::Percent, OpenCL::Lexer::TokenType::LogicAnd,
-    OpenCL::Lexer::TokenType::LogicOr, OpenCL::Lexer::TokenType::Ampersand, OpenCL::Lexer::TokenType::BitOr,
-    OpenCL::Lexer::TokenType::BitXor, OpenCL::Lexer::TokenType::Equal, OpenCL::Lexer::TokenType::NotEqual,
-    OpenCL::Lexer::TokenType::LessThan, OpenCL::Lexer::TokenType::LessThanOrEqual,
-    OpenCL::Lexer::TokenType::GreaterThan, OpenCL::Lexer::TokenType::GreaterThanOrEqual,
-    OpenCL::Lexer::TokenType::Assignment, OpenCL::Lexer::TokenType::PlusAssign, OpenCL::Lexer::TokenType::MinusAssign,
-    OpenCL::Lexer::TokenType::DivideAssign, OpenCL::Lexer::TokenType::MultiplyAssign,
-    OpenCL::Lexer::TokenType::ModuloAssign, OpenCL::Lexer::TokenType::ShiftLeftAssign,
-    OpenCL::Lexer::TokenType::ShiftRightAssign, OpenCL::Lexer::TokenType::BitAndAssign,
-    OpenCL::Lexer::TokenType::BitOrAssign, OpenCL::Lexer::TokenType::BitXorAssign, OpenCL::Lexer::TokenType::ShiftRight,
-    OpenCL::Lexer::TokenType::ShiftLeft, OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement,
-    OpenCL::Lexer::TokenType::Colon, OpenCL::Lexer::TokenType::QuestionMark, OpenCL::Lexer::TokenType::VoidKeyword,
+    OpenCL::Lexer::TokenType::CloseBrace, OpenCL::Lexer::TokenType::Literal, OpenCL::Lexer::TokenType::StringLiteral,
+    OpenCL::Lexer::TokenType::SemiColon, OpenCL::Lexer::TokenType::Comma, OpenCL::Lexer::TokenType::Minus,
+    OpenCL::Lexer::TokenType::BitWiseNegation, OpenCL::Lexer::TokenType::LogicalNegation,
+    OpenCL::Lexer::TokenType::Plus, OpenCL::Lexer::TokenType::Asterisk, OpenCL::Lexer::TokenType::Division,
+    OpenCL::Lexer::TokenType::Percent, OpenCL::Lexer::TokenType::LogicAnd, OpenCL::Lexer::TokenType::LogicOr,
+    OpenCL::Lexer::TokenType::Ampersand, OpenCL::Lexer::TokenType::BitOr, OpenCL::Lexer::TokenType::BitXor,
+    OpenCL::Lexer::TokenType::Equal, OpenCL::Lexer::TokenType::NotEqual, OpenCL::Lexer::TokenType::LessThan,
+    OpenCL::Lexer::TokenType::LessThanOrEqual, OpenCL::Lexer::TokenType::GreaterThan,
+    OpenCL::Lexer::TokenType::GreaterThanOrEqual, OpenCL::Lexer::TokenType::Assignment,
+    OpenCL::Lexer::TokenType::PlusAssign, OpenCL::Lexer::TokenType::MinusAssign, OpenCL::Lexer::TokenType::DivideAssign,
+    OpenCL::Lexer::TokenType::MultiplyAssign, OpenCL::Lexer::TokenType::ModuloAssign,
+    OpenCL::Lexer::TokenType::ShiftLeftAssign, OpenCL::Lexer::TokenType::ShiftRightAssign,
+    OpenCL::Lexer::TokenType::BitAndAssign, OpenCL::Lexer::TokenType::BitOrAssign,
+    OpenCL::Lexer::TokenType::BitXorAssign, OpenCL::Lexer::TokenType::ShiftRight, OpenCL::Lexer::TokenType::ShiftLeft,
+    OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement, OpenCL::Lexer::TokenType::Colon,
+    OpenCL::Lexer::TokenType::QuestionMark, OpenCL::Lexer::TokenType::VoidKeyword,
     OpenCL::Lexer::TokenType::CharKeyword, OpenCL::Lexer::TokenType::ShortKeyword, OpenCL::Lexer::TokenType::IntKeyword,
     OpenCL::Lexer::TokenType::LongKeyword, OpenCL::Lexer::TokenType::FloatKeyword,
     OpenCL::Lexer::TokenType::DoubleKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
@@ -207,15 +208,21 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         test(std::to_string(overUInt32) + 'u', std::uint64_t(overUInt32));
         test("0x5", std::int32_t(5));
         test("0xFFFFFFFF", std::uint32_t(0xFFFFFFFF));
-        test(dynamic_cast<std::stringstream&&>(std::stringstream{} << "0x" << std::hex << overUInt32).str(),
-             overUInt32);
+        std::stringstream str;
+
+        str << "0x" << std::hex << overUInt32;
+        test(str.str(), overUInt32);
+        str = std::stringstream{};
         auto overInt64 = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 6;
-        test(dynamic_cast<std::stringstream&&>(std::stringstream{} << "0x" << std::hex << overInt64).str(),
-             std::uint64_t(overInt64));
-        test(dynamic_cast<std::stringstream&&>(std::stringstream{} << "0x" << std::hex << overInt64 << "ll").str(),
-             std::uint64_t(overInt64));
-        test(dynamic_cast<std::stringstream&&>(std::stringstream{} << "0x" << std::hex << overInt64 << "ull").str(),
-             std::uint64_t(overInt64));
+        str << "0x" << std::hex << overInt64;
+        test(str.str(), std::uint64_t(overInt64));
+        str = std::stringstream{};
+        str << "0x" << std::hex << overInt64 << "ll";
+        test(str.str(), std::uint64_t(overInt64));
+        str = std::stringstream{};
+        str << "0x" << std::hex << overInt64 << "ull";
+        test(str.str(), std::uint64_t(overInt64));
+        str = std::stringstream{};
     }
     SECTION("Long longs")
     {
@@ -504,49 +511,67 @@ TEST_CASE("Lexing positions", "[lexer]")
     5 + 7 - .53f + "dwawd""test"id
 } )");
         REQUIRE(result.size() == 61);
-        std::array correct = {
-            std::tuple{TokenType::VoidKeyword, 1, 0, 4},     std::tuple{TokenType::Identifier, 1, 5, 12},
+        std::array correct = {std::tuple{TokenType::VoidKeyword, 1, 0, 4},
+                              std::tuple{TokenType::Identifier, 1, 5, 12},
                               std::tuple{TokenType::OpenParentheses, 1, 17, 1},
                               std::tuple{TokenType::Identifier, 1, 18, 8},
-                              std::tuple{TokenType::Asterisk, 1, 26, 1},       std::tuple{TokenType::Identifier, 1, 28, 1},
+                              std::tuple{TokenType::Asterisk, 1, 26, 1},
+                              std::tuple{TokenType::Identifier, 1, 28, 1},
                               std::tuple{TokenType::CloseParentheses, 1, 29, 1},
                               std::tuple{TokenType::OpenBrace, 2, 0, 1},
                               std::tuple{TokenType::IfKeyword, 3, 4, 2},
                               std::tuple{TokenType::OpenParentheses, 3, 7, 1},
                               std::tuple{TokenType::Identifier, 3, 8, 6},
                               std::tuple{TokenType::OpenParentheses, 3, 14, 1},
-                              std::tuple{TokenType::Identifier, 3, 15, 1},     std::tuple{TokenType::Arrow, 3, 16, 2},
+                              std::tuple{TokenType::Identifier, 3, 15, 1},
+                              std::tuple{TokenType::Arrow, 3, 16, 2},
                               std::tuple{TokenType::Identifier, 3, 18, 5},
                               std::tuple{TokenType::CloseParentheses, 3, 23, 1},
-                              std::tuple{TokenType::GreaterThan, 3, 25, 1},    std::tuple{TokenType::Identifier, 3, 27, 6},
+                              std::tuple{TokenType::GreaterThan, 3, 25, 1},
+                              std::tuple{TokenType::Identifier, 3, 27, 6},
                               std::tuple{TokenType::OpenParentheses, 3, 33, 1},
                               std::tuple{TokenType::Identifier, 3, 34, 1},
-                              std::tuple{TokenType::Arrow, 3, 35, 2},          std::tuple{TokenType::Identifier, 3, 37, 4},
+                              std::tuple{TokenType::Arrow, 3, 35, 2},
+                              std::tuple{TokenType::Identifier, 3, 37, 4},
                               std::tuple{TokenType::CloseParentheses, 3, 41, 1},
                               std::tuple{TokenType::CloseParentheses, 3, 42, 1},
-                              std::tuple{TokenType::OpenBrace, 4, 4, 1},       std::tuple{TokenType::Identifier, 5, 8, 1},
-            std::tuple{TokenType::Arrow, 5, 9, 2},           std::tuple{TokenType::Identifier, 5, 11, 6},
-            std::tuple{TokenType::Assignment, 5, 18, 1},     std::tuple{TokenType::Identifier, 5, 20, 6},
+                              std::tuple{TokenType::OpenBrace, 4, 4, 1},
+                              std::tuple{TokenType::Identifier, 5, 8, 1},
+                              std::tuple{TokenType::Arrow, 5, 9, 2},
+                              std::tuple{TokenType::Identifier, 5, 11, 6},
+                              std::tuple{TokenType::Assignment, 5, 18, 1},
+                              std::tuple{TokenType::Identifier, 5, 20, 6},
                               std::tuple{TokenType::OpenParentheses, 5, 26, 1},
                               std::tuple{TokenType::Identifier, 5, 27, 1},
-                              std::tuple{TokenType::Arrow, 5, 28, 2},          std::tuple{TokenType::Identifier, 5, 30, 5},
+                              std::tuple{TokenType::Arrow, 5, 28, 2},
+                              std::tuple{TokenType::Identifier, 5, 30, 5},
                               std::tuple{TokenType::CloseParentheses, 5, 35, 1},
                               std::tuple{TokenType::SemiColon, 5, 36, 1},
-                              std::tuple{TokenType::CloseBrace, 6, 4, 1},      std::tuple{TokenType::ElseKeyword, 7, 4, 4},
-            std::tuple{TokenType::OpenBrace, 8, 4, 1},       std::tuple{TokenType::Identifier, 9, 8, 1},
-            std::tuple{TokenType::Arrow, 9, 9, 2},           std::tuple{TokenType::Identifier, 9, 11, 6},
-            std::tuple{TokenType::Assignment, 9, 18, 1},     std::tuple{TokenType::Identifier, 9, 20, 6},
+                              std::tuple{TokenType::CloseBrace, 6, 4, 1},
+                              std::tuple{TokenType::ElseKeyword, 7, 4, 4},
+                              std::tuple{TokenType::OpenBrace, 8, 4, 1},
+                              std::tuple{TokenType::Identifier, 9, 8, 1},
+                              std::tuple{TokenType::Arrow, 9, 9, 2},
+                              std::tuple{TokenType::Identifier, 9, 11, 6},
+                              std::tuple{TokenType::Assignment, 9, 18, 1},
+                              std::tuple{TokenType::Identifier, 9, 20, 6},
                               std::tuple{TokenType::OpenParentheses, 9, 26, 1},
                               std::tuple{TokenType::Identifier, 9, 27, 1},
-                              std::tuple{TokenType::Arrow, 9, 28, 2},          std::tuple{TokenType::Identifier, 9, 30, 4},
+                              std::tuple{TokenType::Arrow, 9, 28, 2},
+                              std::tuple{TokenType::Identifier, 9, 30, 4},
                               std::tuple{TokenType::CloseParentheses, 9, 34, 1},
                               std::tuple{TokenType::SemiColon, 9, 35, 1},
-                              std::tuple{TokenType::CloseBrace, 10, 4, 1},     std::tuple{TokenType::Literal, 11, 4, 1},
-            std::tuple{TokenType::Plus, 11, 6, 1},           std::tuple{TokenType::Literal, 11, 8, 1},
-            std::tuple{TokenType::Minus, 11, 10, 1},         std::tuple{TokenType::Literal, 11, 12, 4},
-            std::tuple{TokenType::Plus, 11, 17, 1},          std::tuple{TokenType::StringLiteral, 11, 19, 7},
-            std::tuple{TokenType::StringLiteral, 11, 26, 6}, std::tuple{TokenType::Identifier, 11, 32, 2},
-            std::tuple{TokenType::CloseBrace, 12, 0, 1}};
+                              std::tuple{TokenType::CloseBrace, 10, 4, 1},
+                              std::tuple{TokenType::Literal, 11, 4, 1},
+                              std::tuple{TokenType::Plus, 11, 6, 1},
+                              std::tuple{TokenType::Literal, 11, 8, 1},
+                              std::tuple{TokenType::Minus, 11, 10, 1},
+                              std::tuple{TokenType::Literal, 11, 12, 4},
+                              std::tuple{TokenType::Plus, 11, 17, 1},
+                              std::tuple{TokenType::StringLiteral, 11, 19, 7},
+                              std::tuple{TokenType::StringLiteral, 11, 26, 6},
+                              std::tuple{TokenType::Identifier, 11, 32, 2},
+                              std::tuple{TokenType::CloseBrace, 12, 0, 1}};
         for (std::size_t i = 0; i < correct.size(); i++)
         {
             DYNAMIC_SECTION("Token " << i << ": " << result[i].emitBack())
