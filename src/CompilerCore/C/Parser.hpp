@@ -33,10 +33,7 @@ namespace OpenCL::Parser
         };
         std::vector<std::map<std::string, Declaration>> m_currentScope{1};
 
-        static bool tokenCompare(const Lexer::Token& lhs, const Lexer::Token& rhs);
-
-        std::map<Lexer::Token, std::pair<Tokens::const_iterator, Tokens::const_iterator>, decltype(&tokenCompare)>
-            m_lines{tokenCompare};
+        const SourceObject& m_sourceObject;
         std::size_t m_errorCount = 0;
 
     public:
@@ -85,8 +82,7 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        explicit Context(Tokens::const_iterator sourceBegin, Tokens::const_iterator sourceEnd,
-                         std::ostream* reporter = &std::cerr);
+        Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr);
 
         ~Context() = default;
 
@@ -137,7 +133,7 @@ namespace OpenCL::Parser
         void braceLeft();
     };
 
-    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
+    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
                                                                std::ostream* reporter = &std::cerr);
 
     OpenCL::Syntax::TranslationUnit parseTranslationUnit(Tokens::const_iterator& begin, Tokens::const_iterator end,
@@ -233,11 +229,14 @@ namespace OpenCL::Parser
     OpenCL::Syntax::LogicalAndExpression parseLogicalAndExpression(Tokens::const_iterator& begin,
                                                                    Tokens::const_iterator end, Context& context);
 
-    OpenCL::Syntax::BitOrExpression parseBitOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
+    OpenCL::Syntax::BitOrExpression parseBitOrExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                         Context& context);
 
-    OpenCL::Syntax::BitXorExpression parseBitXorExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
+    OpenCL::Syntax::BitXorExpression parseBitXorExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                           Context& context);
 
-    OpenCL::Syntax::BitAndExpression parseBitAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context);
+    OpenCL::Syntax::BitAndExpression parseBitAndExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+                                                           Context& context);
 
     std::optional<Syntax::EqualityExpression> parseEqualityExpression(Tokens::const_iterator& begin,
                                                                       Tokens::const_iterator end, Context& context);

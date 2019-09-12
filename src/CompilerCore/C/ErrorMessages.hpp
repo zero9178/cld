@@ -143,6 +143,8 @@ namespace OpenCL
                 "Binary floating point literal must contain an exponent";
 
             constexpr auto UNEXPECTED_CHARACTER = Format("Unexpected character '{}'");
+
+            constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
         } // namespace Lexer
     }     // namespace ErrorMessages
 

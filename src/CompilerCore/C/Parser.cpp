@@ -4,13 +4,14 @@
 #include <cassert>
 
 #include "ParserUtil.hpp"
+#include "SourceObject.hpp"
 
-std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const std::vector<Lexer::Token>& tokens,
+std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const SourceObject& sourceObject,
                                                                            std::ostream* reporter)
 {
-    Context context(tokens.cbegin(), tokens.cend(), reporter);
-    auto begin = tokens.cbegin();
-    return {parseTranslationUnit(begin, tokens.cend(), context), context.getCurrentErrorCount() == 0};
+    Context context(sourceObject, reporter);
+    auto begin = sourceObject.cbegin();
+    return {parseTranslationUnit(begin, sourceObject.cend(), context), context.getCurrentErrorCount() == 0};
 }
 
 void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
@@ -109,56 +110,21 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(Tokens::const_iterator sourceBegin, Tokens::const_iterator sourceEnd,
-                                 std::ostream* reporter)
-    : m_reporter(reporter)
+OpenCL::Parser::Context::Context(const SourceObject& sourceObject, std::ostream* reporter)
+    : m_reporter(reporter), m_sourceObject(sourceObject)
 {
-    while (sourceBegin != sourceEnd)
-    {
-        auto eol = findEOL(sourceBegin, sourceEnd);
-        m_lines.insert({*sourceBegin, {sourceBegin, eol}});
-        sourceBegin = eol;
-    }
-}
-
-bool OpenCL::Parser::Context::tokenCompare(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs)
-{
-    return lhs.getLine() < rhs.getLine();
 }
 
 std::vector<OpenCL::Lexer::Token>::const_iterator
     OpenCL::Parser::Context::getLineStart(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
 {
-    if (m_lines.empty())
-    {
-        return iter;
-    }
-    auto& second = m_lines.rbegin()->second;
-    if (iter == second.second)
-    {
-        return second.first;
-    }
-    else
-    {
-        return m_lines.at(*iter).first;
-    }
+    return m_sourceObject.getLineStart(iter);
 }
 
 std::vector<OpenCL::Lexer::Token>::const_iterator
     OpenCL::Parser::Context::getLineEnd(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
 {
-    if (m_lines.empty())
-    {
-        return iter;
-    }
-    if (iter == m_lines.rbegin()->second.second)
-    {
-        return iter;
-    }
-    else
-    {
-        return m_lines.at(*iter).second;
-    }
+    return m_sourceObject.getLineEnd(iter);
 }
 
 OpenCL::Parser::Context::TokenBitReseter

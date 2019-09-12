@@ -9,10 +9,11 @@
 #include <unordered_map>
 
 #include "ErrorMessages.hpp"
+#include "SourceObject.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #ifdef NOMINMAX
-#undef NOMINMAX
+    #undef NOMINMAX
 #endif
 #define NOMINMAX
 #include "termcolor.hpp"
@@ -89,7 +90,7 @@ namespace
                 *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
                 break;
             case HighlightEffect::InsertAtEnd:
-                *reporter << std::string(lineText.size() == 0 ? 0 : lineText.size() - 1, ' ') << '^';
+                *reporter << std::string(lineText.empty() ? 0 : lineText.size() - 1, ' ') << '^';
                 break;
         }
         *reporter << normalColour << std::endl;
@@ -166,7 +167,7 @@ namespace
                                 {{column - characters.size() - 1, column - 1}});
                 }
             }
-            else
+            else if (std::isdigit(characters[1]))
             {
                 std::istringstream ss(characters.substr(1, characters.size() - 1));
                 if (!(ss >> std::oct >> number))
@@ -176,17 +177,23 @@ namespace
                                 {{column - characters.size() - 1, column - 1}});
                 }
             }
+            else
+            {
+                reportError(reporter, OpenCL::ErrorMessages::Lexer::INCORRECT_CHARACTER_LITERAL.args(characters), line,
+                            column - characters.size() - 2, lineText, {{column - characters.size() - 1, column}});
+                return 0;
+            }
             if (number > std::numeric_limits<std::uint8_t>::max())
             {
                 reportError(
                     reporter,
                     OpenCL::ErrorMessages::Lexer::CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR, line,
-                    column - characters.size() - 2, lineText, {{column - characters.size() - 2, column}});
+                    column - characters.size() - 1, lineText, {{column - characters.size() - 1, column}});
             }
             return number;
         }
         reportError(reporter, OpenCL::ErrorMessages::Lexer::INCORRECT_CHARACTER_LITERAL.args(characters), line,
-                    column - characters.size() - 2, lineText, {{column - characters.size() - 2, column}});
+                    column - characters.size() - 1, lineText, {{column - characters.size() - 1, column}});
         return 0;
     }
 
@@ -488,14 +495,15 @@ namespace
         BlockComment,
         Ambiguous,
         Number,
+        AfterInclude,
     };
 } // namespace
 
-std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, std::ostream* reporter)
+OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
-        source += ' ';
+        source += '\n';
     }
     State currentState = State::Start;
     std::string characters;
@@ -540,6 +548,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                         case ';': result.emplace_back(line, column, 1, TokenType::SemiColon); break;
                         case ',': result.emplace_back(line, column, 1, TokenType::Comma); break;
                         case '?': result.emplace_back(line, column, 1, TokenType::QuestionMark); break;
+                        case '\\': result.emplace_back(line, column, 1, TokenType::Backslash); break;
                         case '~':
                             result.emplace_back(line, column, 1, TokenType::BitWiseNegation);
                             lastTokenIsAmbiguous = true;
@@ -601,8 +610,9 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                     }
                     if (iter == '\n')
                     {
-                        reportError(reporter, "Newline in character literal, use \\n instead", line, column,
-                                    lineMap[line], {{column, column + 1}}, HighlightEffect::InsertAtEnd);
+                        reportError(reporter,
+                                    ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("character literal"), line,
+                                    column, lineMap[line], {{column, column + 1}}, HighlightEffect::InsertAtEnd);
                     }
                     characters += iter;
                     break;
@@ -614,7 +624,12 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                         auto originalCharacters = characters;
                         auto csize = characters.size();
                         currentState = State::Start;
-                        if (std::none_of(characters.begin(), characters.end(), [](char c) { return c == '\n'; }))
+                        bool followsInclude = result.size() >= 2
+                                              && result[result.size() - 2].getTokenType() == TokenType::Pound
+                                              && result.back().getTokenType() == TokenType::Identifier
+                                              && std::get<std::string>(result.back().getValue()) == "include";
+                        if (!followsInclude
+                            && std::none_of(characters.begin(), characters.end(), [](char c) { return c == '\n'; }))
                         {
                             static std::regex escapes(R"(\\([0-7]{1,3}|x[0-9a-fA-F]+|.))");
                             std::smatch matches;
@@ -624,9 +639,10 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                             {
                                 auto size = matches.suffix().first - characters.cbegin()
                                             - (matches[0].second - matches[0].first) + 1;
-                                characters = std::string(characters.cbegin(), matches[0].first)
-                                             + static_cast<char>(charactersToCharLiteral(
-                                                 reporter, {matches[0].first, matches[0].second}, line, column, lineMap[line]))
+                                characters =
+                                    std::string(characters.cbegin(), matches[0].first)
+                                    + static_cast<char>(charactersToCharLiteral(
+                                        reporter, {matches[0].first, matches[0].second}, line, column, lineMap[line]))
                                     + std::string(matches[0].second, characters.cend());
                                 start = characters.cbegin() + size;
                             }
@@ -638,8 +654,8 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                     }
                     if (iter == '\n')
                     {
-                        reportError(reporter, "Newline in string literal, use \\n instead", line, column, lineMap[line],
-                                    {{column, column + 1}}, HighlightEffect::InsertAtEnd);
+                        reportError(reporter, ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("string literal"),
+                                    line, column, lineMap[line], {{column, column + 1}}, HighlightEffect::InsertAtEnd);
                     }
                     characters += iter;
                     break;
@@ -862,6 +878,14 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                         }
                         case '<':
                         {
+                            if (result.size() >= 2 && result[result.size() - 2].getTokenType() == TokenType::Pound
+                                && result.back().getTokenType() == TokenType::Identifier
+                                && std::get<std::string>(result.back().getValue()) == "include")
+                            {
+                                currentState = State::AfterInclude;
+                                characters.clear();
+                                break;
+                            }
                             if (lastTokenIsAmbiguous && !result.empty()
                                 && result.back().getTokenType() == TokenType::LessThan)
                             {
@@ -1023,6 +1047,24 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
                     }
                     break;
                 }
+                case State::AfterInclude:
+                {
+                    if (iter == '>')
+                    {
+                        currentState = State::Start;
+                        result.emplace_back(line, column - 1 - characters.size(), 2 + characters.size(),
+                                            TokenType::StringLiteral, characters, '<' + characters + '>');
+                        characters.clear();
+                        break;
+                    }
+                    if (iter == '\n')
+                    {
+                        reportError(reporter, ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("string literal"),
+                                    line, column, lineMap[line], {{column, column + 1}}, HighlightEffect::InsertAtEnd);
+                    }
+                    characters += iter;
+                    break;
+                }
             }
         } while (!handled);
         if (iter == '\n')
@@ -1042,7 +1084,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, st
         }
     }
 
-    return result;
+    return SourceObject(std::move(result));
 }
 
 std::string OpenCL::Lexer::Token::emitBack() const
@@ -1133,6 +1175,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::Ellipse: return "...";
         case TokenType::RestrictKeyword: return "restrict";
         case TokenType::InlineKeyword: return "inline";
+        case TokenType::Backslash: return "\\";
         case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
     }
     OPENCL_UNREACHABLE;
@@ -1227,6 +1270,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "'inline'";
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
+        case TokenType::Backslash: return "'\\'";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1320,6 +1364,7 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Pound: return "#";
         case TokenType::DoublePound: return "##";
+        case TokenType::Backslash: return "\\";
     }
     OPENCL_UNREACHABLE;
 }

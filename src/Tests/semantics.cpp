@@ -2,13 +2,14 @@
 
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/C/SemanticAnalysis.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 
 #include <array>
 
 static std::pair<OpenCL::Semantics::TranslationUnit, std::string> generateSemantics(const std::string& source)
 {
     std::ostringstream ss;
-    std::vector<OpenCL::Lexer::Token> tokens;
+    OpenCL::SourceObject tokens{{}};
     REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
     auto parsing = OpenCL::Parser::buildTree(tokens, &ss);
     REQUIRE((ss.str().empty() && parsing.second));

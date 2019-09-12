@@ -2,6 +2,7 @@
 
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Parser.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 
 #include <sstream>
@@ -12,7 +13,7 @@
     do                                                             \
     {                                                              \
         std::ostringstream ss;                                     \
-        std::vector<OpenCL::Lexer::Token> tokens;                  \
+        OpenCL::SourceObject tokens{{}};                           \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);        \
         auto string = ss.str();                                    \
@@ -27,28 +28,28 @@
         }                                                          \
     } while (0)
 
-#define functionProduces(parser, source, matches)                                                       \
-    do                                                                                                  \
-    {                                                                                                   \
-        std::ostringstream ss;                                                                          \
-        std::vector<OpenCL::Lexer::Token> tokens;                                                       \
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));                                      \
-        OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), &ss);                           \
-        auto begin = tokens.cbegin();                                         \
-        parser(begin, tokens.cend(), context);                                \
-        auto string = ss.str();                                                                         \
-        CHECK((!string.empty() || begin == tokens.cend()));                                             \
-        CHECK_THAT(string, matches);                                                                    \
-        if (OpenCL::colourConsoleOutput)                                                                \
-        {                                                                                               \
-            auto begin2 = tokens.cbegin();                                                              \
-            OpenCL::Parser::Context context2(tokens.cbegin(), tokens.cend()); \
-            parser(begin2, tokens.cend(), context2);                          \
-            if (!string.empty())                                                                        \
-            {                                                                                           \
-                std::cerr << std::endl;                                                                 \
-            }                                                                                           \
-        }                                                                                               \
+#define functionProduces(parser, source, matches)                  \
+    do                                                             \
+    {                                                              \
+        std::ostringstream ss;                                     \
+        OpenCL::SourceObject tokens{{}};                           \
+        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
+        OpenCL::Parser::Context context(tokens, &ss);              \
+        auto begin = tokens.cbegin();                              \
+        parser(begin, tokens.cend(), context);                     \
+        auto string = ss.str();                                    \
+        CHECK((!string.empty() || begin == tokens.cend()));        \
+        CHECK_THAT(string, matches);                               \
+        if (OpenCL::colourConsoleOutput)                           \
+        {                                                          \
+            auto begin2 = tokens.cbegin();                         \
+            OpenCL::Parser::Context context2(tokens);              \
+            parser(begin2, tokens.cend(), context2);               \
+            if (!string.empty())                                   \
+            {                                                      \
+                std::cerr << std::endl;                            \
+            }                                                      \
+        }                                                          \
     } while (0)
 
 namespace
@@ -1181,4 +1182,3 @@ TEST_CASE("Parse Expressions", "[parser]")
                 && ProducesNErrors(1) && ProducesNoNotes());
     }
 }
-

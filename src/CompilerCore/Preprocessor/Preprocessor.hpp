@@ -1,11 +1,14 @@
 #ifndef OPENCLPARSER_PREPROCESSOR_HPP
 #define OPENCLPARSER_PREPROCESSOR_HPP
 
-#include <string>
-
-namespace OpenCL::PP
+namespace OpenCL
 {
-    std::string preprocess(std::string&& source);
-}
+    class SourceObject;
+
+    namespace PP
+    {
+        SourceObject preprocess(SourceObject sourceObject);
+    }
+} // namespace OpenCL
 
 #endif // OPENCLPARSER_PREPROCESSOR_HPP

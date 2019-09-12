@@ -4,6 +4,7 @@
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/C/SemanticAnalysis.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 
 #include <array>
 
@@ -19,9 +20,9 @@ namespace
         OpenCL::Semantics::ConstantEvaluator::Mode mode = OpenCL::Semantics::ConstantEvaluator::Integer)
     {
         std::ostringstream ss;
-        std::vector<OpenCL::Lexer::Token> tokens;
+        OpenCL::SourceObject tokens{{}};
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
-        OpenCL::Parser::Context context(tokens.cbegin(), tokens.cend(), &ss);
+        OpenCL::Parser::Context context(tokens, &ss);
         auto ref = tokens.cbegin();
         auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
         INFO(ss.str());

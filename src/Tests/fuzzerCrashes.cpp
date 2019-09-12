@@ -1,6 +1,7 @@
 #include "catch.hpp"
 
 #include <CompilerCore/C/Parser.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 
 namespace
 {
@@ -8,7 +9,7 @@ namespace
     {
         std::stringstream ss;
         auto tokens = OpenCL::Lexer::tokenize(source, &ss);
-        if (!ss.str().empty() || tokens.empty())
+        if (!ss.str().empty() || tokens.data().empty())
         {
             return;
         }
@@ -75,17 +76,16 @@ I=')");
         "                                                                                                                                                                                               ");
     parse("IN[\"*[\\* 8F*\n"
           "\"(] 4");
-    parse(R"("\S")");
     // Causes stack overflow when using address sanitizer due to address sanitizer possibly using 3x as much stack space
     // according to documentations
     // Also causes __chckstk to throw on windows when compiling in debug mode
 #if defined(NDEBUG) || !defined(_WIN32)
-#if !defined(__has_feature)
+    #if !defined(__has_feature)
     excludeFromAddressSanitizer();
-#else
-#if !__has_feature(address_sanitizer)
+    #else
+        #if !__has_feature(address_sanitizer)
     excludeFromAddressSanitizer();
-#endif
-#endif
+        #endif
+    #endif
 #endif
 }
