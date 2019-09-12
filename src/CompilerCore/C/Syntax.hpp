@@ -70,7 +70,7 @@ namespace OpenCL::Syntax
 
     class AssignmentExpression;
 
-    using ConstantExpression = AssignmentExpression;
+    using ConstantExpression = ConditionalExpression;
 
     class ReturnStatement;
 

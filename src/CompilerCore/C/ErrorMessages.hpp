@@ -146,7 +146,11 @@ namespace OpenCL
 
             constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
         } // namespace Lexer
-    }     // namespace ErrorMessages
+
+        namespace PP
+        {
+        }
+    } // namespace ErrorMessages
 
     namespace Notes
     {

@@ -612,7 +612,7 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::DefaultStatement::getStatement(
 
 OpenCL::Syntax::CaseStatement::CaseStatement(std::vector<Lexer::Token>::const_iterator begin,
                                              std::vector<Lexer::Token>::const_iterator end,
-                                             AssignmentExpression&& constantExpression,
+                                             ConstantExpression&& constantExpression,
                                              std::unique_ptr<Statement>&& statement)
     : Node(begin, end), m_constantExpression(std::move(constantExpression)), m_statement(std::move(statement))
 {
@@ -623,7 +623,7 @@ const OpenCL::Syntax::Statement& OpenCL::Syntax::CaseStatement::getStatement() c
     return *m_statement;
 }
 
-const OpenCL::Syntax::AssignmentExpression& OpenCL::Syntax::CaseStatement::getConstantExpression() const
+const OpenCL::Syntax::ConstantExpression& OpenCL::Syntax::CaseStatement::getConstantExpression() const
 {
     return m_constantExpression;
 }
