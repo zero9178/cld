@@ -17,7 +17,7 @@ TEST_CASE("Preprocess skipped sections", "[preprocess]")
                                           "#define INCFILE \"versN.h\"\n"
                                           "#endif\n"
                                           "#include INCFILE",
-                                          OpenCL::Language::C, &ss);
+                                          OpenCL::Language::Preprocessor, &ss);
     REQUIRE(ss.str().empty());
     OpenCL::PP::preprocess(source, &ss);
     CHECK(ss.str().empty());

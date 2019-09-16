@@ -189,10 +189,12 @@ namespace
                          const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
     {
         IfGroup result{};
-        assert(begin != end);
-        if (begin->getTokenType() == OpenCL::Lexer::TokenType::IfKeyword)
+        assert(begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+        const auto& value = std::get<std::string>(begin->getValue());
+        assert(value == "if" || value == "ifdef" || value == "ifndef");
+        begin++;
+        if (value == "if")
         {
-            begin++;
             OpenCL::Parser::Context context(sourceObject, reporter);
             auto expEnd = findEOLWithOutBackslash(begin, end);
             auto constantExpression = OpenCL::Parser::parseConditionalExpression(begin, expEnd, context);
@@ -209,10 +211,8 @@ namespace
             }
             result = IfGroup{std::move(constantExpression), nullptr};
         }
-        else if (begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier)
+        else
         {
-            const auto& value = std::get<std::string>(begin->getValue());
-            begin++;
             if (!expect(OpenCL::Lexer::TokenType::Identifier, begin, end, sourceObject, reporter))
             {
                 return result;
@@ -233,22 +233,18 @@ namespace
                 }
                 return result;
             }
-            if (identifier == "ifdef")
+            if (value == "ifdef")
             {
-                result = IfGroup{IfGroup::IfDefTag{value}, nullptr};
+                result = IfGroup{IfGroup::IfDefTag{identifier}, nullptr};
             }
-            else if (identifier == "ifndef")
+            else if (value == "ifndef")
             {
-                result = IfGroup{IfGroup::IfnDefTag{value}, nullptr};
+                result = IfGroup{IfGroup::IfnDefTag{identifier}, nullptr};
             }
             else
             {
                 OPENCL_UNREACHABLE;
             }
-        }
-        else
-        {
-            OPENCL_UNREACHABLE;
         }
 
         if (begin != end)
@@ -289,7 +285,8 @@ namespace
     ElseGroup parseElseGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
                              const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
     {
-        assert(begin->getTokenType() == OpenCL::Lexer::TokenType::ElseKeyword);
+        assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
+               && std::get<std::string>(begin->getValue()) == "else");
         begin++;
         if (begin != end && begin->getLine() == (begin - 1)->getLine())
         {
@@ -375,7 +372,8 @@ namespace
         }
 
         IfSection result{std::move(ifGroup), std::move(elifGroups), {}};
-        if (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::ElseKeyword)
+        if (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
+            && std::get<std::string>(begin->getValue()) == "else")
         {
             result.optionalElseGroup = parseElseGroup(begin, end, sourceObject, reporter);
         }
@@ -439,7 +437,7 @@ namespace
         {
             // No ( after the identifier or there's whitespace in between the identifier and the (
             auto eol = findEOLWithOutBackslash(begin, end);
-            std::vector tokens(begin, eol);
+            std::vector<OpenCL::Lexer::Token> tokens(begin, eol);
             begin = eol;
             return ControlLine::DefineDirective{name, {}, false, std::move(tokens)};
         }
@@ -609,7 +607,7 @@ namespace
             if (begin->getTokenType() != OpenCL::Lexer::TokenType::Pound)
             {
                 auto eol = findEOLWithOutBackslash(begin, end);
-                parts.emplace_back(std::vector(begin, eol));
+                parts.emplace_back(std::vector<OpenCL::Lexer::Token>(begin, eol));
                 begin = eol;
                 continue;
             }
@@ -618,49 +616,30 @@ namespace
             {
                 continue;
             }
-            switch (begin->getTokenType())
+            if (begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier)
             {
-                case OpenCL::Lexer::TokenType::Identifier:
+                const auto& value = std::get<std::string>(begin->getValue());
+                if (value == "elif" || value == "endif" || value == "else")
                 {
-                    // Unknown little feature but you can put a case anywhere even inside of control flow
-                    // One just need to avoid have any declarations above it hence the inlined value in the if below
-                    if (std::get<std::string>(begin->getValue()) == "ifdef"
-                        || std::get<std::string>(begin->getValue()) == "ifndef")
-                    {
-                        case OpenCL::Lexer::TokenType::IfKeyword:
-                        {
-                            parts.emplace_back(parseIfSection(begin, end, sourceObject, reporter));
-                            continue;
-                        }
-                    }
-                    if (std::get<std::string>(begin->getValue()) == "elif"
-                        || std::get<std::string>(begin->getValue()) == "endif")
-                    {
-                        case OpenCL::Lexer::TokenType::ElseKeyword:
-                        {
-                            begin--;
-                            goto End;
-                        }
-                    }
-                    const auto& value = std::get<std::string>(begin->getValue());
-                    if (value == "include" || value == "undef" || value == "line" || value == "error"
-                        || value == "pragma" || value == "define")
-                    {
-                        parts.emplace_back(parseControlLine(begin, end, sourceObject, reporter));
-                        continue;
-                    }
-                    [[fallthrough]];
+                    begin--;
+                    break;
                 }
-                default:
+                if (value == "ifdef" || value == "ifndef" || value == "if")
                 {
-                    auto eol = findEOLWithOutBackslash(begin, end);
-                    parts.emplace_back(NonDirective{std::vector(begin, eol)});
-                    begin = eol;
+                    parts.emplace_back(parseIfSection(begin, end, sourceObject, reporter));
+                    continue;
+                }
+                if (value == "include" || value == "undef" || value == "line" || value == "error" || value == "pragma"
+                    || value == "define")
+                {
+                    parts.emplace_back(parseControlLine(begin, end, sourceObject, reporter));
                     continue;
                 }
             }
+            auto eol = findEOLWithOutBackslash(begin, end);
+            parts.emplace_back(NonDirective{std::vector<OpenCL::Lexer::Token>(begin, eol)});
+            begin = eol;
         } while (begin != end);
-    End:
         return {std::move(parts)};
     }
 
