@@ -2,7 +2,8 @@
 
 #include "ParserUtil.hpp"
 
-OpenCL::SourceObject::SourceObject(std::vector<OpenCL::Lexer::Token> tokens) : m_tokens(std::move(tokens))
+OpenCL::SourceObject::SourceObject(std::vector<OpenCL::Lexer::Token> tokens, Language language)
+    : m_tokens(std::move(tokens)), m_language(language)
 {
     constructLineMap();
 }

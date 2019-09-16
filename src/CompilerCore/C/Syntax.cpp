@@ -489,7 +489,6 @@ OpenCL::Syntax::LogicalOrExpression::LogicalOrExpression(std::vector<Lexer::Toke
                                                          std::vector<LogicalAndExpression>&& andExpressions)
     : Node(begin, end), m_andExpressions(std::move(andExpressions))
 {
-
 }
 
 const std::vector<OpenCL::Syntax::LogicalAndExpression>& OpenCL::Syntax::LogicalOrExpression::getAndExpressions() const
@@ -534,7 +533,6 @@ OpenCL::Syntax::BitAndExpression::BitAndExpression(std::vector<Lexer::Token>::co
                                                    std::vector<EqualityExpression>&& equalityExpressions)
     : Node(begin, end), m_equalityExpressions(std::move(equalityExpressions))
 {
-
 }
 
 const std::vector<OpenCL::Syntax::EqualityExpression>& OpenCL::Syntax::BitAndExpression::getEqualityExpressions() const
@@ -547,7 +545,6 @@ OpenCL::Syntax::BitXorExpression::BitXorExpression(std::vector<Lexer::Token>::co
                                                    std::vector<BitAndExpression>&& bitAndExpressions)
     : Node(begin, end), m_bitAndExpressions(std::move(bitAndExpressions))
 {
-
 }
 
 const std::vector<OpenCL::Syntax::BitAndExpression>& OpenCL::Syntax::BitXorExpression::getBitAndExpressions() const
@@ -560,7 +557,6 @@ OpenCL::Syntax::BitOrExpression::BitOrExpression(std::vector<Lexer::Token>::cons
                                                  std::vector<BitXorExpression>&& bitXorExpressions)
     : Node(begin, end), m_bitXorExpressions(std::move(bitXorExpressions))
 {
-
 }
 
 const std::vector<OpenCL::Syntax::BitXorExpression>& OpenCL::Syntax::BitOrExpression::getBitXorExpressions() const
@@ -1196,4 +1192,16 @@ const std::vector<
     OpenCL::Syntax::AssignmentExpression::getAssignments() const
 {
     return m_assignments;
+}
+
+OpenCL::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                                               std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                                               std::string identifier)
+    : Node(begin, end), m_identifier(std::move(identifier))
+{
+}
+
+const std::string& OpenCL::Syntax::UnaryExpressionDefined::getIdentifier() const
+{
+    return m_identifier;
 }

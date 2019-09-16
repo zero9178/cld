@@ -44,6 +44,8 @@ namespace OpenCL::Syntax
 
     class UnaryExpressionSizeOf;
 
+    class UnaryExpressionDefined;
+
     class CastExpression;
 
     class Term;
@@ -406,9 +408,10 @@ namespace OpenCL::Syntax
      * <UnaryExpression> ::= <UnaryExpressionPostFixExpression>
      *                     | <UnaryExpressionUnaryOperator>
      *                     | <UnaryExpressionSizeOf>
+     *                 [PP]| <UnaryExpressionDefined>
      */
-    using UnaryExpression =
-        std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator, UnaryExpressionSizeOf>;
+    using UnaryExpression = std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator,
+                                         UnaryExpressionSizeOf, UnaryExpressionDefined>;
 
     /**
      * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
@@ -480,6 +483,21 @@ namespace OpenCL::Syntax
                               std::vector<Lexer::Token>::const_iterator end, variant&& variant);
 
         [[nodiscard]] const variant& getVariant() const;
+    };
+
+    /**
+     * <UnaryExpressionDefined> ::= <Identifier=defined> [<TokenType::OpenParentheses>] <TokenType::Identifier>
+     * [<TokenType::CloseParentheses>]
+     */
+    class UnaryExpressionDefined final : public Node
+    {
+        std::string m_identifier;
+
+    public:
+        UnaryExpressionDefined(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                               std::vector<OpenCL::Lexer::Token>::const_iterator end, std::string identifier);
+
+        [[nodiscard]] const std::string& getIdentifier() const;
     };
 
     /**

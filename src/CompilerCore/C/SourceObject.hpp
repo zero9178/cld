@@ -7,16 +7,24 @@
 
 namespace OpenCL
 {
+    enum class Language
+    {
+        C,
+        Preprocessor,
+        OpenCL
+    };
+
     class SourceObject final
     {
         std::vector<Lexer::Token> m_tokens;
         std::vector<std::pair<std::vector<Lexer::Token>::const_iterator, std::vector<Lexer::Token>::const_iterator>>
             m_lines;
+        Language m_language;
 
         void constructLineMap();
 
     public:
-        explicit SourceObject(std::vector<Lexer::Token> tokens);
+        explicit SourceObject(std::vector<Lexer::Token> tokens, Language language = Language::C);
 
         SourceObject(const SourceObject& sourceObject);
 

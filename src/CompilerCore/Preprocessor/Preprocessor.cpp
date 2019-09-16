@@ -28,7 +28,7 @@ namespace
     }
 
     /**
-     * <IfGroup> ::= <TokenType::Pound> <TokenType::IfKeyword> <ConstantExpression> <NEWLINE> [ <Group> ]
+     * <IfGroup> ::= <TokenType::Pound> <Identifier=if> <ConstantExpression> <NEWLINE> [ <Group> ]
      *             | <TokenType::Pound> <Identifier=ifdef> <TokenType::Identifier> <NEWLINE> [ <Group> ]
      *             | <TokenType::Pound> <Identifier=ifndef> <TokenType::Identifier> <NEWLINE> [ <Group> ]
      */
@@ -56,7 +56,7 @@ namespace
     };
 
     /**
-     * <ElseGroup> ::= <TokenType::Pound> <TokenType::ElseKeyword> <NEWLINE> [<Group>]
+     * <ElseGroup> ::= <TokenType::Pound> <Identifier=else> <NEWLINE> [<Group>]
      */
     struct ElseGroup final
     {

@@ -349,7 +349,7 @@ namespace
     }
 
     OpenCL::Lexer::Token charactersToNumber(std::ostream* reporter, const std::string& literal, std::uint64_t line,
-                                            std::uint64_t column, const std::string& lineText)
+                                            std::uint64_t column, const std::string& lineText, bool isPreprocessor)
     {
         if (literal.find('.') == std::string::npos
             && ((literal.size() >= 2 && (literal.substr(0, 2) == "0x" || literal.substr(0, 2) == "0X"))
@@ -371,7 +371,7 @@ namespace
 
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (suffix == "ll" || suffix == "LL")
+                if (isPreprocessor || suffix == "ll" || suffix == "LL")
                 {
                     return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
                                                 literal);
@@ -401,7 +401,7 @@ namespace
             {
                 char* endptr = nullptr;
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (suffix == "ll" || suffix == "LL")
+                if (isPreprocessor || suffix == "ll" || suffix == "LL")
                 {
                     if (isHexOrOctal && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                     {
@@ -499,7 +499,7 @@ namespace
     };
 } // namespace
 
-OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* reporter)
+OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language language, std::ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
@@ -600,10 +600,19 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* r
                         currentState = State::Start;
                         if (std::none_of(characters.begin(), characters.end(), [](char c) { return c == '\n'; }))
                         {
-                            result.emplace_back(
-                                line, column - characters.size() - 1, characters.size() + 2, TokenType::Literal,
-                                charactersToCharLiteral(reporter, characters, line, column + 1, lineMap[line]),
-                                '\'' + characters + '\'');
+                            std::int32_t characterValue =
+                                charactersToCharLiteral(reporter, characters, line, column + 1, lineMap[line]);
+                            if (language != Language::Preprocessor)
+                            {
+                                result.emplace_back(line, column - characters.size() - 1, characters.size() + 2,
+                                                    TokenType::Literal, characterValue, '\'' + characters + '\'');
+                            }
+                            else
+                            {
+                                result.emplace_back(line, column - characters.size() - 1, characters.size() + 2,
+                                                    TokenType::Literal, static_cast<std::int64_t>(characterValue),
+                                                    '\'' + characters + '\'');
+                            }
                         }
                         characters.clear();
                         continue;
@@ -669,10 +678,15 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* r
                     }
                     else
                     {
-                        if (isKeyword(characters))
+                        if (language != Language::Preprocessor && isKeyword(characters))
                         {
                             result.emplace_back(line, column - characters.size(), characters.size(),
                                                 charactersToKeyword(characters));
+                        }
+                        else if (language == Language::Preprocessor && characters == "defined")
+                        {
+                            result.emplace_back(line, column - characters.size(), characters.size(),
+                                                TokenType::DefinedKeyword);
                         }
                         else
                         {
@@ -701,8 +715,8 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* r
                     }
                     else
                     {
-                        result.push_back(
-                            charactersToNumber(reporter, characters, line, column - characters.size(), lineMap[line]));
+                        result.push_back(charactersToNumber(reporter, characters, line, column - characters.size(),
+                                                            lineMap[line], language == Language::Preprocessor));
                         characters.clear();
                         currentState = State::Start;
                         handled = false;
@@ -1084,7 +1098,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, std::ostream* r
         }
     }
 
-    return SourceObject(std::move(result));
+    return SourceObject(std::move(result), language);
 }
 
 std::string OpenCL::Lexer::Token::emitBack() const
@@ -1177,6 +1191,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Backslash: return "\\";
         case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
+        case TokenType::DefinedKeyword: return "defined";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1271,6 +1286,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
         case TokenType::Backslash: return "'\\'";
+        case TokenType::DefinedKeyword: return "'defined'";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1365,6 +1381,7 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::Pound: return "#";
         case TokenType::DoublePound: return "##";
         case TokenType::Backslash: return "\\";
+        case TokenType::DefinedKeyword: return "defined";
     }
     OPENCL_UNREACHABLE;
 }

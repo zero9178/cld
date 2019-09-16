@@ -204,3 +204,7 @@ void OpenCL::Parser::Context::braceLeft()
 {
     m_braceDepth--;
 }
+const OpenCL::SourceObject& OpenCL::Parser::Context::getSourceObject() const
+{
+    return m_sourceObject;
+}

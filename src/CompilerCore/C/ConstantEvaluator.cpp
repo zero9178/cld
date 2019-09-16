@@ -906,6 +906,12 @@ void OpenCL::Semantics::ConstantEvaluator::logError(std::string message, std::op
     }
 }
 
+OpenCL::Semantics::ConstRetType
+    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionDefined& node)
+{
+    return OpenCL::Semantics::ConstRetType();
+}
+
 OpenCL::Semantics::ConstRetType::ConstRetType(const OpenCL::Semantics::ConstRetType::ValueType& value,
                                               const OpenCL::Semantics::Type& type)
     : m_value(value), m_type(type.isUndefined() ? valueToType(m_value) : type)

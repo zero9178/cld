@@ -10,6 +10,8 @@ namespace OpenCL
 {
     class SourceObject;
 
+    enum class Language;
+
     namespace Lexer
     {
         enum class TokenType : std::uint8_t
@@ -58,44 +60,45 @@ namespace OpenCL
             Decrement,
             Colon,
             QuestionMark,
-            VoidKeyword,
-            CharKeyword,
-            ShortKeyword,
-            IntKeyword,
-            LongKeyword,
-            FloatKeyword,
-            DoubleKeyword,
-            SignedKeyword,
-            UnsignedKeyword,
-            TypedefKeyword,
-            ExternKeyword,
-            StaticKeyword,
-            AutoKeyword,
-            RegisterKeyword,
-            ConstKeyword,
-            RestrictKeyword,
-            SizeofKeyword,
-            VolatileKeyword,
-            InlineKeyword,
-            ReturnKeyword,
-            BreakKeyword,
-            ContinueKeyword,
-            DoKeyword,
-            ElseKeyword,
-            ForKeyword,
-            IfKeyword,
-            WhileKeyword,
-            OpenSquareBracket,
-            CloseSquareBracket,
-            StructKeyword,
+            VoidKeyword,        ///<[C,OpenCL]
+            CharKeyword,        ///<[C,OpenCL]
+            ShortKeyword,       ///<[C,OpenCL]
+            IntKeyword,         ///<[C,OpenCL]
+            LongKeyword,        ///<[C,OpenCL]
+            FloatKeyword,       ///<[C,OpenCL]
+            DoubleKeyword,      ///<[C,OpenCL]
+            SignedKeyword,      ///<[C,OpenCL]
+            UnsignedKeyword,    ///<[C,OpenCL]
+            TypedefKeyword,     ///<[C,OpenCL]
+            ExternKeyword,      ///<[C,OpenCL]
+            StaticKeyword,      ///<[C,OpenCL]
+            AutoKeyword,        ///<[C,OpenCL]
+            RegisterKeyword,    ///<[C,OpenCL]
+            ConstKeyword,       ///<[C,OpenCL]
+            RestrictKeyword,    ///<[C,OpenCL]
+            SizeofKeyword,      ///<[C,OpenCL]
+            DefinedKeyword,     ///<[PP]
+            VolatileKeyword,    ///<[C,OpenCL]
+            InlineKeyword,      ///<[C,OpenCL]
+            ReturnKeyword,      ///<[C,OpenCL]
+            BreakKeyword,       ///<[C,OpenCL]
+            ContinueKeyword,    ///<[C,OpenCL]
+            DoKeyword,          ///<[C,OpenCL]
+            ElseKeyword,        ///<[C,OpenCL]
+            ForKeyword,         ///<[C,OpenCL]
+            IfKeyword,          ///<[C,OpenCL]
+            WhileKeyword,       ///<[C,OpenCL]
+            OpenSquareBracket,  ///<[C,OpenCL]
+            CloseSquareBracket, ///<[C,OpenCL]
+            StructKeyword,      ///<[C,OpenCL]
             Dot,
             Arrow,
-            SwitchKeyword,
-            CaseKeyword,
-            DefaultKeyword,
-            UnionKeyword,
-            EnumKeyword,
-            GotoKeyword,
+            SwitchKeyword,  ///<[C,OpenCL]
+            CaseKeyword,    ///<[C,OpenCL]
+            DefaultKeyword, ///<[C,OpenCL]
+            UnionKeyword,   ///<[C,OpenCL]
+            EnumKeyword,    ///<[C,OpenCL]
+            GotoKeyword,    ///<[C,OpenCL]
             Ellipse,
             Pound,
             DoublePound,
@@ -105,7 +108,7 @@ namespace OpenCL
 
         class Token;
 
-        SourceObject tokenize(std::string source, std::ostream* reporter = &std::cerr);
+        SourceObject tokenize(std::string source, Language language, std::ostream* reporter = &std::cerr);
 
         class Token
         {

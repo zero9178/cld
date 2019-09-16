@@ -82,7 +82,7 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr);
+        explicit Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr);
 
         ~Context() = default;
 
@@ -93,6 +93,8 @@ namespace OpenCL::Parser
         Context& operator=(const Context&) = delete;
 
         Context& operator=(Context&&) = delete;
+
+        const SourceObject& getSourceObject() const;
 
         TokenBitReseter withRecoveryTokens(const TokenBitSet& tokenBitSet);
 

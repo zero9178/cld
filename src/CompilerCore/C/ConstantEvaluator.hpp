@@ -171,6 +171,8 @@ namespace OpenCL::Semantics
 
         ConstRetType visit(const Syntax::UnaryExpressionSizeOf& node);
 
+        ConstRetType visit(const Syntax::UnaryExpressionDefined& node);
+
         ConstRetType visit(const Syntax::CastExpression& node);
 
         ConstRetType visit(const Syntax::Term& node);

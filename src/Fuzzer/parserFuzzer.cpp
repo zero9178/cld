@@ -1,5 +1,6 @@
 #include <CompilerCore/C/Lexer.hpp>
 #include <CompilerCore/C/Parser.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -16,8 +17,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::transform(data, data + size, input.begin(), [](std::uint8_t byte) -> char { return static_cast<char>(byte); });
 
     std::stringstream ss;
-    auto tokens = OpenCL::Lexer::tokenize(input, &ss);
-    if (!ss.str().empty() || tokens.empty())
+    auto tokens = OpenCL::Lexer::tokenize(input, OpenCL::Language::C, &ss);
+    if (!ss.str().empty() || tokens.data().empty())
     {
         return 0;
     }
