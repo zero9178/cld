@@ -8,7 +8,7 @@
 #include "Parser.hpp"
 #define WIN32_LEAN_AND_MEAN
 #ifdef NOMINMAX // MinGW redefines this in a header somewhere and I want to be the next chef in the kitchen
-#undef NOMINMAX
+    #undef NOMINMAX
 #endif
 #define NOMINMAX
 #include "termcolor.hpp"
@@ -22,8 +22,8 @@ OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lex
 namespace
 {
     void renderSection(std::ostream& os, const std::string& message, std::ostream& (&colour)(std::ostream&),
-                       const std::string& prefix, OpenCL::Parser::Tokens::const_iterator begin,
-                       OpenCL::Parser::Tokens::const_iterator end, const std::optional<OpenCL::Modifier>& modifier)
+                       const std::string& prefix, OpenCL::SourceObject::const_iterator begin,
+                       OpenCL::SourceObject::const_iterator end, const std::optional<OpenCL::Modifier>& modifier)
     {
 #ifdef NDEBUG
         auto normalColour = termcolor::white;

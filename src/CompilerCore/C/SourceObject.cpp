@@ -25,8 +25,7 @@ void OpenCL::SourceObject::constructLineMap()
     }
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::SourceObject::getLineStart(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
+OpenCL::SourceObject::const_iterator OpenCL::SourceObject::getLineStart(OpenCL::SourceObject::const_iterator iter) const
 {
     if (m_lines.empty())
     {
@@ -39,8 +38,7 @@ std::vector<OpenCL::Lexer::Token>::const_iterator
     return m_lines[iter->getLine() - 1].first;
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::SourceObject::getLineEnd(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
+OpenCL::SourceObject::const_iterator OpenCL::SourceObject::getLineEnd(OpenCL::SourceObject::const_iterator iter) const
 {
     if (m_lines.empty() || iter == m_lines.back().second)
     {
@@ -54,12 +52,12 @@ const std::vector<OpenCL::Lexer::Token>& OpenCL::SourceObject::data() const
     return m_tokens;
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::SourceObject::begin() const
+OpenCL::SourceObject::const_iterator OpenCL::SourceObject::begin() const
 {
     return m_tokens.begin();
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::SourceObject::end() const
+OpenCL::SourceObject::const_iterator OpenCL::SourceObject::end() const
 {
     return m_tokens.end();
 }
@@ -69,7 +67,7 @@ std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::SourceObject::cbegin()
     return m_tokens.begin();
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::SourceObject::cend() const
+OpenCL::SourceObject::const_iterator OpenCL::SourceObject::cend() const
 {
     return m_tokens.end();
 }
@@ -92,4 +90,9 @@ OpenCL::SourceObject& OpenCL::SourceObject::operator=(OpenCL::SourceObject&& sou
     m_tokens = std::move(sourceObject.m_tokens);
     constructLineMap();
     return *this;
+}
+
+OpenCL::Language OpenCL::SourceObject::getLanguage() const
+{
+    return m_language;
 }

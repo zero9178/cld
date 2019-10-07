@@ -78,6 +78,7 @@ namespace OpenCL
             RestrictKeyword,    ///<[C,OpenCL]
             SizeofKeyword,      ///<[C,OpenCL]
             DefinedKeyword,     ///<[PP]
+            Newline,            ///<[PP]
             VolatileKeyword,    ///<[C,OpenCL]
             InlineKeyword,      ///<[C,OpenCL]
             ReturnKeyword,      ///<[C,OpenCL]
@@ -102,7 +103,7 @@ namespace OpenCL
             Ellipse,
             Pound,
             DoublePound,
-            Backslash,
+            Backslash, ///<[PP]
             TOKEN_MAX_VALUE = DoublePound
         };
 
@@ -121,7 +122,7 @@ namespace OpenCL
             variant m_value;
             std::string m_valueRepresentation;
 
-            friend SourceObject tokenize(std::string source, std::ostream* reporter);
+            // friend SourceObject tokenize(std::string source, std::ostream* reporter);
 
         public:
             using ValueType = variant;

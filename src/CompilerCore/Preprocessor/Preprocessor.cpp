@@ -12,12 +12,15 @@ namespace
 {
     struct Group;
 
-    Group parseGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter);
+    struct State;
+
+    std::vector<OpenCL::Lexer::Token> processGroup(OpenCL::SourceObject::const_iterator& begin,
+                                                   OpenCL::SourceObject::const_iterator end,
+                                                   const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                   State* state);
 
     std::vector<OpenCL::Lexer::Token>::const_iterator
-        findEOLWithOutBackslash(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                std::vector<OpenCL::Lexer::Token>::const_iterator end)
+        findEOLWithOutBackslash(OpenCL::SourceObject::const_iterator begin, OpenCL::SourceObject::const_iterator end)
     {
         auto result = begin;
         do
@@ -27,10 +30,23 @@ namespace
         return result;
     }
 
+    std::vector<OpenCL::Lexer::Token> filterForNewlineAndBackslash(OpenCL::SourceObject::const_iterator begin,
+                                                                   OpenCL::SourceObject::const_iterator end)
+    {
+        std::vector<OpenCL::Lexer::Token> result(begin, end);
+        result.erase(std::remove_if(result.begin(), result.end(),
+                                    [](const OpenCL::Lexer::Token& token) {
+                                        return token.getTokenType() == OpenCL::Lexer::TokenType::Newline
+                                               || token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
+                                    }),
+                     result.end());
+        return result;
+    }
+
     /**
-     * <IfGroup> ::= <TokenType::Pound> <Identifier=if> <ConstantExpression> <NEWLINE> [ <Group> ]
-     *             | <TokenType::Pound> <Identifier=ifdef> <TokenType::Identifier> <NEWLINE> [ <Group> ]
-     *             | <TokenType::Pound> <Identifier=ifndef> <TokenType::Identifier> <NEWLINE> [ <Group> ]
+     * <IfGroup> ::= <TokenType::Pound> <Identifier=if> <ConstantExpression> <TokenType::Newline> [ <Group> ]
+     *             | <TokenType::Pound> <Identifier=ifdef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
+     *             | <TokenType::Pound> <Identifier=ifndef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
      */
     struct IfGroup final
     {
@@ -47,7 +63,7 @@ namespace
     };
 
     /**
-     * <ElIfGroup> ::= <TokenType::Pound> <Identifier=elif> <ConstantExpression> <NEWLINE> [ <Group> ]
+     * <ElIfGroup> ::= <TokenType::Pound> <Identifier=elif> <ConstantExpression> <TokenType::Newline> [ <Group> ]
      */
     struct ElIfGroup final
     {
@@ -56,7 +72,7 @@ namespace
     };
 
     /**
-     * <ElseGroup> ::= <TokenType::Pound> <Identifier=else> <NEWLINE> [<Group>]
+     * <ElseGroup> ::= <TokenType::Pound> <Identifier=else> <TokenType::Newline> [<Group>]
      */
     struct ElseGroup final
     {
@@ -64,7 +80,7 @@ namespace
     };
 
     /**
-     * <IfSection> ::= <IfGroup> {<ElIfGroup>} [<ElseGroup] <TokenType::Pound> <Identifier=endif> <NEWLINE>
+     * <IfSection> ::= <IfGroup> {<ElIfGroup>} [<ElseGroup] <TokenType::Pound> <Identifier=endif> <TokenType::Newline>
      */
     struct IfSection final
     {
@@ -77,22 +93,22 @@ namespace
      * OpenParentheses must immediately follow the define keyword for the alternative to be valid
      * otherwise its just another token inside of <TOKENS>
      *
-     * <DefineDirectives> ::= <TokenType::Pound> <Identifier=define> <TokenType::Identifier> [<TOKENS>] <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=define> <TokenType::Identifier> <TokenType::OpenParentheses>
-     *                   [ <TokenType::Identifier { <TokenType::Comma> <TokenType::Identifier> } ]
-     *                   <TokenType::CloseParentheses> [<TOKENS>] <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=define> <TokenType::Identifier> <TokenType::OpenParentheses>
-     *                   <TokenType::Ellipse> <TokenType::CloseParentheses> [ <TOKENS> ] <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=define> <TokenType::Identifier> <TokenType::OpenParentheses>
-     *                   [ <TokenType::Identifier { <TokenType::Comma> <TokenType::Identifier> } ] <TokenType::Comma>
-     *                   <TokenType::Ellipse> <TokenType::CloseParentheses> [ <TOKENS> ] <NEWLINE>
+     * <DefineDirectives> ::= <TokenType::Pound> <Identifier=define> <TokenType::Identifier> [<TOKENS>]
+     * <TokenType::Newline> | <TokenType::Pound> <Identifier=define> <TokenType::Identifier>
+     *                        <TokenType::OpenParentheses> [ <TokenType::Identifier { <TokenType::Comma>
+     * <TokenType::Identifier> } ] <TokenType::CloseParentheses> [<TOKENS>] <TokenType::Newline> | <TokenType::Pound>
+     * <Identifier=define> <TokenType::Identifier> <TokenType::OpenParentheses> <TokenType::Ellipse>
+     * <TokenType::CloseParentheses> [ <TOKENS> ] <TokenType::Newline> | <TokenType::Pound> <Identifier=define>
+     * <TokenType::Identifier> <TokenType::OpenParentheses> [ <TokenType::Identifier { <TokenType::Comma>
+     * <TokenType::Identifier> } ] <TokenType::Comma> <TokenType::Ellipse> <TokenType::CloseParentheses> [ <TOKENS> ]
+     * <TokenType::Newline>
      *
-     * <ControlLine> ::= <TokenType::Pound> <Identifier=include> <TOKENS> <NEWLINE>
+     * <ControlLine> ::= <TokenType::Pound> <Identifier=include> <TOKENS> <TokenType::Newline>
      *                 | <DefineDirectives>
-     *                 | <TokenType::Pound> <Identifier=undef> <TokenType::Identifier> <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=line> <TOKENS> <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=error> [<TOKENS>] <NEWLINE>
-     *                 | <TokenType::Pound> <Identifier=pragma> [<TOKENS>] <NEWLINE>
+     *                 | <TokenType::Pound> <Identifier=undef> <TokenType::Identifier> <TokenType::Newline>
+     *                 | <TokenType::Pound> <Identifier=line> <TOKENS> <TokenType::Newline>
+     *                 | <TokenType::Pound> <Identifier=error> [<TOKENS>] <TokenType::Newline>
+     *                 | <TokenType::Pound> <Identifier=pragma> [<TOKENS>] <TokenType::Newline>
      */
     struct ControlLine final
     {
@@ -156,8 +172,8 @@ namespace
         std::vector<Group> groups;
     };
 
-    bool expect(OpenCL::Lexer::TokenType tokenType, OpenCL::Parser::Tokens::const_iterator begin,
-                OpenCL::Parser::Tokens::const_iterator end, const OpenCL::SourceObject& sourceObject,
+    bool expect(OpenCL::Lexer::TokenType tokenType, OpenCL::SourceObject::const_iterator begin,
+                OpenCL::SourceObject::const_iterator end, const OpenCL::SourceObject& sourceObject,
                 std::ostream* reporter)
     {
         if (begin == end || begin->getTokenType() != tokenType)
@@ -185,8 +201,15 @@ namespace
         return true;
     }
 
-    IfGroup parseIfGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                         const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    struct State
+    {
+        std::unordered_map<std::string, ControlLine::DefineDirective> defines;
+    };
+
+    std::vector<OpenCL::Lexer::Token> processIfGroup(OpenCL::SourceObject::const_iterator& begin,
+                                                     OpenCL::SourceObject::const_iterator end,
+                                                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                     State* state)
     {
         IfGroup result{};
         assert(begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier);
@@ -219,18 +242,8 @@ namespace
             }
             const auto& identifier = std::get<std::string>(begin->getValue());
             begin++;
-            // One may argue that if begin == end we technically don't have a newline either but id rather error later
-            // and complain about not having an endif
-            if (begin != end && begin->getLine() == (begin - 1)->getLine())
+            if (begin != end && !expect(OpenCL::Lexer::TokenType::Newline, begin, end, sourceObject, reporter))
             {
-                if (reporter)
-                {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args("newline",
-                                                                                    '\'' + begin->emitBack() + '\''),
-                        sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                        OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
-                }
                 return result;
             }
             if (value == "ifdef")
@@ -249,13 +262,15 @@ namespace
 
         if (begin != end)
         {
-            result.optionalGroup = std::make_unique<Group>(parseGroup(begin, end, sourceObject, reporter));
+            result.optionalGroup = std::make_unique<Group>(processGroup(begin, end, sourceObject, reporter));
         }
         return result;
     }
 
-    ElIfGroup parseElIfGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                             const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processElIfGroup(OpenCL::SourceObject::const_iterator& begin,
+                                                       OpenCL::SourceObject::const_iterator end,
+                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                       State* state)
     {
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "elif");
@@ -277,41 +292,38 @@ namespace
         }
         if (begin != end)
         {
-            result.optionalGroup = std::make_unique<Group>(parseGroup(begin, end, sourceObject, reporter));
+            result.optionalGroup = std::make_unique<Group>(processGroup(begin, end, sourceObject, reporter));
         }
         return result;
     }
 
-    ElseGroup parseElseGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                             const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processElseGroup(OpenCL::SourceObject::const_iterator& begin,
+                                                       OpenCL::SourceObject::const_iterator end,
+                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                       State* state)
     {
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "else");
         begin++;
-        if (begin != end && begin->getLine() == (begin - 1)->getLine())
+        if (!expect(OpenCL::Lexer::TokenType::Newline, begin, end, sourceObject, reporter))
         {
-            if (reporter)
-            {
-                *reporter << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N.args("newline"), sourceObject.getLineStart(begin),
-                    sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
-            }
             return {{}};
         }
         ElseGroup result{};
         if (begin != end)
         {
-            result.optionalGroup = std::make_unique<Group>(parseGroup(begin, end, sourceObject, reporter));
+            result.optionalGroup = std::make_unique<Group>(processGroup(begin, end, sourceObject, reporter));
         }
         return result;
     }
 
-    IfSection parseIfSection(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                             const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processIfSection(OpenCL::SourceObject::const_iterator& begin,
+                                                       OpenCL::SourceObject::const_iterator end,
+                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                       State* state)
     {
         assert(begin != end);
-        auto ifGroup = parseIfGroup(begin, end, sourceObject, reporter);
+        auto ifGroup = processIfGroup(begin, end, sourceObject, reporter);
         if (begin == end)
         {
             if (reporter)
@@ -342,7 +354,7 @@ namespace
         while (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "elif")
         {
-            elifGroups.push_back(parseElIfGroup(begin, end, sourceObject, reporter));
+            elifGroups.push_back(processElIfGroup(begin, end, sourceObject, reporter));
         }
 
         if (begin == end)
@@ -375,7 +387,7 @@ namespace
         if (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
             && std::get<std::string>(begin->getValue()) == "else")
         {
-            result.optionalElseGroup = parseElseGroup(begin, end, sourceObject, reporter);
+            result.optionalElseGroup = processElseGroup(begin, end, sourceObject, reporter);
         }
 
         if (begin == end)
@@ -418,9 +430,10 @@ namespace
         return result;
     }
 
-    ControlLine::DefineDirective parseDefineDirective(OpenCL::Parser::Tokens::const_iterator& begin,
-                                                      OpenCL::Parser::Tokens::const_iterator end,
-                                                      const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processDefineDirective(OpenCL::SourceObject::const_iterator& begin,
+                                                             OpenCL::SourceObject::const_iterator end,
+                                                             const OpenCL::SourceObject& sourceObject,
+                                                             std::ostream* reporter, State* state)
     {
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "define");
@@ -503,52 +516,39 @@ namespace
         }
     }
 
-    ControlLine parseControlLine(OpenCL::Parser::Tokens::const_iterator& begin,
-                                 OpenCL::Parser::Tokens::const_iterator end, const OpenCL::SourceObject& sourceObject,
-                                 std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processControlLine(OpenCL::SourceObject::const_iterator& begin,
+                                                         OpenCL::SourceObject::const_iterator end,
+                                                         const OpenCL::SourceObject& sourceObject,
+                                                         std::ostream* reporter, State* state)
     {
         const auto& value = std::get<std::string>(begin->getValue());
         if (value == "define")
         {
-            return ControlLine{parseDefineDirective(begin, end, sourceObject, reporter)};
+            return processDefineDirective(begin, end, sourceObject, reporter, state);
         }
         else if (value == "undef")
         {
             begin++;
             if (!expect(OpenCL::Lexer::TokenType::Identifier, begin, end, sourceObject, reporter))
             {
-                return ControlLine{""};
+                return {};
             }
-            const auto& name = std::get<std::string>(begin->getValue());
-            begin++;
-            if (begin != end && begin->getLine() == (begin - 1)->getLine())
+            if (state)
             {
-                if (reporter)
-                {
-                    if (begin == end)
-                    {
-                        *reporter << OpenCL::Message::error(
-                            OpenCL::ErrorMessages::Parser::EXPECTED_N.args("newline"), sourceObject.getLineStart(begin),
-                            sourceObject.getLineEnd(begin),
-                            OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
-                    }
-                    else
-                    {
-                        *reporter << OpenCL::Message::error(
-                            OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                "newline", '\'' + begin->emitBack() + '\''),
-                            sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                            OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
-                    }
-                }
+                state->defines.erase(std::get<std::string>(begin->getValue()));
             }
-            return ControlLine{name};
+            begin++;
+            if (begin != end)
+            {
+                expect(OpenCL::Lexer::TokenType::Newline, begin, end, sourceObject, reporter);
+            }
+            return {};
         }
         else
         {
             begin++;
             auto newline = findEOLWithOutBackslash(begin, end);
-            std::vector<OpenCL::Lexer::Token> tokens(begin, newline);
+            auto tokens = filterForNewlineAndBackslash(begin, newline);
             begin = newline;
             if (value == "include")
             {
@@ -559,7 +559,8 @@ namespace
                         sourceObject.getLineStart(begin - 1), sourceObject.getLineEnd(begin - 1),
                         OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
                 }
-                return ControlLine{ControlLine::IncludeTag{std::move(tokens)}};
+                // TODO: Process tokens to open file, tokenize it and call processFile with it
+                return {};
             }
             else if (value == "line")
             {
@@ -570,15 +571,19 @@ namespace
                         sourceObject.getLineStart(begin - 1), sourceObject.getLineEnd(begin - 1),
                         OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
                 }
-                return ControlLine{ControlLine::LineTag{std::move(tokens)}};
+                return {};
             }
             else if (value == "error")
             {
-                return ControlLine{ControlLine::ErrorTag{std::move(tokens)}};
+                if (reporter)
+                {
+                    // TODO reporting
+                }
+                return {};
             }
             else if (value == "pragma")
             {
-                return ControlLine{ControlLine::PragmaTag{std::move(tokens)}};
+                return {};
             }
             else
             {
@@ -587,8 +592,10 @@ namespace
         }
     }
 
-    Group parseGroup(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processGroup(OpenCL::SourceObject::const_iterator& begin,
+                                                   OpenCL::SourceObject::const_iterator end,
+                                                   const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                   State* state)
     {
         if (begin == end)
         {
@@ -601,18 +608,19 @@ namespace
             return {};
         }
 
-        std::vector<GroupPart> parts;
+        std::vector<OpenCL::Lexer::Token> result;
         do
         {
             if (begin->getTokenType() != OpenCL::Lexer::TokenType::Pound)
             {
                 auto eol = findEOLWithOutBackslash(begin, end);
-                parts.emplace_back(std::vector<OpenCL::Lexer::Token>(begin, eol));
+                auto vector = filterForNewlineAndBackslash(begin, eol);
+                result.insert(result.end(), vector.begin(), vector.end());
                 begin = eol;
                 continue;
             }
             begin++;
-            if (begin == end || begin->getLine() != (begin - 1)->getLine())
+            if (begin == end || begin->getTokenType() == OpenCL::Lexer::TokenType::Newline)
             {
                 continue;
             }
@@ -626,39 +634,46 @@ namespace
                 }
                 if (value == "ifdef" || value == "ifndef" || value == "if")
                 {
-                    parts.emplace_back(parseIfSection(begin, end, sourceObject, reporter));
+                    auto vector = processIfSection(begin, end, sourceObject, reporter, state);
+                    result.insert(result.end(), vector.begin(), vector.end());
                     continue;
                 }
                 if (value == "include" || value == "undef" || value == "line" || value == "error" || value == "pragma"
                     || value == "define")
                 {
-                    parts.emplace_back(parseControlLine(begin, end, sourceObject, reporter));
+                    auto vector = processControlLine(begin, end, sourceObject, reporter, state);
+                    result.insert(result.end(), vector.begin(), vector.end());
                     continue;
                 }
             }
             auto eol = findEOLWithOutBackslash(begin, end);
-            parts.emplace_back(NonDirective{std::vector<OpenCL::Lexer::Token>(begin, eol)});
+            auto vector = filterForNewlineAndBackslash(begin, eol);
+            result.insert(result.end(), vector.begin(), vector.end());
             begin = eol;
         } while (begin != end);
-        return {std::move(parts)};
+        return result;
     }
 
-    File parseFile(OpenCL::Parser::Tokens::const_iterator& begin, OpenCL::Parser::Tokens::const_iterator end,
-                   const OpenCL::SourceObject& sourceObject, std::ostream* reporter)
+    std::vector<OpenCL::Lexer::Token> processFile(OpenCL::SourceObject::const_iterator& begin,
+                                                  OpenCL::SourceObject::const_iterator end,
+                                                  const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                  State* state)
     {
-        std::vector<Group> groups;
+        std::vector<OpenCL::Lexer::Token> result;
         while (begin != end)
         {
-            groups.push_back(parseGroup(begin, end, sourceObject, reporter));
+            auto vector = processGroup(begin, end, sourceObject, reporter, state);
+            result.insert(result.end(), vector.begin(), vector.end());
         }
-        return {std::move(groups)};
+        return result;
     }
 } // namespace
 
 OpenCL::SourceObject OpenCL::PP::preprocess(const SourceObject& sourceObject, std::ostream* reporter)
 {
     auto begin = sourceObject.begin();
-    auto file = parseFile(begin, sourceObject.end(), sourceObject, reporter);
+    State state;
+    auto file = processFile(begin, sourceObject.end(), sourceObject, reporter, &state);
 
     return SourceObject{{}};
 }

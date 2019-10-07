@@ -1088,6 +1088,10 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
             {
                 currentState = State::Start;
             }
+            else if (language == Language::Preprocessor)
+            {
+                result.emplace_back(line, column, 0, TokenType::Newline);
+            }
             line++;
             column = 0;
             continue;
@@ -1192,6 +1196,7 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::Backslash: return "\\";
         case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
         case TokenType::DefinedKeyword: return "defined";
+        case TokenType::Newline: return "";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1287,6 +1292,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::DoublePound: return "'##'";
         case TokenType::Backslash: return "'\\'";
         case TokenType::DefinedKeyword: return "'defined'";
+        case TokenType::Newline: return "'Newline'";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1382,6 +1388,7 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::DoublePound: return "##";
         case TokenType::Backslash: return "\\";
         case TokenType::DefinedKeyword: return "defined";
+        case TokenType::Newline: return "Newline";
     }
     OPENCL_UNREACHABLE;
 }

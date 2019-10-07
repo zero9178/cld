@@ -486,8 +486,9 @@ namespace OpenCL::Syntax
     };
 
     /**
-     * <UnaryExpressionDefined> ::= <Identifier=defined> [<TokenType::OpenParentheses>] <TokenType::Identifier>
-     * [<TokenType::CloseParentheses>]
+     * <UnaryExpressionDefined> ::= <TokenType::DefinedKeyword> <TokenType::Identifier>
+     *                            | <TokenType::DefinedKeyword> <TokenType::OpenParenthese> <TokenType::Identifier>
+     * <TokenType::CloseParenthese>
      */
     class UnaryExpressionDefined final : public Node
     {

@@ -8,8 +8,8 @@
 
 using namespace OpenCL::Syntax;
 
-OpenCL::Syntax::Expression OpenCL::Parser::parseExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                           Context& context)
+OpenCL::Syntax::Expression OpenCL::Parser::parseExpression(SourceObject::const_iterator& begin,
+                                                           SourceObject::const_iterator end, Context& context)
 {
     auto start = begin;
     std::vector<AssignmentExpression> expressions;
@@ -37,7 +37,7 @@ OpenCL::Syntax::Expression OpenCL::Parser::parseExpression(Tokens::const_iterato
 }
 
 std::optional<OpenCL::Syntax::AssignmentExpression>
-    OpenCL::Parser::parseAssignmentExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+    OpenCL::Parser::parseAssignmentExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
                                               Context& context)
 {
     auto start = begin;
@@ -108,8 +108,8 @@ namespace
         return r;
     }
 
-    StateVariant parseBinaryOperators(EndState endState, OpenCL::Parser::Tokens::const_iterator& begin,
-                                      OpenCL::Parser::Tokens::const_iterator end, OpenCL::Parser::Context& context)
+    StateVariant parseBinaryOperators(EndState endState, OpenCL::SourceObject::const_iterator& begin,
+                                      OpenCL::SourceObject::const_iterator end, OpenCL::Parser::Context& context)
     {
         StateVariant state;
         auto start = begin;
@@ -476,8 +476,8 @@ namespace
 
 } // namespace
 
-OpenCL::Syntax::ConditionalExpression OpenCL::Parser::parseConditionalExpression(Tokens::const_iterator& begin,
-                                                                                 Tokens::const_iterator end,
+OpenCL::Syntax::ConditionalExpression OpenCL::Parser::parseConditionalExpression(SourceObject::const_iterator& begin,
+                                                                                 SourceObject::const_iterator end,
                                                                                  Context& context)
 {
     auto start = begin;
@@ -504,72 +504,78 @@ OpenCL::Syntax::ConditionalExpression OpenCL::Parser::parseConditionalExpression
     return ConditionalExpression(start, begin, std::move(logicalOrExpression));
 }
 
-OpenCL::Syntax::LogicalOrExpression OpenCL::Parser::parseLogicalOrExpression(Tokens::const_iterator& begin,
-                                                                             Tokens::const_iterator end,
+OpenCL::Syntax::LogicalOrExpression OpenCL::Parser::parseLogicalOrExpression(SourceObject::const_iterator& begin,
+                                                                             SourceObject::const_iterator end,
                                                                              Context& context)
 {
     return std::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
-OpenCL::Syntax::LogicalAndExpression OpenCL::Parser::parseLogicalAndExpression(Tokens::const_iterator& begin,
-                                                                               Tokens::const_iterator end,
+OpenCL::Syntax::LogicalAndExpression OpenCL::Parser::parseLogicalAndExpression(SourceObject::const_iterator& begin,
+                                                                               SourceObject::const_iterator end,
                                                                                Context& context)
 {
     return std::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
-OpenCL::Syntax::BitOrExpression OpenCL::Parser::parseBitOrExpression(Tokens::const_iterator& begin,
-                                                                     Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitOrExpression OpenCL::Parser::parseBitOrExpression(SourceObject::const_iterator& begin,
+                                                                     SourceObject::const_iterator end, Context& context)
 {
     return std::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
-OpenCL::Syntax::BitXorExpression OpenCL::Parser::parseBitXorExpression(Tokens::const_iterator& begin,
-                                                                       Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitXorExpression OpenCL::Parser::parseBitXorExpression(SourceObject::const_iterator& begin,
+                                                                       SourceObject::const_iterator end,
+                                                                       Context& context)
 {
     return std::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
-OpenCL::Syntax::BitAndExpression OpenCL::Parser::parseBitAndExpression(Tokens::const_iterator& begin,
-                                                                       Tokens::const_iterator end, Context& context)
+OpenCL::Syntax::BitAndExpression OpenCL::Parser::parseBitAndExpression(SourceObject::const_iterator& begin,
+                                                                       SourceObject::const_iterator end,
+                                                                       Context& context)
 {
     return std::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
 std::optional<OpenCL::Syntax::EqualityExpression>
-    OpenCL::Parser::parseEqualityExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+    OpenCL::Parser::parseEqualityExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
+                                            Context& context)
 {
     return std::get<std::optional<EqualityExpression>>(parseBinaryOperators(EndState::Equality, begin, end, context));
 }
 
 std::optional<OpenCL::Syntax::RelationalExpression>
-    OpenCL::Parser::parseRelationalExpression(Tokens::const_iterator& begin, Tokens::const_iterator end,
+    OpenCL::Parser::parseRelationalExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
                                               Context& context)
 {
     return std::get<std::optional<RelationalExpression>>(
         parseBinaryOperators(EndState::Relational, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::ShiftExpression>
-    OpenCL::Parser::parseShiftExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+std::optional<OpenCL::Syntax::ShiftExpression> OpenCL::Parser::parseShiftExpression(SourceObject::const_iterator& begin,
+                                                                                    SourceObject::const_iterator end,
+                                                                                    Context& context)
 {
     return std::get<std::optional<ShiftExpression>>(parseBinaryOperators(EndState::Shift, begin, end, context));
 }
 
 std::optional<OpenCL::Syntax::AdditiveExpression>
-    OpenCL::Parser::parseAdditiveExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+    OpenCL::Parser::parseAdditiveExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
+                                            Context& context)
 {
     return std::get<std::optional<AdditiveExpression>>(parseBinaryOperators(EndState::Additive, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::Term> OpenCL::Parser::parseTerm(Tokens::const_iterator& begin, Tokens::const_iterator end,
-                                                              Context& context)
+std::optional<OpenCL::Syntax::Term> OpenCL::Parser::parseTerm(SourceObject::const_iterator& begin,
+                                                              SourceObject::const_iterator end, Context& context)
 {
     return std::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context));
 }
 
-std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(Tokens::const_iterator& begin,
-                                                                      Tokens::const_iterator end, Context& context)
+std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(SourceObject::const_iterator& begin,
+                                                                      SourceObject::const_iterator end,
+                                                                      Context& context)
 {
     auto start = begin;
     auto specifierQualifiers =
@@ -617,8 +623,8 @@ namespace
     }
 
     void parsePostFixExpressionSuffix(std::vector<OpenCL::Lexer::Token>::const_iterator start,
-                                      OpenCL::Parser::Tokens::const_iterator& begin,
-                                      OpenCL::Parser::Tokens::const_iterator end,
+                                      OpenCL::SourceObject::const_iterator& begin,
+                                      OpenCL::SourceObject::const_iterator end,
                                       std::unique_ptr<PostFixExpression>& current, OpenCL::Parser::Context& context)
     {
         while (begin != end && isPostFixOperator(*begin))
@@ -748,8 +754,9 @@ namespace
     }
 } // namespace
 
-std::optional<OpenCL::Syntax::CastExpression>
-    OpenCL::Parser::parseCastExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+std::optional<OpenCL::Syntax::CastExpression> OpenCL::Parser::parseCastExpression(SourceObject::const_iterator& begin,
+                                                                                  SourceObject::const_iterator end,
+                                                                                  Context& context)
 {
     auto start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParentheses || begin + 1 == end
@@ -782,7 +789,7 @@ std::optional<OpenCL::Syntax::CastExpression>
                               std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
     }
 
-    std::optional<Tokens::const_iterator> openBrace;
+    std::optional<SourceObject::const_iterator> openBrace;
     if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
     {
         context.skipUntil(begin, end, firstInitializerListSet);
@@ -830,8 +837,9 @@ std::optional<OpenCL::Syntax::CastExpression>
     return CastExpression(start, begin, UnaryExpressionPostFixExpression(start, begin, std::move(*current)));
 }
 
-std::optional<OpenCL::Syntax::UnaryExpression>
-    OpenCL::Parser::parseUnaryExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+std::optional<OpenCL::Syntax::UnaryExpression> OpenCL::Parser::parseUnaryExpression(SourceObject::const_iterator& begin,
+                                                                                    SourceObject::const_iterator end,
+                                                                                    Context& context)
 {
     auto start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SizeofKeyword)
@@ -867,6 +875,35 @@ std::optional<OpenCL::Syntax::UnaryExpression>
             return UnaryExpression(
                 UnaryExpressionSizeOf(start, begin, std::make_unique<UnaryExpression>(std::move(*unary))));
         }
+    }
+    else if (context.getSourceObject().getLanguage() == Language::Preprocessor && begin < end
+             && begin->getTokenType() == Lexer::TokenType::DefinedKeyword)
+    {
+        begin++;
+        std::optional<SourceObject::const_iterator> openP;
+        if (begin->getTokenType() == Lexer::TokenType::OpenParentheses)
+        {
+            openP = begin;
+            begin++;
+        }
+        std::string identifier;
+        if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &identifier))
+        {
+            context.skipUntil(begin, end,
+                              openP ? Context::fromTokenTypes(Lexer::TokenType::CloseParentheses) :
+                                      Context::TokenBitSet{});
+        }
+        if (openP)
+        {
+            if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
+                                       context.getLineEnd(*openP),
+                                       Modifier(*openP, *openP + 1, Modifier::PointAtBeginning))}))
+            {
+                context.skipUntil(begin, end);
+            }
+        }
+        return UnaryExpression(UnaryExpressionDefined(start, begin, std::move(identifier)));
     }
     else if (begin < end
              && (begin->getTokenType() == Lexer::TokenType::Increment
@@ -911,7 +948,8 @@ std::optional<OpenCL::Syntax::UnaryExpression>
 }
 
 std::optional<OpenCL::Syntax::PostFixExpression>
-    OpenCL::Parser::parsePostFixExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
+    OpenCL::Parser::parsePostFixExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
+                                           Context& context)
 {
     std::unique_ptr<PostFixExpression> current;
 
@@ -1008,7 +1046,7 @@ std::optional<OpenCL::Syntax::PostFixExpression>
             context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBrace));
         }
 
-        std::optional<Tokens::const_iterator> openBrace;
+        std::optional<SourceObject::const_iterator> openBrace;
         if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
         {
             context.skipUntil(begin, end, firstInitializerListSet);
@@ -1054,81 +1092,4 @@ std::optional<OpenCL::Syntax::PostFixExpression>
         return {};
     }
     return std::move(*current);
-}
-
-std::optional<OpenCL::Syntax::PrimaryExpression>
-    OpenCL::Parser::parsePrimaryExpression(Tokens::const_iterator& begin, Tokens::const_iterator end, Context& context)
-{
-    auto start = begin;
-    std::optional<OpenCL::Syntax::PrimaryExpression> result;
-    if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
-    {
-        const auto& value = std::get<std::string>(begin->getValue());
-        begin++;
-        result = PrimaryExpression(PrimaryExpressionIdentifier(start, begin, value));
-    }
-    else if (begin < end && begin->getTokenType() == Lexer::TokenType::Literal)
-    {
-        auto value = std::visit(
-            [](auto&& value) -> typename PrimaryExpressionConstant::variant {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::variant, T>)
-                {
-                    return {std::forward<decltype(value)>(value)};
-                }
-                else
-                {
-                    throw std::runtime_error("ICE: Can't convert type of variant to constant expression");
-                }
-            },
-            begin->getValue());
-        begin++;
-        result = PrimaryExpression(PrimaryExpressionConstant(start, begin, std::move(value)));
-    }
-    else if (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
-    {
-        std::string literal = std::get<std::string>(begin->getValue());
-        begin++;
-        while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
-        {
-            literal += std::get<std::string>(begin->getValue());
-            begin++;
-        }
-        result = PrimaryExpression(PrimaryExpressionConstant(start, begin, literal));
-    }
-    else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
-    {
-        context.parenthesesEntered(begin);
-        auto openPpos = begin++;
-        auto expression = parseExpression(
-            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-        if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                   context.getLineEnd(openPpos),
-                                   Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
-        {
-            context.skipUntil(begin, end);
-        }
-        result = PrimaryExpression(PrimaryExpressionParenthese(start, begin, std::move(expression)));
-    }
-    else
-    {
-        if (begin == end)
-        {
-            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
-                                            OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                        context.getLineStart(start), begin,
-                                        Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
-        }
-        else
-        {
-            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                            OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
-                                            '\'' + begin->emitBack() + '\''),
-                                        context.getLineStart(start), context.getLineEnd(begin),
-                                        Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
-        }
-        context.skipUntil(begin, end);
-    }
-    return result;
 }

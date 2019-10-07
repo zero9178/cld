@@ -24,6 +24,14 @@ namespace OpenCL
         void constructLineMap();
 
     public:
+        using value_type = Lexer::Token;
+        using reference = Lexer::Token&;
+        using const_reference = const Lexer::Token&;
+        using iterator = std::vector<Lexer::Token>::const_iterator;
+        using const_iterator = std::vector<Lexer::Token>::const_iterator;
+        using difference_type = std::ptrdiff_t;
+        using size_type = std::size_t;
+
         explicit SourceObject(std::vector<Lexer::Token> tokens, Language language = Language::C);
 
         SourceObject(const SourceObject& sourceObject);
@@ -34,21 +42,21 @@ namespace OpenCL
 
         SourceObject& operator=(SourceObject&& sourceObject) noexcept;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator
-            getLineStart(std::vector<Lexer::Token>::const_iterator) const;
+        [[nodiscard]] const_iterator getLineStart(const_iterator iter) const;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator
-            getLineEnd(std::vector<Lexer::Token>::const_iterator) const;
+        [[nodiscard]] const_iterator getLineEnd(const_iterator iter) const;
 
         [[nodiscard]] const std::vector<Lexer::Token>& data() const;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator begin() const;
+        [[nodiscard]] iterator begin() const;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator end() const;
+        [[nodiscard]] iterator end() const;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator cbegin() const;
+        [[nodiscard]] const_iterator cbegin() const;
 
-        [[nodiscard]] std::vector<Lexer::Token>::const_iterator cend() const;
+        [[nodiscard]] const_iterator cend() const;
+
+        Language getLanguage() const;
     };
 } // namespace OpenCL
 
