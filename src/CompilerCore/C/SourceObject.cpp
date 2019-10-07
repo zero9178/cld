@@ -1,9 +1,11 @@
 #include "SourceObject.hpp"
 
+#include <cassert>
+
 #include "ParserUtil.hpp"
 
-OpenCL::SourceObject::SourceObject(std::vector<OpenCL::Lexer::Token> tokens, Language language)
-    : m_tokens(std::move(tokens)), m_language(language)
+OpenCL::SourceObject::SourceObject(std::vector<Lexer::Token> tokens, Language language, SubstitutionMap substitutions)
+    : m_tokens(std::move(tokens)), m_language(language), m_substitutions(std::move(substitutions))
 {
     constructLineMap();
 }
@@ -35,6 +37,7 @@ OpenCL::SourceObject::const_iterator OpenCL::SourceObject::getLineStart(OpenCL::
     {
         return m_lines.back().first;
     }
+    assert(iter->getLine() - 1 < m_lines.size());
     return m_lines[iter->getLine() - 1].first;
 }
 
@@ -44,6 +47,7 @@ OpenCL::SourceObject::const_iterator OpenCL::SourceObject::getLineEnd(OpenCL::So
     {
         return m_tokens.cend();
     }
+    assert(iter->getLine() - 1 < m_lines.size());
     return m_lines[iter->getLine() - 1].second;
 }
 
@@ -72,22 +76,31 @@ OpenCL::SourceObject::const_iterator OpenCL::SourceObject::cend() const
     return m_tokens.end();
 }
 
-OpenCL::SourceObject::SourceObject(const OpenCL::SourceObject& sourceObject) : SourceObject(sourceObject.data()) {}
+OpenCL::SourceObject::SourceObject(const OpenCL::SourceObject& sourceObject)
+    : SourceObject(sourceObject.data(), sourceObject.getLanguage(), sourceObject.m_substitutions)
+{
+}
 
 OpenCL::SourceObject& OpenCL::SourceObject::operator=(const OpenCL::SourceObject& sourceObject)
 {
     m_tokens = sourceObject.data();
+    m_language = sourceObject.getLanguage();
+    m_substitutions = sourceObject.m_substitutions;
     constructLineMap();
     return *this;
 }
 
 OpenCL::SourceObject::SourceObject(OpenCL::SourceObject&& sourceObject) noexcept
-    : SourceObject(std::move(sourceObject.m_tokens))
+    : SourceObject(std::move(sourceObject.m_tokens), sourceObject.getLanguage(),
+                   std::move(sourceObject.m_substitutions))
 {
 }
+
 OpenCL::SourceObject& OpenCL::SourceObject::operator=(OpenCL::SourceObject&& sourceObject) noexcept
 {
     m_tokens = std::move(sourceObject.m_tokens);
+    m_language = sourceObject.getLanguage();
+    m_substitutions = std::move(sourceObject.m_substitutions);
     constructLineMap();
     return *this;
 }

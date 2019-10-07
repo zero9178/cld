@@ -113,6 +113,15 @@ namespace OpenCL
 
         class Token
         {
+        public:
+            enum class Origin : std::uint8_t
+            {
+                Lexer,
+                Macro,
+                MacroArgument
+            };
+
+        private:
             std::uint64_t m_line;
             std::uint64_t m_column;
             std::uint64_t m_length;
@@ -121,8 +130,10 @@ namespace OpenCL
             TokenType m_tokenType;
             variant m_value;
             std::string m_valueRepresentation;
-
-            // friend SourceObject tokenize(std::string source, std::ostream* reporter);
+            Origin m_origin = Origin::Lexer;
+            std::uint64_t m_subLine;
+            std::uint64_t m_subColumn;
+            std::uint64_t m_subLength;
 
         public:
             using ValueType = variant;
@@ -164,7 +175,29 @@ namespace OpenCL
                 return m_column;
             }
 
+            void setLine(uint64_t line);
+
+            void setColumn(uint64_t column);
+
+            void setLength(uint64_t length);
+
+            uint64_t getSubLine() const;
+
+            void setSubLine(uint64_t subLine);
+
+            uint64_t getSubColumn() const;
+
+            void setSubColumn(uint64_t subColumn);
+
+            uint64_t getSubLength() const;
+
+            void setSubLength(uint64_t subLength);
+
             [[nodiscard]] std::uint64_t getLength() const;
+
+            Origin getOrigin() const;
+
+            void setOrigin(Origin origin);
 
             [[nodiscard]] std::string emitBack() const;
         };
@@ -182,6 +215,9 @@ namespace OpenCL
         std::string tokenValue(TokenType tokenType);
 
         std::string reconstruct(std::vector<Token>::const_iterator begin, std::vector<Token>::const_iterator end);
+
+        std::string reconstructTrimmed(std::vector<Token>::const_iterator begin,
+                                       std::vector<Token>::const_iterator end);
     } // namespace Lexer
 } // namespace OpenCL
 

@@ -600,7 +600,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(3).getTokenType() == OpenCL::Lexer::TokenType::CloseBrace);
     CHECK(result.data().at(4).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(5).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
-    CHECK(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == "<: :> <% %> %: %:%:");
+    CHECK(OpenCL::Lexer::reconstructTrimmed(result.begin(), result.end()) == "<: :> <% %> %: %:%:");
 
     result = OpenCL::Lexer::tokenize("%: %: #%: %:# # %: %: #", OpenCL::Language::C);
     REQUIRE(result.data().size() == 8);
@@ -612,7 +612,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(5).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(6).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(7).getTokenType() == OpenCL::Lexer::TokenType::Pound);
-    CHECK(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == "%: %: #%: %:# # %: %: #");
+    CHECK(OpenCL::Lexer::reconstructTrimmed(result.begin(), result.end()) == "%: %: #%: %:# # %: %: #");
 }
 
 TEST_CASE("Lexing input reconstruction", "[lexer]")
@@ -620,7 +620,7 @@ TEST_CASE("Lexing input reconstruction", "[lexer]")
     auto source =
         "ad(){}<% %> \"test\" 52345 ; , - ~ ! + * / % && || & | ^ == != < <= > >= = += -= /= *= %= <<= >>= &= |= ^= >> << ++ -- : ? void char short int long float double signed unsigned typedef extern static auto register const sizeof return break continue do else for if while [] struct . -> switch case default union volatile enum goto ... restrict inline # ##";
     auto result = OpenCL::Lexer::tokenize(source, OpenCL::Language::C);
-    REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end()) == source);
+    REQUIRE(OpenCL::Lexer::reconstructTrimmed(result.begin(), result.end()) == source);
 }
 
 TEST_CASE("Lexing multiline token", "[lexer]")
@@ -634,7 +634,7 @@ TEST_CASE("Lexing multiline token", "[lexer]")
     CHECK(result.data()[1].getColumn() == 0);
     CHECK(result.data()[1].getLine() == 2);
     CHECK(result.data()[1].getLength() == 5);
-    REQUIRE(OpenCL::Lexer::reconstruct(result.begin(), result.end())
+    REQUIRE(OpenCL::Lexer::reconstructTrimmed(result.begin(), result.end())
             == "\"test\"\n"
                "\"yes\"");
 }

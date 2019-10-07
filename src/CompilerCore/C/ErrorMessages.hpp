@@ -149,6 +149,7 @@ namespace OpenCL
 
         namespace PP
         {
+            constexpr auto N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE = Format("{} is an invalid preprocessor directive");
         }
     } // namespace ErrorMessages
 

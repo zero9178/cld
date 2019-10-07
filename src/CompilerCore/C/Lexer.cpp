@@ -1397,9 +1397,367 @@ std::uint64_t OpenCL::Lexer::Token::getLength() const
 {
     return m_length;
 }
+OpenCL::Lexer::Token::Origin OpenCL::Lexer::Token::getOrigin() const
+{
+    return m_origin;
+}
+void OpenCL::Lexer::Token::setOrigin(OpenCL::Lexer::Token::Origin origin)
+{
+    m_origin = origin;
+}
+
+void OpenCL::Lexer::Token::setLine(std::uint64_t line)
+{
+    m_line = line;
+}
+
+void OpenCL::Lexer::Token::setColumn(std::uint64_t column)
+{
+    m_column = column;
+}
+
+void OpenCL::Lexer::Token::setLength(std::uint64_t length)
+{
+    m_length = length;
+}
+
+std::uint64_t OpenCL::Lexer::Token::getSubLine() const
+{
+    return m_subLine;
+}
+
+void OpenCL::Lexer::Token::setSubLine(std::uint64_t subLine)
+{
+    m_subLine = subLine;
+}
+
+std::uint64_t OpenCL::Lexer::Token::getSubColumn() const
+{
+    return m_subColumn;
+}
+
+void OpenCL::Lexer::Token::setSubColumn(std::uint64_t subColumn)
+{
+    m_subColumn = subColumn;
+}
+
+std::uint64_t OpenCL::Lexer::Token::getSubLength() const
+{
+    return m_subLength;
+}
+
+void OpenCL::Lexer::Token::setSubLength(std::uint64_t subLength)
+{
+    m_subLength = subLength;
+}
 
 std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                        std::vector<OpenCL::Lexer::Token>::const_iterator end)
+{
+    if (begin == end)
+    {
+        return {};
+    }
+    return std::string(begin->getLine() - 1, '\n') + std::string(begin->getColumn(), ' ')
+           + reconstructTrimmed(begin, end);
+}
+
+namespace
+{
+    bool needsWhitespaceInbetween(const OpenCL::Lexer::Token& left, const OpenCL::Lexer::Token& right)
+    {
+        switch (left.getTokenType())
+        {
+            case OpenCL::Lexer::TokenType::StructKeyword:
+            case OpenCL::Lexer::TokenType::SwitchKeyword:
+            case OpenCL::Lexer::TokenType::CaseKeyword:
+            case OpenCL::Lexer::TokenType::DefaultKeyword:
+            case OpenCL::Lexer::TokenType::UnionKeyword:
+            case OpenCL::Lexer::TokenType::EnumKeyword:
+            case OpenCL::Lexer::TokenType::GotoKeyword:
+            case OpenCL::Lexer::TokenType::VoidKeyword:
+            case OpenCL::Lexer::TokenType::CharKeyword:
+            case OpenCL::Lexer::TokenType::ShortKeyword:
+            case OpenCL::Lexer::TokenType::IntKeyword:
+            case OpenCL::Lexer::TokenType::LongKeyword:
+            case OpenCL::Lexer::TokenType::FloatKeyword:
+            case OpenCL::Lexer::TokenType::DoubleKeyword:
+            case OpenCL::Lexer::TokenType::SignedKeyword:
+            case OpenCL::Lexer::TokenType::UnsignedKeyword:
+            case OpenCL::Lexer::TokenType::TypedefKeyword:
+            case OpenCL::Lexer::TokenType::ExternKeyword:
+            case OpenCL::Lexer::TokenType::StaticKeyword:
+            case OpenCL::Lexer::TokenType::AutoKeyword:
+            case OpenCL::Lexer::TokenType::RegisterKeyword:
+            case OpenCL::Lexer::TokenType::ConstKeyword:
+            case OpenCL::Lexer::TokenType::RestrictKeyword:
+            case OpenCL::Lexer::TokenType::SizeofKeyword:
+            case OpenCL::Lexer::TokenType::DefinedKeyword:
+            case OpenCL::Lexer::TokenType::VolatileKeyword:
+            case OpenCL::Lexer::TokenType::InlineKeyword:
+            case OpenCL::Lexer::TokenType::ReturnKeyword:
+            case OpenCL::Lexer::TokenType::BreakKeyword:
+            case OpenCL::Lexer::TokenType::ContinueKeyword:
+            case OpenCL::Lexer::TokenType::DoKeyword:
+            case OpenCL::Lexer::TokenType::ElseKeyword:
+            case OpenCL::Lexer::TokenType::ForKeyword:
+            case OpenCL::Lexer::TokenType::IfKeyword:
+            case OpenCL::Lexer::TokenType::WhileKeyword:
+            case OpenCL::Lexer::TokenType::Identifier:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Literal:
+                    {
+                        auto string = right.emitBack();
+                        return std::isdigit(string.front()) || string.front() == '.';
+                    }
+                    case OpenCL::Lexer::TokenType::StringLiteral: return std::get<std::string>(left.getValue()) != "L";
+                    case OpenCL::Lexer::TokenType::StructKeyword:
+                    case OpenCL::Lexer::TokenType::SwitchKeyword:
+                    case OpenCL::Lexer::TokenType::CaseKeyword:
+                    case OpenCL::Lexer::TokenType::DefaultKeyword:
+                    case OpenCL::Lexer::TokenType::UnionKeyword:
+                    case OpenCL::Lexer::TokenType::EnumKeyword:
+                    case OpenCL::Lexer::TokenType::GotoKeyword:
+                    case OpenCL::Lexer::TokenType::VoidKeyword:
+                    case OpenCL::Lexer::TokenType::CharKeyword:
+                    case OpenCL::Lexer::TokenType::ShortKeyword:
+                    case OpenCL::Lexer::TokenType::IntKeyword:
+                    case OpenCL::Lexer::TokenType::LongKeyword:
+                    case OpenCL::Lexer::TokenType::FloatKeyword:
+                    case OpenCL::Lexer::TokenType::DoubleKeyword:
+                    case OpenCL::Lexer::TokenType::SignedKeyword:
+                    case OpenCL::Lexer::TokenType::UnsignedKeyword:
+                    case OpenCL::Lexer::TokenType::TypedefKeyword:
+                    case OpenCL::Lexer::TokenType::ExternKeyword:
+                    case OpenCL::Lexer::TokenType::StaticKeyword:
+                    case OpenCL::Lexer::TokenType::AutoKeyword:
+                    case OpenCL::Lexer::TokenType::RegisterKeyword:
+                    case OpenCL::Lexer::TokenType::ConstKeyword:
+                    case OpenCL::Lexer::TokenType::RestrictKeyword:
+                    case OpenCL::Lexer::TokenType::SizeofKeyword:
+                    case OpenCL::Lexer::TokenType::DefinedKeyword:
+                    case OpenCL::Lexer::TokenType::VolatileKeyword:
+                    case OpenCL::Lexer::TokenType::InlineKeyword:
+                    case OpenCL::Lexer::TokenType::ReturnKeyword:
+                    case OpenCL::Lexer::TokenType::BreakKeyword:
+                    case OpenCL::Lexer::TokenType::ContinueKeyword:
+                    case OpenCL::Lexer::TokenType::DoKeyword:
+                    case OpenCL::Lexer::TokenType::ElseKeyword:
+                    case OpenCL::Lexer::TokenType::ForKeyword:
+                    case OpenCL::Lexer::TokenType::IfKeyword:
+                    case OpenCL::Lexer::TokenType::WhileKeyword:
+                    case OpenCL::Lexer::TokenType::Identifier: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::OpenParentheses: break;
+            case OpenCL::Lexer::TokenType::CloseParentheses: break;
+            case OpenCL::Lexer::TokenType::OpenBrace: break;
+            case OpenCL::Lexer::TokenType::CloseBrace: break;
+            case OpenCL::Lexer::TokenType::Literal:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Literal:
+                    case OpenCL::Lexer::TokenType::StructKeyword:
+                    case OpenCL::Lexer::TokenType::SwitchKeyword:
+                    case OpenCL::Lexer::TokenType::CaseKeyword:
+                    case OpenCL::Lexer::TokenType::DefaultKeyword:
+                    case OpenCL::Lexer::TokenType::UnionKeyword:
+                    case OpenCL::Lexer::TokenType::EnumKeyword:
+                    case OpenCL::Lexer::TokenType::GotoKeyword:
+                    case OpenCL::Lexer::TokenType::VoidKeyword:
+                    case OpenCL::Lexer::TokenType::CharKeyword:
+                    case OpenCL::Lexer::TokenType::ShortKeyword:
+                    case OpenCL::Lexer::TokenType::IntKeyword:
+                    case OpenCL::Lexer::TokenType::LongKeyword:
+                    case OpenCL::Lexer::TokenType::FloatKeyword:
+                    case OpenCL::Lexer::TokenType::DoubleKeyword:
+                    case OpenCL::Lexer::TokenType::SignedKeyword:
+                    case OpenCL::Lexer::TokenType::UnsignedKeyword:
+                    case OpenCL::Lexer::TokenType::TypedefKeyword:
+                    case OpenCL::Lexer::TokenType::ExternKeyword:
+                    case OpenCL::Lexer::TokenType::StaticKeyword:
+                    case OpenCL::Lexer::TokenType::AutoKeyword:
+                    case OpenCL::Lexer::TokenType::RegisterKeyword:
+                    case OpenCL::Lexer::TokenType::ConstKeyword:
+                    case OpenCL::Lexer::TokenType::RestrictKeyword:
+                    case OpenCL::Lexer::TokenType::SizeofKeyword:
+                    case OpenCL::Lexer::TokenType::DefinedKeyword:
+                    case OpenCL::Lexer::TokenType::VolatileKeyword:
+                    case OpenCL::Lexer::TokenType::InlineKeyword:
+                    case OpenCL::Lexer::TokenType::ReturnKeyword:
+                    case OpenCL::Lexer::TokenType::BreakKeyword:
+                    case OpenCL::Lexer::TokenType::ContinueKeyword:
+                    case OpenCL::Lexer::TokenType::DoKeyword:
+                    case OpenCL::Lexer::TokenType::ElseKeyword:
+                    case OpenCL::Lexer::TokenType::ForKeyword:
+                    case OpenCL::Lexer::TokenType::IfKeyword:
+                    case OpenCL::Lexer::TokenType::WhileKeyword:
+                    case OpenCL::Lexer::TokenType::Dot:
+                    case OpenCL::Lexer::TokenType::Ellipse:
+                    case OpenCL::Lexer::TokenType::Identifier: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::StringLiteral: break;
+            case OpenCL::Lexer::TokenType::SemiColon: break;
+            case OpenCL::Lexer::TokenType::Comma: break;
+            case OpenCL::Lexer::TokenType::Minus:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Minus:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::MinusAssign:
+                    case OpenCL::Lexer::TokenType::Equal:
+                    case OpenCL::Lexer::TokenType::GreaterThan:
+                    case OpenCL::Lexer::TokenType::GreaterThanOrEqual:
+                    case OpenCL::Lexer::TokenType::ShiftRight:
+                    case OpenCL::Lexer::TokenType::ShiftRightAssign:
+                    case OpenCL::Lexer::TokenType::Decrement:
+                    case OpenCL::Lexer::TokenType::Arrow: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Plus:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Plus:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::PlusAssign:
+                    case OpenCL::Lexer::TokenType::Equal:
+                    case OpenCL::Lexer::TokenType::Increment: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Division:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Division:
+                    case OpenCL::Lexer::TokenType::DivideAssign:
+                    case OpenCL::Lexer::TokenType::Asterisk:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Percent:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Colon:
+                    case OpenCL::Lexer::TokenType::GreaterThan:
+                    case OpenCL::Lexer::TokenType::GreaterThanOrEqual:
+                    case OpenCL::Lexer::TokenType::ShiftRightAssign:
+                    case OpenCL::Lexer::TokenType::ShiftRight:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::ShiftRight:
+            case OpenCL::Lexer::TokenType::ShiftLeft:
+            case OpenCL::Lexer::TokenType::BitWiseNegation:
+            case OpenCL::Lexer::TokenType::LogicalNegation:
+            case OpenCL::Lexer::TokenType::Asterisk:
+            case OpenCL::Lexer::TokenType::LogicAnd:
+            case OpenCL::Lexer::TokenType::LogicOr:
+            case OpenCL::Lexer::TokenType::BitXor:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::LessThan:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Percent:
+                    case OpenCL::Lexer::TokenType::Colon:
+                    case OpenCL::Lexer::TokenType::LessThan:
+                    case OpenCL::Lexer::TokenType::LessThanOrEqual:
+                    case OpenCL::Lexer::TokenType::ShiftLeft:
+                    case OpenCL::Lexer::TokenType::ShiftLeftAssign:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::GreaterThan:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::GreaterThan:
+                    case OpenCL::Lexer::TokenType::GreaterThanOrEqual:
+                    case OpenCL::Lexer::TokenType::ShiftRight:
+                    case OpenCL::Lexer::TokenType::ShiftRightAssign:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Ampersand:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Ampersand:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::BitOr:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::BitOr:
+                    case OpenCL::Lexer::TokenType::Assignment:
+                    case OpenCL::Lexer::TokenType::Equal: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Equal: break;
+            case OpenCL::Lexer::TokenType::NotEqual: break;
+            case OpenCL::Lexer::TokenType::LessThanOrEqual: break;
+            case OpenCL::Lexer::TokenType::GreaterThanOrEqual: break;
+            case OpenCL::Lexer::TokenType::Assignment: break;
+            case OpenCL::Lexer::TokenType::PlusAssign: break;
+            case OpenCL::Lexer::TokenType::MinusAssign: break;
+            case OpenCL::Lexer::TokenType::DivideAssign: break;
+            case OpenCL::Lexer::TokenType::MultiplyAssign: break;
+            case OpenCL::Lexer::TokenType::ModuloAssign: break;
+            case OpenCL::Lexer::TokenType::ShiftLeftAssign: break;
+            case OpenCL::Lexer::TokenType::ShiftRightAssign: break;
+            case OpenCL::Lexer::TokenType::BitAndAssign: break;
+            case OpenCL::Lexer::TokenType::BitOrAssign: break;
+            case OpenCL::Lexer::TokenType::BitXorAssign: break;
+            case OpenCL::Lexer::TokenType::Increment: break;
+            case OpenCL::Lexer::TokenType::Decrement: break;
+            case OpenCL::Lexer::TokenType::Colon:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::GreaterThan:
+                    case OpenCL::Lexer::TokenType::GreaterThanOrEqual:
+                    case OpenCL::Lexer::TokenType::ShiftRight:
+                    case OpenCL::Lexer::TokenType::ShiftRightAssign: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::QuestionMark: break;
+            case OpenCL::Lexer::TokenType::Dot:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::Literal:
+                    case OpenCL::Lexer::TokenType::Ellipse:
+                    case OpenCL::Lexer::TokenType::Dot: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Arrow: break;
+            case OpenCL::Lexer::TokenType::Ellipse: break;
+            case OpenCL::Lexer::TokenType::Pound:
+                switch (right.getTokenType())
+                {
+                    case OpenCL::Lexer::TokenType::DoublePound:
+                    case OpenCL::Lexer::TokenType::Pound: return true;
+                    default: return false;
+                }
+            case OpenCL::Lexer::TokenType::Newline: break;
+            case OpenCL::Lexer::TokenType::OpenSquareBracket: break;
+            case OpenCL::Lexer::TokenType::CloseSquareBracket: break;
+            case OpenCL::Lexer::TokenType::DoublePound: break;
+            case OpenCL::Lexer::TokenType::Backslash: break;
+        }
+        return false;
+    }
+} // namespace
+
+std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                              std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {
     std::string result;
     for (auto curr = begin; curr != end; curr++)
@@ -1409,7 +1767,29 @@ std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_
             auto prev = curr - 1;
             if (curr->getLine() == prev->getLine())
             {
-                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
+                if (curr->getOrigin() != Token::Origin::Lexer && prev->getOrigin() != Token::Origin::Lexer)
+                {
+                    if (curr->getSubLine() == prev->getSubLine())
+                    {
+                        result +=
+                            std::string(curr->getSubColumn() - (prev->getSubColumn() + prev->getSubLength()), ' ');
+                    }
+                    else
+                    {
+                        result += ' ';
+                    }
+                }
+                else if (prev->getOrigin() != Token::Origin::Lexer)
+                {
+                    if (needsWhitespaceInbetween(*prev, *curr))
+                    {
+                        result += ' ';
+                    }
+                }
+                else
+                {
+                    result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
+                }
             }
             else
             {

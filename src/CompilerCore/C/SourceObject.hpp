@@ -16,13 +16,6 @@ namespace OpenCL
 
     class SourceObject final
     {
-        std::vector<Lexer::Token> m_tokens;
-        std::vector<std::pair<std::vector<Lexer::Token>::const_iterator, std::vector<Lexer::Token>::const_iterator>>
-            m_lines;
-        Language m_language;
-
-        void constructLineMap();
-
     public:
         using value_type = Lexer::Token;
         using reference = Lexer::Token&;
@@ -32,7 +25,26 @@ namespace OpenCL
         using difference_type = std::ptrdiff_t;
         using size_type = std::size_t;
 
-        explicit SourceObject(std::vector<Lexer::Token> tokens, Language language = Language::C);
+        struct Substitution
+        {
+            std::vector<Lexer::Token> define;
+            std::vector<Lexer::Token> replacedTokens;
+        };
+
+    private:
+        std::vector<Lexer::Token> m_tokens;
+        std::vector<std::pair<std::vector<Lexer::Token>::const_iterator, std::vector<Lexer::Token>::const_iterator>>
+            m_lines;
+        Language m_language;
+
+        using SubstitutionMap = std::map<std::pair<std::uint64_t, std::uint64_t>, Substitution>;
+        SubstitutionMap m_substitutions;
+
+        void constructLineMap();
+
+    public:
+        explicit SourceObject(std::vector<Lexer::Token> tokens, Language language = Language::C,
+                              SubstitutionMap substitutions = {});
 
         SourceObject(const SourceObject& sourceObject);
 

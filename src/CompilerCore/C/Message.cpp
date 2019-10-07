@@ -60,7 +60,7 @@ namespace
         for (auto curr = begin; curr != end;)
         {
             auto next = OpenCL::findEOL(curr, end);
-            auto text = OpenCL::Lexer::reconstruct(curr, next);
+            auto text = OpenCL::Lexer::reconstructTrimmed(curr, next);
             auto line = std::to_string(curr->getLine());
             os << normalColour << std::string(numSize - line.size(), ' ') << line << '|'
                << std::string(curr->getColumn() - sideOffset, ' ');
