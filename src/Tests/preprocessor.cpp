@@ -36,32 +36,46 @@ TEST_CASE("C99 Standard examples", "[PP]")
         }
         SECTION("Example 3")
         {
-            auto [ret, error] = preprocessTest("#define x 3\n"
-                                               "#define f(a) f(x * (a))\n"
-                                               "#undef x\n"
-                                               "#define x 2\n"
-                                               "#define g f\n"
-                                               "#define z z[0]\n"
-                                               "#define h g(~\n"
-                                               "#define m(a) a(w)\n"
-                                               "#define w 0,1\n"
-                                               "#define t(a) a\n"
-                                               "#define p() int\n"
-                                               "#define q(x) x\n"
-                                               "#define r(x,y) x ## y\n"
-                                               "#define str(x) # x\n"
-                                               "f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);\n"
-                                               "g(x+(3,4)-w) | h 5) & m\n"
-                                               "(f)^m(m);\n"
-                                               "p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };\n"
-                                               "char c[2][6] = { str(hello), str() };");
-            INFO(error);
-            CHECK(error.empty());
-            CHECK(ret
-                  == "\n\n\n\n\n\n\n\n\n\n\n\n\n\nf(2 * (y+1)) + f(2 * (f(2 * (z[0])))) % f(2 * (0)) + t(1);\n"
-                     "f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);\n"
-                     "int i[] = { 1, 23, 4, 5, };\n"
-                     "char c[2][6] = { \"hello\", \"\" };");
+            SECTION("Partial")
+            {
+                auto [ret, error] = preprocessTest("#define x 3\n"
+                                                   "#define f(a) f(x * (a))\n"
+                                                   "#undef x\n"
+                                                   "#define x 2\n"
+                                                   "f(y+1)");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret == "\n\n\n\nf(2* (y+1))");
+            }
+            SECTION("Complete")
+            {
+                auto [ret, error] = preprocessTest("#define x 3\n"
+                                                   "#define f(a) f(x * (a))\n"
+                                                   "#undef x\n"
+                                                   "#define x 2\n"
+                                                   "#define g f\n"
+                                                   "#define z z[0]\n"
+                                                   "#define h g(~\n"
+                                                   "#define m(a) a(w)\n"
+                                                   "#define w 0,1\n"
+                                                   "#define t(a) a\n"
+                                                   "#define p() int\n"
+                                                   "#define q(x) x\n"
+                                                   "#define r(x,y) x ## y\n"
+                                                   "#define str(x) # x\n"
+                                                   "f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);\n"
+                                                   "g(x+(3,4)-w) | h 5) & m\n"
+                                                   "(f)^m(m);\n"
+                                                   "p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };\n"
+                                                   "char c[2][6] = { str(hello), str() };");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret
+                      == "\n\n\n\n\n\n\n\n\n\n\n\n\n\nf(2* (y+1))+ f(2* (f(2* (z[0])))) % f(2 * (0)) + t(1);\n"
+                         "f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);\n"
+                         "int i[] = { 1, 23, 4, 5, };\n"
+                         "char c[2][6] = { \"hello\", \"\" };");
+            }
         }
         SECTION("Example 5")
         {

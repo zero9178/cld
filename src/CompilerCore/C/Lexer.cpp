@@ -1393,62 +1393,110 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
     OPENCL_UNREACHABLE;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getLength() const
+std::uint64_t OpenCL::Lexer::Token::getLength() const noexcept
 {
     return m_length;
 }
-OpenCL::Lexer::Token::Origin OpenCL::Lexer::Token::getOrigin() const
-{
-    return m_origin;
-}
-void OpenCL::Lexer::Token::setOrigin(OpenCL::Lexer::Token::Origin origin)
-{
-    m_origin = origin;
-}
 
-void OpenCL::Lexer::Token::setLine(std::uint64_t line)
+void OpenCL::Lexer::Token::setLine(std::uint64_t line) noexcept
 {
     m_line = line;
 }
 
-void OpenCL::Lexer::Token::setColumn(std::uint64_t column)
+void OpenCL::Lexer::Token::setColumn(std::uint64_t column) noexcept
 {
     m_column = column;
 }
 
-void OpenCL::Lexer::Token::setLength(std::uint64_t length)
+void OpenCL::Lexer::Token::setLength(std::uint64_t length) noexcept
 {
     m_length = length;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getSubLine() const
+std::uint64_t OpenCL::Lexer::Token::getDefLine() const noexcept
 {
-    return m_subLine;
+    return m_defLine;
 }
 
-void OpenCL::Lexer::Token::setSubLine(std::uint64_t subLine)
+void OpenCL::Lexer::Token::setDefLine(std::uint64_t subLine) noexcept
 {
-    m_subLine = subLine;
+    m_defLine = subLine;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getSubColumn() const
+std::uint64_t OpenCL::Lexer::Token::getDefColumn() const noexcept
 {
-    return m_subColumn;
+    return m_defColumn;
 }
 
-void OpenCL::Lexer::Token::setSubColumn(std::uint64_t subColumn)
+void OpenCL::Lexer::Token::setDefColumn(std::uint64_t subColumn) noexcept
 {
-    m_subColumn = subColumn;
+    m_defColumn = subColumn;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getSubLength() const
+std::uint64_t OpenCL::Lexer::Token::getDefLength() const noexcept
 {
-    return m_subLength;
+    return m_defLength;
 }
 
-void OpenCL::Lexer::Token::setSubLength(std::uint64_t subLength)
+void OpenCL::Lexer::Token::setDefLength(std::uint64_t subLength) noexcept
 {
-    m_subLength = subLength;
+    m_defLength = subLength;
+}
+
+bool OpenCL::Lexer::Token::macroInserted() const noexcept
+{
+    return m_macroId;
+}
+
+std::uint64_t OpenCL::Lexer::Token::getColumn() const noexcept
+{
+    return m_column;
+}
+
+std::uint64_t OpenCL::Lexer::Token::getLine() const noexcept
+{
+    return m_line;
+}
+
+const OpenCL::Lexer::Token::variant& OpenCL::Lexer::Token::getValue() const noexcept
+{
+    return m_value;
+}
+
+OpenCL::Lexer::TokenType OpenCL::Lexer::Token::getTokenType() const noexcept
+{
+    return m_tokenType;
+}
+
+OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
+                            OpenCL::Lexer::TokenType tokenType) noexcept
+    : Token(line, column, length, tokenType, std::monostate{}, "")
+{
+}
+
+OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
+                            OpenCL::Lexer::TokenType tokenType, OpenCL::Lexer::Token::variant value,
+                            std::string valueRepresentation)
+    : m_line(line),
+      m_column(column),
+      m_length(length),
+      m_tokenType(tokenType),
+      m_value(std::move(value)),
+      m_valueRepresentation(std::move(valueRepresentation)),
+      m_defLine(line),
+      m_defColumn(column),
+      m_defLength(length)
+{
+}
+
+std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
+{
+    return m_macroId;
+}
+
+void OpenCL::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
+{
+    m_macroId = macroId;
 }
 
 std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
@@ -1767,19 +1815,19 @@ std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>:
             auto prev = curr - 1;
             if (curr->getLine() == prev->getLine())
             {
-                if (curr->getOrigin() != Token::Origin::Lexer && prev->getOrigin() != Token::Origin::Lexer)
+                if (curr->getMacroId() == prev->getMacroId())
                 {
-                    if (curr->getSubLine() == prev->getSubLine())
+                    if (curr->getDefLine() == prev->getDefLine())
                     {
                         result +=
-                            std::string(curr->getSubColumn() - (prev->getSubColumn() + prev->getSubLength()), ' ');
+                            std::string(curr->getDefColumn() - (prev->getDefColumn() + prev->getDefLength()), ' ');
                     }
                     else
                     {
                         result += ' ';
                     }
                 }
-                else if (prev->getOrigin() != Token::Origin::Lexer)
+                else if (prev->macroInserted())
                 {
                     if (needsWhitespaceInbetween(*prev, *curr))
                     {
