@@ -586,7 +586,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             {
                                 reportError(reporter,
                                             ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(std::to_string(iter)), line,
-                                            column, lineMap[line]);
+                                            column, lineMap[line], std::pair{column, column + 1});
                                 handled = true;
                             }
                             break;

@@ -56,10 +56,17 @@ namespace OpenCL
 
         public:
             template <class... Args>
-            List(std::string delimiter, std::string m_lastInbetween, Args&&... args)
+            List(std::string delimiter, std::string lastInbetween, Args&&... args)
                 : m_delimiter(std::move(delimiter)),
-                  m_lastInbetween(std::move(m_lastInbetween)),
+                  m_lastInbetween(std::move(lastInbetween)),
                   m_strings({toString(args)...})
+            {
+            }
+
+            List(std::string delimiter, std::string lastInbetween, std::vector<std::string> args)
+                : m_delimiter(std::move(delimiter)),
+                  m_lastInbetween(std::move(lastInbetween)),
+                  m_strings(std::move(args))
             {
             }
 

@@ -7,7 +7,9 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <cassert>
+#include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace
 {
@@ -226,7 +228,7 @@ namespace
     std::vector<OpenCL::Lexer::Token> macroSubstitute(OpenCL::SourceObject::const_iterator begin,
                                                       OpenCL::SourceObject::const_iterator end,
                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                      State* state)
+                                                      State* state, std::unordered_set<std::string_view> disabled = {})
     {
         if (!state)
         {
@@ -242,35 +244,172 @@ namespace
                 continue;
             }
             const auto& name = std::get<std::string>(iter->getValue());
+            auto namePos = iter;
             auto define = state->defines.find(name);
-            if (define == state->defines.end())
+            if (define == state->defines.end() || disabled.count(name) != 0)
             {
                 continue;
             }
             result.insert(result.end(), start, iter);
-            start = iter + 1;
             if (!define->second.identifierList)
             {
-                auto vector = macroSubstitute(define->second.replacementList.begin(),
-                                              define->second.replacementList.end(), sourceObject, reporter, state);
+                disabled.insert(name);
+                start = iter + 1;
+                auto temp = result;
+                temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
+                std::for_each(temp.begin() + result.size(), temp.end(), [iter](OpenCL::Lexer::Token& token) {
+                    token.setSubLine(token.getLine());
+                    token.setSubColumn(token.getColumn());
+                    token.setSubLength(token.getLength());
+                    token.setLine(iter->getLine());
+                    token.setColumn(iter->getColumn());
+                    token.setLength(iter->getLength());
+                    token.setOrigin(OpenCL::Lexer::Token::Origin::Macro);
+                });
+                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
+                                              reporter, state, disabled);
                 result.reserve(result.size() + vector.size());
                 std::move(vector.begin(), vector.end(), std::back_inserter(result));
-                std::for_each(result.begin() + result.size() - vector.size(), result.end(),
-                              [iter](OpenCL::Lexer::Token& token) {
-                                  token.setSubLine(token.getLine());
-                                  token.setSubColumn(token.getColumn());
-                                  token.setSubLength(token.getLength());
-                                  token.setLine(iter->getLine());
-                                  token.setColumn(iter->getColumn());
-                                  token.setLength(iter->getLength());
-                                  token.setOrigin(OpenCL::Lexer::Token::Origin::Macro);
-                              });
-                state->substitutions.insert(
-                    {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
             }
-            else
+            else if (iter + 1 != end && (iter + 1)->getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses
+                     && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
             {
+                //( must immediately follow the function like macro identifier
+                iter += 2;
+                std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>> arguments;
+                {
+                    auto argsStart = iter;
+                    while (iter != end && iter->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
+                    {
+                        std::size_t i = 0;
+                        auto argEnd = std::find_if(iter, end, [&i](const OpenCL::Lexer::Token& token) mutable {
+                            if (token.getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses)
+                            {
+                                i++;
+                            }
+                            else if (token.getTokenType() == OpenCL::Lexer::TokenType::CloseParentheses)
+                            {
+                                if (!i)
+                                {
+                                    return true;
+                                }
+                                i--;
+                            }
+                            else if (token.getTokenType() == OpenCL::Lexer::TokenType::Comma)
+                            {
+                                return !i;
+                            }
+                            return false;
+                        });
+                        arguments.emplace((*define->second.identifierList)[arguments.size()],
+                                          filterForNewlineAndBackslash(iter, argEnd));
+                        iter = argEnd;
+                        if (iter != end && iter->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
+                        {
+                            iter++;
+                        }
+                    }
+                    start = iter + 1;
+                    if (arguments.size() < define->second.identifierList->size())
+                    {
+                        if (reporter)
+                        {
+                            *reporter << OpenCL::Message::error(
+                                OpenCL::ErrorMessages::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N.args('\'' + define->first
+                                                                                                 + '\''),
+                                sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter),
+                                OpenCL::Modifier(argsStart, iter != argsStart ? iter : iter + 1))
+                                      << OpenCL::Message::note(
+                                             OpenCL::Notes::MISSING_N.args(
+                                                 "arguments "
+                                                 + static_cast<std::string>(OpenCL::Format::List(
+                                                     ", ", " and ",
+                                                     {define->second.identifierList->begin() + arguments.size(),
+                                                      define->second.identifierList->end()}))),
+                                             sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter));
+                        }
+                        continue;
+                    }
+                    else if (arguments.size() > define->second.identifierList->size() && !define->second.hasEllipse)
+                    {
+                        if (reporter)
+                        {
+                            *reporter << OpenCL::Message::error(
+                                OpenCL::ErrorMessages::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N.args(define->first),
+                                sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter),
+                                OpenCL::Modifier(argsStart, iter != argsStart ? iter : iter + 1));
+                        }
+                        continue;
+                    }
+                }
+
+                std::vector<OpenCL::Lexer::Token> replacementSubstituted;
+                auto argStart = define->second.replacementList.begin();
+                for (auto tokenIter = define->second.replacementList.begin();
+                     tokenIter != define->second.replacementList.end(); tokenIter++)
+                {
+                    if (tokenIter->getTokenType() != OpenCL::Lexer::TokenType::Identifier)
+                    {
+                        continue;
+                    }
+                    auto argument = arguments.find(std::get<std::string>(tokenIter->getValue()));
+                    if (argument == arguments.end())
+                    {
+                        continue;
+                    }
+                    auto replacement =
+                        macroSubstitute(argument->second.begin(), argument->second.end(),
+                                        OpenCL::SourceObject(argument->second), reporter, state, disabled);
+                    if (tokenIter != define->second.replacementList.begin()
+                        && (tokenIter - 1)->getTokenType() == OpenCL::Lexer::TokenType::Pound)
+                    {
+                        replacementSubstituted.insert(replacementSubstituted.end(), argStart, tokenIter - 1);
+                        auto stringValue = OpenCL::Lexer::reconstructTrimmed(replacement.begin(), replacement.end());
+                        auto string =
+                            '\''
+                            + std::accumulate(stringValue.begin(), stringValue.end(), std::string{},
+                                              [](const std::string& init, char character) {
+                                                  if (character == '\'' || character == '"' || character == '\\')
+                                                  {
+                                                      return init + '\\' + character;
+                                                  }
+                                                  return init + character;
+                                              })
+                            + '\'';
+                        replacementSubstituted.emplace_back(
+                            tokenIter->getLine(), tokenIter->getColumn(), tokenIter->getLength(),
+                            OpenCL::Lexer::TokenType::StringLiteral, std::move(stringValue), std::move(string));
+                        replacementSubstituted.back().setOrigin(OpenCL::Lexer::Token::Origin::MacroArgument);
+                    }
+                    else
+                    {
+                        replacementSubstituted.insert(replacementSubstituted.end(), argStart, tokenIter);
+                        replacementSubstituted.insert(replacementSubstituted.end(), replacement.begin(),
+                                                      replacement.end());
+                    }
+                    argStart = tokenIter + 1;
+                }
+                replacementSubstituted.insert(replacementSubstituted.end(), argStart,
+                                              define->second.replacementList.end());
+                disabled.emplace(define->first);
+                auto temp = result;
+                temp.insert(temp.end(), replacementSubstituted.begin(), replacementSubstituted.end());
+                std::for_each(temp.begin() + result.size(), temp.end(), [iter](OpenCL::Lexer::Token& token) {
+                    token.setSubLine(token.getLine());
+                    token.setSubColumn(token.getColumn());
+                    token.setSubLine(token.getLine());
+                    token.setLine(iter->getLine());
+                    token.setColumn(iter->getColumn());
+                    token.setLength(iter->getLength());
+                    token.setOrigin(OpenCL::Lexer::Token::Origin::Macro);
+                });
+                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
+                                              reporter, state, disabled);
+                result.reserve(result.size() + vector.size());
+                std::move(vector.begin(), vector.end(), std::back_inserter(result));
             }
+            state->substitutions.insert(
+                {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
         }
         result.insert(result.end(), start, end);
         return result;
@@ -547,6 +686,7 @@ namespace
                 if (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier)
                 {
                     identifierList.push_back(std::get<std::string>(begin->getValue()));
+                    begin++;
                 }
                 else if (begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Ellipse)
                 {

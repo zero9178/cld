@@ -21,6 +21,7 @@ void OpenCL::SourceObject::constructLineMap()
             this->m_lines.emplace_back(sourceBegin, sourceBegin);
             continue;
         }
+        assert(m_lines.size() >= sourceBegin->getLine() - 1);
         auto eol = OpenCL::findEOL(sourceBegin, this->m_tokens.cend());
         this->m_lines.emplace_back(sourceBegin, eol);
         sourceBegin = eol;

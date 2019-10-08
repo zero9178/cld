@@ -150,7 +150,11 @@ namespace OpenCL
         namespace PP
         {
             constexpr auto N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE = Format("{} is an invalid preprocessor directive");
-        }
+
+            constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for Macro {}");
+
+            constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for Macro {}");
+        } // namespace PP
     } // namespace ErrorMessages
 
     namespace Notes
@@ -166,6 +170,8 @@ namespace OpenCL
         constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
 
         constexpr auto PREVIOUS_STORAGE_SPECIFIER_HERE = "Previous storage specifier encountered here:";
+
+        constexpr auto MISSING_N = Format("Missing {}");
     } // namespace Notes
 } // namespace OpenCL
 

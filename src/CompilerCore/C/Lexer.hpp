@@ -131,9 +131,9 @@ namespace OpenCL
             variant m_value;
             std::string m_valueRepresentation;
             Origin m_origin = Origin::Lexer;
-            std::uint64_t m_subLine;
-            std::uint64_t m_subColumn;
-            std::uint64_t m_subLength;
+            std::uint64_t m_subLine{};
+            std::uint64_t m_subColumn{};
+            std::uint64_t m_subLength{};
 
         public:
             using ValueType = variant;
