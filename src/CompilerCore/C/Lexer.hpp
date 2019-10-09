@@ -163,15 +163,15 @@ namespace OpenCL
 
             [[nodiscard]] std::uint64_t getDefLine() const noexcept;
 
-            void setDefLine(uint64_t subLine) noexcept;
+            void setDefLine(uint64_t defLine) noexcept;
 
             [[nodiscard]] std::uint64_t getDefColumn() const noexcept;
 
-            void setDefColumn(std::uint64_t subColumn) noexcept;
+            void setDefColumn(std::uint64_t defColumn) noexcept;
 
             [[nodiscard]] std::uint64_t getDefLength() const noexcept;
 
-            void setDefLength(std::uint64_t subLength) noexcept;
+            void setDefLength(std::uint64_t defLength) noexcept;
 
             [[nodiscard]] std::string emitBack() const;
         };

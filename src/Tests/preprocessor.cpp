@@ -42,10 +42,11 @@ TEST_CASE("C99 Standard examples", "[PP]")
                                                    "#define f(a) f(x * (a))\n"
                                                    "#undef x\n"
                                                    "#define x 2\n"
-                                                   "f(y+1)");
+                                                   "#define z z[0]\n"
+                                                   "f(f(z))");
                 INFO(error);
                 CHECK(error.empty());
-                CHECK(ret == "\n\n\n\nf(2* (y+1))");
+                CHECK(ret == "\n\n\n\n\nf(2* (f(2* (z[0]))))");
             }
             SECTION("Complete")
             {

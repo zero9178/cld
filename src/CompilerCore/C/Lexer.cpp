@@ -1418,9 +1418,9 @@ std::uint64_t OpenCL::Lexer::Token::getDefLine() const noexcept
     return m_defLine;
 }
 
-void OpenCL::Lexer::Token::setDefLine(std::uint64_t subLine) noexcept
+void OpenCL::Lexer::Token::setDefLine(std::uint64_t defLine) noexcept
 {
-    m_defLine = subLine;
+    m_defLine = defLine;
 }
 
 std::uint64_t OpenCL::Lexer::Token::getDefColumn() const noexcept
@@ -1428,9 +1428,9 @@ std::uint64_t OpenCL::Lexer::Token::getDefColumn() const noexcept
     return m_defColumn;
 }
 
-void OpenCL::Lexer::Token::setDefColumn(std::uint64_t subColumn) noexcept
+void OpenCL::Lexer::Token::setDefColumn(std::uint64_t defColumn) noexcept
 {
-    m_defColumn = subColumn;
+    m_defColumn = defColumn;
 }
 
 std::uint64_t OpenCL::Lexer::Token::getDefLength() const noexcept
@@ -1438,9 +1438,9 @@ std::uint64_t OpenCL::Lexer::Token::getDefLength() const noexcept
     return m_defLength;
 }
 
-void OpenCL::Lexer::Token::setDefLength(std::uint64_t subLength) noexcept
+void OpenCL::Lexer::Token::setDefLength(std::uint64_t defLength) noexcept
 {
-    m_defLength = subLength;
+    m_defLength = defLength;
 }
 
 bool OpenCL::Lexer::Token::macroInserted() const noexcept

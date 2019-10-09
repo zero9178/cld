@@ -22,6 +22,11 @@ namespace
                                                    const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
                                                    State* state);
 
+    std::vector<OpenCL::Lexer::Token> macroSubstitute(OpenCL::SourceObject::const_iterator begin,
+                                                      OpenCL::SourceObject::const_iterator end,
+                                                      const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                      State* state, std::unordered_set<std::string>& disabled);
+
     std::vector<OpenCL::Lexer::Token>::const_iterator
         findEOLWithOutBackslash(OpenCL::SourceObject::const_iterator begin, OpenCL::SourceObject::const_iterator end)
     {
@@ -226,10 +231,105 @@ namespace
         std::uint64_t currentID = 1;
     };
 
+    template <class InputIterator1, class InputIterator2>
+    void assignMacroID(InputIterator1 begin, InputIterator1 end, State& state, InputIterator2 iter)
+    {
+        static_assert(std::is_same_v<typename InputIterator1::value_type, OpenCL::Lexer::Token>);
+        static_assert(std::is_same_v<typename InputIterator2::value_type, OpenCL::Lexer::Token>);
+        std::for_each(begin, end, [iter, state](OpenCL::Lexer::Token& token) {
+            if (!token.macroInserted())
+            {
+                token.setDefLine(token.getLine());
+                token.setDefColumn(token.getColumn());
+                token.setDefLength(token.getLength());
+                token.setMacroId(state.currentID);
+            }
+            token.setLine(iter->getLine());
+            token.setColumn(iter->getColumn());
+            token.setLength(iter->getLength());
+        });
+        state.currentID++;
+    }
+
+    std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>>
+        getArguments(OpenCL::SourceObject::const_iterator& begin, OpenCL::SourceObject::const_iterator end,
+                     OpenCL::SourceObject::const_iterator namePos,
+                     std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
+                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter, State* state,
+                     std::unordered_set<std::string>& disabled)
+    {
+        std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>> arguments;
+        auto argsStart = begin;
+        while (begin != end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
+        {
+            std::size_t i = 0;
+            auto argEnd = std::find_if(begin, end, [&i](const OpenCL::Lexer::Token& token) {
+                if (token.getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses)
+                {
+                    i++;
+                }
+                else if (token.getTokenType() == OpenCL::Lexer::TokenType::CloseParentheses)
+                {
+                    if (!i)
+                    {
+                        return true;
+                    }
+                    i--;
+                }
+                else if (token.getTokenType() == OpenCL::Lexer::TokenType::Comma)
+                {
+                    return !i;
+                }
+                return false;
+            });
+            auto temp = filterForNewlineAndBackslash(begin, argEnd);
+            std::unordered_set<std::string> newDisabled;
+            //Arguments are substituted as if no macro has ever been disabled yet any macro expanded inside of an
+            //argument still disables the macro in the replacement list of the macro call
+            arguments.emplace(
+                (*define->second.identifierList)[arguments.size()],
+                macroSubstitute(temp.begin(), temp.end(), OpenCL::SourceObject(temp), reporter, state, newDisabled));
+            disabled.merge(newDisabled);
+            begin = argEnd;
+            if (begin != end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
+            {
+                begin++;
+            }
+        }
+        if (arguments.size() < define->second.identifierList->size())
+        {
+            if (reporter)
+            {
+                *reporter << OpenCL::Message::error(
+                    OpenCL::ErrorMessages::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N.args('\'' + define->first + '\''),
+                    sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin),
+                    OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1))
+                          << OpenCL::Message::note(OpenCL::Notes::MISSING_N.args(
+                                                       "arguments "
+                                                       + static_cast<std::string>(OpenCL::Format::List(
+                                                           ", ", " and ",
+                                                           {define->second.identifierList->begin() + arguments.size(),
+                                                            define->second.identifierList->end()}))),
+                                                   sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin));
+            }
+        }
+        else if (arguments.size() > define->second.identifierList->size() && !define->second.hasEllipse)
+        {
+            if (reporter)
+            {
+                *reporter << OpenCL::Message::error(
+                    OpenCL::ErrorMessages::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N.args(define->first),
+                    sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin),
+                    OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1));
+            }
+        }
+        return arguments;
+    }
+
     std::vector<OpenCL::Lexer::Token> macroSubstitute(OpenCL::SourceObject::const_iterator begin,
                                                       OpenCL::SourceObject::const_iterator end,
                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                      State* state, std::unordered_set<std::string_view> disabled = {})
+                                                      State* state, std::unordered_set<std::string>& disabled)
     {
         if (!state)
         {
@@ -237,6 +337,7 @@ namespace
         }
 
         std::vector<OpenCL::Lexer::Token> result;
+        std::unordered_set<std::string> newDisabledMerged = disabled;
         auto start = begin;
         for (auto iter = begin; iter != end; iter++)
         {
@@ -251,25 +352,17 @@ namespace
             {
                 continue;
             }
+            auto disabledCopy = disabled;
             result.insert(result.end(), start, iter);
             if (!define->second.identifierList)
             {
-                disabled.insert(name);
+                disabledCopy.insert(name);
                 start = iter + 1;
                 auto temp = result;
                 temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
-                std::for_each(temp.begin() + result.size(), temp.end(), [iter, state](OpenCL::Lexer::Token& token) {
-                    token.setDefLine(token.getLine());
-                    token.setDefColumn(token.getColumn());
-                    token.setDefLength(token.getLength());
-                    token.setLine(iter->getLine());
-                    token.setColumn(iter->getColumn());
-                    token.setLength(iter->getLength());
-                    token.setMacroId(state->currentID);
-                });
-                state->currentID++;
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state, iter);
                 auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
-                                              reporter, state, disabled);
+                                              reporter, state, disabledCopy);
                 result.reserve(result.size() + vector.size());
                 std::move(vector.begin(), vector.end(), std::back_inserter(result));
             }
@@ -278,74 +371,9 @@ namespace
             {
                 //( must immediately follow the function like macro identifier
                 iter += 2;
-                std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>> arguments;
-                {
-                    auto argsStart = iter;
-                    while (iter != end && iter->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
-                    {
-                        std::size_t i = 0;
-                        auto argEnd = std::find_if(iter, end, [&i](const OpenCL::Lexer::Token& token) mutable {
-                            if (token.getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses)
-                            {
-                                i++;
-                            }
-                            else if (token.getTokenType() == OpenCL::Lexer::TokenType::CloseParentheses)
-                            {
-                                if (!i)
-                                {
-                                    return true;
-                                }
-                                i--;
-                            }
-                            else if (token.getTokenType() == OpenCL::Lexer::TokenType::Comma)
-                            {
-                                return !i;
-                            }
-                            return false;
-                        });
-                        auto temp = filterForNewlineAndBackslash(iter, argEnd);
-                        arguments.emplace((*define->second.identifierList)[arguments.size()],
-                                          macroSubstitute(temp.begin(), temp.end(), OpenCL::SourceObject(temp),
-                                                          reporter, state, disabled));
-                        iter = argEnd;
-                        if (iter != end && iter->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
-                        {
-                            iter++;
-                        }
-                    }
-                    start = iter + 1;
-                    if (arguments.size() < define->second.identifierList->size())
-                    {
-                        if (reporter)
-                        {
-                            *reporter << OpenCL::Message::error(
-                                OpenCL::ErrorMessages::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N.args('\'' + define->first
-                                                                                                 + '\''),
-                                sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter),
-                                OpenCL::Modifier(argsStart, iter != argsStart ? iter : iter + 1))
-                                      << OpenCL::Message::note(
-                                             OpenCL::Notes::MISSING_N.args(
-                                                 "arguments "
-                                                 + static_cast<std::string>(OpenCL::Format::List(
-                                                     ", ", " and ",
-                                                     {define->second.identifierList->begin() + arguments.size(),
-                                                      define->second.identifierList->end()}))),
-                                             sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter));
-                        }
-                        continue;
-                    }
-                    else if (arguments.size() > define->second.identifierList->size() && !define->second.hasEllipse)
-                    {
-                        if (reporter)
-                        {
-                            *reporter << OpenCL::Message::error(
-                                OpenCL::ErrorMessages::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N.args(define->first),
-                                sourceObject.getLineStart(namePos), sourceObject.getLineEnd(iter),
-                                OpenCL::Modifier(argsStart, iter != argsStart ? iter : iter + 1));
-                        }
-                        continue;
-                    }
-                }
+                auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state, disabledCopy);
+                disabledCopy.insert(name);
+                start = iter + 1;
 
                 std::vector<OpenCL::Lexer::Token> replacementSubstituted;
                 auto argStart = define->second.replacementList.begin();
@@ -387,46 +415,29 @@ namespace
                         replacementSubstituted.insert(replacementSubstituted.end(), argStart, tokenIter);
                         replacementSubstituted.insert(replacementSubstituted.end(), argument->second.begin(),
                                                       argument->second.end());
-                        std::for_each(replacementSubstituted.end()
+                        assignMacroID(replacementSubstituted.end()
                                           - std::distance(argument->second.begin(), argument->second.end()),
-                                      replacementSubstituted.end(), [state](OpenCL::Lexer::Token& token) {
-                                          if (token.getMacroId() == 0)
-                                          {
-                                              token.setMacroId(state->currentID);
-                                          }
-                                      });
-                        state->currentID++;
+                                      replacementSubstituted.end(), *state, iter);
                     }
                     argStart = tokenIter + 1;
                 }
                 replacementSubstituted.insert(replacementSubstituted.end(), argStart,
                                               define->second.replacementList.end());
-                disabled.emplace(define->first);
                 auto temp = result;
                 temp.reserve(temp.size() + replacementSubstituted.size());
                 std::move(replacementSubstituted.begin(), replacementSubstituted.end(), std::back_inserter(temp));
-                std::for_each(temp.begin() + result.size(), temp.end(), [namePos, state](OpenCL::Lexer::Token& token) {
-                    token.setDefLine(token.getLine());
-                    token.setDefColumn(token.getColumn());
-                    token.setDefLength(token.getLength());
-                    token.setLine(namePos->getLine());
-                    token.setColumn(namePos->getColumn());
-                    token.setLength(namePos->getLength());
-                    if (token.getMacroId() == 0)
-                    {
-                        token.setMacroId(state->currentID);
-                    }
-                });
-                state->currentID++;
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state, iter);
                 auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
-                                              reporter, state, disabled);
+                                              reporter, state, disabledCopy);
                 result.reserve(result.size() + vector.size());
                 std::move(vector.begin(), vector.end(), std::back_inserter(result));
             }
             state->substitutions.insert(
                 {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
+            newDisabledMerged.merge(disabledCopy);
         }
         result.insert(result.end(), start, end);
+        disabled = newDisabledMerged;
         return result;
     }
 
@@ -862,7 +873,8 @@ namespace
             if (begin->getTokenType() != OpenCL::Lexer::TokenType::Pound)
             {
                 auto eol = findEOLWithOutBackslash(begin, end);
-                auto vector = macroSubstitute(begin, eol, sourceObject, reporter, state);
+                std::unordered_set<std::string> disabled;
+                auto vector = macroSubstitute(begin, eol, sourceObject, reporter, state, disabled);
                 result.reserve(result.size() + vector.size());
                 std::move(vector.begin(), vector.end(), std::back_inserter(result));
                 begin = eol;
