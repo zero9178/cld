@@ -1477,15 +1477,15 @@ OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint6
 OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
                             OpenCL::Lexer::TokenType tokenType, OpenCL::Lexer::Token::variant value,
                             std::string valueRepresentation)
-    : m_sourceLine(line),
-      m_sourceColumn(column),
-      m_sourceLength(length),
+    : m_line(line),
+      m_column(column),
+      m_length(length),
       m_tokenType(tokenType),
       m_value(std::move(value)),
       m_valueRepresentation(std::move(valueRepresentation)),
-      m_line(line),
-      m_column(column),
-      m_length(length)
+      m_sourceLine(line),
+      m_sourceColumn(column),
+      m_sourceLength(length)
 {
 }
 
@@ -1813,9 +1813,9 @@ std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>:
         if (curr != begin)
         {
             auto prev = curr - 1;
-            if (curr->getSourceLine() == prev->getSourceLine())
+            if (curr->getLine() == prev->getLine())
             {
-                result += std::string(curr->getSourceColumn() - (prev->getColumn() + prev->getLength()), ' ');
+                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
             }
             else
             {

@@ -113,9 +113,9 @@ namespace OpenCL
 
         class Token
         {
-            std::uint64_t m_sourceLine;   ///<
-            std::uint64_t m_sourceColumn; ///<
-            std::uint64_t m_sourceLength; ///<
+            std::uint64_t m_line;   ///<
+            std::uint64_t m_column; ///<
+            std::uint64_t m_length; ///<
             using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
                                          float, double, std::string>;
             TokenType m_tokenType;             ///< Type of the token
@@ -123,9 +123,9 @@ namespace OpenCL
             std::string m_valueRepresentation; ///< Original spelling of the token
             std::uint64_t m_macroId = 0;       ///< MacroID. All tokens with the same ID have been inserted by the same
                                          ///< macro substitution. ID of 0 means the the token originated from the Lexer
-            std::uint64_t m_line{};   ///<
-            std::uint64_t m_column{}; ///<
-            std::uint64_t m_length{}; ///<
+            std::uint64_t m_sourceLine;   ///<
+            std::uint64_t m_sourceColumn; ///<
+            std::uint64_t m_sourceLength; ///<
 
         public:
             using ValueType = variant;

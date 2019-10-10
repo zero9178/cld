@@ -384,10 +384,13 @@ namespace
 
         std::vector<OpenCL::Lexer::Token> result;
         auto start = begin;
-        std::uint64_t columnOffset = 0;
+        std::int64_t columnOffset = 0;
         for (auto iter = begin; iter != end; iter++)
         {
-            if (iter != begin && iter->getLine() == (iter - 1)->getLine() &&) {}
+            if (iter != begin && iter->getLine() != (iter - 1)->getLine())
+            {
+                columnOffset = 0;
+            }
             if (iter->getTokenType() != OpenCL::Lexer::TokenType::Identifier)
             {
                 continue;
@@ -403,10 +406,24 @@ namespace
             }
             if (!define->second.identifierList)
             {
-                result.insert(result.end(), start, iter);
+                result.reserve(result.size() + std::distance(start, iter));
+                std::transform(start, iter, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
+                    token.setColumn(token.getColumn() + columnOffset);
+                    return token;
+                });
                 start = iter + 1;
+                // Creating a temporary here to create proper context in case of errors in the later macroSubstitute
+                // call
                 auto temp = result;
                 temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
+                columnOffset += static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
+                                                          + define->second.replacementList.back().getLength())
+                                - define->second.replacementList.front().getColumn() - iter->getLength();
+                std::for_each(temp.begin() + result.size(), temp.end(),
+                              [iter, begin = temp.begin() + result.size()](OpenCL::Lexer::Token& token) {
+                                  token.setLine(iter->getLine());
+                                  token.setColumn(iter->getColumn() + token.getColumn() - begin->getColumn());
+                              });
 
                 assignMacroID(temp.begin() + result.size(), temp.end(), *state);
                 state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
@@ -431,7 +448,11 @@ namespace
             else if (iter + 1 != end && (iter + 1)->getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses
                      && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
             {
-                result.insert(result.end(), start, iter);
+                result.reserve(result.size() + std::distance(start, iter));
+                std::transform(start, iter, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
+                    token.setColumn(token.getColumn() + columnOffset);
+                    return token;
+                });
                 //( must immediately follow the function like macro identifier
                 iter += 2;
                 auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
@@ -470,7 +491,11 @@ namespace
             state->substitutions.insert(
                 {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
         }
-        result.insert(result.end(), start, end);
+        result.reserve(result.size() + std::distance(start, end));
+        std::transform(start, end, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
+            token.setColumn(token.getColumn() + columnOffset);
+            return token;
+        });
         return result;
     }
 
