@@ -1413,34 +1413,34 @@ void OpenCL::Lexer::Token::setLength(std::uint64_t length) noexcept
     m_length = length;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getDefLine() const noexcept
+std::uint64_t OpenCL::Lexer::Token::getSourceLine() const noexcept
 {
-    return m_defLine;
+    return m_sourceLine;
 }
 
-void OpenCL::Lexer::Token::setDefLine(std::uint64_t defLine) noexcept
+void OpenCL::Lexer::Token::setSourceLine(std::uint64_t sourceLine) noexcept
 {
-    m_defLine = defLine;
+    m_sourceLine = sourceLine;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getDefColumn() const noexcept
+std::uint64_t OpenCL::Lexer::Token::getSourceColumn() const noexcept
 {
-    return m_defColumn;
+    return m_sourceColumn;
 }
 
-void OpenCL::Lexer::Token::setDefColumn(std::uint64_t defColumn) noexcept
+void OpenCL::Lexer::Token::setSourceColumn(std::uint64_t sourceColumn) noexcept
 {
-    m_defColumn = defColumn;
+    m_sourceColumn = sourceColumn;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getDefLength() const noexcept
+std::uint64_t OpenCL::Lexer::Token::getSourceLength() const noexcept
 {
-    return m_defLength;
+    return m_sourceLength;
 }
 
-void OpenCL::Lexer::Token::setDefLength(std::uint64_t defLength) noexcept
+void OpenCL::Lexer::Token::setSourceLength(std::uint64_t sourceLength) noexcept
 {
-    m_defLength = defLength;
+    m_sourceLength = sourceLength;
 }
 
 bool OpenCL::Lexer::Token::macroInserted() const noexcept
@@ -1477,15 +1477,15 @@ OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint6
 OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
                             OpenCL::Lexer::TokenType tokenType, OpenCL::Lexer::Token::variant value,
                             std::string valueRepresentation)
-    : m_line(line),
-      m_column(column),
-      m_length(length),
+    : m_sourceLine(line),
+      m_sourceColumn(column),
+      m_sourceLength(length),
       m_tokenType(tokenType),
       m_value(std::move(value)),
       m_valueRepresentation(std::move(valueRepresentation)),
-      m_defLine(line),
-      m_defColumn(column),
-      m_defLength(length)
+      m_line(line),
+      m_column(column),
+      m_length(length)
 {
 }
 
@@ -1813,31 +1813,9 @@ std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>:
         if (curr != begin)
         {
             auto prev = curr - 1;
-            if (curr->getLine() == prev->getLine())
+            if (curr->getSourceLine() == prev->getSourceLine())
             {
-                if (curr->getMacroId() == prev->getMacroId())
-                {
-                    if (curr->getDefLine() == prev->getDefLine())
-                    {
-                        result +=
-                            std::string(curr->getDefColumn() - (prev->getDefColumn() + prev->getDefLength()), ' ');
-                    }
-                    else
-                    {
-                        result += ' ';
-                    }
-                }
-                else if (prev->macroInserted())
-                {
-                    if (needsWhitespaceInbetween(*prev, *curr))
-                    {
-                        result += ' ';
-                    }
-                }
-                else
-                {
-                    result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
-                }
+                result += std::string(curr->getSourceColumn() - (prev->getColumn() + prev->getLength()), ' ');
             }
             else
             {

@@ -232,24 +232,17 @@ namespace
         std::vector<std::unordered_set<std::string>> disabledMacros;
     };
 
-    template <class InputIterator1, class InputIterator2>
-    void assignMacroID(InputIterator1 begin, InputIterator1 end, State& state, InputIterator2 iter)
+    template <class InputIterator1>
+    void assignMacroID(InputIterator1 begin, InputIterator1 end, State& state)
     {
         static_assert(std::is_same_v<typename InputIterator1::value_type, OpenCL::Lexer::Token>);
-        static_assert(std::is_same_v<typename InputIterator2::value_type, OpenCL::Lexer::Token>);
         bool setOne = false;
-        std::for_each(begin, end, [iter, state, &setOne](OpenCL::Lexer::Token& token) {
+        std::for_each(begin, end, [state, &setOne](OpenCL::Lexer::Token& token) {
             if (!token.macroInserted())
             {
-                token.setDefLine(token.getLine());
-                token.setDefColumn(token.getColumn());
-                token.setDefLength(token.getLength());
                 token.setMacroId(state.currentID);
                 setOne = true;
             }
-            token.setLine(iter->getLine());
-            token.setColumn(iter->getColumn());
-            token.setLength(iter->getLength());
         });
         if (setOne)
         {
@@ -327,8 +320,7 @@ namespace
     }
 
     std::vector<OpenCL::Lexer::Token>
-        argumentSubstitution(OpenCL::SourceObject::const_iterator namePos,
-                             std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
+        argumentSubstitution(std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
                              std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>>& arguments,
                              State* state)
     {
@@ -372,7 +364,7 @@ namespace
                                               argument->second.end());
                 assignMacroID(replacementSubstituted.end()
                                   - std::distance(argument->second.begin(), argument->second.end()),
-                              replacementSubstituted.end(), *state, namePos);
+                              replacementSubstituted.end(), *state);
             }
             argStart = tokenIter + 1;
         }
@@ -392,8 +384,10 @@ namespace
 
         std::vector<OpenCL::Lexer::Token> result;
         auto start = begin;
+        std::uint64_t columnOffset = 0;
         for (auto iter = begin; iter != end; iter++)
         {
+            if (iter != begin && iter->getLine() == (iter - 1)->getLine() &&) {}
             if (iter->getTokenType() != OpenCL::Lexer::TokenType::Identifier)
             {
                 continue;
@@ -413,7 +407,8 @@ namespace
                 start = iter + 1;
                 auto temp = result;
                 temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state, namePos);
+
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
                 state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
                 {
                     std::unordered_set<std::uint64_t> uniqueSet;
@@ -442,12 +437,13 @@ namespace
                 auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
                 start = iter + 1;
 
-                auto replacementSubstituted = argumentSubstitution(namePos, define, arguments, state);
+                auto replacementSubstituted = argumentSubstitution(define, arguments, state);
 
                 auto temp = result;
                 temp.reserve(temp.size() + replacementSubstituted.size());
                 std::move(replacementSubstituted.begin(), replacementSubstituted.end(), std::back_inserter(temp));
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state, namePos);
+
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
                 state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
                 {
                     std::unordered_set<std::uint64_t> uniqueSet;
@@ -702,10 +698,10 @@ namespace
         //        return result;
     }
 
-    ControlLine::DefineDirective processDefineDirective(OpenCL::SourceObject::const_iterator& begin,
-                                                        OpenCL::SourceObject::const_iterator end,
-                                                        const OpenCL::SourceObject& sourceObject,
-                                                        std::ostream* reporter, State*)
+    std::optional<ControlLine::DefineDirective> processDefineDirective(OpenCL::SourceObject::const_iterator& begin,
+                                                                       OpenCL::SourceObject::const_iterator end,
+                                                                       const OpenCL::SourceObject& sourceObject,
+                                                                       std::ostream* reporter, State*)
     {
         auto start = begin - 1;
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
@@ -718,10 +714,22 @@ namespace
         auto namePos = begin - 1;
         const auto& name = std::get<std::string>(namePos->getValue());
         if (begin == end || begin->getTokenType() != OpenCL::Lexer::TokenType::OpenParentheses
-            || begin->getLine() != (begin - 1)->getLine()
-            || begin->getColumn() != (begin - 1)->getColumn() + (begin - 1)->getLength())
+            || begin->getLine() != namePos->getLine()
+            || begin->getColumn() != namePos->getColumn() + namePos->getLength())
         {
             // No ( after the identifier or there's whitespace in between the identifier and the (
+            if (begin != end && begin->getLine() == namePos->getLine()
+                && begin->getColumn() == namePos->getColumn() + namePos->getLength())
+            {
+                if (reporter)
+                {
+                    *reporter << OpenCL::Message::error(
+                        OpenCL::ErrorMessages::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION,
+                        sourceObject.getLineStart(namePos), sourceObject.getLineEnd(namePos),
+                        OpenCL::Modifier(begin, begin + 1));
+                }
+                return {};
+            }
             auto eol = findEOLWithOutBackslash(begin, end);
             auto tokens = filterForNewlineAndBackslash(begin, eol);
             begin = eol;
@@ -796,24 +804,24 @@ namespace
         if (value == "define")
         {
             auto define = processDefineDirective(begin, end, sourceObject, reporter, state);
-            if (state)
+            if (state && define)
             {
-                auto [result, success] = state->defines.emplace(define.identifier, define);
+                auto [result, success] = state->defines.emplace(define->identifier, *define);
                 if (!success && reporter)
                 {
-                    if (define.identifierList.has_value() != result->second.identifierList.has_value()
-                        || !define.identifierList
-                        || define.identifierList->size() != result->second.identifierList->size()
-                        || define.hasEllipse != result->second.hasEllipse
-                        || !tokenStructureEqual(define.replacementList.begin(), define.replacementList.end(),
+                    if (define->identifierList.has_value() != result->second.identifierList.has_value()
+                        || !define->identifierList
+                        || define->identifierList->size() != result->second.identifierList->size()
+                        || define->hasEllipse != result->second.hasEllipse
+                        || !tokenStructureEqual(define->replacementList.begin(), define->replacementList.end(),
                                                 result->second.replacementList.begin(),
                                                 result->second.replacementList.end()))
                     {
                         *reporter << OpenCL::Message::error(
-                            OpenCL::ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + define.identifier + '\''),
-                            sourceObject.getLineStart(define.identifierPos),
-                            sourceObject.getLineEnd(define.identifierPos),
-                            OpenCL::Modifier(define.identifierPos, define.identifierPos + 1))
+                            OpenCL::ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + define->identifier + '\''),
+                            sourceObject.getLineStart(define->identifierPos),
+                            sourceObject.getLineEnd(define->identifierPos),
+                            OpenCL::Modifier(define->identifierPos, define->identifierPos + 1))
                                   << OpenCL::Message::note(
                                          OpenCL::Notes::PREVIOUSLY_DECLARED_HERE,
                                          sourceObject.getLineStart(result->second.identifierPos),

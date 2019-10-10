@@ -113,11 +113,9 @@ namespace OpenCL
 
         class Token
         {
-            std::uint64_t m_line; ///< Line of the token or line of the identifier of a macro in case of substitution
-            std::uint64_t
-                m_column; ///< Column of the token or column of the identifier of a macro in case of substitution
-            std::uint64_t
-                m_length; ///< Length of the token or length of the identifier of a macro in case of substitution
+            std::uint64_t m_sourceLine;   ///<
+            std::uint64_t m_sourceColumn; ///<
+            std::uint64_t m_sourceLength; ///<
             using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
                                          float, double, std::string>;
             TokenType m_tokenType;             ///< Type of the token
@@ -125,11 +123,9 @@ namespace OpenCL
             std::string m_valueRepresentation; ///< Original spelling of the token
             std::uint64_t m_macroId = 0;       ///< MacroID. All tokens with the same ID have been inserted by the same
                                          ///< macro substitution. ID of 0 means the the token originated from the Lexer
-            std::uint64_t m_defLine{}; ///< Equal to line or original line in source file before macro substitution
-            std::uint64_t
-                m_defColumn{}; ///< Equal to column or original column in source file before macro substitution
-            std::uint64_t
-                m_defLength{}; ///< Equal to length or original length in source file before macro substitution
+            std::uint64_t m_line{};   ///<
+            std::uint64_t m_column{}; ///<
+            std::uint64_t m_length{}; ///<
 
         public:
             using ValueType = variant;
@@ -161,17 +157,17 @@ namespace OpenCL
 
             void setMacroId(std::uint64_t macroId) noexcept;
 
-            [[nodiscard]] std::uint64_t getDefLine() const noexcept;
+            [[nodiscard]] std::uint64_t getSourceLine() const noexcept;
 
-            void setDefLine(uint64_t defLine) noexcept;
+            void setSourceLine(std::uint64_t sourceLine) noexcept;
 
-            [[nodiscard]] std::uint64_t getDefColumn() const noexcept;
+            [[nodiscard]] std::uint64_t getSourceColumn() const noexcept;
 
-            void setDefColumn(std::uint64_t defColumn) noexcept;
+            void setSourceColumn(std::uint64_t sourceColumn) noexcept;
 
-            [[nodiscard]] std::uint64_t getDefLength() const noexcept;
+            [[nodiscard]] std::uint64_t getSourceLength() const noexcept;
 
-            void setDefLength(std::uint64_t defLength) noexcept;
+            void setSourceLength(std::uint64_t sourceLength) noexcept;
 
             [[nodiscard]] std::string emitBack() const;
         };

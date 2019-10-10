@@ -154,8 +154,11 @@ namespace OpenCL
             constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for Macro {}");
 
             constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for Macro {}");
+
+            constexpr auto WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION =
+                "Whitespace required after object macro definition";
         } // namespace PP
-    } // namespace ErrorMessages
+    }     // namespace ErrorMessages
 
     namespace Notes
     {
