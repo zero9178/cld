@@ -229,6 +229,7 @@ namespace
         std::unordered_map<std::string, ControlLine::DefineDirective> defines;
         std::map<std::pair<std::uint64_t, std::uint64_t>, OpenCL::SourceObject::Substitution> substitutions;
         std::uint64_t currentID = 1;
+        std::vector<std::unordered_set<std::string>> disabledMacros;
     };
 
     template <class InputIterator1, class InputIterator2>
@@ -236,19 +237,24 @@ namespace
     {
         static_assert(std::is_same_v<typename InputIterator1::value_type, OpenCL::Lexer::Token>);
         static_assert(std::is_same_v<typename InputIterator2::value_type, OpenCL::Lexer::Token>);
-        std::for_each(begin, end, [iter, state](OpenCL::Lexer::Token& token) {
+        bool setOne = false;
+        std::for_each(begin, end, [iter, state, &setOne](OpenCL::Lexer::Token& token) {
             if (!token.macroInserted())
             {
                 token.setDefLine(token.getLine());
                 token.setDefColumn(token.getColumn());
                 token.setDefLength(token.getLength());
                 token.setMacroId(state.currentID);
+                setOne = true;
             }
             token.setLine(iter->getLine());
             token.setColumn(iter->getColumn());
             token.setLength(iter->getLength());
         });
-        state.currentID++;
+        if (setOne)
+        {
+            state.currentID++;
+        }
     }
 
     std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>>
@@ -321,12 +327,12 @@ namespace
     }
 
     std::vector<OpenCL::Lexer::Token>
-        argumentSubstitution(const OpenCL::SourceObject::const_iterator& iter,
+        argumentSubstitution(OpenCL::SourceObject::const_iterator namePos,
                              std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
                              std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>>& arguments,
                              State* state)
     {
-        std::__1::vector<OpenCL::Lexer::Token> replacementSubstituted;
+        std::vector<OpenCL::Lexer::Token> replacementSubstituted;
         auto argStart = define->second.replacementList.begin();
         for (auto tokenIter = define->second.replacementList.begin(); tokenIter != define->second.replacementList.end();
              tokenIter++)
@@ -335,7 +341,7 @@ namespace
             {
                 continue;
             }
-            auto argument = arguments.find(std::__1::get<std::string>(tokenIter->getValue()));
+            auto argument = arguments.find(std::get<std::string>(tokenIter->getValue()));
             if (argument == arguments.end())
             {
                 continue;
@@ -366,7 +372,7 @@ namespace
                                               argument->second.end());
                 assignMacroID(replacementSubstituted.end()
                                   - std::distance(argument->second.begin(), argument->second.end()),
-                              replacementSubstituted.end(), *state, iter);
+                              replacementSubstituted.end(), *state, namePos);
             }
             argStart = tokenIter + 1;
         }
@@ -395,17 +401,33 @@ namespace
             const auto& name = std::get<std::string>(iter->getValue());
             auto namePos = iter;
             auto define = state->defines.find(name);
-            if (define == state->defines.end())
+            if (define == state->defines.end()
+                || (iter->getMacroId() < state->disabledMacros.size()
+                    && state->disabledMacros[iter->getMacroId()].count(name)))
             {
                 continue;
             }
-            result.insert(result.end(), start, iter);
             if (!define->second.identifierList)
             {
+                result.insert(result.end(), start, iter);
                 start = iter + 1;
                 auto temp = result;
                 temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state, iter);
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state, namePos);
+                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
+                {
+                    std::unordered_set<std::uint64_t> uniqueSet;
+                    std::transform(temp.begin() + result.size(), temp.end(),
+                                   std::inserter(uniqueSet, uniqueSet.begin()),
+                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
+                    for (auto& id : uniqueSet)
+                    {
+                        state->disabledMacros[id].insert(name);
+                        state->disabledMacros[id].insert(state->disabledMacros[iter->getMacroId()].begin(),
+                                                         state->disabledMacros[iter->getMacroId()].end());
+                    }
+                }
+
                 auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
                                               reporter, state);
                 result.reserve(result.size() + vector.size());
@@ -414,21 +436,40 @@ namespace
             else if (iter + 1 != end && (iter + 1)->getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses
                      && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
             {
+                result.insert(result.end(), start, iter);
                 //( must immediately follow the function like macro identifier
                 iter += 2;
                 auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
                 start = iter + 1;
 
-                auto replacementSubstituted = argumentSubstitution(iter, define, arguments, state);
+                auto replacementSubstituted = argumentSubstitution(namePos, define, arguments, state);
 
                 auto temp = result;
                 temp.reserve(temp.size() + replacementSubstituted.size());
                 std::move(replacementSubstituted.begin(), replacementSubstituted.end(), std::back_inserter(temp));
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state, iter);
+                assignMacroID(temp.begin() + result.size(), temp.end(), *state, namePos);
+                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
+                {
+                    std::unordered_set<std::uint64_t> uniqueSet;
+                    std::transform(temp.begin() + result.size(), temp.end(),
+                                   std::inserter(uniqueSet, uniqueSet.begin()),
+                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
+                    for (auto& id : uniqueSet)
+                    {
+                        state->disabledMacros[id].insert(name);
+                        state->disabledMacros[id].insert(state->disabledMacros[namePos->getMacroId()].begin(),
+                                                         state->disabledMacros[namePos->getMacroId()].end());
+                    }
+                }
+
                 auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
                                               reporter, state);
                 result.reserve(result.size() + vector.size());
                 std::move(vector.begin(), vector.end(), std::back_inserter(result));
+            }
+            else
+            {
+                continue;
             }
             state->substitutions.insert(
                 {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
