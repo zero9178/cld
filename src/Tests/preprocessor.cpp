@@ -114,3 +114,11 @@ TEST_CASE("C99 Standard examples", "[PP]")
         }
     }
 }
+
+TEST_CASE("Object like Macro with newline", "[PP]")
+{
+    auto [ret, error] = preprocessTest("#define FUNC \\\n (1 +\\\n 3) \nint main(void) {\n    return FUNC;\n}\n");
+    INFO(error);
+    CHECK(error.empty());
+    CHECK(ret == "\n\n\nint main(void) {\n    return (1 + 3);\n}\n");
+}

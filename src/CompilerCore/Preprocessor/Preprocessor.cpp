@@ -34,13 +34,15 @@ namespace
         do
         {
             result = OpenCL::findEOL(result, end);
-        } while ((result - 1)->getTokenType() == OpenCL::Lexer::TokenType::Backslash);
+        } while (std::distance(begin, result) >= 2
+                 && (result - 2)->getTokenType() == OpenCL::Lexer::TokenType::Backslash);
         return result;
     }
 
     std::vector<OpenCL::Lexer::Token> filterForNewlineAndBackslash(OpenCL::SourceObject::const_iterator begin,
                                                                    OpenCL::SourceObject::const_iterator end)
     {
+        // TODO: Append
         std::vector<OpenCL::Lexer::Token> result(begin, end);
         result.erase(std::remove_if(result.begin(), result.end(),
                                     [](const OpenCL::Lexer::Token& token) {
