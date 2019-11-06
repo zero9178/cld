@@ -46,37 +46,63 @@ namespace
         std::vector<OpenCL::Lexer::Token> result;
         if (concatBackslash)
         {
-            std::vector<std::pair<OpenCL::SourceObject::const_iterator, OpenCL::SourceObject::const_iterator>> lines;
-            while (begin != end)
+            auto curr = begin;
+            std::pair<std::uint64_t, std::uint64_t> backslash;
+            while (curr != end)
             {
-                auto next = std::find_if(begin, end, [](const OpenCL::Lexer::Token& token) {
-                    return token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
+                auto next = std::find_if(curr, end, [](const OpenCL::Lexer::Token& token) {
+                    return token.getTokenType() == OpenCL::Lexer::TokenType::Newline;
                 });
-                lines.emplace_back(begin, next);
-                begin = next;
+                if (curr == begin || next == end)
+                {
+                    OpenCL::SourceObject::const_iterator last;
+                    if (next == end)
+                    {
+                        last = next;
+                    }
+                    else if ((next - 1)->getTokenType() == OpenCL::Lexer::TokenType::Backslash)
+                    {
+                        last = next - 1;
+                    }
+                    else
+                    {
+                        last = next;
+                    }
+                    result.insert(result.end(), curr, last);
+                    backslash = std::pair((next - 1)->getLine(), (next - 1)->getColumn());
+                }
+                else if (curr != next)
+                {
+                    result.reserve(result.size() + std::distance(curr, next));
+                    auto columnOffset = curr->getColumn();
+                    std::transform(curr, next, std::back_inserter(result),
+                                   [backslash, columnOffset](OpenCL::Lexer::Token token) {
+                                       token.setLine(backslash.first);
+                                       token.setColumn(backslash.second + token.getColumn() - columnOffset);
+                                       return token;
+                                   });
+                    if (result.back().getTokenType() == OpenCL::Lexer::TokenType::Backslash)
+                    {
+                        backslash = std::pair(result.back().getLine(), result.back().getColumn());
+                        result.pop_back();
+                    }
+                }
+                if (next != end)
+                {
+                    curr = next + 1;
+                }
             }
-            result.insert(result.end(), lines.front().first, lines.front().second);
-            std::for_each(
-                lines.begin() + 1, lines.end(),
-                [](const std::pair<OpenCL::SourceObject::const_iterator, OpenCL::SourceObject::const_iterator>& pair) {
-                    auto backslash = pair.first - 1;
-                });
         }
         else
         {
             result.insert(result.end(), begin, end);
+            result.erase(std::remove_if(result.begin(), result.end(),
+                                        [](const OpenCL::Lexer::Token& token) {
+                                            return token.getTokenType() == OpenCL::Lexer::TokenType::Newline
+                                                   || token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
+                                        }),
+                         result.end());
         }
-        result.erase(std::remove_if(
-                         result.begin(), result.end(),
-                         concatBackslash ?
-                             [](const OpenCL::Lexer::Token& token) {
-                                 return token.getTokenType() == OpenCL::Lexer::TokenType::Newline;
-                             } :
-                             [](const OpenCL::Lexer::Token& token) {
-                                 return token.getTokenType() == OpenCL::Lexer::TokenType::Newline
-                                        || token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
-                             }),
-                     result.end());
         return result;
     }
 
@@ -445,11 +471,13 @@ namespace
                 // call
                 auto temp = result;
                 temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
-                columnOffset += static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
-                                                          + define->second.replacementList.back().getLength())
-                                - define->second.replacementList.front().getColumn() - iter->getLength();
+                columnOffset += define->second.replacementList.empty() ?
+                                    -iter->getLength() :
+                                    static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
+                                                              + define->second.replacementList.back().getLength())
+                                        - define->second.replacementList.front().getColumn() - iter->getLength();
                 std::for_each(temp.begin() + result.size(), temp.end(),
-                              [iter, begin = temp.begin() + result.size()](OpenCL::Lexer::Token& token) {
+                              [iter, begin = define->second.replacementList.begin()](OpenCL::Lexer::Token& token) {
                                   token.setLine(iter->getLine());
                                   token.setColumn(iter->getColumn() + token.getColumn() - begin->getColumn());
                               });
@@ -773,7 +801,8 @@ namespace
         {
             // No ( after the identifier or there's whitespace in between the identifier and the (
             if (begin != end && begin->getLine() == namePos->getLine()
-                && begin->getColumn() == namePos->getColumn() + namePos->getLength())
+                && begin->getColumn() == namePos->getColumn() + namePos->getLength()
+                && begin->getTokenType() != OpenCL::Lexer::TokenType::Newline)
             {
                 if (reporter)
                 {
