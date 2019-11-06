@@ -40,15 +40,42 @@ namespace
     }
 
     std::vector<OpenCL::Lexer::Token> filterForNewlineAndBackslash(OpenCL::SourceObject::const_iterator begin,
-                                                                   OpenCL::SourceObject::const_iterator end)
+                                                                   OpenCL::SourceObject::const_iterator end,
+                                                                   bool concatBackslash = false)
     {
-        // TODO: Append
-        std::vector<OpenCL::Lexer::Token> result(begin, end);
-        result.erase(std::remove_if(result.begin(), result.end(),
-                                    [](const OpenCL::Lexer::Token& token) {
-                                        return token.getTokenType() == OpenCL::Lexer::TokenType::Newline
-                                               || token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
-                                    }),
+        std::vector<OpenCL::Lexer::Token> result;
+        if (concatBackslash)
+        {
+            std::vector<std::pair<OpenCL::SourceObject::const_iterator, OpenCL::SourceObject::const_iterator>> lines;
+            while (begin != end)
+            {
+                auto next = std::find_if(begin, end, [](const OpenCL::Lexer::Token& token) {
+                    return token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
+                });
+                lines.emplace_back(begin, next);
+                begin = next;
+            }
+            result.insert(result.end(), lines.front().first, lines.front().second);
+            std::for_each(
+                lines.begin() + 1, lines.end(),
+                [](const std::pair<OpenCL::SourceObject::const_iterator, OpenCL::SourceObject::const_iterator>& pair) {
+                    auto backslash = pair.first - 1;
+                });
+        }
+        else
+        {
+            result.insert(result.end(), begin, end);
+        }
+        result.erase(std::remove_if(
+                         result.begin(), result.end(),
+                         concatBackslash ?
+                             [](const OpenCL::Lexer::Token& token) {
+                                 return token.getTokenType() == OpenCL::Lexer::TokenType::Newline;
+                             } :
+                             [](const OpenCL::Lexer::Token& token) {
+                                 return token.getTokenType() == OpenCL::Lexer::TokenType::Newline
+                                        || token.getTokenType() == OpenCL::Lexer::TokenType::Backslash;
+                             }),
                      result.end());
         return result;
     }
@@ -758,7 +785,7 @@ namespace
                 return {};
             }
             auto eol = findEOLWithOutBackslash(begin, end);
-            auto tokens = filterForNewlineAndBackslash(begin, eol);
+            auto tokens = filterForNewlineAndBackslash(begin, eol, true);
             begin = eol;
             return ControlLine::DefineDirective{start, begin, namePos, name, {}, false, std::move(tokens)};
         }
@@ -817,7 +844,7 @@ namespace
             }
             expect(OpenCL::Lexer::TokenType::CloseParentheses, begin, end, sourceObject, reporter);
             auto newline = findEOLWithOutBackslash(begin, end);
-            auto token = filterForNewlineAndBackslash(begin, newline);
+            auto token = filterForNewlineAndBackslash(begin, newline, true);
             begin = newline;
             return ControlLine::DefineDirective{start,      begin,           namePos, name, std::move(identifierList),
                                                 hasEllipse, std::move(token)};
