@@ -1611,6 +1611,7 @@ namespace OpenCL::Syntax
             Double,
             Signed,
             Unsigned,
+            Bool,
         };
 
     private:

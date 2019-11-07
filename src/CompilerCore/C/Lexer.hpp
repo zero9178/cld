@@ -95,15 +95,15 @@ namespace OpenCL
             StructKeyword,      ///<[C,OpenCL]
             Dot,
             Arrow,
-            SwitchKeyword,      ///<[C,OpenCL]
-            CaseKeyword,        ///<[C,OpenCL]
-            DefaultKeyword,     ///<[C,OpenCL]
-            UnionKeyword,       ///<[C,OpenCL]
-            EnumKeyword,        ///<[C,OpenCL]
-            GotoKeyword,        ///<[C,OpenCL]
-            UnderlineBool,      ///<[C,OpenCL]
-            UnderlineComplex,   ///<[C,OpenCL]
-            UnderlineImaginary, ///<[C,OpenCL]
+            SwitchKeyword,  ///<[C,OpenCL]
+            CaseKeyword,    ///<[C,OpenCL]
+            DefaultKeyword, ///<[C,OpenCL]
+            UnionKeyword,   ///<[C,OpenCL]
+            EnumKeyword,    ///<[C,OpenCL]
+            GotoKeyword,    ///<[C,OpenCL]
+            UnderlineBool,  ///<[C,OpenCL]
+            // UnderlineComplex,   ///<[C,OpenCL]
+            // UnderlineImaginary, ///<[C,OpenCL]
             Ellipse,
             Pound,
             DoublePound,

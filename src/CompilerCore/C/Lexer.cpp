@@ -3,6 +3,7 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <regex>
 #include <sstream>
@@ -207,8 +208,7 @@ namespace
                || characters == "continue" || characters == "for" || characters == "signed" || characters == "void"
                || characters == "default" || characters == "goto" || characters == "sizeof" || characters == "volatile"
                || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
-               || characters == "while" || characters == "inline" || characters == "_Bool" || characters == "_Complex"
-               || characters == "_Imaginary";
+               || characters == "while" || characters == "inline" || characters == "_Bool";
     }
 
     OpenCL::Lexer::TokenType charactersToKeyword(const std::string& characters)
@@ -353,14 +353,6 @@ namespace
         if (characters == "_Bool")
         {
             return TokenType::UnderlineBool;
-        }
-        if (characters == "_Complex")
-        {
-            return TokenType::UnderlineComplex;
-        }
-        if (characters == "_Imaginary")
-        {
-            return TokenType::UnderlineImaginary;
         }
         OPENCL_UNREACHABLE;
     }
@@ -513,6 +505,7 @@ namespace
         Ambiguous,
         Number,
         AfterInclude,
+        L,
     };
 } // namespace
 
@@ -582,8 +575,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                         case 'L':
                             characters.clear();
                             characters += 'L';
-                            lastTokenIsAmbiguous = true;
-                            currentState = State::Ambiguous;
+                            currentState = State::L;
                             break;
                         default:
                             if (iter > 0 && std::isspace(iter)) // Its UB to pass negative value to std::isspace. TIL
@@ -615,6 +607,20 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             }
                             break;
                     }
+                    break;
+                }
+                case State::L:
+                {
+                    if (iter == '\'' || iter == '"')
+                    {
+                        currentState = State::Start;
+                        wide = true;
+                    }
+                    else
+                    {
+                        currentState = State::Text;
+                    }
+                    handled = false;
                     break;
                 }
                 case State::CharacterLiteral:
@@ -1105,18 +1111,6 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 characters += '.';
                                 currentState = State::Number;
                             }
-                            else if (characters == "L")
-                            {
-                                if (iter == '\'' || iter == '"')
-                                {
-                                    currentState = State::Start;
-                                    wide = true;
-                                }
-                                else
-                                {
-                                    currentState = State::Text;
-                                }
-                            }
                             else
                             {
                                 currentState = State::Start;
@@ -1266,8 +1260,6 @@ std::string OpenCL::Lexer::Token::emitBack() const
         case TokenType::DefinedKeyword: return "defined";
         case TokenType::Newline: return "";
         case TokenType::UnderlineBool: return "_Bool";
-        case TokenType::UnderlineComplex: return "_Complex";
-        case TokenType::UnderlineImaginary: return "_Imaginary";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1370,9 +1362,8 @@ std::pair<OpenCL::Lexer::Token, std::optional<OpenCL::Lexer::Token>>
         case TokenType::DoublePound: break;
         case TokenType::Backslash: break;
         case TokenType::UnderlineBool: break;
-        case TokenType::UnderlineComplex: break;
-        case TokenType::UnderlineImaginary: break;
     }
+    OPENCL_UNREACHABLE;
 }
 
 std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
@@ -1468,8 +1459,6 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::DefinedKeyword: return "'defined'";
         case TokenType::Newline: return "'Newline'";
         case TokenType::UnderlineBool: return "'_Bool'";
-        case TokenType::UnderlineComplex: return "'_Complex'";
-        case TokenType::UnderlineImaginary: return "'_Imaginary";
     }
     OPENCL_UNREACHABLE;
 }
@@ -1567,8 +1556,6 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::DefinedKeyword: return "defined";
         case TokenType::Newline: return "Newline";
         case TokenType::UnderlineBool: return "_Bool";
-        case TokenType::UnderlineComplex: return "_Complex";
-        case TokenType::UnderlineImaginary: return "_Imaginary";
     }
     OPENCL_UNREACHABLE;
 }

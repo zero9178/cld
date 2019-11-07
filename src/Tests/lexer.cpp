@@ -261,6 +261,23 @@ TEST_CASE("Lexing weird characters", "[lexer]")
     CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
     REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
     CHECK(std::get<std::string>(result.data()[0].getValue()) == "L");
+    result = OpenCL::Lexer::tokenize("V=V==L+E", OpenCL::Language::C);
+    REQUIRE(result.data().size() == 7);
+    CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+    CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Assignment);
+    CHECK(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+    CHECK(result.data()[3].getTokenType() == OpenCL::Lexer::TokenType::Equal);
+    CHECK(result.data()[4].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+    CHECK(result.data()[5].getTokenType() == OpenCL::Lexer::TokenType::Plus);
+    CHECK(result.data()[6].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+    REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+    REQUIRE(std::holds_alternative<std::string>(result.data()[2].getValue()));
+    REQUIRE(std::holds_alternative<std::string>(result.data()[4].getValue()));
+    REQUIRE(std::holds_alternative<std::string>(result.data()[6].getValue()));
+    REQUIRE(std::get<std::string>(result.data()[0].getValue()) == "V");
+    REQUIRE(std::get<std::string>(result.data()[2].getValue()) == "V");
+    REQUIRE(std::get<std::string>(result.data()[4].getValue()) == "L");
+    REQUIRE(std::get<std::string>(result.data()[6].getValue()) == "E");
 }
 
 TEST_CASE("Lexing Punctuators", "[lexer]")
@@ -433,19 +450,18 @@ TEST_CASE("Lexing keywords", "[lexer]")
 {
     using namespace OpenCL::Lexer;
     auto result = OpenCL::Lexer::tokenize(
-        "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool _Complex _Imaginary",
+        "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool",
         OpenCL::Language::C);
     std::vector correct = {
-        TokenType::AutoKeyword,       TokenType::EnumKeyword,   TokenType::RestrictKeyword, TokenType::UnsignedKeyword,
-        TokenType::BreakKeyword,      TokenType::ExternKeyword, TokenType::ReturnKeyword,   TokenType::VoidKeyword,
-        TokenType::CaseKeyword,       TokenType::FloatKeyword,  TokenType::ShortKeyword,    TokenType::VolatileKeyword,
-        TokenType::CharKeyword,       TokenType::ForKeyword,    TokenType::SignedKeyword,   TokenType::WhileKeyword,
-        TokenType::ConstKeyword,      TokenType::GotoKeyword,   TokenType::SizeofKeyword,   TokenType::ContinueKeyword,
-        TokenType::IfKeyword,         TokenType::StaticKeyword, TokenType::DefaultKeyword,  TokenType::InlineKeyword,
-        TokenType::StructKeyword,     TokenType::DoKeyword,     TokenType::IntKeyword,      TokenType::SwitchKeyword,
-        TokenType::DoubleKeyword,     TokenType::LongKeyword,   TokenType::TypedefKeyword,  TokenType::ElseKeyword,
-        TokenType::RegisterKeyword,   TokenType::UnionKeyword,  TokenType::UnderlineBool,   TokenType::UnderlineComplex,
-        TokenType::UnderlineImaginary};
+        TokenType::AutoKeyword,     TokenType::EnumKeyword,   TokenType::RestrictKeyword, TokenType::UnsignedKeyword,
+        TokenType::BreakKeyword,    TokenType::ExternKeyword, TokenType::ReturnKeyword,   TokenType::VoidKeyword,
+        TokenType::CaseKeyword,     TokenType::FloatKeyword,  TokenType::ShortKeyword,    TokenType::VolatileKeyword,
+        TokenType::CharKeyword,     TokenType::ForKeyword,    TokenType::SignedKeyword,   TokenType::WhileKeyword,
+        TokenType::ConstKeyword,    TokenType::GotoKeyword,   TokenType::SizeofKeyword,   TokenType::ContinueKeyword,
+        TokenType::IfKeyword,       TokenType::StaticKeyword, TokenType::DefaultKeyword,  TokenType::InlineKeyword,
+        TokenType::StructKeyword,   TokenType::DoKeyword,     TokenType::IntKeyword,      TokenType::SwitchKeyword,
+        TokenType::DoubleKeyword,   TokenType::LongKeyword,   TokenType::TypedefKeyword,  TokenType::ElseKeyword,
+        TokenType::RegisterKeyword, TokenType::UnionKeyword,  TokenType::UnderlineBool};
     std::vector<TokenType> tokens;
     tokens.reserve(result.data().size());
     std::transform(result.begin(), result.end(), std::back_inserter(tokens),

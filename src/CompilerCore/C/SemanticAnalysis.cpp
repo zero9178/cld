@@ -452,6 +452,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         Double = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double),
         Signed = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
         Unsigned = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
+        UnderlineBool = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool),
     };
     auto logMoreThanN = [&](OpenCL::Lexer::TokenType tokenType, const char* amountString) -> void {
         auto result = std::find_if(
@@ -464,7 +465,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                                  declStart, declEnd, OpenCL::Modifier(result, result + 1))});
     };
 
-    std::array<std::size_t, 9> primitivesCount = {0};
+    std::array<std::size_t, 10> primitivesCount = {0};
     for (auto& iter : primitives)
     {
         primitivesCount[static_cast<std::size_t>(iter)]++;
@@ -513,6 +514,11 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             logMoreThanN(OpenCL::Lexer::TokenType::LongKeyword, "twice");
             return Type{};
         }
+        if (primitivesCount[UnderlineBool] > 1)
+        {
+            logMoreThanN(OpenCL::Lexer::TokenType::UnderlineBool, "once");
+            return Type{};
+        }
     }
 
     bool hasSigned = primitivesCount[Signed];
@@ -549,7 +555,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                        || token.getTokenType() == TokenType::FloatKeyword
                        || token.getTokenType() == TokenType::DoubleKeyword
                        || token.getTokenType() == TokenType::SignedKeyword
-                       || token.getTokenType() == TokenType::UnsignedKeyword);
+                       || token.getTokenType() == TokenType::UnsignedKeyword
+                       || token.getTokenType() == TokenType::UnderlineBool);
         });
     };
 
