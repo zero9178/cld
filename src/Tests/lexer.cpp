@@ -256,6 +256,11 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
 TEST_CASE("Lexing weird characters", "[lexer]")
 {
     OpenCL::Lexer::tokenize("\xAA test", OpenCL::Language::C, nullptr);
+    auto result = OpenCL::Lexer::tokenize("L", OpenCL::Language::C);
+    REQUIRE(result.data().size() == 1);
+    CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+    REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+    CHECK(std::get<std::string>(result.data()[0].getValue()) == "L");
 }
 
 TEST_CASE("Lexing Punctuators", "[lexer]")
@@ -376,6 +381,14 @@ TEST_CASE("Lexing character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == '\x070');
     }
+    SECTION("Multibyte")
+    {
+        auto result = OpenCL::Lexer::tokenize("L'5'", OpenCL::Language::C);
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == L'5');
+    }
     SECTION("Fails")
     {
         LEXER_FAILS_WITH("'\n'", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("character literal")));
@@ -401,6 +414,14 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
     }
+    SECTION("Multibyte")
+    {
+        auto result = OpenCL::Lexer::tokenize("L\"test\"", OpenCL::Language::C);
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<std::wstring>(result.data()[0].getValue()));
+        CHECK(std::get<std::wstring>(result.data()[0].getValue()) == L"test");
+    }
     SECTION("Fails")
     {
         LEXER_FAILS_WITH("\"\n\"", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("string literal")));
@@ -412,18 +433,19 @@ TEST_CASE("Lexing keywords", "[lexer]")
 {
     using namespace OpenCL::Lexer;
     auto result = OpenCL::Lexer::tokenize(
-        "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union",
+        "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool _Complex _Imaginary",
         OpenCL::Language::C);
     std::vector correct = {
-        TokenType::AutoKeyword,     TokenType::EnumKeyword,   TokenType::RestrictKeyword, TokenType::UnsignedKeyword,
-        TokenType::BreakKeyword,    TokenType::ExternKeyword, TokenType::ReturnKeyword,   TokenType::VoidKeyword,
-        TokenType::CaseKeyword,     TokenType::FloatKeyword,  TokenType::ShortKeyword,    TokenType::VolatileKeyword,
-        TokenType::CharKeyword,     TokenType::ForKeyword,    TokenType::SignedKeyword,   TokenType::WhileKeyword,
-        TokenType::ConstKeyword,    TokenType::GotoKeyword,   TokenType::SizeofKeyword,   TokenType::ContinueKeyword,
-        TokenType::IfKeyword,       TokenType::StaticKeyword, TokenType::DefaultKeyword,  TokenType::InlineKeyword,
-        TokenType::StructKeyword,   TokenType::DoKeyword,     TokenType::IntKeyword,      TokenType::SwitchKeyword,
-        TokenType::DoubleKeyword,   TokenType::LongKeyword,   TokenType::TypedefKeyword,  TokenType::ElseKeyword,
-        TokenType::RegisterKeyword, TokenType::UnionKeyword};
+        TokenType::AutoKeyword,       TokenType::EnumKeyword,   TokenType::RestrictKeyword, TokenType::UnsignedKeyword,
+        TokenType::BreakKeyword,      TokenType::ExternKeyword, TokenType::ReturnKeyword,   TokenType::VoidKeyword,
+        TokenType::CaseKeyword,       TokenType::FloatKeyword,  TokenType::ShortKeyword,    TokenType::VolatileKeyword,
+        TokenType::CharKeyword,       TokenType::ForKeyword,    TokenType::SignedKeyword,   TokenType::WhileKeyword,
+        TokenType::ConstKeyword,      TokenType::GotoKeyword,   TokenType::SizeofKeyword,   TokenType::ContinueKeyword,
+        TokenType::IfKeyword,         TokenType::StaticKeyword, TokenType::DefaultKeyword,  TokenType::InlineKeyword,
+        TokenType::StructKeyword,     TokenType::DoKeyword,     TokenType::IntKeyword,      TokenType::SwitchKeyword,
+        TokenType::DoubleKeyword,     TokenType::LongKeyword,   TokenType::TypedefKeyword,  TokenType::ElseKeyword,
+        TokenType::RegisterKeyword,   TokenType::UnionKeyword,  TokenType::UnderlineBool,   TokenType::UnderlineComplex,
+        TokenType::UnderlineImaginary};
     std::vector<TokenType> tokens;
     tokens.reserve(result.data().size());
     std::transform(result.begin(), result.end(), std::back_inserter(tokens),

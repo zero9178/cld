@@ -2,6 +2,7 @@
 #define OPENCLPARSER_LEXER_HPP
 
 #include <iostream>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -94,12 +95,15 @@ namespace OpenCL
             StructKeyword,      ///<[C,OpenCL]
             Dot,
             Arrow,
-            SwitchKeyword,  ///<[C,OpenCL]
-            CaseKeyword,    ///<[C,OpenCL]
-            DefaultKeyword, ///<[C,OpenCL]
-            UnionKeyword,   ///<[C,OpenCL]
-            EnumKeyword,    ///<[C,OpenCL]
-            GotoKeyword,    ///<[C,OpenCL]
+            SwitchKeyword,      ///<[C,OpenCL]
+            CaseKeyword,        ///<[C,OpenCL]
+            DefaultKeyword,     ///<[C,OpenCL]
+            UnionKeyword,       ///<[C,OpenCL]
+            EnumKeyword,        ///<[C,OpenCL]
+            GotoKeyword,        ///<[C,OpenCL]
+            UnderlineBool,      ///<[C,OpenCL]
+            UnderlineComplex,   ///<[C,OpenCL]
+            UnderlineImaginary, ///<[C,OpenCL]
             Ellipse,
             Pound,
             DoublePound,
@@ -117,7 +121,7 @@ namespace OpenCL
             std::uint64_t m_column; ///<
             std::uint64_t m_length; ///<
             using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
-                                         float, double, std::string>;
+                                         float, double, std::string, std::wstring>;
             TokenType m_tokenType;             ///< Type of the token
             variant m_value;                   ///< Optional value of the token
             std::string m_valueRepresentation; ///< Original spelling of the token
@@ -171,6 +175,14 @@ namespace OpenCL
 
             [[nodiscard]] std::string emitBack() const;
         };
+
+        /**
+         *
+         * @param lhs
+         * @param rhs
+         * @return
+         */
+        std::pair<Token, std::optional<Token>> concat(const Token& lhs, const Token& rhs);
 
         /**
          * @param tokenType Token

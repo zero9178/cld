@@ -212,8 +212,8 @@ namespace OpenCL::Syntax
     class PrimaryExpressionConstant final : public Node
     {
     public:
-        using variant =
-            std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string>;
+        using variant = std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double,
+                                     std::string, std::wstring>;
 
     private:
         variant m_value;

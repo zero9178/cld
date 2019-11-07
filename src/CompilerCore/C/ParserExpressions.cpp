@@ -3,6 +3,8 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
+#include <codecvt>
+#include <locale>
 
 #include "ParserUtil.hpp"
 
@@ -985,14 +987,44 @@ std::optional<OpenCL::Syntax::PostFixExpression>
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
         {
-            std::string literal = std::get<std::string>(begin->getValue());
+            using stringVariant = std::variant<std::string, std::wstring>;
+            stringVariant literal = match(
+                begin->getValue(), [](const std::string& str) -> stringVariant { return str; },
+                [](const std::wstring& str) -> stringVariant { return str; },
+                [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
             begin++;
+
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
             while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
             {
-                literal += std::get<std::string>(begin->getValue());
+                literal = match(
+                    begin->getValue(),
+                    [&literal, &converter](const std::string& str) -> stringVariant {
+                        return match(
+                            literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
+                            [&str, &converter](const std::wstring& lhs) -> stringVariant {
+                                return lhs + converter.from_bytes(str);
+                            },
+                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
+                    },
+                    [&literal, &converter](const std::wstring& str) -> stringVariant {
+                        return match(
+                            literal,
+                            [&str, &converter](const std::string& lhs) -> stringVariant {
+                                return converter.from_bytes(lhs) + str;
+                            },
+                            [&str](const std::wstring& lhs) -> stringVariant { return lhs + str; },
+                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
+                    },
+                    [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
                 begin++;
             }
-            newPrimary = PrimaryExpression(PrimaryExpressionConstant(start, begin, literal));
+            newPrimary = PrimaryExpression(PrimaryExpressionConstant(
+                start, begin,
+                match(
+                    literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return str; },
+                    [](const std::wstring& str) -> PrimaryExpressionConstant::variant { return str; },
+                    [](const auto&) -> PrimaryExpressionConstant::variant { OPENCL_UNREACHABLE; })));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {

@@ -125,7 +125,7 @@ TEST_CASE("Macros", "[PP]")
                 preprocessTest("#define FUNC \\\n (1 +\\\n 3) \nint main(void) {\n    return FUNC;\n}\n");
             INFO(error);
             CHECK(error.empty());
-            CHECK(ret == "\n\n\nint main(void) {\n    return (1 +3);\n}");
+            CHECK(ret == "\n\n\nint main(void) {\n    return (1 + 3);\n}");
         }
         SECTION("Empty")
         {
@@ -139,6 +139,27 @@ TEST_CASE("Macros", "[PP]")
                 INFO(error);
                 CHECK(error.empty());
                 CHECK(ret == "\n\nint table[];");
+            }
+        }
+        SECTION("Concat")
+        {
+            {
+                auto [ret, error] = preprocessTest("#define TABSIZE return\\\na\nint main(void){TABSIZE;}");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret == "\n\nint main(void){returna;}");
+            }
+            {
+                auto [ret, error] = preprocessTest("#define TABSIZE return \\\na\nint main(void){TABSIZE;}");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret == "\n\nint main(void){return a;}");
+            }
+            {
+                auto [ret, error] = preprocessTest("#define TABSIZE return\\\n a\nint main(void){TABSIZE;}");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret == "\n\nint main(void){return a;}");
             }
         }
     }

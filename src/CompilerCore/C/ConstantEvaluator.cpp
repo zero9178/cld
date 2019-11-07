@@ -16,7 +16,7 @@ OpenCL::Semantics::ConstRetType
     return std::visit(
         [this, &node](auto&& value) -> Semantics::ConstRetType {
             using T = std::decay_t<decltype(value)>;
-            if constexpr (!std::is_same_v<T, std::string>)
+            if constexpr (!std::is_same_v<T, std::string> && !std::is_same_v<T, std::wstring>)
             {
                 return {value};
             }

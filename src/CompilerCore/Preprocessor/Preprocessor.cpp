@@ -74,13 +74,11 @@ namespace
                 else if (curr != next)
                 {
                     result.reserve(result.size() + std::distance(curr, next));
-                    auto columnOffset = curr->getColumn();
-                    std::transform(curr, next, std::back_inserter(result),
-                                   [backslash, columnOffset](OpenCL::Lexer::Token token) {
-                                       token.setLine(backslash.first);
-                                       token.setColumn(backslash.second + token.getColumn() - columnOffset);
-                                       return token;
-                                   });
+                    std::transform(curr, next, std::back_inserter(result), [backslash](OpenCL::Lexer::Token token) {
+                        token.setLine(backslash.first);
+                        token.setColumn(backslash.second + token.getColumn());
+                        return token;
+                    });
                     if (result.back().getTokenType() == OpenCL::Lexer::TokenType::Backslash)
                     {
                         backslash = std::pair(result.back().getLine(), result.back().getColumn());
