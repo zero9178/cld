@@ -102,8 +102,6 @@ namespace OpenCL
             EnumKeyword,    ///<[C,OpenCL]
             GotoKeyword,    ///<[C,OpenCL]
             UnderlineBool,  ///<[C,OpenCL]
-            // UnderlineComplex,   ///<[C,OpenCL]
-            // UnderlineImaginary, ///<[C,OpenCL]
             Ellipse,
             Pound,
             DoublePound,
@@ -176,13 +174,14 @@ namespace OpenCL
             [[nodiscard]] std::string emitBack() const;
         };
 
-        /**
-         *
-         * @param lhs
-         * @param rhs
-         * @return
-         */
-        std::pair<Token, std::optional<Token>> concat(const Token& lhs, const Token& rhs);
+        struct ConcatReturn
+        {
+            Token left;
+            std::optional<Token> right{};
+        };
+
+        std::optional<ConcatReturn> concat(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs,
+                                           std::ostream* reporter);
 
         /**
          * @param tokenType Token

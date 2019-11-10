@@ -1264,21 +1264,111 @@ std::string OpenCL::Lexer::Token::emitBack() const
     OPENCL_UNREACHABLE;
 }
 
-std::pair<OpenCL::Lexer::Token, std::optional<OpenCL::Lexer::Token>>
-    OpenCL::Lexer::concat(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs)
+std::optional<OpenCL::Lexer::ConcatReturn>
+    OpenCL::Lexer::concat(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs, std::ostream* reporter)
 {
     if (lhs.getLine() != rhs.getLine() || lhs.getColumn() + lhs.getLength() != rhs.getColumn())
     {
-        return {lhs, rhs};
+        return ConcatReturn{lhs, rhs};
     }
     switch (lhs.getTokenType())
     {
-        case TokenType::Identifier: break;
-        case TokenType::OpenParentheses: break;
-        case TokenType::CloseParentheses: break;
-        case TokenType::OpenBrace: break;
-        case TokenType::CloseBrace: break;
-        case TokenType::Literal: break;
+        case TokenType::Identifier:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Identifier:
+                {
+                    auto value = std::get<std::string>(lhs.getValue()) + std::get<std::string>(rhs.getValue());
+                    if (isKeyword(value))
+                    {
+                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), lhs.getLength() + rhs.getLength(),
+                                                  charactersToKeyword(value)),
+                                            {}};
+                    }
+                    else
+                    {
+                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), lhs.getLength() + rhs.getLength(),
+                                                  TokenType::Identifier, value, value),
+                                            {}};
+                    }
+                }
+                case TokenType::StringLiteral:
+                {
+                    if (std::get<std::string>(lhs.getValue()) == "L"
+                        && std::holds_alternative<std::string>(rhs.getValue()))
+                    {
+                        auto right = std::get<std::string>(rhs.getValue());
+                        std::wstring result(right.size(), L' ');
+                        result.resize(std::mbstowcs(result.data(), right.c_str(), right.size()));
+                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 1 + rhs.getLength(),
+                                                  TokenType::StringLiteral, result, "L" + rhs.emitBack()),
+                                            {}};
+                    }
+                    else if (std::holds_alternative<std::wstring>(rhs.getValue()))
+                    {
+                        auto right = std::get<std::wstring>(rhs.getValue());
+                        std::string result(right.size() * 4, ' ');
+                        result.resize(std::wcstombs(result.data(), right.data(), result.size()));
+                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 1 + lhs.getLength(),
+                                                  TokenType::Identifier, std::get<std::string>(lhs.getValue()) + "L",
+                                                  lhs.emitBack() + "L"),
+                                            Token(rhs.getLine(), rhs.getColumn() + 1, rhs.getLength() - 1,
+                                                  TokenType::StringLiteral, result, rhs.emitBack().substr(1))};
+                    }
+                    return ConcatReturn{lhs, rhs};
+                }
+                default: return ConcatReturn{lhs, rhs};
+            }
+        }
+        case TokenType::Literal:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Identifier:
+                case TokenType::VoidKeyword:
+                case TokenType::CharKeyword:
+                case TokenType::ShortKeyword:
+                case TokenType::IntKeyword:
+                case TokenType::LongKeyword:
+                case TokenType::FloatKeyword:
+                case TokenType::DoubleKeyword:
+                case TokenType::SignedKeyword:
+                case TokenType::UnsignedKeyword:
+                case TokenType::TypedefKeyword:
+                case TokenType::ExternKeyword:
+                case TokenType::StaticKeyword:
+                case TokenType::AutoKeyword:
+                case TokenType::RegisterKeyword:
+                case TokenType::ConstKeyword:
+                case TokenType::RestrictKeyword:
+                case TokenType::SizeofKeyword:
+                case TokenType::VolatileKeyword:
+                case TokenType::InlineKeyword:
+                case TokenType::ReturnKeyword:
+                case TokenType::BreakKeyword:
+                case TokenType::ContinueKeyword:
+                case TokenType::DoKeyword:
+                case TokenType::ElseKeyword:
+                case TokenType::ForKeyword:
+                case TokenType::IfKeyword:
+                case TokenType::WhileKeyword:
+                case TokenType::OpenSquareBracket:
+                case TokenType::CloseSquareBracket:
+                case TokenType::StructKeyword:
+                case TokenType::SwitchKeyword:
+                case TokenType::CaseKeyword:
+                case TokenType::DefaultKeyword:
+                case TokenType::UnionKeyword:
+                case TokenType::EnumKeyword:
+                case TokenType::GotoKeyword:
+                case TokenType::UnderlineBool:
+                {
+                }
+                default: break;
+            }
+            return ConcatReturn{lhs, rhs};
+        }
         case TokenType::StringLiteral: break;
         case TokenType::SemiColon: break;
         case TokenType::Comma: break;
@@ -1362,8 +1452,9 @@ std::pair<OpenCL::Lexer::Token, std::optional<OpenCL::Lexer::Token>>
         case TokenType::DoublePound: break;
         case TokenType::Backslash: break;
         case TokenType::UnderlineBool: break;
+        default: break;
     }
-    OPENCL_UNREACHABLE;
+    return ConcatReturn{lhs, rhs};
 }
 
 std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)

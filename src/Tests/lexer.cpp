@@ -707,3 +707,73 @@ TEST_CASE("Lexing include directives", "[lexer]")
         CHECK(result.data()[2].emitBack() == "\"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"");
     }
 }
+
+namespace OpenCL::Lexer
+{
+    bool operator==(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs)
+    {
+        return std::tuple(lhs.getLine(), lhs.getColumn(), lhs.getLength(), lhs.getTokenType(), lhs.getValue(),
+                          lhs.emitBack())
+               == std::tuple(rhs.getLine(), rhs.getColumn(), rhs.getLength(), rhs.getTokenType(), rhs.getValue(),
+                             rhs.emitBack());
+    }
+
+    bool operator==(const OpenCL::Lexer::ConcatReturn& lhs, const OpenCL::Lexer::ConcatReturn& rhs)
+    {
+        return std::tie(lhs.left, lhs.right) == std::tie(rhs.left, rhs.right);
+    }
+
+} // namespace OpenCL::Lexer
+
+namespace Catch
+{
+    template <>
+    struct StringMaker<OpenCL::Lexer::Token>
+    {
+        static std::string convert(const OpenCL::Lexer::Token& value)
+        {
+            return "Token(" + std::to_string(value.getLine()) + ", " + std::to_string(value.getColumn()) + ", "
+                   + std::to_string(value.getLength()) + ", "
+                   + StringMaker<OpenCL::Lexer::TokenType>::convert(value.getTokenType()) + ", "
+                   + StringMaker<OpenCL::Lexer::Token::ValueType>::convert(value.getValue()) + ", " + value.emitBack()
+                   + ")";
+        }
+    };
+
+    template <>
+    struct StringMaker<OpenCL::Lexer::ConcatReturn>
+    {
+        static std::string convert(const OpenCL::Lexer::ConcatReturn& value)
+        {
+            return '{' + StringMaker<OpenCL::Lexer::Token>::convert(value.left) + ", "
+                   + StringMaker<std::optional<OpenCL::Lexer::Token>>::convert(value.right) + '}';
+        }
+    };
+} // namespace Catch
+
+TEST_CASE("Lexing concat", "[lexer]")
+{
+    using namespace OpenCL::Lexer;
+    std::vector<std::pair<Token, Token>> inputs = {
+        {Token(1, 0, 3, TokenType::Identifier, "foo", "foo"), Token(1, 3, 3, TokenType::Identifier, "bar", "bar")},
+        {Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
+         Token(1, 3, 5, TokenType::StringLiteral, "bar", "\"bar\"")},
+        {Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
+         Token(1, 3, 6, TokenType::StringLiteral, L"bar", "L\"bar\"")}};
+    std::vector<std::optional<ConcatReturn>> results = {
+        ConcatReturn{Token(1, 0, 6, TokenType::Identifier, "foobar", "foobar")},
+        ConcatReturn{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
+                     Token(1, 3, 5, TokenType::StringLiteral, "bar", "\"bar\"")},
+        ConcatReturn{Token(1, 0, 4, TokenType::Identifier, "fooL", "fooL"),
+                     Token(1, 4, 5, TokenType::StringLiteral, "bar", "\"bar\"")}};
+    REQUIRE(inputs.size() == results.size());
+    for (std::size_t i = 0; i < inputs.size(); i++)
+    {
+        auto& [lhs, rhs] = inputs[i];
+        DYNAMIC_SECTION("Combining '" << lhs.emitBack() << "' and '" << rhs.emitBack() << "'")
+        {
+            auto result = concat(lhs, rhs, nullptr);
+            CHECK(results[i] == result);
+        }
+    }
+}

@@ -907,7 +907,7 @@ void OpenCL::Semantics::ConstantEvaluator::logError(std::string message, std::op
 }
 
 OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionDefined& node)
+    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionDefined&)
 {
     return OpenCL::Semantics::ConstRetType();
 }

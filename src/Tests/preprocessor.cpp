@@ -129,10 +129,12 @@ TEST_CASE("Macros", "[PP]")
         }
         SECTION("Empty")
         {
-            auto [ret, error] = preprocessTest("#define TABSIZE\nint table[TABSIZE];");
-            INFO(error);
-            CHECK(error.empty());
-            CHECK(ret == "\nint table[];");
+            {
+                auto [ret, error] = preprocessTest("#define TABSIZE\nint table[TABSIZE];");
+                INFO(error);
+                CHECK(error.empty());
+                CHECK(ret == "\nint table[];");
+            }
             SECTION("Multiline")
             {
                 auto [ret, error] = preprocessTest("#define TABSIZE \\\n\nint table[TABSIZE];");
