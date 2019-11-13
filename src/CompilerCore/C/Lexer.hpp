@@ -105,8 +105,9 @@ namespace OpenCL
             Ellipse,
             Pound,
             DoublePound,
-            Backslash, ///<[PP]
-            TOKEN_MAX_VALUE = DoublePound
+            Backslash,     ///<[PP]
+            Miscellaneous, ///<[PP]
+            TOKEN_MAX_VALUE = DoublePound,
         };
 
         class Token;

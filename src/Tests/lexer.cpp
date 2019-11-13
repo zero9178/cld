@@ -347,9 +347,13 @@ TEST_CASE("Lexing comments", "[lexer]")
     CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Plus);
     CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Asterisk);
     LEXER_FAILS_WITH("/*", Catch::Contains(OpenCL::ErrorMessages::Lexer::UNTERMINATED_COMMENT));
-    SECTION("Multiline")
+}
+
+TEST_CASE("Backslashes", "[lexer]")
+{
+    SECTION("Comment")
     {
-        result = OpenCL::Lexer::tokenize("1/\\\n/dwadwadaw\n34", OpenCL::Language::C);
+        auto result = OpenCL::Lexer::tokenize("1/\\\n/dwadwadaw\n34", OpenCL::Language::C);
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Literal);
