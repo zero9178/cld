@@ -145,6 +145,8 @@ namespace OpenCL
             constexpr auto UNEXPECTED_CHARACTER = Format("Unexpected character '{}'");
 
             constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
+
+            constexpr auto UNTERMINATED_COMMENT = "Unterminated comment";
         } // namespace Lexer
 
         namespace PP

@@ -519,6 +519,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
     std::string characters;
     static std::regex identifierMatch("[a-zA-Z_]\\w*");
     std::vector<Token> result;
+    std::pair<std::uint64_t, std::uint64_t> blockCommentStart;
     std::uint64_t line = 1, column = 0;
     bool lastTokenIsAmbiguous = false;
     bool wide = false;
@@ -821,6 +822,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::Division)
                             {
                                 currentState = State::BlockComment;
+                                blockCommentStart = std::pair{line, column};
                                 result.pop_back();
                             }
                             else
@@ -1163,7 +1165,12 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
             column++;
         }
     }
-
+    if (currentState == State::BlockComment)
+    {
+        reportError(reporter, ErrorMessages::Lexer::UNTERMINATED_COMMENT, blockCommentStart.first,
+                    blockCommentStart.second, lineMap[blockCommentStart.first],
+                    {{blockCommentStart.first, blockCommentStart.first + 1}}, HighlightEffect::PointAtEnd);
+    }
     return SourceObject(std::move(result), language);
 }
 
@@ -1364,20 +1371,107 @@ std::optional<OpenCL::Lexer::ConcatReturn>
                 case TokenType::GotoKeyword:
                 case TokenType::UnderlineBool:
                 {
+                    // TODO:
                 }
                 default: break;
             }
             return ConcatReturn{lhs, rhs};
         }
-        case TokenType::StringLiteral: break;
-        case TokenType::SemiColon: break;
-        case TokenType::Comma: break;
-        case TokenType::Minus: break;
-        case TokenType::BitWiseNegation: break;
-        case TokenType::LogicalNegation: break;
-        case TokenType::Plus: break;
-        case TokenType::Asterisk: break;
-        case TokenType::Division: break;
+        case TokenType::Minus:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Minus:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement)};
+                case TokenType::Assignment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MinusAssign)};
+                case TokenType::GreaterThan:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow)};
+                case TokenType::Decrement:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Minus)};
+                case TokenType::MinusAssign:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                case TokenType::Arrow:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::GreaterThan)};
+                case TokenType::ShiftRight:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::GreaterThan)};
+                case TokenType::ShiftRightAssign:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 2, TokenType::GreaterThanOrEqual)};
+                case TokenType::GreaterThanOrEqual:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                case TokenType::Equal:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MinusAssign),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                default: break;
+            }
+            break;
+        }
+        case TokenType::LogicalNegation:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Assignment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::NotEqual)};
+                case TokenType::Equal:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::NotEqual),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                default: break;
+            }
+            break;
+        }
+        case TokenType::Plus:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Plus:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment)};
+                case TokenType::Assignment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::PlusAssign)};
+                case TokenType::Increment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Plus)};
+                case TokenType::PlusAssign:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                case TokenType::Equal:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::PlusAssign),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                default: break;
+            }
+            break;
+        }
+        case TokenType::Asterisk:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Assignment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MultiplyAssign)};
+                case TokenType::Equal:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MultiplyAssign),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                default: break;
+            }
+            break;
+        }
+        case TokenType::Division:
+        {
+            switch (rhs.getTokenType())
+            {
+                case TokenType::Assignment:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::DivideAssign)};
+                case TokenType::Equal:
+                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::DivideAssign),
+                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
+                default: break;
+            }
+            break;
+        }
         case TokenType::Percent: break;
         case TokenType::LogicAnd: break;
         case TokenType::LogicOr: break;
