@@ -28,7 +28,7 @@ namespace OpenCL::Parser
             else
             {
                 context.log({Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                                Lexer::tokenName(expected), '\'' + curr->emitBack() + '\''),
+                                                Lexer::tokenName(expected), '\'' + curr->getRepresentation() + '\''),
                                             context.getLineStart(begin), context.getLineEnd(curr),
                                             Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
             }

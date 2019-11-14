@@ -18,6 +18,7 @@
 
 TEST_CASE("C99 Standard examples", "[PP]")
 {
+    FAIL();
     SECTION("6.10.3.5 'Scope of macro definitions'")
     {
         SECTION("Example 1")
@@ -117,6 +118,7 @@ TEST_CASE("C99 Standard examples", "[PP]")
 
 TEST_CASE("Macros", "[PP]")
 {
+    FAIL();
     SECTION("Object like Macros")
     {
         SECTION("Multiline")

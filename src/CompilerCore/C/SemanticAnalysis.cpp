@@ -883,7 +883,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                 result != typeSpecifiers.end())
             {
                 logError({Message::error(ErrorMessages::Semantics::EXPECTED_ONLY_PRIMITIVES.args(
-                                             '\'' + typeSpecifiers[0]->begin()->emitBack() + '\''),
+                                             '\'' + typeSpecifiers[0]->begin()->getRepresentation() + '\''),
                                          declStart, declEnd, Modifier((*result)->begin(), (*result)->end()))});
             }
             std::vector<Syntax::TypeSpecifier::PrimitiveTypeSpecifier> primitiveTypeSpecifier;

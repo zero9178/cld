@@ -66,7 +66,7 @@ OpenCL::Semantics::ConstRetType
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + node.begin()->emitBack()
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + node.begin()->getRepresentation()
                                                                                          + '\''),
                      Modifier(node.begin(), node.begin() + 1));
             return {};

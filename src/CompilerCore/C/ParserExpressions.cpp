@@ -587,7 +587,7 @@ std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(SourceObje
         if (begin < end)
         {
             context.log({Message::error(
-                ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
+                ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->getRepresentation() + '\''),
                 context.getLineStart(start), context.getLineEnd(begin),
                 Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
         }
@@ -1055,7 +1055,7 @@ std::optional<OpenCL::Syntax::PostFixExpression>
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                                 OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
-                                                '\'' + begin->emitBack() + '\''),
+                                                '\'' + begin->getRepresentation() + '\''),
                                             context.getLineStart(start), context.getLineEnd(begin),
                                             Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
             }

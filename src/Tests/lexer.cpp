@@ -550,7 +550,7 @@ TEST_CASE("Lexing positions", "[lexer]")
                               std::tuple{TokenType::ShiftRightAssign, 2, 95, 3}};
         for (std::size_t i = 0; i < correct.size(); i++)
         {
-            DYNAMIC_SECTION("Token " << result.data()[i].emitBack())
+            DYNAMIC_SECTION("Token " << result.data()[i].getRepresentation())
             {
                 CHECK(result.data()[i].getTokenType() == std::get<0>(correct[i]));
                 CHECK(result.data()[i].getLine() == std::get<1>(correct[i]));
@@ -638,7 +638,7 @@ TEST_CASE("Lexing positions", "[lexer]")
                               std::tuple{TokenType::CloseBrace, 12, 0, 1}};
         for (std::size_t i = 0; i < correct.size(); i++)
         {
-            DYNAMIC_SECTION("Token " << i << ": " << result.data()[i].emitBack())
+            DYNAMIC_SECTION("Token " << i << ": " << result.data()[i].getRepresentation())
             {
                 CHECK(std::tuple(result.data()[i].getTokenType(), result.data()[i].getLine(),
                                  result.data()[i].getColumn(), result.data()[i].getLength())
@@ -711,7 +711,7 @@ TEST_CASE("Lexing include directives", "[lexer]")
         CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
         REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
-        CHECK(result.data()[2].emitBack() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
+        CHECK(result.data()[2].getRepresentation() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
     }
     SECTION("\" \"")
     {
@@ -724,134 +724,6 @@ TEST_CASE("Lexing include directives", "[lexer]")
         CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
         REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
-        CHECK(result.data()[2].emitBack() == "\"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"");
-    }
-}
-
-namespace OpenCL::Lexer
-{
-    bool operator==(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs)
-    {
-        return std::tuple(lhs.getLine(), lhs.getColumn(), lhs.getLength(), lhs.getTokenType(), lhs.getValue(),
-                          lhs.emitBack())
-               == std::tuple(rhs.getLine(), rhs.getColumn(), rhs.getLength(), rhs.getTokenType(), rhs.getValue(),
-                             rhs.emitBack());
-    }
-
-    bool operator==(const OpenCL::Lexer::ConcatReturn& lhs, const OpenCL::Lexer::ConcatReturn& rhs)
-    {
-        return std::tie(lhs.left, lhs.right) == std::tie(rhs.left, rhs.right);
-    }
-} // namespace OpenCL::Lexer
-
-namespace Catch
-{
-    template <>
-    struct StringMaker<OpenCL::Lexer::Token>
-    {
-        static std::string convert(const OpenCL::Lexer::Token& value)
-        {
-            return "Token(" + std::to_string(value.getLine()) + ", " + std::to_string(value.getColumn()) + ", "
-                   + std::to_string(value.getLength()) + ", "
-                   + StringMaker<OpenCL::Lexer::TokenType>::convert(value.getTokenType()) + ", "
-                   + StringMaker<OpenCL::Lexer::Token::ValueType>::convert(value.getValue()) + ", " + value.emitBack()
-                   + ")";
-        }
-    };
-
-    template <>
-    struct StringMaker<OpenCL::Lexer::ConcatReturn>
-    {
-        static std::string convert(const OpenCL::Lexer::ConcatReturn& value)
-        {
-            return '{' + StringMaker<OpenCL::Lexer::Token>::convert(value.left) + ", "
-                   + StringMaker<std::optional<OpenCL::Lexer::Token>>::convert(value.right) + '}';
-        }
-    };
-} // namespace Catch
-
-TEST_CASE("Lexing concat", "[lexer]")
-{
-    using namespace OpenCL::Lexer;
-    std::vector inputs = {std::pair{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                                    Token(1, 3, 3, TokenType::Identifier, "bar", "bar")},
-                          std::pair{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                                    Token(1, 3, 5, TokenType::StringLiteral, "bar", "\"bar\"")},
-                          std::pair{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                                    Token(1, 3, 6, TokenType::StringLiteral, L"bar", "L\"bar\"")},
-                          std::pair{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                                    Token(1, 4, 6, TokenType::StringLiteral, L"bar", "L\"bar\"")},
-                          std::pair{Token(1, 0, 2, TokenType::Identifier, "re", "re"),
-                                    Token(1, 2, 4, TokenType::Identifier, "turn", "turn")},
-                          std::pair{Token(1, 0, 2, TokenType::Identifier, "re", "re"),
-                                    Token(2, 0, 4, TokenType::Identifier, "turn", "turn")},
-                          std::pair{Token(1, 0, 1, TokenType::Identifier, "L", "L"),
-                                    Token(1, 1, 5, TokenType::StringLiteral, "foo", "\"foo\"")},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 1, TokenType::Minus)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 1, TokenType::Assignment)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 1, TokenType::GreaterThan)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::Decrement)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::MinusAssign)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::Arrow)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::ShiftRight)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 3, TokenType::ShiftRightAssign)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::GreaterThanOrEqual)},
-                          std::pair{Token(1, 0, 1, TokenType::Minus), Token(1, 1, 2, TokenType::Equal)},
-                          std::pair{Token(1, 0, 1, TokenType::LogicalNegation), Token(1, 1, 1, TokenType::Assignment)},
-                          std::pair{Token(1, 0, 2, TokenType::LogicalNegation), Token(1, 2, 1, TokenType::Equal)},
-                          std::pair{Token(1, 0, 1, TokenType::Plus), Token(1, 1, 1, TokenType::Plus)},
-                          std::pair{Token(1, 0, 1, TokenType::Plus), Token(1, 1, 1, TokenType::Assignment)},
-                          std::pair{Token(1, 0, 1, TokenType::Plus), Token(1, 1, 2, TokenType::Increment)},
-                          std::pair{Token(1, 0, 1, TokenType::Plus), Token(1, 1, 2, TokenType::PlusAssign)},
-                          std::pair{Token(1, 0, 1, TokenType::Plus), Token(1, 1, 2, TokenType::Equal)},
-                          std::pair{Token(1, 0, 1, TokenType::Asterisk), Token(1, 1, 1, TokenType::Assignment)},
-                          std::pair{Token(1, 0, 2, TokenType::Asterisk), Token(1, 2, 1, TokenType::Equal)},
-                          std::pair{Token(1, 0, 1, TokenType::Division), Token(1, 1, 1, TokenType::Assignment)},
-                          std::pair{Token(1, 0, 2, TokenType::Division), Token(1, 2, 1, TokenType::Equal)}};
-    std::vector<std::optional<ConcatReturn>> correct = {
-        ConcatReturn{Token(1, 0, 6, TokenType::Identifier, "foobar", "foobar")},
-        ConcatReturn{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                     Token(1, 3, 5, TokenType::StringLiteral, "bar", "\"bar\"")},
-        ConcatReturn{Token(1, 0, 4, TokenType::Identifier, "fooL", "fooL"),
-                     Token(1, 4, 5, TokenType::StringLiteral, "bar", "\"bar\"")},
-        ConcatReturn{Token(1, 0, 3, TokenType::Identifier, "foo", "foo"),
-                     Token(1, 4, 6, TokenType::StringLiteral, L"bar", "L\"bar\"")},
-        ConcatReturn{Token(1, 0, 6, TokenType::ReturnKeyword)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Identifier, "re", "re"),
-                     Token(2, 0, 4, TokenType::Identifier, "turn", "turn")},
-        ConcatReturn{Token(1, 0, 6, TokenType::StringLiteral, L"foo", "L\"foo\"")},
-        ConcatReturn{Token(1, 0, 2, TokenType::Decrement)},
-        ConcatReturn{Token(1, 0, 2, TokenType::MinusAssign)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Arrow)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Decrement), Token(1, 2, 1, TokenType::Minus)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Decrement), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Decrement), Token(1, 2, 1, TokenType::GreaterThan)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Arrow), Token(1, 2, 1, TokenType::GreaterThan)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Arrow), Token(1, 2, 2, TokenType::GreaterThanOrEqual)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Arrow), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::MinusAssign), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::NotEqual)},
-        ConcatReturn{Token(1, 0, 2, TokenType::NotEqual), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Increment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::PlusAssign)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Increment), Token(1, 2, 1, TokenType::Plus)},
-        ConcatReturn{Token(1, 0, 2, TokenType::Increment), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::PlusAssign), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::MultiplyAssign)},
-        ConcatReturn{Token(1, 0, 2, TokenType::MultiplyAssign), Token(1, 2, 1, TokenType::Assignment)},
-        ConcatReturn{Token(1, 0, 2, TokenType::DivideAssign)},
-        ConcatReturn{Token(1, 0, 2, TokenType::DivideAssign), Token(1, 2, 1, TokenType::Assignment)}};
-    REQUIRE(inputs.size() == correct.size());
-    for (std::size_t i = 0; i < inputs.size(); i++)
-    {
-        auto& [lhs, rhs] = inputs[i];
-        DYNAMIC_SECTION('[' + std::to_string(i) + "] Combining '" << lhs.emitBack() << "' and '" << rhs.emitBack()
-                                                                  << "'")
-        {
-            auto result = concat(lhs, rhs, nullptr);
-            INFO(Catch::StringMaker<Token>::convert(lhs));
-            INFO(Catch::StringMaker<Token>::convert(rhs));
-            CHECK(correct[i] == result);
-        }
+        CHECK(result.data()[2].getRepresentation() == "\"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"");
     }
 }

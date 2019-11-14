@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cctype>
 #include <regex>
 #include <sstream>
@@ -382,8 +383,8 @@ namespace
                 std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
                 if (isPreprocessor || suffix == "ll" || suffix == "LL")
                 {
-                    return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
-                                                literal);
+                    return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+                                                literal, number);
                 }
                 else
                 {
@@ -397,12 +398,12 @@ namespace
                     if (number > std::numeric_limits<std::uint32_t>::max())
                     {
                         return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    number, literal);
+                                                    literal, number);
                     }
                     else
                     {
                         return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::uint32_t>(number), literal);
+                                                    literal, static_cast<std::uint32_t>(number));
                     }
                 }
             }
@@ -415,12 +416,12 @@ namespace
                     if (isHexOrOctal && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                     {
                         return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    number, literal);
+                                                    literal, number);
                     }
                     else
                     {
                         return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::int64_t>(number), literal);
+                                                    literal, static_cast<std::int64_t>(number));
                     }
                 }
                 else
@@ -437,24 +438,24 @@ namespace
                         if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
                         {
                             return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        static_cast<std::uint32_t>(number), literal);
+                                                        literal, static_cast<std::uint32_t>(number));
                         }
                         else if (isHexOrOctal
                                  && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
                         {
                             return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        number, literal);
+                                                        literal, number);
                         }
                         else
                         {
                             return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        static_cast<std::int64_t>(number), literal);
+                                                        literal, static_cast<std::int64_t>(number));
                         }
                     }
                     else
                     {
                         return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    static_cast<std::int32_t>(number), literal);
+                                                    literal, static_cast<std::int32_t>(number));
                     }
                 }
             }
@@ -471,8 +472,8 @@ namespace
                     reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
                                 line, column, lineText, {{column, column + literal.size()}});
                 }
-                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
-                                            literal);
+                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, literal,
+                                            number);
             }
             else
             {
@@ -488,8 +489,8 @@ namespace
                     reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
                                 line, column, lineText, {{column, column + literal.size()}});
                 }
-                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, number,
-                                            literal);
+                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, literal,
+                                            number);
             }
         }
     }
@@ -551,26 +552,25 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             characters.clear();
                             currentState = State::StringLiteral;
                             break;
-                        case '(': result.emplace_back(line, column, 1, TokenType::OpenParentheses); break;
-                        case ')': result.emplace_back(line, column, 1, TokenType::CloseParentheses); break;
-                        case '{': result.emplace_back(line, column, 1, TokenType::OpenBrace); break;
-                        case '}': result.emplace_back(line, column, 1, TokenType::CloseBrace); break;
-                        case '[': result.emplace_back(line, column, 1, TokenType::OpenSquareBracket); break;
-                        case ']': result.emplace_back(line, column, 1, TokenType::CloseSquareBracket); break;
-                        case ';': result.emplace_back(line, column, 1, TokenType::SemiColon); break;
-                        case ',': result.emplace_back(line, column, 1, TokenType::Comma); break;
-                        case '?': result.emplace_back(line, column, 1, TokenType::QuestionMark); break;
-                        case '\\': result.emplace_back(line, column, 1, TokenType::Backslash); break;
+                        case '(': result.emplace_back(line, column, 1, TokenType::OpenParentheses, "("); break;
+                        case ')': result.emplace_back(line, column, 1, TokenType::CloseParentheses, ")"); break;
+                        case '{': result.emplace_back(line, column, 1, TokenType::OpenBrace, "{"); break;
+                        case '}': result.emplace_back(line, column, 1, TokenType::CloseBrace, "}"); break;
+                        case '[': result.emplace_back(line, column, 1, TokenType::OpenSquareBracket, "["); break;
+                        case ']': result.emplace_back(line, column, 1, TokenType::CloseSquareBracket, "]"); break;
+                        case ';': result.emplace_back(line, column, 1, TokenType::SemiColon, ";"); break;
+                        case ',': result.emplace_back(line, column, 1, TokenType::Comma, ","); break;
+                        case '?': result.emplace_back(line, column, 1, TokenType::QuestionMark, "?"); break;
                         case '~':
-                            result.emplace_back(line, column, 1, TokenType::BitWiseNegation);
+                            result.emplace_back(line, column, 1, TokenType::BitWiseNegation, "~");
                             lastTokenIsAmbiguous = true;
                             break;
                         case '^':
-                            result.emplace_back(line, column, 1, TokenType::BitXor);
+                            result.emplace_back(line, column, 1, TokenType::BitXor, "^");
                             lastTokenIsAmbiguous = true;
                             break;
                         case '!':
-                            result.emplace_back(line, column, 1, TokenType::LogicalNegation);
+                            result.emplace_back(line, column, 1, TokenType::LogicalNegation, "!");
                             lastTokenIsAmbiguous = true;
                             break;
                         case 'L':
@@ -649,20 +649,20 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                     std::mbtowc(&wideChar, chars.data(), charSize);
                                     result.emplace_back(
                                         line, column - characters.size() - 2, characters.size() + 3, TokenType::Literal,
-                                        /*TODO: Target dependent size */ static_cast<std::int32_t>(wideChar),
-                                        "L\'" + characters + '\'');
+                                        "L\'" + characters + '\'',
+                                        /*TODO: Target dependent size */ static_cast<std::int32_t>(wideChar));
                                 }
                                 else
                                 {
                                     result.emplace_back(line, column - characters.size() - 1, characters.size() + 2,
-                                                        TokenType::Literal, characterValue, '\'' + characters + '\'');
+                                                        TokenType::Literal, '\'' + characters + '\'', characterValue);
                                 }
                             }
                             else
                             {
                                 result.emplace_back(line, column - characters.size() - 1, characters.size() + 2,
-                                                    TokenType::Literal, static_cast<std::int64_t>(characterValue),
-                                                    '\'' + characters + '\'');
+                                                    TokenType::Literal, '\'' + characters + '\'',
+                                                    static_cast<std::int64_t>(characterValue));
                             }
                         }
                         characters.clear();
@@ -713,13 +713,13 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             auto size = std::mbstowcs(wideString.data(), characters.c_str(), characters.size());
                             wideString.resize(size);
                             result.emplace_back(line, column - 1 - csize - 1, 3 + csize, TokenType::StringLiteral,
-                                                wideString, "L\"" + std::move(originalCharacters) + '\"');
+                                                "L\"" + std::move(originalCharacters) + '\"', wideString);
                             wide = false;
                         }
                         else
                         {
                             result.emplace_back(line, column - 1 - csize, 2 + csize, TokenType::StringLiteral,
-                                                characters, '\"' + std::move(originalCharacters) + '\"');
+                                                '\"' + std::move(originalCharacters) + '\"', characters);
                         }
                         characters.clear();
                         continue;
@@ -744,12 +744,12 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                         if (language != Language::Preprocessor && isKeyword(characters))
                         {
                             result.emplace_back(line, column - characters.size(), characters.size(),
-                                                charactersToKeyword(characters));
+                                                charactersToKeyword(characters), characters);
                         }
                         else if (language == Language::Preprocessor && characters == "defined")
                         {
                             result.emplace_back(line, column - characters.size(), characters.size(),
-                                                TokenType::DefinedKeyword);
+                                                TokenType::DefinedKeyword, characters);
                         }
                         else
                         {
@@ -812,7 +812,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Division);
+                                result.emplace_back(line, column, 1, TokenType::Division, "/");
                             }
                             break;
                         }
@@ -827,7 +827,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Asterisk);
+                                result.emplace_back(line, column, 1, TokenType::Asterisk, "*");
                             }
                             break;
                         }
@@ -840,11 +840,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             {
                                 result.pop_back();
                                 result.pop_back();
-                                result.emplace_back(line, column - 2, 3, TokenType::Ellipse);
+                                result.emplace_back(line, column - 2, 3, TokenType::Ellipse, "...");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Dot);
+                                result.emplace_back(line, column, 1, TokenType::Dot, ".");
                             }
                             break;
                         }
@@ -853,14 +853,14 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                             if (lastTokenIsAmbiguous && !result.empty()
                                 && result.back().getTokenType() == TokenType::Pound)
                             {
-                                auto representation = result.back().emitBack();
+                                auto representation = result.back().getRepresentation();
                                 result.pop_back();
                                 result.emplace_back(line, column - representation.size(), 1 + representation.size(),
-                                                    TokenType::DoublePound, std::monostate{}, representation + '#');
+                                                    TokenType::DoublePound, representation + '#');
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Pound);
+                                result.emplace_back(line, column, 1, TokenType::Pound, "#");
                             }
                             break;
                         }
@@ -870,11 +870,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::LessThan)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::OpenBrace, std::monostate{}, "<%");
+                                result.emplace_back(line, column - 1, 2, TokenType::OpenBrace, "<%");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Percent);
+                                result.emplace_back(line, column, 1, TokenType::Percent, "%");
                             }
                             break;
                         }
@@ -885,8 +885,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 if (!result.empty() && result.back().getTokenType() == TokenType::LessThan)
                                 {
                                     result.pop_back();
-                                    result.emplace_back(line, column - 1, 2, TokenType::OpenSquareBracket,
-                                                        std::monostate{}, "<:");
+                                    result.emplace_back(line, column - 1, 2, TokenType::OpenSquareBracket, "<:");
                                 }
                                 else if (!result.empty() && result.back().getTokenType() == TokenType::Percent)
                                 {
@@ -894,26 +893,25 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                     if (!result.empty() && result.back().getTokenType() == TokenType::Pound
                                         && result.back().getColumn() + result.back().getLength() == column - 1)
                                     {
-                                        auto representation = result.back().emitBack();
+                                        auto representation = result.back().getRepresentation();
                                         result.pop_back();
                                         result.emplace_back(line, column - representation.size() - 1,
                                                             representation.size() + 2, TokenType::DoublePound,
-                                                            std::monostate{}, representation + "%:");
+                                                            representation + "%:");
                                     }
                                     else
                                     {
-                                        result.emplace_back(line, column - 1, 2, TokenType::Pound, std::monostate{},
-                                                            "%:");
+                                        result.emplace_back(line, column - 1, 2, TokenType::Pound, "%:");
                                     }
                                 }
                                 else
                                 {
-                                    result.emplace_back(line, column, 1, TokenType::Colon);
+                                    result.emplace_back(line, column, 1, TokenType::Colon, ":");
                                 }
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Colon);
+                                result.emplace_back(line, column, 1, TokenType::Colon, ":");
                             }
                             break;
                         }
@@ -924,33 +922,31 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 if (!result.empty() && result.back().getTokenType() == TokenType::Minus)
                                 {
                                     result.pop_back();
-                                    result.emplace_back(line, column - 1, 2, TokenType::Arrow);
+                                    result.emplace_back(line, column - 1, 2, TokenType::Arrow, "->");
                                 }
                                 else if (!result.empty() && result.back().getTokenType() == TokenType::GreaterThan)
                                 {
                                     result.pop_back();
-                                    result.emplace_back(line, column - 1, 2, TokenType::ShiftRight);
+                                    result.emplace_back(line, column - 1, 2, TokenType::ShiftRight, ">>");
                                 }
                                 else if (!result.empty() && result.back().getTokenType() == TokenType::Colon)
                                 {
                                     result.pop_back();
-                                    result.emplace_back(line, column - 1, 2, TokenType::CloseSquareBracket,
-                                                        std::monostate{}, ":>");
+                                    result.emplace_back(line, column - 1, 2, TokenType::CloseSquareBracket, ":>");
                                 }
                                 else if (!result.empty() && result.back().getTokenType() == TokenType::Percent)
                                 {
                                     result.pop_back();
-                                    result.emplace_back(line, column - 1, 2, TokenType::CloseBrace, std::monostate{},
-                                                        "%>");
+                                    result.emplace_back(line, column - 1, 2, TokenType::CloseBrace, "%>");
                                 }
                                 else
                                 {
-                                    result.emplace_back(line, column, 1, TokenType::GreaterThan);
+                                    result.emplace_back(line, column, 1, TokenType::GreaterThan, ">");
                                 }
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::GreaterThan);
+                                result.emplace_back(line, column, 1, TokenType::GreaterThan, ">");
                             }
                             break;
                         }
@@ -968,11 +964,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::LessThan)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::ShiftLeft);
+                                result.emplace_back(line, column - 1, 2, TokenType::ShiftLeft, "<<");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::LessThan);
+                                result.emplace_back(line, column, 1, TokenType::LessThan, "<");
                             }
                             break;
                         }
@@ -982,11 +978,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::Ampersand)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::LogicAnd);
+                                result.emplace_back(line, column - 1, 2, TokenType::LogicAnd, "&&");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Ampersand);
+                                result.emplace_back(line, column, 1, TokenType::Ampersand, "&");
                             }
                             break;
                         }
@@ -996,11 +992,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::BitOr)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::LogicOr);
+                                result.emplace_back(line, column - 1, 2, TokenType::LogicOr, "||");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::BitOr);
+                                result.emplace_back(line, column, 1, TokenType::BitOr, "|");
                             }
                             break;
                         }
@@ -1010,11 +1006,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::Plus)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::Increment);
+                                result.emplace_back(line, column - 1, 2, TokenType::Increment, "++");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Plus);
+                                result.emplace_back(line, column, 1, TokenType::Plus, "+");
                             }
                             break;
                         }
@@ -1024,11 +1020,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 && result.back().getTokenType() == TokenType::Minus)
                             {
                                 result.pop_back();
-                                result.emplace_back(line, column - 1, 2, TokenType::Decrement);
+                                result.emplace_back(line, column - 1, 2, TokenType::Decrement, "--");
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Minus);
+                                result.emplace_back(line, column, 1, TokenType::Minus, "-");
                             }
                             break;
                         }
@@ -1040,66 +1036,66 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                                 {
                                     case TokenType::Assignment:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::Equal);
+                                        result.emplace_back(line, column - 1, 2, TokenType::Equal, "==");
                                         break;
                                     case TokenType::LogicalNegation:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::NotEqual);
+                                        result.emplace_back(line, column - 1, 2, TokenType::NotEqual, "!=");
                                         break;
                                     case TokenType::GreaterThan:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::GreaterThanOrEqual);
+                                        result.emplace_back(line, column - 1, 2, TokenType::GreaterThanOrEqual, ">=");
                                         break;
                                     case TokenType::LessThan:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::LessThanOrEqual);
+                                        result.emplace_back(line, column - 1, 2, TokenType::LessThanOrEqual, "<=");
                                         break;
                                     case TokenType::Plus:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::PlusAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::PlusAssign, "+=");
                                         break;
                                     case TokenType::Minus:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::MinusAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::MinusAssign, "-=");
                                         break;
                                     case TokenType::Division:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::DivideAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::DivideAssign, "/=");
                                         break;
                                     case TokenType::Asterisk:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::MultiplyAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::MultiplyAssign, "*=");
                                         break;
                                     case TokenType::Percent:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::ModuloAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::ModuloAssign, "%=");
                                         break;
                                     case TokenType::Ampersand:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::BitAndAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::BitAndAssign, "&=");
                                         break;
                                     case TokenType::BitOr:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::BitOrAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::BitOrAssign, "|=");
                                         break;
                                     case TokenType::BitXor:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 1, 2, TokenType::BitXorAssign);
+                                        result.emplace_back(line, column - 1, 2, TokenType::BitXorAssign, "^=");
                                         break;
                                     case TokenType::ShiftLeft:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 2, 3, TokenType::ShiftLeftAssign);
+                                        result.emplace_back(line, column - 2, 3, TokenType::ShiftLeftAssign, "<<=");
                                         break;
                                     case TokenType::ShiftRight:
                                         result.pop_back();
-                                        result.emplace_back(line, column - 2, 3, TokenType::ShiftRightAssign);
+                                        result.emplace_back(line, column - 2, 3, TokenType::ShiftRightAssign, ">>=");
                                         break;
-                                    default: result.emplace_back(line, column, 1, TokenType::Assignment); break;
+                                    default: result.emplace_back(line, column, 1, TokenType::Assignment, "="); break;
                                 }
                             }
                             else
                             {
-                                result.emplace_back(line, column, 1, TokenType::Assignment);
+                                result.emplace_back(line, column, 1, TokenType::Assignment, "=");
                             }
                             break;
                         }
@@ -1131,7 +1127,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
                     {
                         currentState = State::Start;
                         result.emplace_back(line, column - 1 - characters.size(), 2 + characters.size(),
-                                            TokenType::StringLiteral, characters, '<' + characters + '>');
+                                            TokenType::StringLiteral, '<' + characters + '>', characters);
                         characters.clear();
                         break;
                     }
@@ -1154,7 +1150,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
             }
             else if (language == Language::Preprocessor)
             {
-                result.emplace_back(line, column, 0, TokenType::Newline);
+                result.emplace_back(line, column, 0, TokenType::Newline, "\n");
             }
             line++;
             column = 0;
@@ -1174,381 +1170,9 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, Language langua
     return SourceObject(std::move(result), language);
 }
 
-std::string OpenCL::Lexer::Token::emitBack() const
+std::string OpenCL::Lexer::Token::getRepresentation() const
 {
-    switch (getTokenType())
-    {
-        case TokenType::Identifier: return std::get<std::string>(getValue());
-        case TokenType::OpenParentheses: return "(";
-        case TokenType::CloseParentheses: return ")";
-        case TokenType::OpenBrace: return m_valueRepresentation.empty() ? "{" : m_valueRepresentation;
-        case TokenType::CloseBrace: return m_valueRepresentation.empty() ? "}" : m_valueRepresentation;
-        case TokenType::DoublePound:
-        case TokenType::StringLiteral:
-        case TokenType::Literal: return m_valueRepresentation;
-        case TokenType::SemiColon: return ";";
-        case TokenType::Comma: return ",";
-        case TokenType::Minus: return "-";
-        case TokenType::BitWiseNegation: return "~";
-        case TokenType::LogicalNegation: return "!";
-        case TokenType::Plus: return "+";
-        case TokenType::Asterisk: return "*";
-        case TokenType::Division: return "/";
-        case TokenType::Percent: return "%";
-        case TokenType::LogicAnd: return "&&";
-        case TokenType::LogicOr: return "||";
-        case TokenType::Ampersand: return "&";
-        case TokenType::BitOr: return "|";
-        case TokenType::BitXor: return "^";
-        case TokenType::Equal: return "==";
-        case TokenType::NotEqual: return "!=";
-        case TokenType::LessThan: return "<";
-        case TokenType::LessThanOrEqual: return "<=";
-        case TokenType::GreaterThan: return ">";
-        case TokenType::GreaterThanOrEqual: return ">=";
-        case TokenType::Assignment: return "=";
-        case TokenType::PlusAssign: return "+=";
-        case TokenType::MinusAssign: return "-=";
-        case TokenType::DivideAssign: return "/=";
-        case TokenType::MultiplyAssign: return "*=";
-        case TokenType::ModuloAssign: return "%=";
-        case TokenType::ShiftLeftAssign: return "<<=";
-        case TokenType::ShiftRightAssign: return ">>=";
-        case TokenType::BitAndAssign: return "&=";
-        case TokenType::BitOrAssign: return "|=";
-        case TokenType::BitXorAssign: return "^=";
-        case TokenType::ShiftRight: return ">>";
-        case TokenType::ShiftLeft: return "<<";
-        case TokenType::Increment: return "++";
-        case TokenType::Decrement: return "--";
-        case TokenType::Colon: return ":";
-        case TokenType::QuestionMark: return "?";
-        case TokenType::VoidKeyword: return "void";
-        case TokenType::CharKeyword: return "char";
-        case TokenType::ShortKeyword: return "short";
-        case TokenType::IntKeyword: return "int";
-        case TokenType::LongKeyword: return "long";
-        case TokenType::FloatKeyword: return "float";
-        case TokenType::DoubleKeyword: return "double";
-        case TokenType::SignedKeyword: return "signed";
-        case TokenType::UnsignedKeyword: return "unsigned";
-        case TokenType::TypedefKeyword: return "typedef";
-        case TokenType::ExternKeyword: return "extern";
-        case TokenType::StaticKeyword: return "static";
-        case TokenType::AutoKeyword: return "auto";
-        case TokenType::RegisterKeyword: return "register";
-        case TokenType::ConstKeyword: return "const";
-        case TokenType::SizeofKeyword: return "sizeof";
-        case TokenType::ReturnKeyword: return "return";
-        case TokenType::BreakKeyword: return "break";
-        case TokenType::ContinueKeyword: return "continue";
-        case TokenType::DoKeyword: return "do";
-        case TokenType::ElseKeyword: return "else";
-        case TokenType::ForKeyword: return "for";
-        case TokenType::IfKeyword: return "if";
-        case TokenType::WhileKeyword: return "while";
-        case TokenType::OpenSquareBracket: return m_valueRepresentation.empty() ? "[" : m_valueRepresentation;
-        case TokenType::CloseSquareBracket: return m_valueRepresentation.empty() ? "]" : m_valueRepresentation;
-        case TokenType::StructKeyword: return "struct";
-        case TokenType::Dot: return ".";
-        case TokenType::Arrow: return "->";
-        case TokenType::SwitchKeyword: return "switch";
-        case TokenType::CaseKeyword: return "case";
-        case TokenType::DefaultKeyword: return "default";
-        case TokenType::UnionKeyword: return "union";
-        case TokenType::VolatileKeyword: return "volatile";
-        case TokenType::EnumKeyword: return "enum";
-        case TokenType::GotoKeyword: return "goto";
-        case TokenType::Ellipse: return "...";
-        case TokenType::RestrictKeyword: return "restrict";
-        case TokenType::InlineKeyword: return "inline";
-        case TokenType::Backslash: return "\\";
-        case TokenType::Pound: return m_valueRepresentation.empty() ? "#" : m_valueRepresentation;
-        case TokenType::DefinedKeyword: return "defined";
-        case TokenType::Newline: return "";
-        case TokenType::UnderlineBool: return "_Bool";
-    }
-    OPENCL_UNREACHABLE;
-}
-
-std::optional<OpenCL::Lexer::ConcatReturn>
-    OpenCL::Lexer::concat(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs, std::ostream* reporter)
-{
-    if (lhs.getLine() != rhs.getLine() || lhs.getColumn() + lhs.getLength() != rhs.getColumn())
-    {
-        return ConcatReturn{lhs, rhs};
-    }
-    switch (lhs.getTokenType())
-    {
-        case TokenType::Identifier:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Identifier:
-                {
-                    auto value = std::get<std::string>(lhs.getValue()) + std::get<std::string>(rhs.getValue());
-                    if (isKeyword(value))
-                    {
-                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), lhs.getLength() + rhs.getLength(),
-                                                  charactersToKeyword(value)),
-                                            {}};
-                    }
-                    else
-                    {
-                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), lhs.getLength() + rhs.getLength(),
-                                                  TokenType::Identifier, value, value),
-                                            {}};
-                    }
-                }
-                case TokenType::StringLiteral:
-                {
-                    if (std::get<std::string>(lhs.getValue()) == "L"
-                        && std::holds_alternative<std::string>(rhs.getValue()))
-                    {
-                        auto right = std::get<std::string>(rhs.getValue());
-                        std::wstring result(right.size(), L' ');
-                        result.resize(std::mbstowcs(result.data(), right.c_str(), right.size()));
-                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 1 + rhs.getLength(),
-                                                  TokenType::StringLiteral, result, "L" + rhs.emitBack()),
-                                            {}};
-                    }
-                    else if (std::holds_alternative<std::wstring>(rhs.getValue()))
-                    {
-                        auto right = std::get<std::wstring>(rhs.getValue());
-                        std::string result(right.size() * 4, ' ');
-                        result.resize(std::wcstombs(result.data(), right.data(), result.size()));
-                        return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 1 + lhs.getLength(),
-                                                  TokenType::Identifier, std::get<std::string>(lhs.getValue()) + "L",
-                                                  lhs.emitBack() + "L"),
-                                            Token(rhs.getLine(), rhs.getColumn() + 1, rhs.getLength() - 1,
-                                                  TokenType::StringLiteral, result, rhs.emitBack().substr(1))};
-                    }
-                    return ConcatReturn{lhs, rhs};
-                }
-                default: return ConcatReturn{lhs, rhs};
-            }
-        }
-        case TokenType::Literal:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Identifier:
-                case TokenType::VoidKeyword:
-                case TokenType::CharKeyword:
-                case TokenType::ShortKeyword:
-                case TokenType::IntKeyword:
-                case TokenType::LongKeyword:
-                case TokenType::FloatKeyword:
-                case TokenType::DoubleKeyword:
-                case TokenType::SignedKeyword:
-                case TokenType::UnsignedKeyword:
-                case TokenType::TypedefKeyword:
-                case TokenType::ExternKeyword:
-                case TokenType::StaticKeyword:
-                case TokenType::AutoKeyword:
-                case TokenType::RegisterKeyword:
-                case TokenType::ConstKeyword:
-                case TokenType::RestrictKeyword:
-                case TokenType::SizeofKeyword:
-                case TokenType::VolatileKeyword:
-                case TokenType::InlineKeyword:
-                case TokenType::ReturnKeyword:
-                case TokenType::BreakKeyword:
-                case TokenType::ContinueKeyword:
-                case TokenType::DoKeyword:
-                case TokenType::ElseKeyword:
-                case TokenType::ForKeyword:
-                case TokenType::IfKeyword:
-                case TokenType::WhileKeyword:
-                case TokenType::OpenSquareBracket:
-                case TokenType::CloseSquareBracket:
-                case TokenType::StructKeyword:
-                case TokenType::SwitchKeyword:
-                case TokenType::CaseKeyword:
-                case TokenType::DefaultKeyword:
-                case TokenType::UnionKeyword:
-                case TokenType::EnumKeyword:
-                case TokenType::GotoKeyword:
-                case TokenType::UnderlineBool:
-                {
-                    // TODO:
-                }
-                default: break;
-            }
-            return ConcatReturn{lhs, rhs};
-        }
-        case TokenType::Minus:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Minus:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement)};
-                case TokenType::Assignment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MinusAssign)};
-                case TokenType::GreaterThan:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow)};
-                case TokenType::Decrement:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Minus)};
-                case TokenType::MinusAssign:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                case TokenType::Arrow:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Decrement),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::GreaterThan)};
-                case TokenType::ShiftRight:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::GreaterThan)};
-                case TokenType::ShiftRightAssign:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 2, TokenType::GreaterThanOrEqual)};
-                case TokenType::GreaterThanOrEqual:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Arrow),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                case TokenType::Equal:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MinusAssign),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                default: break;
-            }
-            break;
-        }
-        case TokenType::LogicalNegation:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Assignment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::NotEqual)};
-                case TokenType::Equal:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::NotEqual),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                default: break;
-            }
-            break;
-        }
-        case TokenType::Plus:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Plus:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment)};
-                case TokenType::Assignment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::PlusAssign)};
-                case TokenType::Increment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Plus)};
-                case TokenType::PlusAssign:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::Increment),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                case TokenType::Equal:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::PlusAssign),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                default: break;
-            }
-            break;
-        }
-        case TokenType::Asterisk:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Assignment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MultiplyAssign)};
-                case TokenType::Equal:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::MultiplyAssign),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                default: break;
-            }
-            break;
-        }
-        case TokenType::Division:
-        {
-            switch (rhs.getTokenType())
-            {
-                case TokenType::Assignment:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::DivideAssign)};
-                case TokenType::Equal:
-                    return ConcatReturn{Token(lhs.getLine(), lhs.getColumn(), 2, TokenType::DivideAssign),
-                                        Token(lhs.getLine(), lhs.getColumn() + 2, 1, TokenType::Assignment)};
-                default: break;
-            }
-            break;
-        }
-        case TokenType::Percent: break;
-        case TokenType::LogicAnd: break;
-        case TokenType::LogicOr: break;
-        case TokenType::Ampersand: break;
-        case TokenType::BitOr: break;
-        case TokenType::BitXor: break;
-        case TokenType::Equal: break;
-        case TokenType::NotEqual: break;
-        case TokenType::LessThan: break;
-        case TokenType::LessThanOrEqual: break;
-        case TokenType::GreaterThan: break;
-        case TokenType::GreaterThanOrEqual: break;
-        case TokenType::Assignment: break;
-        case TokenType::PlusAssign: break;
-        case TokenType::MinusAssign: break;
-        case TokenType::DivideAssign: break;
-        case TokenType::MultiplyAssign: break;
-        case TokenType::ModuloAssign: break;
-        case TokenType::ShiftLeftAssign: break;
-        case TokenType::ShiftRightAssign: break;
-        case TokenType::BitAndAssign: break;
-        case TokenType::BitOrAssign: break;
-        case TokenType::BitXorAssign: break;
-        case TokenType::ShiftRight: break;
-        case TokenType::ShiftLeft: break;
-        case TokenType::Increment: break;
-        case TokenType::Decrement: break;
-        case TokenType::Colon: break;
-        case TokenType::QuestionMark: break;
-        case TokenType::VoidKeyword: break;
-        case TokenType::CharKeyword: break;
-        case TokenType::ShortKeyword: break;
-        case TokenType::IntKeyword: break;
-        case TokenType::LongKeyword: break;
-        case TokenType::FloatKeyword: break;
-        case TokenType::DoubleKeyword: break;
-        case TokenType::SignedKeyword: break;
-        case TokenType::UnsignedKeyword: break;
-        case TokenType::TypedefKeyword: break;
-        case TokenType::ExternKeyword: break;
-        case TokenType::StaticKeyword: break;
-        case TokenType::AutoKeyword: break;
-        case TokenType::RegisterKeyword: break;
-        case TokenType::ConstKeyword: break;
-        case TokenType::RestrictKeyword: break;
-        case TokenType::SizeofKeyword: break;
-        case TokenType::DefinedKeyword: break;
-        case TokenType::Newline: break;
-        case TokenType::VolatileKeyword: break;
-        case TokenType::InlineKeyword: break;
-        case TokenType::ReturnKeyword: break;
-        case TokenType::BreakKeyword: break;
-        case TokenType::ContinueKeyword: break;
-        case TokenType::DoKeyword: break;
-        case TokenType::ElseKeyword: break;
-        case TokenType::ForKeyword: break;
-        case TokenType::IfKeyword: break;
-        case TokenType::WhileKeyword: break;
-        case TokenType::OpenSquareBracket: break;
-        case TokenType::CloseSquareBracket: break;
-        case TokenType::StructKeyword: break;
-        case TokenType::Dot: break;
-        case TokenType::Arrow: break;
-        case TokenType::SwitchKeyword: break;
-        case TokenType::CaseKeyword: break;
-        case TokenType::DefaultKeyword: break;
-        case TokenType::UnionKeyword: break;
-        case TokenType::EnumKeyword: break;
-        case TokenType::GotoKeyword: break;
-        case TokenType::Ellipse: break;
-        case TokenType::Pound: break;
-        case TokenType::DoublePound: break;
-        case TokenType::Backslash: break;
-        case TokenType::UnderlineBool: break;
-        default: break;
-    }
-    return ConcatReturn{lhs, rhs};
+    return m_representation;
 }
 
 std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
@@ -1640,10 +1264,10 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "'inline'";
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
-        case TokenType::Backslash: return "'\\'";
         case TokenType::DefinedKeyword: return "'defined'";
         case TokenType::Newline: return "'Newline'";
         case TokenType::UnderlineBool: return "'_Bool'";
+        case TokenType::Miscellaneous: OPENCL_UNREACHABLE;
     }
     OPENCL_UNREACHABLE;
 }
@@ -1737,10 +1361,10 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Pound: return "#";
         case TokenType::DoublePound: return "##";
-        case TokenType::Backslash: return "\\";
         case TokenType::DefinedKeyword: return "defined";
         case TokenType::Newline: return "Newline";
         case TokenType::UnderlineBool: return "_Bool";
+        case TokenType::Miscellaneous: OPENCL_UNREACHABLE;
     }
     OPENCL_UNREACHABLE;
 }
@@ -1821,24 +1445,19 @@ OpenCL::Lexer::TokenType OpenCL::Lexer::Token::getTokenType() const noexcept
 }
 
 OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
-                            OpenCL::Lexer::TokenType tokenType) noexcept
-    : Token(line, column, length, tokenType, std::monostate{}, "")
-{
-}
-
-OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
-                            OpenCL::Lexer::TokenType tokenType, OpenCL::Lexer::Token::variant value,
-                            std::string valueRepresentation)
+                            OpenCL::Lexer::TokenType tokenType, std::string representation,
+                            OpenCL::Lexer::Token::variant value)
     : m_line(line),
       m_column(column),
       m_length(length),
       m_tokenType(tokenType),
+      m_representation(std::move(representation)),
       m_value(std::move(value)),
-      m_valueRepresentation(std::move(valueRepresentation)),
       m_sourceLine(line),
       m_sourceColumn(column),
       m_sourceLength(length)
 {
+    assert(!m_representation.empty());
 }
 
 std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
@@ -1880,7 +1499,7 @@ std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>:
                 result += '\n' + std::string(curr->getColumn(), ' ');
             }
         }
-        result += curr->emitBack();
+        result += curr->getRepresentation();
     }
     return result;
 }

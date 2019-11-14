@@ -603,7 +603,7 @@ std::optional<OpenCL::Syntax::DeclarationSpecifier>
     if (begin < end)
     {
         context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("storage specifier or typename",
-                                                                                    '\'' + begin->emitBack() + '\''),
+                                                                                    '\'' + begin->getRepresentation() + '\''),
                                     context.getLineStart(start), context.getLineEnd(begin),
                                     Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
     }
@@ -840,10 +840,10 @@ std::optional<OpenCL::Syntax::SpecifierQualifier>
                     auto* loc = context.getLocationOf(std::get<std::string>(begin->getValue()));
                     context.log(
                         {Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                            "typename", '\'' + begin->emitBack() + '\''),
+                                            "typename", '\'' + begin->getRepresentation() + '\''),
                                         context.getLineStart(start), context.getLineEnd(end),
                                         Modifier{begin, begin + 1, Modifier::PointAtBeginning}),
-                         Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + begin->emitBack() + '\''),
+                         Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + begin->getRepresentation() + '\''),
                                        context.getLineStart(loc->begin), context.getLineEnd(loc->end),
                                        Modifier(loc->identifier, loc->identifier + 1))});
                     context.skipUntil(begin, end);
@@ -857,7 +857,7 @@ std::optional<OpenCL::Syntax::SpecifierQualifier>
     if (begin < end)
     {
         context.log({Message::error(
-            ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->emitBack() + '\''),
+            ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->getRepresentation() + '\''),
             context.getLineStart(start), context.getLineEnd(begin),
             Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
     }
@@ -938,7 +938,7 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
         {
             context.log({Message::error(
                 ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                    OpenCL::Format::List(", ", " or ", "'('", "identifier"), '\'' + begin->emitBack() + '\''),
+                    OpenCL::Format::List(", ", " or ", "'('", "identifier"), '\'' + begin->getRepresentation() + '\''),
                 context.getLineStart(start), context.getLineEnd(begin),
                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
@@ -1493,7 +1493,7 @@ std::optional<OpenCL::Syntax::DirectAbstractDeclarator>
         {
             context.log(
                 {Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                    OpenCL::Format::List(", ", " or ", "'('", "'['"), '\'' + begin->emitBack() + '\''),
+                                    OpenCL::Format::List(", ", " or ", "'('", "'['"), '\'' + begin->getRepresentation() + '\''),
                                 context.getLineStart(start), context.getLineEnd(begin),
                                 Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
@@ -1601,7 +1601,7 @@ std::optional<OpenCL::Syntax::EnumSpecifier> OpenCL::Parser::parseEnumSpecifier(
             else
             {
                 context.log({Message::error(
-                    ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args("','", '\'' + begin->emitBack() + '\''),
+                    ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args("','", '\'' + begin->getRepresentation() + '\''),
                     context.getLineStart(start), context.getLineEnd(begin),
                     Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
                 context.skipUntil(begin, end,
@@ -1986,7 +1986,7 @@ std::optional<OpenCL::Syntax::Statement> OpenCL::Parser::parseStatement(SourceOb
             if (loc)
             {
                 notes.push_back(
-                    Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + start->emitBack() + '\''),
+                    Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + start->getRepresentation() + '\''),
                                   context.getLineStart(loc->begin), context.getLineEnd(loc->end),
                                   Modifier(loc->identifier, loc->identifier + 1, Modifier::Underline)));
             }

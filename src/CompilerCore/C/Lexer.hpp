@@ -103,9 +103,8 @@ namespace OpenCL
             GotoKeyword,    ///<[C,OpenCL]
             UnderlineBool,  ///<[C,OpenCL]
             Ellipse,
-            Pound,
-            DoublePound,
-            Backslash,     ///<[PP]
+            Pound,         ///<[PP]
+            DoublePound,   ///<[PP]
             Miscellaneous, ///<[PP]
             TOKEN_MAX_VALUE = DoublePound,
         };
@@ -121,22 +120,23 @@ namespace OpenCL
             std::uint64_t m_length; ///<
             using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
                                          float, double, std::string, std::wstring>;
-            TokenType m_tokenType;             ///< Type of the token
-            variant m_value;                   ///< Optional value of the token
-            std::string m_valueRepresentation; ///< Original spelling of the token
-            std::uint64_t m_macroId = 0;       ///< MacroID. All tokens with the same ID have been inserted by the same
-                                         ///< macro substitution. ID of 0 means the the token originated from the Lexer
-            std::uint64_t m_sourceLine;   ///<
-            std::uint64_t m_sourceColumn; ///<
-            std::uint64_t m_sourceLength; ///<
+            TokenType m_tokenType;        /**< Type of the token*/
+            std::string m_representation; /**< Original spelling of the token*/
+            variant m_value;              /**< Optional value of the token*/
+            std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro
+                                             substitution. ID of 0 means the the token originated from the Lexer*/
+            std::uint64_t m_sourceLine; /**< Original line of the token in the source code. For a token originating from
+                                           the replacement list of a macro declaration it will points to it's original
+                                           location in the replacement list. Therefore many tokens inside of a source
+                                           file can have the same source line*/
+            std::uint64_t m_sourceColumn; /**< Same as above but column*/
+            std::uint64_t m_sourceLength; /**< Same as above but length*/
 
         public:
             using ValueType = variant;
 
-            Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType) noexcept;
-
-            Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType, variant value,
-                  std::string valueRepresentation);
+            Token(std::uint64_t line, std::uint64_t column, std::uint64_t length, TokenType tokenType,
+                  std::string representation, variant value = std::monostate{});
 
             [[nodiscard]] TokenType getTokenType() const noexcept;
 
@@ -172,27 +172,18 @@ namespace OpenCL
 
             void setSourceLength(std::uint64_t sourceLength) noexcept;
 
-            [[nodiscard]] std::string emitBack() const;
+            [[nodiscard]] std::string getRepresentation() const;
         };
-
-        struct ConcatReturn
-        {
-            Token left;
-            std::optional<Token> right{};
-        };
-
-        std::optional<ConcatReturn> concat(const OpenCL::Lexer::Token& lhs, const OpenCL::Lexer::Token& rhs,
-                                           std::ostream* reporter);
 
         /**
          * @param tokenType Token
-         * @return name of the token. If the token is a punctuator its surrounded in '
+         * @return name of the token. If the token is a punctuation its surrounded in '
          */
         std::string tokenName(TokenType tokenType);
 
         /**
          * @param tokenType Token
-         * @return generic value of the token. For non punctuators this is just a description. eg. identifier
+         * @return generic value of the token. For non punctuations this is just a description. eg. identifier
          */
         std::string tokenValue(TokenType tokenType);
 
