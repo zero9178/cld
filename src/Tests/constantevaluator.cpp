@@ -21,7 +21,7 @@ namespace
     {
         std::ostringstream ss;
         OpenCL::SourceObject tokens{{}};
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression, OpenCL::Language::C));
+        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
         OpenCL::Parser::Context context(tokens, &ss);
         auto ref = tokens.cbegin();
         auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);

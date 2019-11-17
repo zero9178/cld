@@ -2,16 +2,15 @@
 #define OPENCLPARSER_LEXER_HPP
 
 #include <iostream>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
+#include "LanguageOptions.hpp"
+
 namespace OpenCL
 {
     class SourceObject;
-
-    enum class Language;
 
     namespace Lexer
     {
@@ -109,9 +108,17 @@ namespace OpenCL
             TOKEN_MAX_VALUE = DoublePound,
         };
 
-        class Token;
+        SourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
+                              bool inPreprocessor = false, std::ostream* reporter = &std::cerr);
 
-        SourceObject tokenize(std::string source, Language language, std::ostream* reporter = &std::cerr);
+        struct NonCharString
+        {
+            enum Type
+            {
+                Wide
+            } type;
+            std::vector<std::uint64_t> characters;
+        };
 
         class Token
         {
@@ -119,7 +126,7 @@ namespace OpenCL
             std::uint64_t m_column; ///<
             std::uint64_t m_length; ///<
             using variant = std::variant<std::monostate, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
-                                         float, double, std::string, std::wstring>;
+                                         float, double, std::string, NonCharString>;
             TokenType m_tokenType;        /**< Type of the token*/
             std::string m_representation; /**< Original spelling of the token*/
             variant m_value;              /**< Optional value of the token*/
@@ -177,7 +184,7 @@ namespace OpenCL
 
         /**
          * @param tokenType Token
-         * @return name of the token. If the token is a punctuation its surrounded in '
+         * @return name of the token. If the token is a punctuation it's surrounded in '
          */
         std::string tokenName(TokenType tokenType);
 

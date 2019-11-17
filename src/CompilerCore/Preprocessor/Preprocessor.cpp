@@ -759,7 +759,7 @@ namespace
                 return {};
             }
             auto eol = findNewline(begin, end);
-            auto tokens = std::vector(begin, eol);
+            auto tokens = std::vector<OpenCL::Lexer::Token>(begin, eol);
             begin = eol;
             return ControlLine::DefineDirective{start, begin, namePos, name, {}, false, std::move(tokens)};
         }
@@ -818,7 +818,7 @@ namespace
             }
             expect(OpenCL::Lexer::TokenType::CloseParentheses, begin, end, sourceObject, reporter);
             auto newline = findNewline(begin, end);
-            auto token = std::vector(begin, newline);
+            auto token = std::vector<OpenCL::Lexer::Token>(begin, newline);
             begin = newline;
             return ControlLine::DefineDirective{start,      begin,           namePos, name, std::move(identifierList),
                                                 hasEllipse, std::move(token)};
@@ -1013,5 +1013,5 @@ OpenCL::SourceObject OpenCL::PP::preprocess(const SourceObject& sourceObject, st
     auto begin = sourceObject.begin();
     State state;
     auto file = processFile(begin, sourceObject.end(), sourceObject, reporter, &state);
-    return SourceObject(filterNewline(file.begin(), file.end()), Language::C, state.substitutions);
+    return SourceObject(filterNewline(file.begin(), file.end()), LanguageOptions::native(), state.substitutions);
 }

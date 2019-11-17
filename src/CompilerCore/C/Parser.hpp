@@ -34,6 +34,7 @@ namespace OpenCL::Parser
 
         const SourceObject& m_sourceObject;
         std::size_t m_errorCount = 0;
+        bool m_inPreprocessor;
 
     public:
         using TokenBitSet =
@@ -81,7 +82,8 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        explicit Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr);
+        explicit Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr,
+                         bool inPreprocessor = false);
 
         ~Context() = default;
 
@@ -94,6 +96,8 @@ namespace OpenCL::Parser
         Context& operator=(Context&&) = delete;
 
         const SourceObject& getSourceObject() const;
+
+        bool isInPreprocessor() const;
 
         TokenBitReseter withRecoveryTokens(const TokenBitSet& tokenBitSet);
 

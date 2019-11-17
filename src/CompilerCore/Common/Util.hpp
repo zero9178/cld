@@ -71,6 +71,8 @@ namespace OpenCL
 
 #else
 
+    #include <cstdlib>
+
     #define OPENCL_UNREACHABLE \
         do                     \
             std::abort();      \

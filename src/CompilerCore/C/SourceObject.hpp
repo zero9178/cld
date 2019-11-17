@@ -3,17 +3,11 @@
 
 #include <map>
 
+#include "LanguageOptions.hpp"
 #include "Lexer.hpp"
 
 namespace OpenCL
 {
-    enum class Language
-    {
-        C,
-        Preprocessor,
-        OpenCL
-    };
-
     class SourceObject final
     {
     public:
@@ -35,7 +29,7 @@ namespace OpenCL
         std::vector<Lexer::Token> m_tokens;
         std::vector<std::pair<std::vector<Lexer::Token>::const_iterator, std::vector<Lexer::Token>::const_iterator>>
             m_lines;
-        Language m_language;
+        LanguageOptions m_languageOptions;
 
         using SubstitutionMap = std::map<std::pair<std::uint64_t, std::uint64_t>, Substitution>;
         SubstitutionMap m_substitutions;
@@ -43,7 +37,8 @@ namespace OpenCL
         void constructLineMap();
 
     public:
-        explicit SourceObject(std::vector<Lexer::Token> tokens, Language language = Language::C,
+        explicit SourceObject(std::vector<Lexer::Token> tokens,
+                              LanguageOptions languageOptions = LanguageOptions::native(LanguageOptions::C99),
                               SubstitutionMap substitutions = {});
 
         SourceObject(const SourceObject& sourceObject);
@@ -68,7 +63,7 @@ namespace OpenCL
 
         [[nodiscard]] const_iterator cend() const;
 
-        Language getLanguage() const;
+        LanguageOptions getLanguageOptions() const;
     };
 } // namespace OpenCL
 

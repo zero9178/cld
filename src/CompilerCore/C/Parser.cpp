@@ -110,8 +110,8 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(const SourceObject& sourceObject, std::ostream* reporter)
-    : m_reporter(reporter), m_sourceObject(sourceObject)
+OpenCL::Parser::Context::Context(const SourceObject& sourceObject, std::ostream* reporter, bool inPreprocessor)
+    : m_reporter(reporter), m_sourceObject(sourceObject), m_inPreprocessor(inPreprocessor)
 {
 }
 
@@ -204,7 +204,13 @@ void OpenCL::Parser::Context::braceLeft()
 {
     m_braceDepth--;
 }
+
 const OpenCL::SourceObject& OpenCL::Parser::Context::getSourceObject() const
 {
     return m_sourceObject;
+}
+
+bool OpenCL::Parser::Context::isInPreprocessor() const
+{
+    return m_inPreprocessor;
 }

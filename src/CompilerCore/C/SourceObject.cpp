@@ -1,11 +1,14 @@
 #include "SourceObject.hpp"
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <cassert>
 
 #include "ParserUtil.hpp"
 
-OpenCL::SourceObject::SourceObject(std::vector<Lexer::Token> tokens, Language language, SubstitutionMap substitutions)
-    : m_tokens(std::move(tokens)), m_language(language), m_substitutions(std::move(substitutions))
+OpenCL::SourceObject::SourceObject(std::vector<Lexer::Token> tokens, LanguageOptions languageOptions,
+                                   SubstitutionMap substitutions)
+    : m_tokens(std::move(tokens)), m_languageOptions(languageOptions), m_substitutions(std::move(substitutions))
 {
     constructLineMap();
 }
@@ -78,21 +81,21 @@ OpenCL::SourceObject::const_iterator OpenCL::SourceObject::cend() const
 }
 
 OpenCL::SourceObject::SourceObject(const OpenCL::SourceObject& sourceObject)
-    : SourceObject(sourceObject.data(), sourceObject.getLanguage(), sourceObject.m_substitutions)
+    : SourceObject(sourceObject.data(), sourceObject.getLanguageOptions(), sourceObject.m_substitutions)
 {
 }
 
 OpenCL::SourceObject& OpenCL::SourceObject::operator=(const OpenCL::SourceObject& sourceObject)
 {
     m_tokens = sourceObject.data();
-    m_language = sourceObject.getLanguage();
+    m_languageOptions = sourceObject.getLanguageOptions();
     m_substitutions = sourceObject.m_substitutions;
     constructLineMap();
     return *this;
 }
 
 OpenCL::SourceObject::SourceObject(OpenCL::SourceObject&& sourceObject) noexcept
-    : SourceObject(std::move(sourceObject.m_tokens), sourceObject.getLanguage(),
+    : SourceObject(std::move(sourceObject.m_tokens), sourceObject.getLanguageOptions(),
                    std::move(sourceObject.m_substitutions))
 {
 }
@@ -100,13 +103,13 @@ OpenCL::SourceObject::SourceObject(OpenCL::SourceObject&& sourceObject) noexcept
 OpenCL::SourceObject& OpenCL::SourceObject::operator=(OpenCL::SourceObject&& sourceObject) noexcept
 {
     m_tokens = std::move(sourceObject.m_tokens);
-    m_language = sourceObject.getLanguage();
+    m_languageOptions = sourceObject.getLanguageOptions();
     m_substitutions = std::move(sourceObject.m_substitutions);
     constructLineMap();
     return *this;
 }
 
-OpenCL::Language OpenCL::SourceObject::getLanguage() const
+OpenCL::LanguageOptions OpenCL::SourceObject::getLanguageOptions() const
 {
-    return m_language;
+    return m_languageOptions;
 }
