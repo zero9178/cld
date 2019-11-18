@@ -16,7 +16,7 @@ namespace OpenCL::Semantics
 
     class SemanticAnalysis final
     {
-        std::ostream* m_reporter;
+        llvm::raw_ostream* m_reporter;
         std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
         std::vector<std::map<std::string, DeclarationTypedefEnums>> m_declarations{1};
 
@@ -79,7 +79,7 @@ namespace OpenCL::Semantics
                                      const std::vector<OpenCL::Syntax::Declaration>& declarations);
 
     public:
-        explicit SemanticAnalysis(std::ostream* reporter = nullptr) : m_reporter(reporter) {}
+        explicit SemanticAnalysis(llvm::raw_ostream* reporter = nullptr) : m_reporter(reporter) {}
 
         using DeclarationOrSpecifierQualifier =
             std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,

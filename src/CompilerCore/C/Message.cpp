@@ -1,12 +1,13 @@
 #include "Message.hpp"
 
+#include <llvm/Support/Format.h>
+
 #include <CompilerCore/Common/Util.hpp>
 
 #include <regex>
 #include <utility>
 
 #include "Parser.hpp"
-#include "termcolor.hpp"
 
 OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
                          std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
@@ -16,15 +17,11 @@ OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lex
 
 namespace
 {
-    void renderSection(std::ostream& os, const std::string& message, std::ostream& (&colour)(std::ostream&),
+    void renderSection(llvm::raw_ostream& os, const std::string& message, llvm::raw_ostream::Colors colour,
                        const std::string& prefix, OpenCL::SourceObject::const_iterator begin,
                        OpenCL::SourceObject::const_iterator end, const std::optional<OpenCL::Modifier>& modifier)
     {
-#ifdef NDEBUG
-        auto normalColour = termcolor::white;
-#else
-        auto normalColour = termcolor::grey;
-#endif
+        auto normalColour = llvm::raw_ostream::Colors::WHITE;
 
         std::size_t sideOffset = std::numeric_limits<std::size_t>::max();
         if (begin != end)
@@ -32,7 +29,7 @@ namespace
             os << normalColour << begin->getLine() << ':' << begin->getColumn() << ": ";
             if (modifier && modifier->getAnEnd() > end)
             {
-                std::cerr << "Trying to apply action to text not rendered" << std::endl;
+                llvm::errs() << "Trying to apply action to text not rendered\n";
                 std::terminate();
             }
 
@@ -56,8 +53,7 @@ namespace
         {
             auto next = OpenCL::findEOL(curr, end);
             auto text = OpenCL::Lexer::reconstructTrimmed(curr, next);
-            auto line = std::to_string(curr->getLine());
-            os << normalColour << std::string(numSize - line.size(), ' ') << line << '|'
+            os << normalColour << llvm::format_decimal(curr->getLine(), numSize) << '|'
                << std::string(curr->getColumn() - sideOffset, ' ');
             if (modifier && modifierBegin != modifier->getAnEnd() && modifierBegin->getLine() == curr->getLine())
             {
@@ -103,7 +99,7 @@ namespace
                     {
                         if (modifierBegin + 1 != highlightedEOL)
                         {
-                            std::cerr << "End must be one higher than begin when using in between actions" << std::endl;
+                            llvm::errs() << "End must be one higher than begin when using in between actions\n";
                             std::terminate();
                         }
                         auto start = modifierBegin->getColumn() - curr->getColumn() + modifierBegin->getLength();
@@ -158,19 +154,20 @@ namespace
     }
 } // namespace
 
-std::ostream& OpenCL::operator<<(std::ostream& os, const Message& message)
+llvm::raw_ostream& OpenCL::operator<<(llvm::raw_ostream& os, const Message& message)
 {
-    auto [colour, prefix] = [&message]() -> std::pair<std::ostream& (&)(std::ostream&), std::string> {
+    auto [colour, prefix] = [&message]() -> std::pair<llvm::raw_ostream::Colors, std::string> {
         switch (message.getSeverity())
         {
-            case Message::Error: return {termcolor::red, "error: "};
-            case Message::Note: return {termcolor::cyan, "note: "};
-            case Message::Warning: return {termcolor::magenta, "warning: "};
+            case Message::Error: return {llvm::raw_ostream::RED, "error: "};
+            case Message::Note: return {llvm::raw_ostream::CYAN, "note: "};
+            case Message::Warning: return {llvm::raw_ostream::MAGENTA, "warning: "};
             default: OPENCL_UNREACHABLE;
         }
     }();
     renderSection(os, message.getMessage(), colour, prefix, message.getBegin(), message.getAnEnd(),
                   message.getModifier());
+    os.flush();
     return os;
 }
 
@@ -281,7 +278,7 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
         }
         if (args.empty())
         {
-            std::cerr << "Not enough arguments specified to substitute in format" << std::endl;
+            llvm::errs() << "Not enough arguments specified to substitute in format";
             std::terminate();
         }
         result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
@@ -291,7 +288,7 @@ std::string OpenCL::Format::format(std::vector<std::string> args) const
     }
     if (!args.empty())
     {
-        std::cerr << "More arguments specified than needed to substitute" << std::endl;
+        llvm::errs() << "More arguments specified than needed to substitute";
         std::terminate();
     }
     return result;

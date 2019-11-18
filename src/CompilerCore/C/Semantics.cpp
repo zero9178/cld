@@ -33,9 +33,7 @@ bool OpenCL::Semantics::ArrayType::isRestricted() const
 OpenCL::Semantics::Type OpenCL::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                              OpenCL::Semantics::Type&& type, std::size_t size)
 {
-    std::ostringstream ss;
-    ss << size;
-    auto name = type.getName() + "[" + ss.str() + "]";
+    auto name = type.getName() + "[" + std::to_string(size) + "]";
     return OpenCL::Semantics::Type(isConst, isVolatile, name,
                                    ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }

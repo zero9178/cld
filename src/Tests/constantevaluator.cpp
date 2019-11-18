@@ -19,7 +19,8 @@ namespace
         const std::string& expression,
         OpenCL::Semantics::ConstantEvaluator::Mode mode = OpenCL::Semantics::ConstantEvaluator::Integer)
     {
-        std::ostringstream ss;
+        std::string storage;
+        llvm::raw_string_ostream ss(storage);
         OpenCL::SourceObject tokens{{}};
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
         OpenCL::Parser::Context context(tokens, &ss);
@@ -51,9 +52,9 @@ namespace
                 },
                 {},
                 [&tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
-                    std::cerr << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(),
-                                                        std::move(modifier))
-                              << std::endl;
+                    llvm::errs() << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(),
+                                                           std::move(modifier))
+                                 << '\n';
                 },
                 mode)
                 .visit(parsing);

@@ -1,7 +1,7 @@
 #ifndef OPENCLPARSER_PREPROCESSOR_HPP
 #define OPENCLPARSER_PREPROCESSOR_HPP
 
-#include <iostream>
+#include <llvm/Support/raw_ostream.h>
 
 namespace OpenCL
 {
@@ -9,7 +9,7 @@ namespace OpenCL
 
     namespace PP
     {
-        OpenCL::SourceObject preprocess(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr);
+        OpenCL::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
     }
 } // namespace OpenCL
 

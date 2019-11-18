@@ -1,99 +1,91 @@
 #include "Lexer.hpp"
 
 #include <llvm/Support/ConvertUTF.h>
+#include <llvm/Support/Format.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
 #include <cassert>
-#include <cctype>
+#include <map>
 #include <regex>
-#include <sstream>
-#include <unordered_map>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
-#include "termcolor.hpp"
 
 using namespace OpenCL::Lexer;
 
 namespace
 {
-    enum class HighlightEffect
-    {
-        Underline,
-        PointAtBeginning,
-        PointAtEnd,
-        InsertAtEnd,
-    };
-
-    void reportError(std::ostream* reporter, const std::string& message, std::uint64_t line, std::uint64_t column,
-                     const std::string& lineText,
-                     std::optional<std::pair<std::uint64_t, std::uint64_t>> highLightRange = {},
-                     HighlightEffect highlightEffect = HighlightEffect::Underline)
-    {
-        if (!reporter)
-        {
-            return;
-        }
-#ifdef NDEBUG
-        auto normalColour = termcolor::white;
-#else
-        auto normalColour = termcolor::grey;
-#endif
-        auto lineNumberText = std::to_string(line);
-        *reporter << normalColour << lineNumberText << ':' << column << ": " << termcolor::red
-                  << "error: " << normalColour << message << '\n';
-        auto numSize = lineNumberText.size();
-        auto remainder = numSize % 4;
-        if (remainder)
-        {
-            numSize += 4 - remainder;
-        }
-        *reporter << normalColour << std::string(numSize - lineNumberText.size(), ' ') << lineNumberText << '|';
-        if (!highLightRange || highLightRange->first == highLightRange->second)
-        {
-            *reporter << lineText << std::endl;
-            return;
-        }
-        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->first > highLightRange->second)
-        {
-            std::cerr << "Highlight column range start greater than end" << std::endl;
-            std::terminate();
-        }
-        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > lineText.size())
-        {
-            std::cerr << "Highlight column range end greater than line size" << std::endl;
-            std::terminate();
-        }
-        if (highlightEffect != HighlightEffect::InsertAtEnd)
-        {
-            *reporter << lineText.substr(0, highLightRange->first) << termcolor::red
-                      << lineText.substr(highLightRange->first, highLightRange->second - highLightRange->first)
-                      << normalColour << lineText.substr(highLightRange->second) << '\n';
-        }
-        else
-        {
-            *reporter << lineText << '\n';
-        }
-        *reporter << std::string(numSize, ' ') << '|' << std::string(highLightRange->first, ' ') << termcolor::red;
-        switch (highlightEffect)
-        {
-            case HighlightEffect::Underline:
-                *reporter << std::string(highLightRange->second - highLightRange->first, '~');
-                break;
-            case HighlightEffect::PointAtBeginning:
-                *reporter << '^' << std::string(highLightRange->second - highLightRange->first - 1, '~');
-                break;
-            case HighlightEffect::PointAtEnd:
-                *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
-                break;
-            case HighlightEffect::InsertAtEnd:
-                *reporter << std::string(lineText.empty() ? 0 : lineText.size() - 1, ' ') << '^';
-                break;
-        }
-        *reporter << normalColour << std::endl;
-    }
+    //    void reportError(llvm::raw_ostream* reporter, const std::string& message, std::uint64_t line, std::uint64_t
+    //    column,
+    //                     const std::string& lineText,
+    //                     std::optional<std::pair<std::uint64_t, std::uint64_t>> highLightRange = {},
+    //                     HighlightEffect highlightEffect = HighlightEffect::Underline)
+    //    {
+    //        if (!reporter)
+    //        {
+    //            return;
+    //        }
+    //#ifdef NDEBUG
+    //        auto normalColour = termcolor::white;
+    //#else
+    //        auto normalColour = termcolor::grey;
+    //#endif
+    //        auto lineNumberText = std::to_string(line);
+    //        *reporter << normalColour << lineNumberText << ':' << column << ": " << termcolor::red
+    //                  << "error: " << normalColour << message << '\n';
+    //        auto numSize = lineNumberText.size();
+    //        auto remainder = numSize % 4;
+    //        if (remainder)
+    //        {
+    //            numSize += 4 - remainder;
+    //        }
+    //        *reporter << normalColour << std::string(numSize - lineNumberText.size(), ' ') << lineNumberText << '|';
+    //        if (!highLightRange || highLightRange->first == highLightRange->second)
+    //        {
+    //            *reporter << lineText << std::endl;
+    //            return;
+    //        }
+    //        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->first > highLightRange->second)
+    //        {
+    //            std::cerr << "Highlight column range start greater than end" << std::endl;
+    //            std::terminate();
+    //        }
+    //        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > lineText.size())
+    //        {
+    //            std::cerr << "Highlight column range end greater than line size" << std::endl;
+    //            std::terminate();
+    //        }
+    //        if (highlightEffect != HighlightEffect::InsertAtEnd)
+    //        {
+    //            *reporter << lineText.substr(0, highLightRange->first) << termcolor::red
+    //                      << lineText.substr(highLightRange->first, highLightRange->second - highLightRange->first)
+    //                      << normalColour << lineText.substr(highLightRange->second) << '\n';
+    //        }
+    //        else
+    //        {
+    //            *reporter << lineText << '\n';
+    //        }
+    //        *reporter << std::string(numSize, ' ') << '|' << std::string(highLightRange->first, ' ') <<
+    //        termcolor::red; switch (highlightEffect)
+    //        {
+    //            case HighlightEffect::Underline:
+    //                *reporter << std::string(highLightRange->second - highLightRange->first, '~');
+    //                break;
+    //            case HighlightEffect::PointAtBeginning:
+    //                *reporter << '^' << std::string(highLightRange->second - highLightRange->first - 1, '~');
+    //                break;
+    //            case HighlightEffect::PointAtEnd:
+    //                *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
+    //                break;
+    //            case HighlightEffect::InsertAtEnd:
+    //                *reporter << std::string(lineText.empty() ? 0 : lineText.size() - 1, ' ') << '^';
+    //                break;
+    //        }
+    //        *reporter << normalColour << std::endl;
+    //    }
 
     //    std::int32_t charactersToCharLiteral(std::ostream* reporter, const std::string& characters, std::uint64_t
     //    line,
@@ -360,167 +352,244 @@ namespace
         OPENCL_UNREACHABLE;
     }
 
-    Token charactersToNumber(std::ostream* reporter, const std::string& literal, std::uint64_t line,
-                             std::uint64_t column, const std::string& lineText, bool isPreprocessor)
-    {
-        if (literal.find('.') == std::string::npos
-            && ((literal.size() >= 2 && (literal.substr(0, 2) == "0x" || literal.substr(0, 2) == "0X"))
-                || (literal.find('e') == std::string::npos && literal.find('E') == std::string::npos))
-            && literal.find('p') == std::string::npos && literal.find('P') == std::string::npos)
-        {
-            static std::regex numbers("(0x)?[0-9a-fA-F]+");
-            bool isHexOrOctal = literal[0] == '0';
-            std::smatch match;
-            std::regex_search(literal, match, numbers);
-            std::string filtered = match[0];
-
-            std::string suffix = literal.substr(filtered.size(), literal.size() - filtered.size());
-            auto originalSuffix = suffix;
-            if (std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u'; }))
-            {
-                auto erase = std::remove(suffix.begin(), suffix.end(), 'u');
-                suffix.erase(erase, suffix.end());
-
-                char* endptr = nullptr;
-                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (isPreprocessor || suffix == "ll" || suffix == "LL")
-                {
-                    return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                literal, number);
-                }
-                else
-                {
-                    if (!suffix.empty() && suffix != "l" && suffix != "L")
-                    {
-                        reportError(reporter,
-                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
-                                    line, column, lineText,
-                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
-                    }
-                    if (number > std::numeric_limits<std::uint32_t>::max())
-                    {
-                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    literal, number);
-                    }
-                    else
-                    {
-                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    literal, static_cast<std::uint32_t>(number));
-                    }
-                }
-            }
-            else
-            {
-                char* endptr = nullptr;
-                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
-                if (isPreprocessor || suffix == "ll" || suffix == "LL")
-                {
-                    if (isHexOrOctal && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-                    {
-                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    literal, number);
-                    }
-                    else
-                    {
-                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    literal, static_cast<std::int64_t>(number));
-                    }
-                }
-                else
-                {
-                    if (!suffix.empty() && suffix != "l" && suffix != "L")
-                    {
-                        reportError(reporter,
-                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
-                                    line, column, lineText,
-                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
-                    }
-                    if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
-                    {
-                        if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
-                        {
-                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        literal, static_cast<std::uint32_t>(number));
-                        }
-                        else if (isHexOrOctal
-                                 && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-                        {
-                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        literal, number);
-                        }
-                        else
-                        {
-                            return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                        literal, static_cast<std::int64_t>(number));
-                        }
-                    }
-                    else
-                    {
-                        return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
-                                                    literal, static_cast<std::int32_t>(number));
-                    }
-                }
-            }
-        }
-        else
-        {
-            char* endptr = nullptr;
-            if (literal.back() == 'f' || literal.back() == 'F')
-            {
-                auto filtered = literal.substr(0, literal.size() - 1);
-                float number = std::strtof(filtered.c_str(), &endptr);
-                if (endptr != filtered.c_str() + filtered.size())
-                {
-                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
-                                line, column, lineText, {{column, column + literal.size()}});
-                }
-                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, literal,
-                                            number);
-            }
-            else
-            {
-                if (literal.size() >= 2 && literal[0] == '0' && std::tolower(literal[1]) == 'x'
-                    && std::none_of(literal.begin(), literal.end(), [](char c) { return c == 'p' || c == 'P'; }))
-                {
-                    reportError(reporter, OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
-                                line, column, lineText, {{column, column + literal.size()}});
-                }
-                double number = std::strtod(literal.c_str(), &endptr);
-                if (endptr != literal.c_str() + literal.size())
-                {
-                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
-                                line, column, lineText, {{column, column + literal.size()}});
-                }
-                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal, literal,
-                                            number);
-            }
-        }
-    }
+    //    Token charactersToNumber(std::ostream* reporter, const std::string& literal, std::uint64_t line,
+    //                             std::uint64_t column, const std::string& lineText, bool isPreprocessor)
+    //    {
+    //        if (literal.find('.') == std::string::npos
+    //            && ((literal.size() >= 2 && (literal.substr(0, 2) == "0x" || literal.substr(0, 2) == "0X"))
+    //                || (literal.find('e') == std::string::npos && literal.find('E') == std::string::npos))
+    //            && literal.find('p') == std::string::npos && literal.find('P') == std::string::npos)
+    //        {
+    //            static std::regex numbers("(0x)?[0-9a-fA-F]+");
+    //            bool isHexOrOctal = literal[0] == '0';
+    //            std::smatch match;
+    //            std::regex_search(literal, match, numbers);
+    //            std::string filtered = match[0];
+    //
+    //            std::string suffix = literal.substr(filtered.size(), literal.size() - filtered.size());
+    //            auto originalSuffix = suffix;
+    //            if (std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u'; }))
+    //            {
+    //                auto erase = std::remove(suffix.begin(), suffix.end(), 'u');
+    //                suffix.erase(erase, suffix.end());
+    //
+    //                char* endptr = nullptr;
+    //                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
+    //                if (isPreprocessor || suffix == "ll" || suffix == "LL")
+    //                {
+    //                    return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+    //                                                literal, number);
+    //                }
+    //                else
+    //                {
+    //                    if (!suffix.empty() && suffix != "l" && suffix != "L")
+    //                    {
+    //                        reportError(reporter,
+    //                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
+    //                                    line, column, lineText,
+    //                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
+    //                    }
+    //                    if (number > std::numeric_limits<std::uint32_t>::max())
+    //                    {
+    //                        return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                        OpenCL::Lexer::TokenType::Literal,
+    //                                                    literal, number);
+    //                    }
+    //                    else
+    //                    {
+    //                        return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                        OpenCL::Lexer::TokenType::Literal,
+    //                                                    literal, static_cast<std::uint32_t>(number));
+    //                    }
+    //                }
+    //            }
+    //            else
+    //            {
+    //                char* endptr = nullptr;
+    //                std::uint64_t number = std::strtoull(filtered.c_str(), &endptr, 0);
+    //                if (isPreprocessor || suffix == "ll" || suffix == "LL")
+    //                {
+    //                    if (isHexOrOctal && number >
+    //                    static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    //                    {
+    //                        return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                        OpenCL::Lexer::TokenType::Literal,
+    //                                                    literal, number);
+    //                    }
+    //                    else
+    //                    {
+    //                        return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                        OpenCL::Lexer::TokenType::Literal,
+    //                                                    literal, static_cast<std::int64_t>(number));
+    //                    }
+    //                }
+    //                else
+    //                {
+    //                    if (!suffix.empty() && suffix != "l" && suffix != "L")
+    //                    {
+    //                        reportError(reporter,
+    //                                    OpenCL::ErrorMessages::Lexer::INVALID_INTEGER_LITERAL_SUFFIX.args(originalSuffix),
+    //                                    line, column, lineText,
+    //                                    {{column + literal.size() - originalSuffix.size(), column + literal.size()}});
+    //                    }
+    //                    if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max()))
+    //                    {
+    //                        if (isHexOrOctal && number <= std::numeric_limits<std::uint32_t>::max())
+    //                        {
+    //                            return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                            OpenCL::Lexer::TokenType::Literal,
+    //                                                        literal, static_cast<std::uint32_t>(number));
+    //                        }
+    //                        else if (isHexOrOctal
+    //                                 && number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    //                        {
+    //                            return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                            OpenCL::Lexer::TokenType::Literal,
+    //                                                        literal, number);
+    //                        }
+    //                        else
+    //                        {
+    //                            return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                            OpenCL::Lexer::TokenType::Literal,
+    //                                                        literal, static_cast<std::int64_t>(number));
+    //                        }
+    //                    }
+    //                    else
+    //                    {
+    //                        return OpenCL::Lexer::Token(line, column, literal.size(),
+    //                        OpenCL::Lexer::TokenType::Literal,
+    //                                                    literal, static_cast<std::int32_t>(number));
+    //                    }
+    //                }
+    //            }
+    //        }
+    //        else
+    //        {
+    //            char* endptr = nullptr;
+    //            if (literal.back() == 'f' || literal.back() == 'F')
+    //            {
+    //                auto filtered = literal.substr(0, literal.size() - 1);
+    //                float number = std::strtof(filtered.c_str(), &endptr);
+    //                if (endptr != filtered.c_str() + filtered.size())
+    //                {
+    //                    reportError(reporter,
+    //                    OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
+    //                                line, column, lineText, {{column, column + literal.size()}});
+    //                }
+    //                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+    //                literal,
+    //                                            number);
+    //            }
+    //            else
+    //            {
+    //                if (literal.size() >= 2 && literal[0] == '0' && std::tolower(literal[1]) == 'x'
+    //                    && std::none_of(literal.begin(), literal.end(), [](char c) { return c == 'p' || c == 'P'; }))
+    //                {
+    //                    reportError(reporter,
+    //                    OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+    //                                line, column, lineText, {{column, column + literal.size()}});
+    //                }
+    //                double number = std::strtod(literal.c_str(), &endptr);
+    //                if (endptr != literal.c_str() + literal.size())
+    //                {
+    //                    reportError(reporter,
+    //                    OpenCL::ErrorMessages::Lexer::INVALID_FLOATING_POINT_LITERAL.args(literal),
+    //                                line, column, lineText, {{column, column + literal.size()}});
+    //                }
+    //                return OpenCL::Lexer::Token(line, column, literal.size(), OpenCL::Lexer::TokenType::Literal,
+    //                literal,
+    //                                            number);
+    //            }
+    //        }
+    //    }
 
     class Context
     {
         OpenCL::LanguageOptions m_languageOptions;
         bool m_inPreprocessor;
-        std::ostream* m_reporter;
+        llvm::raw_ostream* m_reporter;
         std::vector<Token> m_result;
+        std::string& m_source;
+        std::uint64_t m_offset;
+        std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> m_lineToOffset;
 
     public:
         std::uint64_t line = 1;
         std::uint64_t column = 0;
+        std::uint64_t currLineStart;
+        std::uint64_t currColumnStart;
+        std::uint64_t currOffset;
 
-        Context(OpenCL::LanguageOptions languageOptions, bool inPreprocessor, std::ostream* reporter) noexcept
-            : m_languageOptions(languageOptions), m_inPreprocessor(inPreprocessor), m_reporter(reporter)
+        Context(std::string& source, std::uint64_t& offset, OpenCL::LanguageOptions languageOptions,
+                bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
+            : m_languageOptions(languageOptions),
+              m_inPreprocessor(inPreprocessor),
+              m_reporter(reporter),
+              m_source(source),
+              m_offset(offset)
         {
+            auto begin = source.cbegin();
+            while (begin != source.cend())
+            {
+                auto newLine = std::find(begin, source.cend(), '\n');
+                m_lineToOffset.insert({0, {std::distance(source.cbegin(), begin), std::distance(begin, newLine)}});
+                begin = newLine == source.cend() ? newLine : newLine + 1;
+            }
+        }
+
+        void reportError(const std::string& message, std::uint64_t lineNumber, std::uint64_t columnNumber,
+                         std::vector<std::pair<std::uint64_t, std::uint64_t>> arrows)
+        {
+            assert(!m_inPreprocessor);
+            if (!m_reporter)
+            {
+                return;
+            }
+            auto normalColour = llvm::raw_ostream::Colors::WHITE;
+
+            *m_reporter << normalColour << lineNumber << ':' << columnNumber << ": " << llvm::raw_ostream::RED
+                        << "error: " << normalColour << message << '\n';
+            std::vector<std::string> lines;
+            lines.reserve(this->line - currLineStart + 1);
+            std::transform(
+                m_lineToOffset.find(currLineStart),
+                [&] {
+                    auto result = m_lineToOffset.find(this->line);
+                    assert(result != m_lineToOffset.end());
+                    return ++result;
+                }(),
+                std::back_inserter(lines),
+                [this](const auto& pair) { return m_source.substr(pair.second.first, pair.second.second); });
+            auto numSize = std::to_string(this->line).size();
+            auto remainder = numSize % 4;
+            if (remainder)
+            {
+                numSize += 4 - remainder;
+            }
+            for (auto i = currLineStart; i <= this->line; i++)
+            {
+                auto lineIndex = i - currLineStart;
+                *m_reporter << normalColour << llvm::format_decimal(i, numSize) << '|';
+                if (i == currLineStart)
+                {
+                    *m_reporter << lines[lineIndex].substr(0, currColumnStart);
+                }
+                *m_reporter << llvm::raw_ostream::Colors::RED;
+                if (i != this->line)
+                {
+                    *m_reporter << lines[lineIndex];
+                }
+                else
+                {
+                    *m_reporter << lines[lineIndex].substr(0, this->column);
+                    *m_reporter << normalColour << lines[lineIndex].substr(this->column);
+                }
+            }
         }
 
         [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
         {
             return m_languageOptions;
-        }
-
-        [[nodiscard]] std::ostream* getReporter() const noexcept
-        {
-            return m_reporter;
         }
 
         [[nodiscard]] const std::vector<OpenCL::Lexer::Token>& getResult() const& noexcept
@@ -538,15 +607,10 @@ namespace
             return m_inPreprocessor;
         }
 
-        void push(Token&& token) noexcept
+        void push(TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            m_result.push_back(std::move(token));
-        }
-
-        template <class... T>
-        void emplace(T&&... args) noexcept
-        {
-            m_result.emplace_back(std::forward<T>(args)...);
+            m_result.emplace_back(currLineStart, currColumnStart, line, column, tokenType,
+                                  m_source.substr(currOffset, m_offset - currOffset), std::move(value));
         }
     };
 
@@ -629,15 +693,48 @@ namespace
     {
         if (c == '\'' && (characters.empty() || characters.back() != '\\'))
         {
+            std::uint32_t largestCharacter = [&context, this]() -> std::uint32_t {
+                return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
+            }();
             std::vector<std::uint32_t> result;
             result.resize(characters.size());
-            auto* destBegin = result.data();
-            const auto* begin = characters.data();
-            auto res = llvm::ConvertUTF8toUTF32(
-                reinterpret_cast<const llvm::UTF8**>(&begin),
-                reinterpret_cast<const llvm::UTF8*>(
-                    std::find_if(begin + 1, characters.c_str() + characters.size(), [](char c) { return c == '\\'; })),
-                &destBegin, result.data() + result.size(), llvm::strictConversion);
+            auto* resultStart = result.data();
+            auto* resultEnd = result.data() + result.size();
+
+            const auto* end = characters.data() + characters.size();
+            for (const auto* iter = characters.data(); iter != end; iter++)
+            {
+                if (*iter != '\\')
+                {
+                    const auto* start = iter;
+                    iter = std::find_if(iter, end, [](char c) { return c == '\\'; });
+
+                    const auto* curr = resultStart;
+                    auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
+                                                        reinterpret_cast<const llvm::UTF8*>(iter), &resultStart,
+                                                        resultEnd, llvm::strictConversion);
+                    if (res != llvm::conversionOK)
+                    {
+                        // TODO: Error
+                    }
+                    else
+                    {
+                        for (; curr < resultStart; curr++)
+                        {
+                            if (*curr > largestCharacter)
+                            {
+                                // TODO: Error
+                            }
+                        }
+                    }
+                    continue;
+                }
+                // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
+                // iter + 1 == end the last character would be '\\' and following that '\''.
+                // Therefore the character literal wouldn't have ended and we wouldn't be here.
+                if (iter[1] == 'u' || iter[1] == 'U') {}
+            }
+
             // TODO: check res, handle escape characters, make character literal only single character wide. Check
             //  ranges
             if (!context.isInPreprocessor())
@@ -648,21 +745,17 @@ namespace
                     std::memcpy(&value, &result[0], sizeof(std::int32_t));
                     // TODO: Error on platforms where wchar_t isn't 32 bit if value is bigger than max utf 16.
                     //  Conversion to utf 16 is truncation otherwise
-                    context.emplace(context.line, context.column - characters.size() - 1, characters.size() + 2,
-                                    TokenType::Literal, '\'' + characters + '\'', value);
+                    context.push(TokenType::Literal, value);
                 }
                 else
                 {
                     // TODO: check that result[0] isn't bigger than 255
-                    context.emplace(context.line, context.column - characters.size() - 1, characters.size() + 2,
-                                    TokenType::Literal, '\'' + characters + '\'',
-                                    static_cast<std::int32_t>(static_cast<std::uint8_t>(result[0])));
+                    context.push(TokenType::Literal, static_cast<std::int32_t>(static_cast<std::uint8_t>(result[0])));
                 }
             }
             else
             {
-                context.emplace(context.line, context.column - characters.size() - 1, characters.size() + 2,
-                                TokenType::Literal, '\'' + characters + '\'', static_cast<std::int64_t>(result[0]));
+                context.push(TokenType::Literal, static_cast<std::int64_t>(result[0]));
             }
             return Start{};
         }
@@ -685,8 +778,7 @@ namespace
             if (wide) {}
             else
             {
-                context.emplace(context.line, context.column - 1 - csize, 2 + csize, TokenType::StringLiteral,
-                                '"' + std::move(originalCharacters) + '"', characters);
+                context.push(TokenType::StringLiteral, characters);
             }
         }
         characters += c;
@@ -711,7 +803,7 @@ namespace
 } // namespace
 
 OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
-                                             std::ostream* reporter)
+                                             llvm::raw_ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
@@ -719,12 +811,13 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     }
     static std::regex identifierMatch("[a-zA-Z_]\\w*");
 
-    Context context(languageOptions, isInPreprocessor, reporter);
     StateMachine stateMachine;
+    std::uint64_t offset = 0;
+    Context context(source, offset, languageOptions, isInPreprocessor, reporter);
     for (auto iter : source)
     {
         while (std::visit(
-            [iter, &stateMachine, &context](auto&& state) mutable -> bool {
+            [iter, &stateMachine, &context, offset](auto&& state) mutable -> bool {
                 if constexpr (std::is_convertible_v<decltype(state.advance(iter, context)), bool>)
                 {
                     return !state.advance(iter, context);
@@ -744,11 +837,27 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                     auto&& [lhs, rhs] = state.advance(iter, context);
                     if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
                     {
+                        using New = std::decay_t<decltype(rhs)>;
+                        using Prev = std::decay_t<decltype(state)>;
+                        if constexpr (!std::is_same_v<New, Prev> && std::is_same_v<Prev, Start>)
+                        {
+                            context.currLineStart = context.line;
+                            context.currColumnStart = context.column;
+                            context.currOffset = offset;
+                        }
                         stateMachine = std::move(rhs);
                         return !lhs;
                     }
                     else
                     {
+                        using New = std::decay_t<decltype(lhs)>;
+                        using Prev = std::decay_t<decltype(state)>;
+                        if constexpr (!std::is_same_v<New, Prev> && std::is_same_v<Prev, Start>)
+                        {
+                            context.currLineStart = context.line;
+                            context.currColumnStart = context.column;
+                            context.currOffset = offset;
+                        }
                         stateMachine = std::move(lhs);
                         return !rhs;
                     }
@@ -765,6 +874,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         {
             context.column++;
         }
+        offset++;
     }
 
     return SourceObject(std::move(context).getResult(), languageOptions);
@@ -969,11 +1079,6 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
     OPENCL_UNREACHABLE;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getLength() const noexcept
-{
-    return m_length;
-}
-
 void OpenCL::Lexer::Token::setLine(std::uint64_t line) noexcept
 {
     m_line = line;
@@ -982,11 +1087,6 @@ void OpenCL::Lexer::Token::setLine(std::uint64_t line) noexcept
 void OpenCL::Lexer::Token::setColumn(std::uint64_t column) noexcept
 {
     m_column = column;
-}
-
-void OpenCL::Lexer::Token::setLength(std::uint64_t length) noexcept
-{
-    m_length = length;
 }
 
 std::uint64_t OpenCL::Lexer::Token::getSourceLine() const noexcept
@@ -1007,16 +1107,6 @@ std::uint64_t OpenCL::Lexer::Token::getSourceColumn() const noexcept
 void OpenCL::Lexer::Token::setSourceColumn(std::uint64_t sourceColumn) noexcept
 {
     m_sourceColumn = sourceColumn;
-}
-
-std::uint64_t OpenCL::Lexer::Token::getSourceLength() const noexcept
-{
-    return m_sourceLength;
-}
-
-void OpenCL::Lexer::Token::setSourceLength(std::uint64_t sourceLength) noexcept
-{
-    m_sourceLength = sourceLength;
 }
 
 bool OpenCL::Lexer::Token::macroInserted() const noexcept
@@ -1044,20 +1134,21 @@ OpenCL::Lexer::TokenType OpenCL::Lexer::Token::getTokenType() const noexcept
     return m_tokenType;
 }
 
-OpenCL::Lexer::Token::Token(std::uint64_t line, std::uint64_t column, std::uint64_t length,
+OpenCL::Lexer::Token::Token(std::uint32_t line, std::uint64_t column, std::uint32_t endLine, std::uint64_t endColumn,
                             OpenCL::Lexer::TokenType tokenType, std::string representation,
                             OpenCL::Lexer::Token::variant value)
-    : m_line(line),
-      m_column(column),
-      m_length(length),
-      m_tokenType(tokenType),
+    : m_value(std::move(value)),
       m_representation(std::move(representation)),
-      m_value(std::move(value)),
-      m_sourceLine(line),
+      m_column(column),
+      m_endColumn(endColumn),
       m_sourceColumn(column),
-      m_sourceLength(length)
+      m_line(line),
+      m_sourceLine(line),
+      m_lineOffset(endLine - line),
+      m_tokenType(tokenType)
 {
     assert(!m_representation.empty());
+    assert(endLine - line <= std::numeric_limits<std::uint16_t>::max());
 }
 
 std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
@@ -1068,6 +1159,11 @@ std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
 void OpenCL::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
 {
     m_macroId = macroId;
+}
+
+std::size_t Token::getLength() const noexcept
+{
+    return m_representation.size();
 }
 
 std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,

@@ -19,13 +19,13 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processGroup(OpenCL::SourceObject::const_iterator& begin,
                                                    OpenCL::SourceObject::const_iterator end,
-                                                   const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                   State* state);
+                                                   const OpenCL::SourceObject& sourceObject,
+                                                   llvm::raw_ostream* reporter, State* state);
 
     std::vector<OpenCL::Lexer::Token> macroSubstitute(OpenCL::SourceObject::const_iterator begin,
                                                       OpenCL::SourceObject::const_iterator end,
-                                                      const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                      State* state);
+                                                      const OpenCL::SourceObject& sourceObject,
+                                                      llvm::raw_ostream* reporter, State* state);
 
     OpenCL::SourceObject::const_iterator findNewline(OpenCL::SourceObject::const_iterator begin,
                                                      OpenCL::SourceObject::const_iterator end)
@@ -192,7 +192,7 @@ namespace
 
     bool expect(OpenCL::Lexer::TokenType tokenType, OpenCL::SourceObject::const_iterator& begin,
                 OpenCL::SourceObject::const_iterator end, const OpenCL::SourceObject& sourceObject,
-                std::ostream* reporter)
+                llvm::raw_ostream* reporter)
     {
         if (begin == end || begin->getTokenType() != tokenType)
         {
@@ -250,7 +250,7 @@ namespace
         getArguments(OpenCL::SourceObject::const_iterator& begin, OpenCL::SourceObject::const_iterator end,
                      OpenCL::SourceObject::const_iterator namePos,
                      std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
-                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter, State* state)
+                     const OpenCL::SourceObject& sourceObject, llvm::raw_ostream* reporter, State* state)
     {
         std::unordered_map<std::string, std::vector<OpenCL::Lexer::Token>> arguments;
         auto argsStart = begin;
@@ -349,9 +349,10 @@ namespace
                                                     return init + character;
                                                 })
                               + '\'';
-                replacementSubstituted.emplace_back(tokenIter->getLine(), tokenIter->getColumn(),
-                                                    tokenIter->getLength(), OpenCL::Lexer::TokenType::StringLiteral,
-                                                    std::move(stringValue), std::move(string));
+                //                replacementSubstituted.emplace_back(tokenIter->getLine(), tokenIter->getColumn(),
+                //                                                    tokenIter->getLength(),
+                //                                                    OpenCL::Lexer::TokenType::StringLiteral,
+                //                                                    std::move(stringValue), std::move(string));
             }
             else
             {
@@ -370,8 +371,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> macroSubstitute(OpenCL::SourceObject::const_iterator begin,
                                                       OpenCL::SourceObject::const_iterator end,
-                                                      const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                      State* state)
+                                                      const OpenCL::SourceObject& sourceObject,
+                                                      llvm::raw_ostream* reporter, State* state)
     {
         if (!state)
         {
@@ -499,8 +500,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processIfGroup(OpenCL::SourceObject::const_iterator& begin,
                                                      OpenCL::SourceObject::const_iterator end,
-                                                     const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                     State* state)
+                                                     const OpenCL::SourceObject& sourceObject,
+                                                     llvm::raw_ostream* reporter, State* state)
     {
         IfGroup result{};
         assert(begin != end && begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier);
@@ -559,8 +560,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processElIfGroup(OpenCL::SourceObject::const_iterator& begin,
                                                        OpenCL::SourceObject::const_iterator end,
-                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                       State* state)
+                                                       const OpenCL::SourceObject& sourceObject,
+                                                       llvm::raw_ostream* reporter, State* state)
     {
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "elif");
@@ -589,8 +590,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processElseGroup(OpenCL::SourceObject::const_iterator& begin,
                                                        OpenCL::SourceObject::const_iterator end,
-                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                       State* state)
+                                                       const OpenCL::SourceObject& sourceObject,
+                                                       llvm::raw_ostream* reporter, State* state)
     {
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "else");
@@ -609,8 +610,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processIfSection(OpenCL::SourceObject::const_iterator& begin,
                                                        OpenCL::SourceObject::const_iterator end,
-                                                       const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                       State* state)
+                                                       const OpenCL::SourceObject& sourceObject,
+                                                       llvm::raw_ostream* reporter, State* state)
     {
         assert(begin != end);
         auto ifGroup = processIfGroup(begin, end, sourceObject, reporter, state);
@@ -728,7 +729,7 @@ namespace
     std::optional<ControlLine::DefineDirective> processDefineDirective(OpenCL::SourceObject::const_iterator& begin,
                                                                        OpenCL::SourceObject::const_iterator end,
                                                                        const OpenCL::SourceObject& sourceObject,
-                                                                       std::ostream* reporter, State*)
+                                                                       llvm::raw_ostream* reporter, State*)
     {
         auto start = begin - 1;
         assert(begin->getTokenType() == OpenCL::Lexer::TokenType::Identifier
@@ -826,7 +827,7 @@ namespace
     }
 
     void processControlLine(OpenCL::SourceObject::const_iterator& begin, OpenCL::SourceObject::const_iterator end,
-                            const OpenCL::SourceObject& sourceObject, std::ostream* reporter, State* state)
+                            const OpenCL::SourceObject& sourceObject, llvm::raw_ostream* reporter, State* state)
     {
         const auto& value = std::get<std::string>(begin->getValue());
         if (value == "define")
@@ -926,8 +927,8 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processGroup(OpenCL::SourceObject::const_iterator& begin,
                                                    OpenCL::SourceObject::const_iterator end,
-                                                   const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
-                                                   State* state)
+                                                   const OpenCL::SourceObject& sourceObject,
+                                                   llvm::raw_ostream* reporter, State* state)
     {
         if (begin == end)
         {
@@ -994,7 +995,7 @@ namespace
 
     std::vector<OpenCL::Lexer::Token> processFile(OpenCL::SourceObject::const_iterator& begin,
                                                   OpenCL::SourceObject::const_iterator end,
-                                                  const OpenCL::SourceObject& sourceObject, std::ostream* reporter,
+                                                  const OpenCL::SourceObject& sourceObject, llvm::raw_ostream* reporter,
                                                   State* state)
     {
         std::vector<OpenCL::Lexer::Token> result;
@@ -1008,7 +1009,7 @@ namespace
     }
 } // namespace
 
-OpenCL::SourceObject OpenCL::PP::preprocess(const SourceObject& sourceObject, std::ostream* reporter)
+OpenCL::SourceObject OpenCL::PP::preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter)
 {
     auto begin = sourceObject.begin();
     State state;

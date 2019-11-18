@@ -1,11 +1,12 @@
 #include "catch.hpp"
 
+#include <llvm/Support/Format.h>
+
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Lexer.hpp>
 #include <CompilerCore/C/SourceObject.hpp>
 
 #include <array>
-#include <sstream>
 
 #include "TestConfig.hpp"
 
@@ -50,17 +51,17 @@ CATCH_REGISTER_ENUM(
     OpenCL::Lexer::TokenType::DefaultKeyword, OpenCL::Lexer::TokenType::UnionKeyword,
     OpenCL::Lexer::TokenType::EnumKeyword, OpenCL::Lexer::TokenType::GotoKeyword, OpenCL::Lexer::TokenType::Ellipse)
 
-#define LEXER_FAILS_WITH(string, match)                                                 \
-    do                                                                                  \
-    {                                                                                   \
-        std::stringstream ss;                                                           \
-        OpenCL::Lexer::tokenize(string, OpenCL::LanguageOptions::native(), false, &ss); \
-        auto s = ss.str();                                                              \
-        CHECK_THAT(s, match);                                                           \
-        if (!s.empty() && OpenCL::colourConsoleOutput)                                  \
-        {                                                                               \
-            OpenCL::Lexer::tokenize(string);                                            \
-        }                                                                               \
+#define LEXER_FAILS_WITH(input, match)                                                 \
+    do                                                                                 \
+    {                                                                                  \
+        std::string s;                                                                 \
+        llvm::raw_string_ostream ss(s);                                                \
+        OpenCL::Lexer::tokenize(input, OpenCL::LanguageOptions::native(), false, &ss); \
+        CHECK_THAT(s, match);                                                          \
+        if (!s.empty() && OpenCL::colourConsoleOutput)                                 \
+        {                                                                              \
+            OpenCL::Lexer::tokenize(input);                                            \
+        }                                                                              \
     } while (0)
 
 TEST_CASE("Lexing Number Literals", "[lexer]")
@@ -194,8 +195,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             using ResultingType = std::decay_t<decltype(result)>;
             DYNAMIC_SECTION(text)
             {
-                std::ostringstream ss(text);
-                auto tokens = OpenCL::Lexer::tokenize(ss.str());
+                auto tokens = OpenCL::Lexer::tokenize(text);
                 REQUIRE_FALSE(tokens.data().empty());
                 CHECK(tokens.data().size() == 1);
                 REQUIRE(tokens.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -209,21 +209,23 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         test(std::to_string(overUInt32) + 'u', std::uint64_t(overUInt32));
         test("0x5", std::int32_t(5));
         test("0xFFFFFFFF", std::uint32_t(0xFFFFFFFF));
-        std::stringstream str;
 
-        str << "0x" << std::hex << overUInt32;
+        std::string output;
+
+        llvm::raw_string_ostream str(output);
+        str << llvm::format_hex(overUInt32, 0);
         test(str.str(), overUInt32);
-        str = std::stringstream{};
+        output.clear();
         auto overInt64 = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) + 6;
-        str << "0x" << std::hex << overInt64;
+        str << llvm::format_hex(overInt64, 0);
         test(str.str(), std::uint64_t(overInt64));
-        str = std::stringstream{};
-        str << "0x" << std::hex << overInt64 << "ll";
+        output.clear();
+        str << llvm::format_hex(overInt64, 0) << "ll";
         test(str.str(), std::uint64_t(overInt64));
-        str = std::stringstream{};
-        str << "0x" << std::hex << overInt64 << "ull";
+        output.clear();
+        str << "0x" << llvm::format_hex(overInt64, 0) << "ull";
         test(str.str(), std::uint64_t(overInt64));
-        str = std::stringstream{};
+        output.clear();
     }
     SECTION("Long longs")
     {
@@ -723,7 +725,8 @@ TEST_CASE("Lexing multiline token", "[lexer]")
 
 TEST_CASE("Lexing include directives", "[lexer]")
 {
-    std::stringstream ss;
+    std::string storage;
+    llvm::raw_string_ostream ss(storage);
     SECTION("< >")
     {
         auto result = OpenCL::Lexer::tokenize("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>",

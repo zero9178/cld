@@ -1,9 +1,8 @@
 #ifndef OPENCLPARSER_MESSAGE_HPP
 #define OPENCLPARSER_MESSAGE_HPP
 
-#include <iostream>
 #include <optional>
-#include <sstream>
+#include <string>
 #include <utility>
 
 #include "Lexer.hpp"
@@ -169,7 +168,7 @@ namespace OpenCL
         [[nodiscard]] const std::optional<Modifier>& getModifier() const;
     };
 
-    std::ostream& operator<<(std::ostream& os, const Message& message);
+    llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Message& message);
 
     std::vector<Lexer::Token>::const_iterator findEOL(std::vector<Lexer::Token>::const_iterator begin,
                                                       std::vector<Lexer::Token>::const_iterator end);

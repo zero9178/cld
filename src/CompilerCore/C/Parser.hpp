@@ -17,7 +17,7 @@ namespace OpenCL::Parser
 
     class Context final
     {
-        std::ostream* m_reporter;
+        llvm::raw_ostream* m_reporter;
         struct DeclarationLocation
         {
             SourceObject::const_iterator begin;
@@ -82,7 +82,7 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        explicit Context(const SourceObject& sourceObject, std::ostream* reporter = &std::cerr,
+        explicit Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
                          bool inPreprocessor = false);
 
         ~Context() = default;
@@ -140,7 +140,7 @@ namespace OpenCL::Parser
     };
 
     std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
-                                                               std::ostream* reporter = &std::cerr);
+                                                               llvm::raw_ostream* reporter = &llvm::errs());
 
     OpenCL::Syntax::TranslationUnit parseTranslationUnit(SourceObject::const_iterator& begin,
                                                          SourceObject::const_iterator end, Context& context);

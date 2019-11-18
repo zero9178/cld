@@ -7,7 +7,7 @@
 #include "SourceObject.hpp"
 
 std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const SourceObject& sourceObject,
-                                                                           std::ostream* reporter)
+                                                                           llvm::raw_ostream* reporter)
 {
     Context context(sourceObject, reporter);
     auto begin = sourceObject.cbegin();
@@ -110,7 +110,7 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(const SourceObject& sourceObject, std::ostream* reporter, bool inPreprocessor)
+OpenCL::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
     : m_reporter(reporter), m_sourceObject(sourceObject), m_inPreprocessor(inPreprocessor)
 {
 }

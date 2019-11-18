@@ -5,25 +5,23 @@
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 
-#include <sstream>
-
 #include "TestConfig.hpp"
 
 #define treeProduces(source, matches)                              \
     do                                                             \
     {                                                              \
-        std::ostringstream ss;                                     \
+        std::string string;                                        \
+        llvm::raw_string_ostream ss(string);                       \
         OpenCL::SourceObject tokens{{}};                           \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);        \
-        auto string = ss.str();                                    \
         CHECK_THAT(string, matches);                               \
         if (OpenCL::colourConsoleOutput)                           \
         {                                                          \
             OpenCL::Parser::buildTree(tokens);                     \
             if (!string.empty())                                   \
             {                                                      \
-                std::cerr << std::endl;                            \
+                llvm::errs() << '\n';                              \
             }                                                      \
         }                                                          \
     } while (0)
@@ -31,13 +29,13 @@
 #define functionProduces(parser, source, matches)                  \
     do                                                             \
     {                                                              \
-        std::ostringstream ss;                                     \
+        std::string string;                                        \
+        llvm::raw_string_ostream ss(string);                       \
         OpenCL::SourceObject tokens{{}};                           \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         OpenCL::Parser::Context context(tokens, &ss);              \
         auto begin = tokens.cbegin();                              \
         parser(begin, tokens.cend(), context);                     \
-        auto string = ss.str();                                    \
         CHECK((!string.empty() || begin == tokens.cend()));        \
         CHECK_THAT(string, matches);                               \
         if (OpenCL::colourConsoleOutput)                           \
@@ -47,7 +45,7 @@
             parser(begin2, tokens.cend(), context2);               \
             if (!string.empty())                                   \
             {                                                      \
-                std::cerr << std::endl;                            \
+                llvm::errs() << '\n';                              \
             }                                                      \
         }                                                          \
     } while (0)

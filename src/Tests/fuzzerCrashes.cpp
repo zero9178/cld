@@ -7,7 +7,8 @@ namespace
 {
     void parse(const std::string& source)
     {
-        std::stringstream ss;
+        std::string storage;
+        llvm::raw_string_ostream ss(storage);
         auto tokens = OpenCL::Lexer::tokenize(source, OpenCL::LanguageOptions::native(), false, &ss);
         if (!ss.str().empty() || tokens.data().empty())
         {

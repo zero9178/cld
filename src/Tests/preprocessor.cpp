@@ -8,7 +8,8 @@
 
 #define preprocessTest(source)                                                                    \
     [](const std::string& str) {                                                                  \
-        std::stringstream ss;                                                                     \
+        std::string storage;                                                                      \
+        llvm::raw_string_ostream ss(storage);                                                     \
         auto tokens = OpenCL::Lexer::tokenize(str, OpenCL::LanguageOptions::native(), true, &ss); \
         INFO(ss.str());                                                                           \
         REQUIRE(ss.str().empty());                                                                \
