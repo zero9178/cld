@@ -11,14 +11,6 @@ namespace OpenCL
     class SourceObject final
     {
     public:
-        using value_type = Lexer::Token;
-        using reference = Lexer::Token&;
-        using const_reference = const Lexer::Token&;
-        using iterator = std::vector<Lexer::Token>::const_iterator;
-        using const_iterator = std::vector<Lexer::Token>::const_iterator;
-        using difference_type = std::ptrdiff_t;
-        using size_type = std::size_t;
-
         struct Substitution
         {
             std::vector<Lexer::Token> define;
@@ -26,42 +18,22 @@ namespace OpenCL
         };
 
     private:
-        std::vector<Lexer::Token> m_tokens;
-        std::vector<std::pair<std::vector<Lexer::Token>::const_iterator, std::vector<Lexer::Token>::const_iterator>>
-            m_lines;
+        std::vector<std::uint64_t> m_starts;
+        std::uint64_t m_length;
         LanguageOptions m_languageOptions;
-
         using SubstitutionMap = std::map<std::pair<std::uint64_t, std::uint64_t>, Substitution>;
         SubstitutionMap m_substitutions;
 
-        void constructLineMap();
-
     public:
-        explicit SourceObject(std::vector<Lexer::Token> tokens,
+        explicit SourceObject(std::vector<std::uint64_t> starts, std::uint64_t length,
                               LanguageOptions languageOptions = LanguageOptions::native(LanguageOptions::C99),
                               SubstitutionMap substitutions = {});
 
-        SourceObject(const SourceObject& sourceObject);
+        std::uint64_t getLineNumber(std::uint64_t offset) const noexcept;
 
-        SourceObject& operator=(const SourceObject& sourceObject);
+        std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept;
 
-        SourceObject(SourceObject&& sourceObject) noexcept;
-
-        SourceObject& operator=(SourceObject&& sourceObject) noexcept;
-
-        [[nodiscard]] const_iterator getLineStart(const_iterator iter) const;
-
-        [[nodiscard]] const_iterator getLineEnd(const_iterator iter) const;
-
-        [[nodiscard]] const std::vector<Lexer::Token>& data() const;
-
-        [[nodiscard]] iterator begin() const;
-
-        [[nodiscard]] iterator end() const;
-
-        [[nodiscard]] const_iterator cbegin() const;
-
-        [[nodiscard]] const_iterator cend() const;
+        std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept;
 
         LanguageOptions getLanguageOptions() const;
     };

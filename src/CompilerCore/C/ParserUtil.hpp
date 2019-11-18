@@ -11,9 +11,9 @@ namespace OpenCL::Parser
     bool isAssignment(Lexer::TokenType type);
 
     template <class T = void>
-    bool expect(Lexer::TokenType expected, SourceObject::const_iterator begin, SourceObject::const_iterator& curr,
-                SourceObject::const_iterator end, Context& context, std::vector<Message> additional = {},
-                T* value = nullptr)
+    bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator begin,
+                std::vector<Lexer::Token>::const_iterator& curr, std::vector<Lexer::Token>::const_iterator end,
+                Context& context, std::vector<Message> additional = {}, T* value = nullptr)
     {
         (void)value;
         if (curr == end || curr->getTokenType() != expected)

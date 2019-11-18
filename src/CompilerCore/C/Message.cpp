@@ -18,8 +18,9 @@ OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lex
 namespace
 {
     void renderSection(llvm::raw_ostream& os, const std::string& message, llvm::raw_ostream::Colors colour,
-                       const std::string& prefix, OpenCL::SourceObject::const_iterator begin,
-                       OpenCL::SourceObject::const_iterator end, const std::optional<OpenCL::Modifier>& modifier)
+                       const std::string& prefix, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                       std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                       const std::optional<OpenCL::Modifier>& modifier)
     {
         auto normalColour = llvm::raw_ostream::Colors::WHITE;
 
@@ -244,20 +245,6 @@ OpenCL::Modifier::Action OpenCL::Modifier::getAction() const
 const std::string& OpenCL::Modifier::getActionArgument() const
 {
     return m_actionArgument;
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::findEOL(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                    std::vector<OpenCL::Lexer::Token>::const_iterator end)
-{
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr->getLine() != begin->getLine())
-        {
-            return curr;
-        }
-    }
-    return end;
 }
 
 std::string OpenCL::Format::format(std::vector<std::string> args) const

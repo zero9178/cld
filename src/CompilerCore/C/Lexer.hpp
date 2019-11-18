@@ -3,6 +3,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include <memory>
 #include <string>
 #include <variant>
 #include <vector>
@@ -109,8 +110,10 @@ namespace OpenCL
             TOKEN_MAX_VALUE = DoublePound,
         };
 
-        SourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
-                              bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs());
+        class Token;
+
+        std::vector<Token> tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
+                                    bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs());
 
         struct NonCharString
         {
@@ -127,24 +130,24 @@ namespace OpenCL
                                          float, double, std::string, NonCharString>;
             variant m_value;              ///< Optional value of the token
             std::string m_representation; ///< Original spelling of the token
+            std::shared_ptr<const SourceObject> m_sourceObject;
             std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro
                                              substitution. ID of 0 means the the token originated from the Lexer*/
-            std::uint64_t m_column;       ///< Column this Token starts at
-            std::uint64_t m_endColumn;    ///< Column this Token ends at
-            std::uint64_t m_sourceColumn; /**< Original column of the token in the source code. For a token originating
+            std::uint64_t m_offset;       /**< Offset of the token. That is bytes offset to the first character of the
+                                               token from the beginning of the file*/
+            std::uint64_t m_sourceOffset; /**< Original offset of the token in the source code. For a token originating
                                            from the replacement list of a macro declaration it will points to it's
                                            original location in the replacement list. Therefore many tokens inside of a
-                                           source file can have the same column*/
-            std::uint32_t m_line;         ///< Line this Token starts at
-            std::uint32_t m_sourceLine;   ///< Same as m_sourceColumn but for line
-            std::uint16_t m_lineOffset;   ///< Delta from line to end line of this token
+                                           source file can have the same offset*/
             TokenType m_tokenType;        ///< Type of the token
+
+            friend std::vector<Token> tokenize(std::string, LanguageOptions, bool, llvm::raw_ostream*);
 
         public:
             using ValueType = variant;
 
-            Token(std::uint32_t line, std::uint64_t column, std::uint32_t endLine, std::uint64_t endColumn,
-                  TokenType tokenType, std::string representation, variant value = std::monostate{});
+            Token(std::uint64_t offset, TokenType tokenType, std::string representation,
+                  variant value = std::monostate{});
 
             [[nodiscard]] TokenType getTokenType() const noexcept;
 
@@ -152,13 +155,13 @@ namespace OpenCL
 
             [[nodiscard]] bool macroInserted() const noexcept;
 
+            [[nodiscard]] std::uint64_t getOffset() const noexcept;
+
+            [[nodiscard]] std::uint64_t getSourceOffset() const noexcept;
+
             [[nodiscard]] std::uint64_t getLine() const noexcept;
 
-            void setLine(std::uint64_t line) noexcept;
-
             [[nodiscard]] std::uint64_t getColumn() const noexcept;
-
-            void setColumn(std::uint64_t column) noexcept;
 
             [[nodiscard]] std::size_t getLength() const noexcept;
 
@@ -166,15 +169,11 @@ namespace OpenCL
 
             void setMacroId(std::uint64_t macroId) noexcept;
 
-            [[nodiscard]] std::uint64_t getSourceLine() const noexcept;
-
-            void setSourceLine(std::uint64_t sourceLine) noexcept;
-
-            [[nodiscard]] std::uint64_t getSourceColumn() const noexcept;
-
-            void setSourceColumn(std::uint64_t sourceColumn) noexcept;
-
             [[nodiscard]] std::string getRepresentation() const;
+
+            const SourceObject& getSourceObject() const noexcept;
+
+            void setSourceObject(const std::shared_ptr<const SourceObject>& sourceObject);
         };
 
         /**

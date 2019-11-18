@@ -6,12 +6,12 @@
 #include "ParserUtil.hpp"
 #include "SourceObject.hpp"
 
-std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const SourceObject& sourceObject,
-                                                                           llvm::raw_ostream* reporter)
+std::pair<OpenCL::Syntax::TranslationUnit, bool>
+    OpenCL::Parser::buildTree(const std::vector<OpenCL::Lexer::Token>& tokens, llvm::raw_ostream* reporter)
 {
-    Context context(sourceObject, reporter);
-    auto begin = sourceObject.cbegin();
-    return {parseTranslationUnit(begin, sourceObject.cend(), context), context.getCurrentErrorCount() == 0};
+    Context context(reporter);
+    auto begin = tokens.cbegin();
+    return {parseTranslationUnit(begin, tokens.cend(), context), context.getCurrentErrorCount() == 0};
 }
 
 void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
@@ -110,21 +110,9 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
-    : m_reporter(reporter), m_sourceObject(sourceObject), m_inPreprocessor(inPreprocessor)
+OpenCL::Parser::Context::Context(llvm::raw_ostream* reporter, bool inPreprocessor)
+    : m_reporter(reporter), m_inPreprocessor(inPreprocessor)
 {
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::Parser::Context::getLineStart(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
-{
-    return m_sourceObject.getLineStart(iter);
-}
-
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::Parser::Context::getLineEnd(std::vector<OpenCL::Lexer::Token>::const_iterator iter) const
-{
-    return m_sourceObject.getLineEnd(iter);
 }
 
 OpenCL::Parser::Context::TokenBitReseter

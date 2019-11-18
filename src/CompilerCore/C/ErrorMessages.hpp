@@ -128,9 +128,6 @@ namespace OpenCL
 
             constexpr auto INVALID_HEXADECIMAL_CHARACTER = Format("Invalid hexadecimal character '{}'");
 
-            constexpr auto CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR =
-                "Character mustn't have a higher value than the maximum value of unsigned char";
-
             constexpr auto INVALID_OCTAL_CHARACTER = Format("Invalid octal character '{}'");
 
             constexpr auto INCORRECT_CHARACTER_LITERAL = Format("Incorrect character literal '{}'");
@@ -147,6 +144,10 @@ namespace OpenCL
             constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
 
             constexpr auto UNTERMINATED_COMMENT = "Unterminated comment";
+
+            constexpr auto INVALID_UTF8_SEQUENCE = "Invalid UTF-8 Sequence";
+
+            constexpr auto CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE = "Character too large for enclosing type";
         } // namespace Lexer
 
         namespace PP

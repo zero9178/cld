@@ -2,6 +2,8 @@
 
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
+#include <llvm/Support/Unicode.h>
+#include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include <CompilerCore/Common/Util.hpp>
@@ -510,12 +512,12 @@ namespace
         llvm::raw_ostream* m_reporter;
         std::vector<Token> m_result;
         std::string& m_source;
-        std::uint64_t m_offset;
+        std::uint64_t& m_offset;
         std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> m_lineToOffset;
 
     public:
         std::uint64_t line = 1;
-        std::uint64_t column = 0;
+        std::uint64_t column = 1;
         std::uint64_t currLineStart;
         std::uint64_t currColumnStart;
         std::uint64_t currOffset;
@@ -532,23 +534,24 @@ namespace
             while (begin != source.cend())
             {
                 auto newLine = std::find(begin, source.cend(), '\n');
-                m_lineToOffset.insert({0, {std::distance(source.cbegin(), begin), std::distance(begin, newLine)}});
+                m_lineToOffset.insert({m_lineToOffset.size() + 1,
+                                       {std::distance(source.cbegin(), begin), std::distance(begin, newLine)}});
                 begin = newLine == source.cend() ? newLine : newLine + 1;
             }
         }
 
         void reportError(const std::string& message, std::uint64_t lineNumber, std::uint64_t columnNumber,
-                         std::vector<std::pair<std::uint64_t, std::uint64_t>> arrows)
+                         std::vector<std::pair<std::uint64_t, std::uint64_t>> arrows = {})
         {
             assert(!m_inPreprocessor);
             if (!m_reporter)
             {
                 return;
             }
-            auto normalColour = llvm::raw_ostream::Colors::WHITE;
 
-            *m_reporter << normalColour << lineNumber << ':' << columnNumber << ": " << llvm::raw_ostream::RED
-                        << "error: " << normalColour << message << '\n';
+            *m_reporter << lineNumber << ':' << columnNumber << ": ";
+            llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << "error: ";
+            *m_reporter << message << '\n';
             std::vector<std::string> lines;
             lines.reserve(this->line - currLineStart + 1);
             std::transform(
@@ -568,23 +571,60 @@ namespace
             }
             for (auto i = currLineStart; i <= this->line; i++)
             {
-                auto lineIndex = i - currLineStart;
-                *m_reporter << normalColour << llvm::format_decimal(i, numSize) << '|';
+                // Text
+                *m_reporter << llvm::format_decimal(i, numSize) << '|';
+                auto string = lines[i - currLineStart];
+                auto tokenStartsString = string.substr(currColumnStart, i == this->line ? 0 : std::string::npos);
+                auto tokenEndsString = string.substr(i == currLineStart ? currColumnStart : 0, this->column);
                 if (i == currLineStart)
                 {
-                    *m_reporter << lines[lineIndex].substr(0, currColumnStart);
+                    // Token starts in this line
+                    *m_reporter << string.substr(0, currColumnStart);
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << tokenStartsString;
+                    // If the token ends and starts in the same line then the if block for token ending gets to print it
                 }
-                *m_reporter << llvm::raw_ostream::Colors::RED;
-                if (i != this->line)
+
+                if (i != this->line && i != currLineStart)
                 {
-                    *m_reporter << lines[lineIndex];
+                    // Token does not end nor start in this line
+                    m_reporter->changeColor(llvm::raw_ostream::RED) << string;
                 }
                 else
                 {
-                    *m_reporter << lines[lineIndex].substr(0, this->column);
-                    *m_reporter << normalColour << lines[lineIndex].substr(this->column);
+                    // Token ends in this line
+
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << tokenEndsString;
+                    auto test = llvm::sys::unicode::columnWidthUTF8(tokenEndsString);
+                    *m_reporter << string.substr(this->column);
                 }
+                *m_reporter << '\n';
+                // Underline
+                m_reporter->indent(numSize) << '|';
+                if (i == currLineStart)
+                {
+                    // Token starts in this line
+                    llvm::WithColor(m_reporter->indent(currColumnStart), llvm::raw_ostream::RED)
+                        << std::string(llvm::sys::unicode::columnWidthUTF8(tokenStartsString), '~');
+                    // TODO: Arrows
+                }
+                if (i != this->line && i != currLineStart)
+                {
+                    // Token does not end nor start in this line
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED)
+                        << std::string(llvm::sys::unicode::columnWidthUTF8(string), '~');
+                    // TODO: Arrows
+                }
+                else
+                {
+                    // Token ends in this line
+                    llvm::WithColor(m_reporter->indent(i == currLineStart ? currColumnStart : 0),
+                                    llvm::raw_ostream::RED)
+                        << std::string(llvm::sys::unicode::columnWidthUTF8(tokenEndsString), '~');
+                    // TODO: Arrows
+                }
+                *m_reporter << '\n';
             }
+            m_reporter->flush();
         }
 
         [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
@@ -609,8 +649,8 @@ namespace
 
         void push(TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            m_result.emplace_back(currLineStart, currColumnStart, line, column, tokenType,
-                                  m_source.substr(currOffset, m_offset - currOffset), std::move(value));
+            m_result.emplace_back(currOffset, tokenType, m_source.substr(currOffset, m_offset - currOffset),
+                                  std::move(value));
         }
     };
 
@@ -689,6 +729,13 @@ namespace
         }
     }
 
+    /**
+     * Callee responsible for right format
+     * @param value string that either consist of 5 characters (u plus 4 hex digits) or 9 (U plus 8 hex digits)
+     * @return Unicode value
+     */
+    std::uint32_t universalCharacterToValue(const std::string& value) {}
+
     StateMachine CharacterLiteral::advance(char c, Context& context) noexcept
     {
         if (c == '\'' && (characters.empty() || characters.back() != '\\'))
@@ -702,7 +749,7 @@ namespace
             auto* resultEnd = result.data() + result.size();
 
             const auto* end = characters.data() + characters.size();
-            for (const auto* iter = characters.data(); iter != end; iter++)
+            for (const auto* iter = characters.data(); iter != end;)
             {
                 if (*iter != '\\')
                 {
@@ -715,7 +762,20 @@ namespace
                                                         resultEnd, llvm::strictConversion);
                     if (res != llvm::conversionOK)
                     {
-                        // TODO: Error
+                        auto last = std::make_reverse_iterator(characters.c_str());
+                        auto first = std::make_reverse_iterator(start);
+                        auto newline = std::find(first, last, '\n');
+                        std::uint64_t column;
+                        if (newline != last)
+                        {
+                            column = std::distance(first, last);
+                        }
+                        else
+                        {
+                            column = context.column;
+                        }
+                        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.line, column,
+                                            {{context.line, column}});
                     }
                     else
                     {
@@ -723,7 +783,9 @@ namespace
                         {
                             if (*curr > largestCharacter)
                             {
-                                // TODO: Error
+                                context.reportError(
+                                    OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE,
+                                    context.currLineStart, context.currColumnStart);
                             }
                         }
                     }
@@ -802,8 +864,8 @@ namespace
     }
 } // namespace
 
-OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
-                                             llvm::raw_ostream* reporter)
+std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions,
+                                                          bool isInPreprocessor, llvm::raw_ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
@@ -814,6 +876,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     StateMachine stateMachine;
     std::uint64_t offset = 0;
     Context context(source, offset, languageOptions, isInPreprocessor, reporter);
+    std::vector<std::uint64_t> starts = {0};
     for (auto iter : source)
     {
         while (std::visit(
@@ -825,6 +888,15 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                 else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(iter, context))>)
                 {
                     stateMachine = state.advance(iter, context);
+                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                    {
+                        if (!std::holds_alternative<Start>(stateMachine))
+                        {
+                            context.currLineStart = context.line;
+                            context.currColumnStart = context.column - 1;
+                            context.currOffset = offset;
+                        }
+                    }
                     return false;
                 }
                 else if constexpr (std::is_void_v<decltype(state.advance(iter, context))>)
@@ -835,32 +907,27 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                 else
                 {
                     auto&& [lhs, rhs] = state.advance(iter, context);
+                    bool advance;
                     if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
                     {
-                        using New = std::decay_t<decltype(rhs)>;
-                        using Prev = std::decay_t<decltype(state)>;
-                        if constexpr (!std::is_same_v<New, Prev> && std::is_same_v<Prev, Start>)
-                        {
-                            context.currLineStart = context.line;
-                            context.currColumnStart = context.column;
-                            context.currOffset = offset;
-                        }
                         stateMachine = std::move(rhs);
-                        return !lhs;
+                        advance = lhs;
                     }
                     else
                     {
-                        using New = std::decay_t<decltype(lhs)>;
-                        using Prev = std::decay_t<decltype(state)>;
-                        if constexpr (!std::is_same_v<New, Prev> && std::is_same_v<Prev, Start>)
+                        stateMachine = std::move(lhs);
+                        advance = rhs;
+                    }
+                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                    {
+                        if (!std::holds_alternative<Start>(stateMachine))
                         {
                             context.currLineStart = context.line;
-                            context.currColumnStart = context.column;
+                            context.currColumnStart = context.column - 1;
                             context.currOffset = offset;
                         }
-                        stateMachine = std::move(lhs);
-                        return !rhs;
                     }
+                    return !advance;
                 }
             },
             stateMachine))
@@ -868,7 +935,8 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         if (iter == '\n')
         {
             context.line++;
-            context.column = 0;
+            context.column = 1;
+            starts.push_back(offset);
         }
         else
         {
@@ -877,7 +945,13 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         offset++;
     }
 
-    return SourceObject(std::move(context).getResult(), languageOptions);
+    auto sourceObject = std::make_shared<SourceObject>(std::move(starts), offset, languageOptions);
+    auto tokens = std::move(context).getResult();
+    for (auto& iter : tokens)
+    {
+        iter.m_sourceObject = sourceObject;
+    }
+    return tokens;
 }
 
 std::string OpenCL::Lexer::Token::getRepresentation() const
@@ -1079,36 +1153,6 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
     OPENCL_UNREACHABLE;
 }
 
-void OpenCL::Lexer::Token::setLine(std::uint64_t line) noexcept
-{
-    m_line = line;
-}
-
-void OpenCL::Lexer::Token::setColumn(std::uint64_t column) noexcept
-{
-    m_column = column;
-}
-
-std::uint64_t OpenCL::Lexer::Token::getSourceLine() const noexcept
-{
-    return m_sourceLine;
-}
-
-void OpenCL::Lexer::Token::setSourceLine(std::uint64_t sourceLine) noexcept
-{
-    m_sourceLine = sourceLine;
-}
-
-std::uint64_t OpenCL::Lexer::Token::getSourceColumn() const noexcept
-{
-    return m_sourceColumn;
-}
-
-void OpenCL::Lexer::Token::setSourceColumn(std::uint64_t sourceColumn) noexcept
-{
-    m_sourceColumn = sourceColumn;
-}
-
 bool OpenCL::Lexer::Token::macroInserted() const noexcept
 {
     return m_macroId;
@@ -1116,12 +1160,12 @@ bool OpenCL::Lexer::Token::macroInserted() const noexcept
 
 std::uint64_t OpenCL::Lexer::Token::getColumn() const noexcept
 {
-    return m_column;
+    return m_offset - m_sourceObject->getLineStartOffset(m_sourceObject->getLineNumber(m_offset));
 }
 
 std::uint64_t OpenCL::Lexer::Token::getLine() const noexcept
 {
-    return m_line;
+    return m_sourceObject->getLineNumber(m_offset);
 }
 
 const OpenCL::Lexer::Token::variant& OpenCL::Lexer::Token::getValue() const noexcept
@@ -1134,21 +1178,14 @@ OpenCL::Lexer::TokenType OpenCL::Lexer::Token::getTokenType() const noexcept
     return m_tokenType;
 }
 
-OpenCL::Lexer::Token::Token(std::uint32_t line, std::uint64_t column, std::uint32_t endLine, std::uint64_t endColumn,
-                            OpenCL::Lexer::TokenType tokenType, std::string representation,
-                            OpenCL::Lexer::Token::variant value)
+OpenCL::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value)
     : m_value(std::move(value)),
       m_representation(std::move(representation)),
-      m_column(column),
-      m_endColumn(endColumn),
-      m_sourceColumn(column),
-      m_line(line),
-      m_sourceLine(line),
-      m_lineOffset(endLine - line),
+      m_offset(offset),
+      m_sourceOffset(offset),
       m_tokenType(tokenType)
 {
     assert(!m_representation.empty());
-    assert(endLine - line <= std::numeric_limits<std::uint16_t>::max());
 }
 
 std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
@@ -1164,6 +1201,26 @@ void OpenCL::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
 std::size_t Token::getLength() const noexcept
 {
     return m_representation.size();
+}
+
+std::uint64_t Token::getOffset() const noexcept
+{
+    return m_offset;
+}
+
+std::uint64_t Token::getSourceOffset() const noexcept
+{
+    return m_sourceOffset;
+}
+
+const OpenCL::SourceObject& Token::getSourceObject() const noexcept
+{
+    return *m_sourceObject;
+}
+
+void Token::setSourceObject(const std::shared_ptr<const SourceObject>& sourceObject)
+{
+    m_sourceObject = sourceObject;
 }
 
 std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,

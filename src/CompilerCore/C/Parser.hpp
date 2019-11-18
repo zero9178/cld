@@ -6,7 +6,6 @@
 
 #include "Message.hpp"
 #include "Semantics.hpp"
-#include "SourceObject.hpp"
 #include "Syntax.hpp"
 
 namespace OpenCL::Parser
@@ -20,9 +19,9 @@ namespace OpenCL::Parser
         llvm::raw_ostream* m_reporter;
         struct DeclarationLocation
         {
-            SourceObject::const_iterator begin;
-            SourceObject::const_iterator end;
-            SourceObject::const_iterator identifier;
+            std::vector<Lexer::Token>::const_iterator begin;
+            std::vector<Lexer::Token>::const_iterator end;
+            std::vector<Lexer::Token>::const_iterator identifier;
         };
 
         struct Declaration
@@ -32,7 +31,6 @@ namespace OpenCL::Parser
         };
         std::vector<std::map<std::string, Declaration>> m_currentScope{1};
 
-        const SourceObject& m_sourceObject;
         std::size_t m_errorCount = 0;
         bool m_inPreprocessor;
 
@@ -82,8 +80,7 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        explicit Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
-                         bool inPreprocessor = false);
+        explicit Context(llvm::raw_ostream* reporter = &llvm::errs(), bool inPreprocessor = false);
 
         ~Context() = default;
 
@@ -94,8 +91,6 @@ namespace OpenCL::Parser
         Context& operator=(const Context&) = delete;
 
         Context& operator=(Context&&) = delete;
-
-        const SourceObject& getSourceObject() const;
 
         bool isInPreprocessor() const;
 
@@ -109,10 +104,6 @@ namespace OpenCL::Parser
 
         void log(std::vector<Message> messages);
 
-        [[nodiscard]] SourceObject::const_iterator getLineStart(SourceObject::const_iterator iter) const;
-
-        [[nodiscard]] SourceObject::const_iterator getLineEnd(SourceObject::const_iterator iter) const;
-
         void addToScope(const std::string& name, DeclarationLocation declarator);
 
         [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(const std::string& name) const;
@@ -123,168 +114,187 @@ namespace OpenCL::Parser
 
         [[nodiscard]] std::size_t getCurrentErrorCount() const;
 
-        void skipUntil(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
+        void skipUntil(std::vector<Lexer::Token>::const_iterator& begin, std::vector<Lexer::Token>::const_iterator end,
                        TokenBitSet additional = {});
 
-        void parenthesesEntered(SourceObject::const_iterator bracket);
+        void parenthesesEntered(std::vector<Lexer::Token>::const_iterator bracket);
 
         void parenthesesLeft();
 
-        void squareBracketEntered(SourceObject::const_iterator bracket);
+        void squareBracketEntered(std::vector<Lexer::Token>::const_iterator bracket);
 
         void squareBracketLeft();
 
-        void braceEntered(SourceObject::const_iterator bracket);
+        void braceEntered(std::vector<Lexer::Token>::const_iterator bracket);
 
         void braceLeft();
     };
 
-    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
+    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
                                                                llvm::raw_ostream* reporter = &llvm::errs());
 
-    OpenCL::Syntax::TranslationUnit parseTranslationUnit(SourceObject::const_iterator& begin,
-                                                         SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::TranslationUnit parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,
+                                                         std::vector<Lexer::Token>::const_iterator end,
+                                                         Context& context);
 
-    std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(SourceObject::const_iterator& begin,
-                                                                        SourceObject::const_iterator end,
-                                                                        Context& context);
+    std::optional<Syntax::ExternalDeclaration>
+        parseExternalDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
+                                 std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::Declaration> parseDeclaration(SourceObject::const_iterator& begin,
-                                                        SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::Declaration> parseDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
+                                                        std::vector<Lexer::Token>::const_iterator end,
+                                                        Context& context);
 
-    std::optional<Syntax::DeclarationSpecifier> parseDeclarationSpecifier(SourceObject::const_iterator& begin,
-                                                                          SourceObject::const_iterator end,
-                                                                          Context& context);
+    std::optional<Syntax::DeclarationSpecifier>
+        parseDeclarationSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(SourceObject::const_iterator& begin,
-                                                                      SourceObject::const_iterator end,
+    std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-    std::vector<Syntax::SpecifierQualifier> parseSpecifierQualifierList(SourceObject::const_iterator& begin,
-                                                                        SourceObject::const_iterator end,
-                                                                        Context& context);
+    std::vector<Syntax::SpecifierQualifier>
+        parseSpecifierQualifierList(std::vector<Lexer::Token>::const_iterator& begin,
+                                    std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::Declarator> parseDeclarator(SourceObject::const_iterator& begin,
-                                                      SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::Declarator> parseDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                                      std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(SourceObject::const_iterator& begin,
-                                                                  SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                  std::vector<Lexer::Token>::const_iterator end,
+                                                                  Context& context);
 
-    Syntax::ParameterTypeList parseParameterTypeList(SourceObject::const_iterator& begin,
-                                                     SourceObject::const_iterator end, Context& context);
+    Syntax::ParameterTypeList parseParameterTypeList(std::vector<Lexer::Token>::const_iterator& begin,
+                                                     std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    Syntax::AbstractDeclarator parseAbstractDeclarator(SourceObject::const_iterator& begin,
-                                                       SourceObject::const_iterator end, Context& context);
+    Syntax::AbstractDeclarator parseAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                                       std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::DirectAbstractDeclarator> parseDirectAbstractDeclarator(SourceObject::const_iterator& begin,
-                                                                                  SourceObject::const_iterator end,
-                                                                                  Context& context);
+    std::optional<Syntax::DirectAbstractDeclarator>
+        parseDirectAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                      std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    Syntax::ParameterList parseParameterList(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                             Context& context);
+    Syntax::ParameterList parseParameterList(std::vector<Lexer::Token>::const_iterator& begin,
+                                             std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    Syntax::Pointer parsePointer(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                 Context& context);
+    Syntax::Pointer parsePointer(std::vector<Lexer::Token>::const_iterator& begin,
+                                 std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(SourceObject::const_iterator& begin,
-                                                                              SourceObject::const_iterator end,
-                                                                              Context& context);
+    std::optional<Syntax::StructOrUnionSpecifier>
+        parseStructOrUnionSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                    std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(SourceObject::const_iterator& begin,
-                                                            SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                                            std::vector<Lexer::Token>::const_iterator end,
+                                                            Context& context);
 
-    std::optional<Syntax::CompoundStatement> parseCompoundStatement(SourceObject::const_iterator& begin,
-                                                                    SourceObject::const_iterator end,
+    std::optional<Syntax::CompoundStatement> parseCompoundStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                    std::vector<Lexer::Token>::const_iterator end,
                                                                     OpenCL::Parser::Context& context,
                                                                     bool pushScope = true);
 
-    std::optional<Syntax::CompoundItem> parseCompoundItem(SourceObject::const_iterator& begin,
-                                                          SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::CompoundItem> parseCompoundItem(std::vector<Lexer::Token>::const_iterator& begin,
+                                                          std::vector<Lexer::Token>::const_iterator end,
+                                                          Context& context);
 
-    std::optional<Syntax::Initializer> parseInitializer(SourceObject::const_iterator& begin,
-                                                        SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::Initializer> parseInitializer(std::vector<Lexer::Token>::const_iterator& begin,
+                                                        std::vector<Lexer::Token>::const_iterator end,
+                                                        Context& context);
 
-    std::optional<Syntax::InitializerList> parseInitializerList(SourceObject::const_iterator& begin,
-                                                                SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::InitializerList> parseInitializerList(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                std::vector<Lexer::Token>::const_iterator end,
+                                                                Context& context);
 
-    std::optional<Syntax::Statement> parseStatement(SourceObject::const_iterator& begin,
-                                                    SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::Statement> parseStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                    std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    Syntax::ReturnStatement parseReturnStatement(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                                 Context& context);
+    Syntax::ReturnStatement parseReturnStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                 std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::IfStatement> parseIfStatement(SourceObject::const_iterator& begin,
-                                                        SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::IfStatement> parseIfStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                        std::vector<Lexer::Token>::const_iterator end,
+                                                        Context& context);
 
-    std::optional<Syntax::SwitchStatement> parseSwitchStatement(SourceObject::const_iterator& begin,
-                                                                SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::SwitchStatement> parseSwitchStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                std::vector<Lexer::Token>::const_iterator end,
+                                                                Context& context);
 
-    std::optional<Syntax::ForStatement> parseForStatement(SourceObject::const_iterator& begin,
-                                                          SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::ForStatement> parseForStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                          std::vector<Lexer::Token>::const_iterator end,
+                                                          Context& context);
 
-    std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(SourceObject::const_iterator& begin,
-                                                                      SourceObject::const_iterator end,
+    std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-    std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(SourceObject::const_iterator& begin,
-                                                                      SourceObject::const_iterator end,
+    std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-    Syntax::Expression parseExpression(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                       Context& context);
+    Syntax::Expression parseExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                       std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(SourceObject::const_iterator& begin,
-                                                                          SourceObject::const_iterator end,
-                                                                          Context& context);
+    std::optional<Syntax::AssignmentExpression>
+        parseAssignmentExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    OpenCL::Syntax::ConditionalExpression parseConditionalExpression(SourceObject::const_iterator& begin,
-                                                                     SourceObject::const_iterator end,
+    OpenCL::Syntax::ConditionalExpression parseConditionalExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                     std::vector<Lexer::Token>::const_iterator end,
                                                                      Context& context);
 
-    OpenCL::Syntax::LogicalOrExpression parseLogicalOrExpression(SourceObject::const_iterator& begin,
-                                                                 SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::LogicalOrExpression parseLogicalOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                 std::vector<Lexer::Token>::const_iterator end,
+                                                                 Context& context);
 
-    OpenCL::Syntax::LogicalAndExpression parseLogicalAndExpression(SourceObject::const_iterator& begin,
-                                                                   SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::LogicalAndExpression parseLogicalAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                   std::vector<Lexer::Token>::const_iterator end,
+                                                                   Context& context);
 
-    OpenCL::Syntax::BitOrExpression parseBitOrExpression(SourceObject::const_iterator& begin,
-                                                         SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::BitOrExpression parseBitOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                         std::vector<Lexer::Token>::const_iterator end,
+                                                         Context& context);
 
-    OpenCL::Syntax::BitXorExpression parseBitXorExpression(SourceObject::const_iterator& begin,
-                                                           SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::BitXorExpression parseBitXorExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                           std::vector<Lexer::Token>::const_iterator end,
+                                                           Context& context);
 
-    OpenCL::Syntax::BitAndExpression parseBitAndExpression(SourceObject::const_iterator& begin,
-                                                           SourceObject::const_iterator end, Context& context);
+    OpenCL::Syntax::BitAndExpression parseBitAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                           std::vector<Lexer::Token>::const_iterator end,
+                                                           Context& context);
 
-    std::optional<Syntax::EqualityExpression> parseEqualityExpression(SourceObject::const_iterator& begin,
-                                                                      SourceObject::const_iterator end,
+    std::optional<Syntax::EqualityExpression> parseEqualityExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-    std::optional<Syntax::RelationalExpression> parseRelationalExpression(SourceObject::const_iterator& begin,
-                                                                          SourceObject::const_iterator end,
-                                                                          Context& context);
+    std::optional<Syntax::RelationalExpression>
+        parseRelationalExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::ShiftExpression> parseShiftExpression(SourceObject::const_iterator& begin,
-                                                                SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::ShiftExpression> parseShiftExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                std::vector<Lexer::Token>::const_iterator end,
+                                                                Context& context);
 
-    std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(SourceObject::const_iterator& begin,
-                                                                      SourceObject::const_iterator end,
+    std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-    std::optional<Syntax::Term> parseTerm(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                          Context& context);
+    std::optional<Syntax::Term> parseTerm(std::vector<Lexer::Token>::const_iterator& begin,
+                                          std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::TypeName> parseTypeName(SourceObject::const_iterator& begin, SourceObject::const_iterator end,
-                                                  Context& context);
+    std::optional<Syntax::TypeName> parseTypeName(std::vector<Lexer::Token>::const_iterator& begin,
+                                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-    std::optional<Syntax::CastExpression> parseCastExpression(SourceObject::const_iterator& begin,
-                                                              SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::CastExpression> parseCastExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                              std::vector<Lexer::Token>::const_iterator end,
+                                                              Context& context);
 
-    std::optional<Syntax::UnaryExpression> parseUnaryExpression(SourceObject::const_iterator& begin,
-                                                                SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::UnaryExpression> parseUnaryExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                std::vector<Lexer::Token>::const_iterator end,
+                                                                Context& context);
 
-    std::optional<Syntax::PostFixExpression> parsePostFixExpression(SourceObject::const_iterator& begin,
-                                                                    SourceObject::const_iterator end, Context& context);
+    std::optional<Syntax::PostFixExpression> parsePostFixExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                    std::vector<Lexer::Token>::const_iterator end,
+                                                                    Context& context);
 } // namespace OpenCL::Parser
 
 template <class... Args>
