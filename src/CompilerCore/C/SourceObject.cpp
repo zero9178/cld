@@ -4,10 +4,10 @@
 
 #include <cassert>
 
-OpenCL::SourceObject::SourceObject(std::vector<std::uint64_t> starts, std::uint64_t length,
+OpenCL::SourceObject::SourceObject(std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
                                    LanguageOptions languageOptions, SubstitutionMap substitutions)
     : m_starts(std::move(starts)),
-      m_length(length),
+      m_tokens(std::move(tokens)),
       m_languageOptions(languageOptions),
       m_substitutions(std::move(substitutions))
 {
@@ -34,5 +34,10 @@ std::uint64_t OpenCL::SourceObject::getLineStartOffset(std::uint64_t line) const
 std::uint64_t OpenCL::SourceObject::getLineEndOffset(std::uint64_t line) const noexcept
 {
     assert(line - 1 < m_starts.size());
-    return line == m_starts.size() ? m_length : m_starts[line];
+    return line == m_starts.size() ? m_tokens.back().getOffset() + m_tokens.back().getLength() : m_starts[line];
+}
+
+const std::vector<OpenCL::Lexer::Token>& OpenCL::SourceObject::data() const
+{
+    return m_tokens;
 }

@@ -16,6 +16,7 @@ namespace OpenCL::Parser
 
     class Context final
     {
+        const SourceObject& m_sourceObject;
         llvm::raw_ostream* m_reporter;
         struct DeclarationLocation
         {
@@ -30,7 +31,6 @@ namespace OpenCL::Parser
             bool isTypedef{};
         };
         std::vector<std::map<std::string, Declaration>> m_currentScope{1};
-
         std::size_t m_errorCount = 0;
         bool m_inPreprocessor;
 
@@ -80,7 +80,8 @@ namespace OpenCL::Parser
         template <class... Args>
         constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-        explicit Context(llvm::raw_ostream* reporter = &llvm::errs(), bool inPreprocessor = false);
+        explicit Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+                         bool inPreprocessor = false);
 
         ~Context() = default;
 
@@ -114,6 +115,8 @@ namespace OpenCL::Parser
 
         [[nodiscard]] std::size_t getCurrentErrorCount() const;
 
+        const SourceObject& getSourceObject() const;
+
         void skipUntil(std::vector<Lexer::Token>::const_iterator& begin, std::vector<Lexer::Token>::const_iterator end,
                        TokenBitSet additional = {});
 
@@ -130,7 +133,7 @@ namespace OpenCL::Parser
         void braceLeft();
     };
 
-    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const std::vector<Lexer::Token>& tokens,
+    std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
                                                                llvm::raw_ostream* reporter = &llvm::errs());
 
     OpenCL::Syntax::TranslationUnit parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,

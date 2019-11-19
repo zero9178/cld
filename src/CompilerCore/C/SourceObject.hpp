@@ -16,16 +16,18 @@ namespace OpenCL
             std::vector<Lexer::Token> define;
             std::vector<Lexer::Token> replacedTokens;
         };
+        using SubstitutionMap = std::map<std::pair<std::uint64_t, std::uint64_t>, Substitution>;
 
     private:
         std::vector<std::uint64_t> m_starts;
-        std::uint64_t m_length;
-        LanguageOptions m_languageOptions;
-        using SubstitutionMap = std::map<std::pair<std::uint64_t, std::uint64_t>, Substitution>;
+        std::vector<Lexer::Token> m_tokens;
+        LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
         SubstitutionMap m_substitutions;
 
     public:
-        explicit SourceObject(std::vector<std::uint64_t> starts, std::uint64_t length,
+        SourceObject() = default;
+
+        explicit SourceObject(std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
                               LanguageOptions languageOptions = LanguageOptions::native(LanguageOptions::C99),
                               SubstitutionMap substitutions = {});
 
@@ -34,6 +36,8 @@ namespace OpenCL
         std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept;
 
         std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept;
+
+        [[nodiscard]] const std::vector<Lexer::Token>& data() const;
 
         LanguageOptions getLanguageOptions() const;
     };

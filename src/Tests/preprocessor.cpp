@@ -4,17 +4,15 @@
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 
-#include <sstream>
-
-#define preprocessTest(source)                                                                    \
-    [](const std::string& str) {                                                                  \
-        std::string storage;                                                                      \
-        llvm::raw_string_ostream ss(storage);                                                     \
-        auto tokens = OpenCL::Lexer::tokenize(str, OpenCL::LanguageOptions::native(), true, &ss); \
-        INFO(ss.str());                                                                           \
-        REQUIRE(ss.str().empty());                                                                \
-        auto ret = OpenCL::PP::preprocess(tokens, &ss);                                           \
-        return std::pair{OpenCL::Lexer::reconstruct(ret.begin(), ret.end()), ss.str()};           \
+#define preprocessTest(source)                                                                        \
+    [](const std::string& str) {                                                                      \
+        std::string storage;                                                                          \
+        llvm::raw_string_ostream ss(storage);                                                         \
+        auto tokens = OpenCL::Lexer::tokenize(str, OpenCL::LanguageOptions::native(), true, &ss);     \
+        INFO(ss.str());                                                                               \
+        REQUIRE(ss.str().empty());                                                                    \
+        auto ret = OpenCL::PP::preprocess(tokens, &ss);                                               \
+        return std::pair{OpenCL::Lexer::reconstruct(ret.data().begin(), ret.data().end()), ss.str()}; \
     }(source)
 
 TEST_CASE("C99 Standard examples", "[PP]")

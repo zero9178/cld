@@ -21,11 +21,11 @@ namespace
     {
         std::string storage;
         llvm::raw_string_ostream ss(storage);
-        OpenCL::SourceObject tokens{{}};
+        OpenCL::SourceObject tokens;
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
         OpenCL::Parser::Context context(tokens, &ss);
-        auto ref = tokens.cbegin();
-        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.cend(), context);
+        auto ref = tokens.data().cbegin();
+        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.data().cend(), context);
         INFO(ss.str());
         REQUIRE((ss.str().empty()));
         OpenCL::Semantics::SemanticAnalysis analysis(&ss);
@@ -37,7 +37,9 @@ namespace
             },
             {},
             [&ss, &tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
-                ss << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(), std::move(modifier));
+                OpenCL::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                       std::move(modifier))
+                    .print(ss, tokens);
             },
             mode);
         auto ret = evaluator.visit(parsing);
@@ -52,9 +54,10 @@ namespace
                 },
                 {},
                 [&tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
-                    llvm::errs() << OpenCL::Message::error(std::move(message), tokens.cbegin(), tokens.cend(),
-                                                           std::move(modifier))
-                                 << '\n';
+                    OpenCL::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                           std::move(modifier))
+                            .print(llvm::errs(), tokens)
+                        << '\n';
                 },
                 mode)
                 .visit(parsing);

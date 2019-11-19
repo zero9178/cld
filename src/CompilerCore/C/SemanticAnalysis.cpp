@@ -17,7 +17,7 @@ void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages
     {
         for (auto& iter : messages)
         {
-            (*m_reporter) << iter;
+            // TODO: (*m_reporter) << iter;
         }
     }
 }

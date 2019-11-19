@@ -10,7 +10,7 @@ static std::pair<OpenCL::Semantics::TranslationUnit, std::string> generateSemant
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
-    OpenCL::SourceObject tokens{{}};
+    OpenCL::SourceObject tokens;
     REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
     auto parsing = OpenCL::Parser::buildTree(tokens, &ss);
     REQUIRE((ss.str().empty() && parsing.second));

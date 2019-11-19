@@ -864,8 +864,8 @@ namespace
     }
 } // namespace
 
-std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions,
-                                                          bool isInPreprocessor, llvm::raw_ostream* reporter)
+OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
+                                             llvm::raw_ostream* reporter)
 {
     if (source.empty() || source.back() != ' ')
     {
@@ -945,13 +945,7 @@ std::vector<OpenCL::Lexer::Token> OpenCL::Lexer::tokenize(std::string source, La
         offset++;
     }
 
-    auto sourceObject = std::make_shared<SourceObject>(std::move(starts), offset, languageOptions);
-    auto tokens = std::move(context).getResult();
-    for (auto& iter : tokens)
-    {
-        iter.m_sourceObject = sourceObject;
-    }
-    return tokens;
+    return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }
 
 std::string OpenCL::Lexer::Token::getRepresentation() const
@@ -1158,16 +1152,6 @@ bool OpenCL::Lexer::Token::macroInserted() const noexcept
     return m_macroId;
 }
 
-std::uint64_t OpenCL::Lexer::Token::getColumn() const noexcept
-{
-    return m_offset - m_sourceObject->getLineStartOffset(m_sourceObject->getLineNumber(m_offset));
-}
-
-std::uint64_t OpenCL::Lexer::Token::getLine() const noexcept
-{
-    return m_sourceObject->getLineNumber(m_offset);
-}
-
 const OpenCL::Lexer::Token::variant& OpenCL::Lexer::Token::getValue() const noexcept
 {
     return m_value;
@@ -1213,46 +1197,36 @@ std::uint64_t Token::getSourceOffset() const noexcept
     return m_sourceOffset;
 }
 
-const OpenCL::SourceObject& Token::getSourceObject() const noexcept
-{
-    return *m_sourceObject;
-}
-
-void Token::setSourceObject(const std::shared_ptr<const SourceObject>& sourceObject)
-{
-    m_sourceObject = sourceObject;
-}
-
 std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                        std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {
-    if (begin == end)
-    {
-        return {};
-    }
-    return std::string(begin->getLine() - 1, '\n') + std::string(begin->getColumn(), ' ')
-           + reconstructTrimmed(begin, end);
+    //    if (begin == end)
+    //    {
+    //        return {};
+    //    }
+    //    return std::string(begin->getLine() - 1, '\n') + std::string(begin->getColumn(), ' ')
+    //           + reconstructTrimmed(begin, end);
 }
 
 std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                               std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {
-    std::string result;
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr != begin)
-        {
-            auto prev = curr - 1;
-            if (curr->getLine() == prev->getLine())
-            {
-                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
-            }
-            else
-            {
-                result += '\n' + std::string(curr->getColumn(), ' ');
-            }
-        }
-        result += curr->getRepresentation();
-    }
-    return result;
+    //    std::string result;
+    //    for (auto curr = begin; curr != end; curr++)
+    //    {
+    //        if (curr != begin)
+    //        {
+    //            auto prev = curr - 1;
+    //            if (curr->getLine() == prev->getLine())
+    //            {
+    //                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
+    //            }
+    //            else
+    //            {
+    //                result += '\n' + std::string(curr->getColumn(), ' ');
+    //            }
+    //        }
+    //        result += curr->getRepresentation();
+    //    }
+    //    return result;
 }

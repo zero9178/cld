@@ -141,37 +141,36 @@ namespace OpenCL
         std::optional<Modifier> m_modifier;
         std::string m_message;
         std::vector<OpenCL::Lexer::Token>::const_iterator m_begin;
-        std::vector<OpenCL::Lexer::Token>::const_iterator m_end;
+        std::optional<std::vector<OpenCL::Lexer::Token>::const_iterator> m_rangeEnd;
         Severity m_severity;
 
-    public:
         Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
-                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
+                std::optional<std::vector<OpenCL::Lexer::Token>::const_iterator> rangeEnd = {},
+                std::optional<Modifier> modifier = {});
+
+    public:
+        static Message error(std::string message, std::vector<Lexer::Token>::const_iterator token,
+                             std::optional<Modifier> modifier = {});
 
         static Message error(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                              std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
+        static Message note(std::string message, std::vector<Lexer::Token>::const_iterator token,
+                            std::optional<Modifier> modifier = {});
+
         static Message note(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                             std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
+
+        static Message warning(std::string message, std::vector<Lexer::Token>::const_iterator token,
+                               std::optional<Modifier> modifier = {});
 
         static Message warning(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
         [[nodiscard]] Severity getSeverity() const;
 
-        [[nodiscard]] const std::string& getMessage() const;
-
-        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
-
-        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
-
-        [[nodiscard]] const std::optional<Modifier>& getModifier() const;
+        llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceObject& sourceObject) const;
     };
-
-    llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Message& message);
-
-    std::vector<Lexer::Token>::const_iterator findEOL(std::vector<Lexer::Token>::const_iterator begin,
-                                                      std::vector<Lexer::Token>::const_iterator end);
 } // namespace OpenCL
 
 #endif // OPENCLPARSER_MESSAGE_HPP

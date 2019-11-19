@@ -6,12 +6,12 @@
 #include "ParserUtil.hpp"
 #include "SourceObject.hpp"
 
-std::pair<OpenCL::Syntax::TranslationUnit, bool>
-    OpenCL::Parser::buildTree(const std::vector<OpenCL::Lexer::Token>& tokens, llvm::raw_ostream* reporter)
+std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const SourceObject& sourceObject,
+                                                                           llvm::raw_ostream* reporter)
 {
-    Context context(reporter);
-    auto begin = tokens.cbegin();
-    return {parseTranslationUnit(begin, tokens.cend(), context), context.getCurrentErrorCount() == 0};
+    Context context(sourceObject, reporter);
+    auto begin = sourceObject.data().cbegin();
+    return {parseTranslationUnit(begin, sourceObject.data().cend(), context), context.getCurrentErrorCount() == 0};
 }
 
 void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
@@ -19,11 +19,9 @@ void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLoc
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
     {
-        log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
-                            getLineStart(declarator.begin), getLineEnd(declarator.end),
-                            Modifier(declarator.identifier, declarator.identifier + 1)),
-             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, getLineStart(iter->second.location.begin),
-                           getLineEnd(iter->second.location.end),
+        log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
+                            declarator.end, Modifier(declarator.identifier, declarator.identifier + 1)),
+             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
                            Modifier(iter->second.location.identifier, iter->second.location.identifier + 1))});
     }
 }
@@ -50,7 +48,7 @@ void OpenCL::Parser::Context::log(std::vector<Message> messages)
         }
         if (this->m_reporter)
         {
-            *this->m_reporter << iter;
+            iter.print(*this->m_reporter, getSourceObject());
         }
     }
 }
@@ -61,11 +59,9 @@ void OpenCL::Parser::Context::addToScope(const std::string& name, DeclarationLoc
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
-        log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''),
-                            getLineStart(declarator.begin), getLineEnd(declarator.end),
-                            Modifier(declarator.identifier, declarator.identifier + 1)),
-             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, getLineStart(iter->second.location.begin),
-                           getLineEnd(iter->second.location.end),
+        log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
+                            declarator.end, Modifier(declarator.identifier, declarator.identifier + 1)),
+             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
                            Modifier(iter->second.location.identifier, iter->second.location.identifier + 1))});
     }
 }
@@ -110,8 +106,8 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(llvm::raw_ostream* reporter, bool inPreprocessor)
-    : m_reporter(reporter), m_inPreprocessor(inPreprocessor)
+OpenCL::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
+    : m_sourceObject(sourceObject), m_reporter(reporter), m_inPreprocessor(inPreprocessor)
 {
 }
 
@@ -149,8 +145,8 @@ void OpenCL::Parser::Context::parenthesesEntered(std::vector<OpenCL::Lexer::Toke
         return;
     }
     log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
-        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
+        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 
@@ -166,8 +162,8 @@ void OpenCL::Parser::Context::squareBracketEntered(std::vector<OpenCL::Lexer::To
         return;
     }
     log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
-        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
+        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 
@@ -183,8 +179,8 @@ void OpenCL::Parser::Context::braceEntered(std::vector<OpenCL::Lexer::Token>::co
         return;
     }
     log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)),
-        getLineStart(bracket), getLineEnd(bracket), Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
+        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 

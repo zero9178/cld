@@ -493,8 +493,7 @@ OpenCL::Syntax::ConditionalExpression
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
         if (!expect(Lexer::TokenType::Colon, start, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), context.getLineStart(questionMarkpos),
-                                   context.getLineEnd(questionMarkpos),
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), questionMarkpos,
                                    Modifier(questionMarkpos, questionMarkpos + 1, Modifier::PointAtBeginning))}))
         {
             context.skipUntil(begin, end, firstExpressionSet);
@@ -590,13 +589,12 @@ std::optional<OpenCL::Syntax::TypeName> OpenCL::Parser::parseTypeName(std::vecto
         {
             context.log({Message::error(
                 ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->getRepresentation() + '\''),
-                context.getLineStart(start), context.getLineEnd(begin),
-                Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
+                start, begin, Modifier(begin, begin + 1, Modifier::PointAtBeginning))});
         }
         else
         {
-            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), context.getLineStart(start),
-                                        begin, Modifier(begin - 1, begin, Modifier::InsertAtEnd))});
+            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), start,
+                                        Modifier(begin - 1, begin, Modifier::InsertAtEnd))});
         }
     }
 
@@ -671,8 +669,7 @@ namespace
 
                 if (!expect(OpenCL::Lexer::TokenType::CloseParentheses, start, begin, end, context,
                             {OpenCL::Message::note(
-                                OpenCL::Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                context.getLineEnd(openPpos),
+                                OpenCL::Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                 OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
                 {
                     context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
@@ -695,8 +692,7 @@ namespace
 
                 if (!expect(OpenCL::Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
                             {OpenCL::Message::note(
-                                OpenCL::Notes::TO_MATCH_N_HERE.args("'['"), context.getLineStart(start),
-                                context.getLineEnd(openPpos),
+                                OpenCL::Notes::TO_MATCH_N_HERE.args("'['"), start, openPpos,
                                 OpenCL::Modifier(openPpos, openPpos + 1, OpenCL::Modifier::PointAtBeginning))}))
                 {
                     context.skipUntil(begin, end, OpenCL::Parser::firstPostfixSet);
@@ -777,8 +773,8 @@ std::optional<OpenCL::Syntax::CastExpression>
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
     if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                               context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
+                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start,
+                               Modifier(start, start + 1, Modifier::PointAtBeginning))}))
     {
         context.skipUntil(begin, end, firstExpressionSet);
     }
@@ -813,8 +809,7 @@ std::optional<OpenCL::Syntax::CastExpression>
     if (openBrace)
     {
         if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start),
-                                   context.getLineEnd(*openBrace),
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
                                    Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
         {
             context.skipUntil(begin, end, firstPostfixSet);
@@ -857,8 +852,7 @@ std::optional<OpenCL::Syntax::UnaryExpression>
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                       context.getLineEnd(openPpos),
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
                 context.skipUntil(begin, end);
@@ -899,8 +893,7 @@ std::optional<OpenCL::Syntax::UnaryExpression>
         if (openP)
         {
             if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                       context.getLineEnd(*openP),
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, *openP,
                                        Modifier(*openP, *openP + 1, Modifier::PointAtBeginning))}))
             {
                 context.skipUntil(begin, end);
@@ -1036,8 +1029,7 @@ std::optional<OpenCL::Syntax::PostFixExpression>
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                       context.getLineEnd(openPpos),
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
                 context.skipUntil(begin, end);
@@ -1051,16 +1043,14 @@ std::optional<OpenCL::Syntax::PostFixExpression>
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
                                                 OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                            context.getLineStart(start), begin,
-                                            Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
+                                            start, begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
             }
             else
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                                OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
-                                                '\'' + begin->getRepresentation() + '\''),
-                                            context.getLineStart(start), context.getLineEnd(begin),
-                                            Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
+                                        OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                        '\'' + begin->getRepresentation() + '\''),
+                                    start, begin, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
             }
             context.skipUntil(begin, end);
         }
@@ -1075,8 +1065,8 @@ std::optional<OpenCL::Syntax::PostFixExpression>
         begin++;
         auto type = parseTypeName(begin, end, context);
         if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), context.getLineStart(start),
-                                   context.getLineEnd(start), Modifier(start, start + 1, Modifier::PointAtBeginning))}))
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start,
+                                   Modifier(start, start + 1, Modifier::PointAtBeginning))}))
         {
             context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBrace));
         }
@@ -1099,8 +1089,7 @@ std::optional<OpenCL::Syntax::PostFixExpression>
         if (openBrace)
         {
             if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), context.getLineStart(start),
-                                       context.getLineEnd(*openBrace),
+                        {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
                                        Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
             {
                 context.skipUntil(begin, end, firstPostfixSet);

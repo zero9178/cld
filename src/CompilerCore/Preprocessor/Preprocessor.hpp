@@ -3,21 +3,13 @@
 
 #include <llvm/Support/raw_ostream.h>
 
-#include <vector>
-
 namespace OpenCL
 {
     class SourceObject;
 
-    namespace Lexer
-    {
-        class Token;
-    }
-
     namespace PP
     {
-        std::vector<Lexer::Token> preprocess(const std::vector<Lexer::Token>& tokens,
-                                             llvm::raw_ostream* reporter = &llvm::errs());
+        OpenCL::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
     }
 } // namespace OpenCL
 

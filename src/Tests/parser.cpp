@@ -12,7 +12,7 @@
     {                                                              \
         std::string string;                                        \
         llvm::raw_string_ostream ss(string);                       \
-        OpenCL::SourceObject tokens{{}};                           \
+        OpenCL::SourceObject tokens;                               \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);        \
         CHECK_THAT(string, matches);                               \
@@ -31,18 +31,18 @@
     {                                                              \
         std::string string;                                        \
         llvm::raw_string_ostream ss(string);                       \
-        OpenCL::SourceObject tokens{{}};                           \
+        OpenCL::SourceObject tokens;                               \
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         OpenCL::Parser::Context context(tokens, &ss);              \
-        auto begin = tokens.cbegin();                              \
-        parser(begin, tokens.cend(), context);                     \
-        CHECK((!string.empty() || begin == tokens.cend()));        \
+        auto begin = tokens.data().cbegin();                       \
+        parser(begin, tokens.data().cend(), context);              \
+        CHECK((!string.empty() || begin == tokens.data().cend())); \
         CHECK_THAT(string, matches);                               \
         if (OpenCL::colourConsoleOutput)                           \
         {                                                          \
-            auto begin2 = tokens.cbegin();                         \
+            auto begin2 = tokens.data().cbegin();                  \
             OpenCL::Parser::Context context2(tokens);              \
-            parser(begin2, tokens.cend(), context2);               \
+            parser(begin2, tokens.data().cend(), context2);        \
             if (!string.empty())                                   \
             {                                                      \
                 llvm::errs() << '\n';                              \

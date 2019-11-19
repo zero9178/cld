@@ -112,8 +112,8 @@ namespace OpenCL
 
         class Token;
 
-        std::vector<Token> tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
-                                    bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs());
+        SourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
+                              bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs());
 
         struct NonCharString
         {
@@ -130,7 +130,6 @@ namespace OpenCL
                                          float, double, std::string, NonCharString>;
             variant m_value;              ///< Optional value of the token
             std::string m_representation; ///< Original spelling of the token
-            std::shared_ptr<const SourceObject> m_sourceObject;
             std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro
                                              substitution. ID of 0 means the the token originated from the Lexer*/
             std::uint64_t m_offset;       /**< Offset of the token. That is bytes offset to the first character of the
@@ -140,8 +139,6 @@ namespace OpenCL
                                            original location in the replacement list. Therefore many tokens inside of a
                                            source file can have the same offset*/
             TokenType m_tokenType;        ///< Type of the token
-
-            friend std::vector<Token> tokenize(std::string, LanguageOptions, bool, llvm::raw_ostream*);
 
         public:
             using ValueType = variant;
@@ -159,10 +156,6 @@ namespace OpenCL
 
             [[nodiscard]] std::uint64_t getSourceOffset() const noexcept;
 
-            [[nodiscard]] std::uint64_t getLine() const noexcept;
-
-            [[nodiscard]] std::uint64_t getColumn() const noexcept;
-
             [[nodiscard]] std::size_t getLength() const noexcept;
 
             [[nodiscard]] std::uint64_t getMacroId() const noexcept;
@@ -170,10 +163,6 @@ namespace OpenCL
             void setMacroId(std::uint64_t macroId) noexcept;
 
             [[nodiscard]] std::string getRepresentation() const;
-
-            const SourceObject& getSourceObject() const noexcept;
-
-            void setSourceObject(const std::shared_ptr<const SourceObject>& sourceObject);
         };
 
         /**

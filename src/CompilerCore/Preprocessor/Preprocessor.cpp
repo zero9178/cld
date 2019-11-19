@@ -203,18 +203,19 @@ namespace
             {
                 if (begin == end)
                 {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::Parser::EXPECTED_N.args(OpenCL::Lexer::tokenName(tokenType)),
-                        sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                        OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                    OpenCL::Message::error(
+                        OpenCL::ErrorMessages::Parser::EXPECTED_N.args(OpenCL::Lexer::tokenName(tokenType)), begin,
+                        OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                        .print(*reporter, sourceObject);
                 }
                 else
                 {
-                    *reporter << OpenCL::Message::error(
+                    OpenCL::Message::error(
                         OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                             OpenCL::Lexer::tokenName(tokenType), '\'' + begin->getRepresentation() + '\''),
-                        sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                        OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                        begin, OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                        .print(*reporter, sourceObject);
+                    ;
                 }
             }
             return false;
@@ -281,8 +282,9 @@ namespace
                 return false;
             });
             auto temp = filterNewline(begin, argEnd);
-            arguments.emplace((*define->second.identifierList)[arguments.size()],
-                              macroSubstitute(temp.begin(), temp.end(), OpenCL::SourceObject(temp), reporter, state));
+            arguments.emplace(
+                (*define->second.identifierList)[arguments.size()],
+                macroSubstitute(temp.begin(), temp.end(), OpenCL::SourceObject(/*TODO:*/), reporter, state));
             begin = argEnd;
             if (begin != end && begin->getTokenType() != OpenCL::Lexer::TokenType::CloseParentheses)
             {
@@ -293,27 +295,27 @@ namespace
         {
             if (reporter)
             {
-                *reporter << OpenCL::Message::error(
+                OpenCL::Message::error(
                     OpenCL::ErrorMessages::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N.args('\'' + define->first + '\''),
-                    sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1))
-                          << OpenCL::Message::note(OpenCL::Notes::MISSING_N.args(
-                                                       "arguments "
-                                                       + static_cast<std::string>(OpenCL::Format::List(
-                                                           ", ", " and ",
-                                                           {define->second.identifierList->begin() + arguments.size(),
-                                                            define->second.identifierList->end()}))),
-                                                   sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin));
+                    namePos, OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1))
+                    .print(*reporter, sourceObject);
+                OpenCL::Message::note(
+                    OpenCL::Notes::MISSING_N.args("arguments "
+                                                  + static_cast<std::string>(OpenCL::Format::List(
+                                                      ", ", " and ",
+                                                      {define->second.identifierList->begin() + arguments.size(),
+                                                       define->second.identifierList->end()}))),
+                    namePos)
+                    .print(*reporter, sourceObject);
             }
         }
         else if (arguments.size() > define->second.identifierList->size() && !define->second.hasEllipse)
         {
             if (reporter)
             {
-                *reporter << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N.args(define->first),
-                    sourceObject.getLineStart(namePos), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1));
+                OpenCL::Message::error(OpenCL::ErrorMessages::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N.args(define->first),
+                                       namePos, OpenCL::Modifier(argsStart, begin != argsStart ? begin : begin + 1))
+                    .print(*reporter, sourceObject);
             }
         }
         return arguments;
@@ -388,7 +390,7 @@ namespace
         std::int64_t columnOffset = 0;
         for (auto iter = begin; iter != end; iter++)
         {
-            if (iter != begin && iter->getLine() != (iter - 1)->getLine())
+            if (iter != begin && iter->getTokenType() == OpenCL::Lexer::TokenType::Newline)
             {
                 columnOffset = 0;
             }
@@ -396,109 +398,122 @@ namespace
             {
                 continue;
             }
-            const auto& name = std::get<std::string>(iter->getValue());
-            auto namePos = iter;
-            auto define = state->defines.find(name);
-            if (define == state->defines.end()
-                || (iter->getMacroId() < state->disabledMacros.size()
-                    && state->disabledMacros[iter->getMacroId()].count(name)))
-            {
-                continue;
-            }
-            if (!define->second.identifierList)
-            {
-                result.reserve(result.size() + std::distance(start, iter));
-                std::transform(start, iter, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
-                    token.setColumn(token.getColumn() + columnOffset);
-                    return token;
-                });
-                start = iter + 1;
-                // Creating a temporary here to create proper context in case of errors in the later macroSubstitute
-                // call
-                auto temp = result;
-                temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
-                columnOffset += define->second.replacementList.empty() ?
-                                    -static_cast<std::int64_t>(iter->getLength()) :
-                                    static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
-                                                              + define->second.replacementList.back().getLength())
-                                        - define->second.replacementList.front().getColumn() - iter->getLength();
-                std::for_each(temp.begin() + result.size(), temp.end(),
-                              [iter, begin = define->second.replacementList.begin()](OpenCL::Lexer::Token& token) {
-                                  token.setLine(iter->getLine());
-                                  token.setColumn(iter->getColumn() + token.getColumn() - begin->getColumn());
-                              });
-
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
-                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
-                {
-                    std::unordered_set<std::uint64_t> uniqueSet;
-                    std::transform(temp.begin() + result.size(), temp.end(),
-                                   std::inserter(uniqueSet, uniqueSet.begin()),
-                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
-                    for (auto& id : uniqueSet)
-                    {
-                        state->disabledMacros[id].insert(name);
-                        state->disabledMacros[id].insert(state->disabledMacros[iter->getMacroId()].begin(),
-                                                         state->disabledMacros[iter->getMacroId()].end());
-                    }
-                }
-
-                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
-                                              reporter, state);
-                result.reserve(result.size() + vector.size());
-                std::move(vector.begin(), vector.end(), std::back_inserter(result));
-            }
-            else if (iter + 1 != end && (iter + 1)->getTokenType() == OpenCL::Lexer::TokenType::OpenParentheses
-                     && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
-            {
-                result.reserve(result.size() + std::distance(start, iter));
-                std::transform(start, iter, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
-                    token.setColumn(token.getColumn() + columnOffset);
-                    return token;
-                });
-                //( must immediately follow the function like macro identifier
-                iter += 2;
-                auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
-                start = iter + 1;
-
-                auto replacementSubstituted = argumentSubstitution(define, arguments, state);
-
-                auto temp = result;
-                temp.reserve(temp.size() + replacementSubstituted.size());
-                std::move(replacementSubstituted.begin(), replacementSubstituted.end(), std::back_inserter(temp));
-
-                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
-                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
-                {
-                    std::unordered_set<std::uint64_t> uniqueSet;
-                    std::transform(temp.begin() + result.size(), temp.end(),
-                                   std::inserter(uniqueSet, uniqueSet.begin()),
-                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
-                    for (auto& id : uniqueSet)
-                    {
-                        state->disabledMacros[id].insert(name);
-                        state->disabledMacros[id].insert(state->disabledMacros[namePos->getMacroId()].begin(),
-                                                         state->disabledMacros[namePos->getMacroId()].end());
-                    }
-                }
-
-                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), OpenCL::SourceObject(temp),
-                                              reporter, state);
-                result.reserve(result.size() + vector.size());
-                std::move(vector.begin(), vector.end(), std::back_inserter(result));
-            }
-            else
-            {
-                continue;
-            }
-            state->substitutions.insert(
-                {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end}, {*iter}}});
+            //            const auto& name = std::get<std::string>(iter->getValue());
+            //            auto namePos = iter;
+            //            auto define = state->defines.find(name);
+            //            if (define == state->defines.end()
+            //                || (iter->getMacroId() < state->disabledMacros.size()
+            //                    && state->disabledMacros[iter->getMacroId()].count(name)))
+            //            {
+            //                continue;
+            //            }
+            //            if (!define->second.identifierList)
+            //            {
+            //                result.reserve(result.size() + std::distance(start, iter));
+            //                std::transform(start, iter, std::back_inserter(result),
+            //                [columnOffset](OpenCL::Lexer::Token token) {
+            //                    token.setColumn(token.getColumn() + columnOffset);
+            //                    return token;
+            //                });
+            //                start = iter + 1;
+            //                // Creating a temporary here to create proper context in case of errors in the later
+            //                macroSubstitute
+            //                // call
+            //                auto temp = result;
+            //                temp.insert(temp.end(), define->second.replacementList.begin(),
+            //                define->second.replacementList.end()); columnOffset +=
+            //                define->second.replacementList.empty() ?
+            //                                    -static_cast<std::int64_t>(iter->getLength()) :
+            //                                    static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
+            //                                                              +
+            //                                                              define->second.replacementList.back().getLength())
+            //                                        - define->second.replacementList.front().getColumn() -
+            //                                        iter->getLength();
+            //                std::for_each(temp.begin() + result.size(), temp.end(),
+            //                              [iter, begin = define->second.replacementList.begin()](OpenCL::Lexer::Token&
+            //                              token) {
+            //                                  token.setLine(iter->getLine());
+            //                                  token.setColumn(iter->getColumn() + token.getColumn() -
+            //                                  begin->getColumn());
+            //                              });
+            //
+            //                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
+            //                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
+            //                {
+            //                    std::unordered_set<std::uint64_t> uniqueSet;
+            //                    std::transform(temp.begin() + result.size(), temp.end(),
+            //                                   std::inserter(uniqueSet, uniqueSet.begin()),
+            //                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
+            //                    for (auto& id : uniqueSet)
+            //                    {
+            //                        state->disabledMacros[id].insert(name);
+            //                        state->disabledMacros[id].insert(state->disabledMacros[iter->getMacroId()].begin(),
+            //                                                         state->disabledMacros[iter->getMacroId()].end());
+            //                    }
+            //                }
+            //
+            //                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(),
+            //                OpenCL::SourceObject(temp),
+            //                                              reporter, state);
+            //                result.reserve(result.size() + vector.size());
+            //                std::move(vector.begin(), vector.end(), std::back_inserter(result));
+            //            }
+            //            else if (iter + 1 != end && (iter + 1)->getTokenType() ==
+            //            OpenCL::Lexer::TokenType::OpenParentheses
+            //                     && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
+            //            {
+            //                result.reserve(result.size() + std::distance(start, iter));
+            //                std::transform(start, iter, std::back_inserter(result),
+            //                [columnOffset](OpenCL::Lexer::Token token) {
+            //                    token.setColumn(token.getColumn() + columnOffset);
+            //                    return token;
+            //                });
+            //                //( must immediately follow the function like macro identifier
+            //                iter += 2;
+            //                auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
+            //                start = iter + 1;
+            //
+            //                auto replacementSubstituted = argumentSubstitution(define, arguments, state);
+            //
+            //                auto temp = result;
+            //                temp.reserve(temp.size() + replacementSubstituted.size());
+            //                std::move(replacementSubstituted.begin(), replacementSubstituted.end(),
+            //                std::back_inserter(temp));
+            //
+            //                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
+            //                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
+            //                {
+            //                    std::unordered_set<std::uint64_t> uniqueSet;
+            //                    std::transform(temp.begin() + result.size(), temp.end(),
+            //                                   std::inserter(uniqueSet, uniqueSet.begin()),
+            //                                   [](const OpenCL::Lexer::Token& token) { return token.getMacroId(); });
+            //                    for (auto& id : uniqueSet)
+            //                    {
+            //                        state->disabledMacros[id].insert(name);
+            //                        state->disabledMacros[id].insert(state->disabledMacros[namePos->getMacroId()].begin(),
+            //                                                         state->disabledMacros[namePos->getMacroId()].end());
+            //                    }
+            //                }
+            //
+            //                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(),
+            //                OpenCL::SourceObject(temp),
+            //                                              reporter, state);
+            //                result.reserve(result.size() + vector.size());
+            //                std::move(vector.begin(), vector.end(), std::back_inserter(result));
+            //            }
+            //            else
+            //            {
+            //                continue;
+            //            }
+            //            state->substitutions.insert(
+            //                {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end},
+            //                {*iter}}});
         }
         result.reserve(result.size() + std::distance(start, end));
-        std::transform(start, end, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
-            token.setColumn(token.getColumn() + columnOffset);
-            return token;
-        });
+        //        std::transform(start, end, std::back_inserter(result), [columnOffset](OpenCL::Lexer::Token token) {
+        //            token.setColumn(token.getColumn() + columnOffset);
+        //            return token;
+        //        });
         return result;
     }
 
@@ -521,10 +536,10 @@ namespace
             {
                 if (reporter)
                 {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("newline", "expression"),
-                        sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                        OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                    OpenCL::Message::error(
+                        OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("newline", "expression"), begin,
+                        OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                        .print(*reporter, sourceObject);
                 }
                 return {};
             }
@@ -578,10 +593,9 @@ namespace
         {
             if (reporter)
             {
-                *reporter << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("newline", "expression"),
-                    sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("newline", "expression"),
+                                       begin, OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                    .print(*reporter, sourceObject);
             }
             return {};
         }
@@ -623,9 +637,9 @@ namespace
         {
             if (reporter)
             {
-                (*reporter) << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N.args("#endif"), sourceObject.getLineStart(begin),
-                    sourceObject.getLineEnd(begin), OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args("#endif"), begin,
+                                       OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                    .print(*reporter, sourceObject);
             }
             return {}; //{std::move(ifGroup), {}, {}};
         }
@@ -633,11 +647,10 @@ namespace
         {
             if (reporter)
             {
-                (*reporter) << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("#endif",
-                                                                            '\'' + begin->getRepresentation() + '\''),
-                    sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args(
+                                           "#endif", '\'' + begin->getRepresentation() + '\''),
+                                       begin, OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                    .print(*reporter, sourceObject);
             }
             return {}; //{std::move(ifGroup), {}, {}};
         }
@@ -657,9 +670,9 @@ namespace
         {
             if (reporter)
             {
-                (*reporter) << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N.args("#endif"), sourceObject.getLineStart(begin),
-                    sourceObject.getLineEnd(begin), OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args("#endif"), begin,
+                                       OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                    .print(*reporter, sourceObject);
             }
             return {}; //{std::move(ifGroup), std::move(elifGroups), {}};
         }
@@ -667,11 +680,10 @@ namespace
         {
             if (reporter)
             {
-                (*reporter) << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("#endif",
-                                                                            '\'' + begin->getRepresentation() + '\''),
-                    sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args(
+                                           "#endif", '\'' + begin->getRepresentation() + '\''),
+                                       begin, OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                    .print(*reporter, sourceObject);
             }
             return {}; //{std::move(ifGroup), std::move(elifGroups), {}};
         }
@@ -746,20 +758,17 @@ namespace
         auto namePos = begin - 1;
         const auto& name = std::get<std::string>(namePos->getValue());
         if (begin == end || begin->getTokenType() != OpenCL::Lexer::TokenType::OpenParentheses
-            || begin->getLine() != namePos->getLine()
-            || begin->getColumn() != namePos->getColumn() + namePos->getLength())
+            || begin->getOffset() != namePos->getOffset() + namePos->getLength())
         {
             // No ( after the identifier or there's whitespace in between the identifier and the (
-            if (begin != end && begin->getLine() == namePos->getLine()
-                && begin->getColumn() == namePos->getColumn() + namePos->getLength()
+            if (begin != end && begin->getOffset() == namePos->getOffset() + namePos->getLength()
                 && begin->getTokenType() != OpenCL::Lexer::TokenType::Newline)
             {
                 if (reporter)
                 {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION,
-                        sourceObject.getLineStart(namePos), sourceObject.getLineEnd(namePos),
-                        OpenCL::Modifier(begin, begin + 1));
+                    OpenCL::Message::error(OpenCL::ErrorMessages::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION,
+                                           namePos, OpenCL::Modifier(begin, begin + 1))
+                        .print(*reporter, sourceObject);
                 }
                 return {};
             }
@@ -803,18 +812,18 @@ namespace
                     {
                         if (begin == end)
                         {
-                            *reporter << OpenCL::Message::error(
-                                OpenCL::ErrorMessages::Parser::EXPECTED_N.args("identifier or '...'"),
-                                sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                                OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                            OpenCL::Message::error(
+                                OpenCL::ErrorMessages::Parser::EXPECTED_N.args("identifier or '...'"), begin,
+                                OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                                .print(*reporter, sourceObject);
                         }
                         else
                         {
-                            *reporter << OpenCL::Message::error(
+                            OpenCL::Message::error(
                                 OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                     "identifier or '...'", '\'' + begin->getRepresentation() + '\''),
-                                sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                                OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning));
+                                begin, OpenCL::Modifier(begin, begin + 1, OpenCL::Modifier::PointAtBeginning))
+                                .print(*reporter, sourceObject);
                         }
                     }
                     return ControlLine::DefineDirective{start, begin, namePos, name, std::move(identifierList),
@@ -851,16 +860,17 @@ namespace
                                                 result->second.replacementList.begin(),
                                                 result->second.replacementList.end()))
                     {
-                        *reporter << OpenCL::Message::error(
+                        OpenCL::Message::error(
                             OpenCL::ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + define->identifier + '\''),
-                            sourceObject.getLineStart(define->identifierPos),
-                            sourceObject.getLineEnd(define->identifierPos),
+                            define->identifierPos, define->identifierPos,
                             OpenCL::Modifier(define->identifierPos, define->identifierPos + 1))
-                                  << OpenCL::Message::note(
-                                         OpenCL::Notes::PREVIOUSLY_DECLARED_HERE,
-                                         sourceObject.getLineStart(result->second.identifierPos),
-                                         sourceObject.getLineEnd(result->second.identifierPos),
-                                         OpenCL::Modifier(result->second.identifierPos, result->second.identifierPos));
+                            .print(*reporter, sourceObject);
+
+                        OpenCL::Message::note(
+                            OpenCL::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
+                            result->second.identifierPos,
+                            OpenCL::Modifier(result->second.identifierPos, result->second.identifierPos))
+                            .print(*reporter, sourceObject);
                     }
                 }
             }
@@ -892,10 +902,9 @@ namespace
             {
                 if (tokens.empty() && reporter)
                 {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("tokens", "include"),
-                        sourceObject.getLineStart(begin - 1), sourceObject.getLineEnd(begin - 1),
-                        OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                    OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("tokens", "include"),
+                                           begin - 1, OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                        .print(*reporter, sourceObject);
                 }
                 // TODO: Process tokens to open file, tokenize it and call processFile with it
                 return;
@@ -904,10 +913,9 @@ namespace
             {
                 if (tokens.empty() && reporter)
                 {
-                    *reporter << OpenCL::Message::error(
-                        OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("tokens", "line"),
-                        sourceObject.getLineStart(begin - 1), sourceObject.getLineEnd(begin - 1),
-                        OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                    OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("tokens", "line"),
+                                           begin - 1, OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                        .print(*reporter, sourceObject);
                 }
                 return;
             }
@@ -939,9 +947,9 @@ namespace
         {
             if (reporter)
             {
-                *reporter << OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args("Tokens"),
-                                                    sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                                                    OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd));
+                OpenCL::Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args("Tokens"), begin, begin,
+                                       OpenCL::Modifier(begin - 1, begin, OpenCL::Modifier::InsertAtEnd))
+                    .print(*reporter, sourceObject);
             }
             return {};
         }
@@ -987,11 +995,10 @@ namespace
             auto eol = findNewline(begin, end);
             if (reporter && state)
             {
-                *reporter << OpenCL::Message::error(
-                    OpenCL::ErrorMessages::PP::N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args(
-                        "'#" + begin->getRepresentation() + '\''),
-                    sourceObject.getLineStart(begin), sourceObject.getLineEnd(begin),
-                    OpenCL::Modifier(begin - 1, begin + 1));
+                OpenCL::Message::error(OpenCL::ErrorMessages::PP::N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args(
+                                           "'#" + begin->getRepresentation() + '\''),
+                                       begin, OpenCL::Modifier(begin - 1, begin + 1))
+                    .print(*reporter, sourceObject);
             }
             begin = eol;
         } while (begin != end);
@@ -1014,11 +1021,10 @@ namespace
     }
 } // namespace
 
-std::vector<OpenCL::Lexer::Token> OpenCL::PP::preprocess(const std::vector<Lexer::Token>& tokens,
-                                                         llvm::raw_ostream* reporter)
+OpenCL::SourceObject OpenCL::PP::preprocess(const OpenCL::SourceObject& sourceObject, llvm::raw_ostream* reporter)
 {
-    //    auto begin = sourceObject.begin();
-    //    State state;
-    //    auto file = processFile(begin, sourceObject.end(), sourceObject, reporter, &state);
-    //    return SourceObject(LanguageOptions::native(), state.substitutions, OpenCL::SourceObject::SubstitutionMap());
+    auto begin = sourceObject.data().begin();
+    State state;
+    auto file = processFile(begin, sourceObject.data().end(), sourceObject, reporter, &state);
+    return SourceObject({}, std::move(file), LanguageOptions::native(), state.substitutions);
 }
