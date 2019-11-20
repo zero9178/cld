@@ -3,6 +3,7 @@
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
+#include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -10,7 +11,7 @@
 
 #include <algorithm>
 #include <cassert>
-#include <map>
+#include <numeric>
 #include <regex>
 #include <string_view>
 
@@ -21,75 +22,6 @@ using namespace OpenCL::Lexer;
 
 namespace
 {
-    //    void reportError(llvm::raw_ostream* reporter, const std::string& message, std::uint64_t line, std::uint64_t
-    //    column,
-    //                     const std::string& lineText,
-    //                     std::optional<std::pair<std::uint64_t, std::uint64_t>> highLightRange = {},
-    //                     HighlightEffect highlightEffect = HighlightEffect::Underline)
-    //    {
-    //        if (!reporter)
-    //        {
-    //            return;
-    //        }
-    //#ifdef NDEBUG
-    //        auto normalColour = termcolor::white;
-    //#else
-    //        auto normalColour = termcolor::grey;
-    //#endif
-    //        auto lineNumberText = std::to_string(line);
-    //        *reporter << normalColour << lineNumberText << ':' << column << ": " << termcolor::red
-    //                  << "error: " << normalColour << message << '\n';
-    //        auto numSize = lineNumberText.size();
-    //        auto remainder = numSize % 4;
-    //        if (remainder)
-    //        {
-    //            numSize += 4 - remainder;
-    //        }
-    //        *reporter << normalColour << std::string(numSize - lineNumberText.size(), ' ') << lineNumberText << '|';
-    //        if (!highLightRange || highLightRange->first == highLightRange->second)
-    //        {
-    //            *reporter << lineText << std::endl;
-    //            return;
-    //        }
-    //        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->first > highLightRange->second)
-    //        {
-    //            std::cerr << "Highlight column range start greater than end" << std::endl;
-    //            std::terminate();
-    //        }
-    //        if (highlightEffect != HighlightEffect::InsertAtEnd && highLightRange->second > lineText.size())
-    //        {
-    //            std::cerr << "Highlight column range end greater than line size" << std::endl;
-    //            std::terminate();
-    //        }
-    //        if (highlightEffect != HighlightEffect::InsertAtEnd)
-    //        {
-    //            *reporter << lineText.substr(0, highLightRange->first) << termcolor::red
-    //                      << lineText.substr(highLightRange->first, highLightRange->second - highLightRange->first)
-    //                      << normalColour << lineText.substr(highLightRange->second) << '\n';
-    //        }
-    //        else
-    //        {
-    //            *reporter << lineText << '\n';
-    //        }
-    //        *reporter << std::string(numSize, ' ') << '|' << std::string(highLightRange->first, ' ') <<
-    //        termcolor::red; switch (highlightEffect)
-    //        {
-    //            case HighlightEffect::Underline:
-    //                *reporter << std::string(highLightRange->second - highLightRange->first, '~');
-    //                break;
-    //            case HighlightEffect::PointAtBeginning:
-    //                *reporter << '^' << std::string(highLightRange->second - highLightRange->first - 1, '~');
-    //                break;
-    //            case HighlightEffect::PointAtEnd:
-    //                *reporter << std::string(highLightRange->second - highLightRange->first - 1, '~') << '^';
-    //                break;
-    //            case HighlightEffect::InsertAtEnd:
-    //                *reporter << std::string(lineText.empty() ? 0 : lineText.size() - 1, ' ') << '^';
-    //                break;
-    //        }
-    //        *reporter << normalColour << std::endl;
-    //    }
-
     //    std::int32_t charactersToCharLiteral(std::ostream* reporter, const std::string& characters, std::uint64_t
     //    line,
     //                                         std::uint64_t column, const std::string& lineText)
@@ -511,11 +443,103 @@ namespace
         return os.write(sv.data(), sv.size());
     }
 
+    int charWidth(int UCS)
+    {
+        if (!llvm::sys::unicode::isPrintable(UCS))
+            return llvm::sys::unicode::ErrorNonPrintableCharacter;
+
+        // Sorted list of non-spacing and enclosing combining mark intervals as
+        // defined in "3.6 Combination" of
+        // http://www.unicode.org/versions/Unicode6.2.0/UnicodeStandard-6.2.pdf
+        static const llvm::sys::UnicodeCharRange CombiningCharacterRanges[] = {
+            {0x0300, 0x036F},   {0x0483, 0x0489},   {0x0591, 0x05BD},   {0x05BF, 0x05BF},   {0x05C1, 0x05C2},
+            {0x05C4, 0x05C5},   {0x05C7, 0x05C7},   {0x0610, 0x061A},   {0x064B, 0x065F},   {0x0670, 0x0670},
+            {0x06D6, 0x06DC},   {0x06DF, 0x06E4},   {0x06E7, 0x06E8},   {0x06EA, 0x06ED},   {0x0711, 0x0711},
+            {0x0730, 0x074A},   {0x07A6, 0x07B0},   {0x07EB, 0x07F3},   {0x0816, 0x0819},   {0x081B, 0x0823},
+            {0x0825, 0x0827},   {0x0829, 0x082D},   {0x0859, 0x085B},   {0x08E4, 0x08FE},   {0x0900, 0x0902},
+            {0x093A, 0x093A},   {0x093C, 0x093C},   {0x0941, 0x0948},   {0x094D, 0x094D},   {0x0951, 0x0957},
+            {0x0962, 0x0963},   {0x0981, 0x0981},   {0x09BC, 0x09BC},   {0x09C1, 0x09C4},   {0x09CD, 0x09CD},
+            {0x09E2, 0x09E3},   {0x0A01, 0x0A02},   {0x0A3C, 0x0A3C},   {0x0A41, 0x0A42},   {0x0A47, 0x0A48},
+            {0x0A4B, 0x0A4D},   {0x0A51, 0x0A51},   {0x0A70, 0x0A71},   {0x0A75, 0x0A75},   {0x0A81, 0x0A82},
+            {0x0ABC, 0x0ABC},   {0x0AC1, 0x0AC5},   {0x0AC7, 0x0AC8},   {0x0ACD, 0x0ACD},   {0x0AE2, 0x0AE3},
+            {0x0B01, 0x0B01},   {0x0B3C, 0x0B3C},   {0x0B3F, 0x0B3F},   {0x0B41, 0x0B44},   {0x0B4D, 0x0B4D},
+            {0x0B56, 0x0B56},   {0x0B62, 0x0B63},   {0x0B82, 0x0B82},   {0x0BC0, 0x0BC0},   {0x0BCD, 0x0BCD},
+            {0x0C3E, 0x0C40},   {0x0C46, 0x0C48},   {0x0C4A, 0x0C4D},   {0x0C55, 0x0C56},   {0x0C62, 0x0C63},
+            {0x0CBC, 0x0CBC},   {0x0CBF, 0x0CBF},   {0x0CC6, 0x0CC6},   {0x0CCC, 0x0CCD},   {0x0CE2, 0x0CE3},
+            {0x0D41, 0x0D44},   {0x0D4D, 0x0D4D},   {0x0D62, 0x0D63},   {0x0DCA, 0x0DCA},   {0x0DD2, 0x0DD4},
+            {0x0DD6, 0x0DD6},   {0x0E31, 0x0E31},   {0x0E34, 0x0E3A},   {0x0E47, 0x0E4E},   {0x0EB1, 0x0EB1},
+            {0x0EB4, 0x0EB9},   {0x0EBB, 0x0EBC},   {0x0EC8, 0x0ECD},   {0x0F18, 0x0F19},   {0x0F35, 0x0F35},
+            {0x0F37, 0x0F37},   {0x0F39, 0x0F39},   {0x0F71, 0x0F7E},   {0x0F80, 0x0F84},   {0x0F86, 0x0F87},
+            {0x0F8D, 0x0F97},   {0x0F99, 0x0FBC},   {0x0FC6, 0x0FC6},   {0x102D, 0x1030},   {0x1032, 0x1037},
+            {0x1039, 0x103A},   {0x103D, 0x103E},   {0x1058, 0x1059},   {0x105E, 0x1060},   {0x1071, 0x1074},
+            {0x1082, 0x1082},   {0x1085, 0x1086},   {0x108D, 0x108D},   {0x109D, 0x109D},   {0x135D, 0x135F},
+            {0x1712, 0x1714},   {0x1732, 0x1734},   {0x1752, 0x1753},   {0x1772, 0x1773},   {0x17B4, 0x17B5},
+            {0x17B7, 0x17BD},   {0x17C6, 0x17C6},   {0x17C9, 0x17D3},   {0x17DD, 0x17DD},   {0x180B, 0x180D},
+            {0x18A9, 0x18A9},   {0x1920, 0x1922},   {0x1927, 0x1928},   {0x1932, 0x1932},   {0x1939, 0x193B},
+            {0x1A17, 0x1A18},   {0x1A56, 0x1A56},   {0x1A58, 0x1A5E},   {0x1A60, 0x1A60},   {0x1A62, 0x1A62},
+            {0x1A65, 0x1A6C},   {0x1A73, 0x1A7C},   {0x1A7F, 0x1A7F},   {0x1B00, 0x1B03},   {0x1B34, 0x1B34},
+            {0x1B36, 0x1B3A},   {0x1B3C, 0x1B3C},   {0x1B42, 0x1B42},   {0x1B6B, 0x1B73},   {0x1B80, 0x1B81},
+            {0x1BA2, 0x1BA5},   {0x1BA8, 0x1BA9},   {0x1BAB, 0x1BAB},   {0x1BE6, 0x1BE6},   {0x1BE8, 0x1BE9},
+            {0x1BED, 0x1BED},   {0x1BEF, 0x1BF1},   {0x1C2C, 0x1C33},   {0x1C36, 0x1C37},   {0x1CD0, 0x1CD2},
+            {0x1CD4, 0x1CE0},   {0x1CE2, 0x1CE8},   {0x1CED, 0x1CED},   {0x1CF4, 0x1CF4},   {0x1DC0, 0x1DE6},
+            {0x1DFC, 0x1DFF},   {0x20D0, 0x20F0},   {0x2CEF, 0x2CF1},   {0x2D7F, 0x2D7F},   {0x2DE0, 0x2DFF},
+            {0x302A, 0x302D},   {0x3099, 0x309A},   {0xA66F, 0xA672},   {0xA674, 0xA67D},   {0xA69F, 0xA69F},
+            {0xA6F0, 0xA6F1},   {0xA802, 0xA802},   {0xA806, 0xA806},   {0xA80B, 0xA80B},   {0xA825, 0xA826},
+            {0xA8C4, 0xA8C4},   {0xA8E0, 0xA8F1},   {0xA926, 0xA92D},   {0xA947, 0xA951},   {0xA980, 0xA982},
+            {0xA9B3, 0xA9B3},   {0xA9B6, 0xA9B9},   {0xA9BC, 0xA9BC},   {0xAA29, 0xAA2E},   {0xAA31, 0xAA32},
+            {0xAA35, 0xAA36},   {0xAA43, 0xAA43},   {0xAA4C, 0xAA4C},   {0xAAB0, 0xAAB0},   {0xAAB2, 0xAAB4},
+            {0xAAB7, 0xAAB8},   {0xAABE, 0xAABF},   {0xAAC1, 0xAAC1},   {0xAAEC, 0xAAED},   {0xAAF6, 0xAAF6},
+            {0xABE5, 0xABE5},   {0xABE8, 0xABE8},   {0xABED, 0xABED},   {0xFB1E, 0xFB1E},   {0xFE00, 0xFE0F},
+            {0xFE20, 0xFE26},   {0x101FD, 0x101FD}, {0x10A01, 0x10A03}, {0x10A05, 0x10A06}, {0x10A0C, 0x10A0F},
+            {0x10A38, 0x10A3A}, {0x10A3F, 0x10A3F}, {0x11001, 0x11001}, {0x11038, 0x11046}, {0x11080, 0x11081},
+            {0x110B3, 0x110B6}, {0x110B9, 0x110BA}, {0x11100, 0x11102}, {0x11127, 0x1112B}, {0x1112D, 0x11134},
+            {0x11180, 0x11181}, {0x111B6, 0x111BE}, {0x116AB, 0x116AB}, {0x116AD, 0x116AD}, {0x116B0, 0x116B5},
+            {0x116B7, 0x116B7}, {0x16F8F, 0x16F92}, {0x1D167, 0x1D169}, {0x1D17B, 0x1D182}, {0x1D185, 0x1D18B},
+            {0x1D1AA, 0x1D1AD}, {0x1D242, 0x1D244}, {0xE0100, 0xE01EF},
+        };
+        static const llvm::sys::UnicodeCharSet CombiningCharacters(CombiningCharacterRanges);
+
+        if (CombiningCharacters.contains(UCS))
+            return 0;
+
+        static const llvm::sys::UnicodeCharRange DoubleWidthCharacterRanges[] = {
+            // Hangul Jamo
+            {0x1100, 0x11FF},
+            // Deprecated fullwidth angle brackets
+            {0x2329, 0x232A},
+            // CJK Misc, CJK Unified Ideographs, Yijing Hexagrams, Yi
+            // excluding U+303F (IDEOGRAPHIC HALF FILL SPACE)
+            {0x2E80, 0x303E},
+            {0x3040, 0xA4CF},
+            // Hangul
+            {0xAC00, 0xD7A3},
+            {0xD7B0, 0xD7C6},
+            {0xD7CB, 0xD7FB},
+            // CJK Unified Ideographs
+            {0xF900, 0xFAFF},
+            // Vertical forms
+            {0xFE10, 0xFE19},
+            // CJK Compatibility Forms + Small Form Variants
+            {0xFE30, 0xFE6F},
+            // Fullwidth forms
+            {0xFF01, 0xFF60},
+            {0xFFE0, 0xFFE6},
+            // CJK Unified Ideographs
+            {0x20000, 0x2A6DF},
+            {0x2A700, 0x2B81F},
+            {0x2F800, 0x2FA1F}};
+        static const llvm::sys::UnicodeCharSet DoubleWidthCharacters(DoubleWidthCharacterRanges);
+
+        if (DoubleWidthCharacters.contains(UCS))
+            return 2;
+        return 1;
+    }
+
     int columnWidthUTF8Safe(std::string_view sv)
     {
         int columnWidth = 0;
         int length;
-        for (std::size_t i = 0,e = sv.size(); i < e; i += length)
+        for (std::size_t i = 0, e = sv.size(); i < e; i += length)
         {
             length = llvm::getNumBytesForUTF8(sv[i]);
             if (length <= 0 || i + length > sv.size())
@@ -524,7 +548,29 @@ namespace
                 columnWidth++;
                 continue;
             }
+            llvm::UTF32 buf[1];
+            const llvm::UTF8* start = reinterpret_cast<const llvm::UTF8*>(sv.data() + i);
+            llvm::UTF32* target = &buf[0];
+            if (llvm::conversionOK
+                != llvm::ConvertUTF8toUTF32(&start, start + length, &target, target + 1, llvm::strictConversion))
+            {
+                columnWidth += length * charWidth(0xFFFD);
+                continue;
+            }
+            int width = charWidth(buf[0]);
+            if (width < 0)
+            {
+                return llvm::sys::unicode::ErrorNonPrintableCharacter;
+            }
+            columnWidth += width;
         }
+        return columnWidth;
+    }
+
+    std::string stringOfSameWidth(std::string_view original, char characterToReplace)
+    {
+        auto utf8Width = columnWidthUTF8Safe(original);
+        return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
     }
 
     class Context
@@ -613,7 +659,7 @@ namespace
                         continue;
                     }
                     auto printed = lines[i - startLine].substr(0, iter - begin);
-                    auto utf8Width = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
+                    auto utf8Width = columnWidthUTF8Safe({printed.data(), printed.size()});
                     columnsOfArrowsForLine[i - startLine].push_back(iter - begin
                                                                     - (utf8Width < 0 ? 0 : printed.size() - utf8Width));
                 }
@@ -637,8 +683,8 @@ namespace
                     auto column = tokenStartOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
                     llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get()
-                        << string.substr(column, m_offset - tokenStartOffset);
-                    *m_reporter << string.substr(m_offset);
+                        << string.substr(column, m_offset - tokenStartOffset + 1);
+                    *m_reporter << string.substr(m_offset + 1);
                 }
                 else if (i == startLine)
                 {
@@ -650,7 +696,7 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = m_offset - getLineStartOffset(i);
+                    auto endColumn = m_offset + 1 - getLineStartOffset(i);
                     llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string.substr(0, endColumn);
                     *m_reporter << string.substr(endColumn);
                 }
@@ -662,8 +708,7 @@ namespace
                 {
                     // The token spans multiple lines and we are neither at the first nor last line. Therefore
                     // this line consist only of the token
-                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({string.data(), string.size()});
-                    auto underline = std::string(utf8With < 0 ? string.size() : utf8With, '~');
+                    auto underline = stringOfSameWidth(string, '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter < underline.size());
@@ -675,23 +720,21 @@ namespace
                 {
                     // The token does not span lines and starts as well as ends here
                     auto column = tokenStartOffset - getLineStartOffset(i);
-                    auto printed = string.substr(column, m_offset - tokenStartOffset);
-                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
-                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
+                    auto underline = stringOfSameWidth(string.substr(column, m_offset - tokenStartOffset + 1), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter - column < underline.size());
                         underline[iter - column] = '^';
                     }
-                    llvm::WithColor(m_reporter->indent(column), llvm::raw_ostream::RED) << underline;
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
                 }
                 else if (i == startLine)
                 {
                     // The token starts here and does not end here
                     auto column = tokenStartOffset - getLineStartOffset(i);
-                    auto printed = string.substr(column);
-                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
-                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
+                    auto underline = stringOfSameWidth(string.substr(column), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter < underline.size());
@@ -702,10 +745,8 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = m_offset - getLineStartOffset(i);
-                    auto printed = string.substr(0, endColumn);
-                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
-                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    auto endColumn = 1 + m_offset - getLineStartOffset(i);
+                    auto underline = stringOfSameWidth(string.substr(0, endColumn), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter < underline.size());
@@ -740,7 +781,7 @@ namespace
 
         void push(TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset + 1);
             m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
     };
@@ -822,10 +863,40 @@ namespace
 
     /**
      * Callee responsible for right format
-     * @param value string that either consist of 5 characters (u plus 4 hex digits) or 9 (U plus 8 hex digits)
+     * @param value string that either consist of 4 or 8 hex digits
      * @return Unicode value
      */
-    std::uint32_t universalCharacterToValue(const std::string& value) {}
+    std::uint32_t universalCharacterToValue(std::string_view value, std::uint64_t offsetOfFirstC, Context& context)
+    {
+        auto result = std::stoul(std::string{value.begin(), value.end()}, nullptr, 16);
+        if (result < 0xA0)
+        {
+            if (result != '$' && result != '@' && result != '`')
+            {
+                std::string storage;
+                llvm::raw_string_ostream os(storage);
+                os.write_hex(result);
+                std::vector<std::uint64_t> arrows(value.size());
+                std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
+                context.reportError(
+                    OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                        storage, "Value mustn't be less than 0xA0"),
+                    offsetOfFirstC, std::move(arrows));
+            }
+        }
+        else if (result >= 0xD800 && result <= 0xDFFF)
+        {
+            std::string storage;
+            llvm::raw_string_ostream os(storage);
+            os.write_hex(result);
+            std::vector<std::uint64_t> arrows(value.size());
+            std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
+            context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                    storage, "Value mustn't be in range of 0xD800 to 0xDFFF"),
+                                offsetOfFirstC, std::move(arrows));
+        }
+        return result;
+    }
 
     StateMachine CharacterLiteral::advance(char c, Context& context) noexcept
     {
@@ -873,7 +944,55 @@ namespace
                 // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
                 // iter + 1 == end the last character would be '\\' and following that '\''.
                 // Therefore the character literal wouldn't have ended and we wouldn't be here.
-                if (iter[1] == 'u' || iter[1] == 'U') {}
+                if (iter[1] == 'u' || iter[1] == 'U')
+                {
+                    bool big = iter[1] == 'U';
+                    iter += 2;
+                    if (iter == end
+                        || (!(*iter >= '0' || *iter <= '9') && !(*iter >= 'a' && *iter <= 'f')
+                            && !(*iter >= 'A' && *iter <= 'F')))
+                    {
+                        // First character followed after \u or \U is not a hex digit or its the end of string
+                        // Let's assume the user thought \u might be an escape character
+                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                        context.reportError(
+                            OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE.args(big ? "\\U" : "\\u"), start,
+                            {start, start + 1});
+                        continue;
+                    }
+                    else
+                    {
+                        auto hexStart = iter;
+                        auto hexEnd = std::find_if(
+                            hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
+                            [](char c) {
+                                return !(c >= '0' || c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+                            });
+                        if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
+                        {
+                            auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                            std::vector<std::uint64_t> arrows = {start, start + 1};
+                            arrows.resize(2 + std::distance(hexStart, hexEnd));
+                            std::iota(arrows.begin() + 2, arrows.end(), start + 2);
+                            context.reportError(
+                                OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                                    std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
+                                start, std::move(arrows));
+                            iter = hexEnd;
+                            continue;
+                        }
+                        *resultStart = universalCharacterToValue(
+                            {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
+                            context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
+                        resultStart++;
+                        continue;
+                    }
+                }
+                else
+                {
+                    // TODO: temp, escape sequences go here
+                    iter += 2;
+                }
             }
 
             // TODO: check res, handle escape characters, make character literal only single character wide. Check

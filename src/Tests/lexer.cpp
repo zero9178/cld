@@ -435,7 +435,17 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Fails")
     {
         LEXER_FAILS_WITH("'\n'", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("character literal")));
-        LEXER_FAILS_WITH("'aa'", Catch::Contains(INCORRECT_CHARACTER_LITERAL.args("aa")));
+    }
+    SECTION("Universal characters")
+    {
+        LEXER_FAILS_WITH("'\\u'", Catch::Contains(INVALID_ESCAPE_SEQUENCE.args("\\u")));
+        LEXER_FAILS_WITH("'\\U'", Catch::Contains(INVALID_ESCAPE_SEQUENCE.args("\\U")));
+        LEXER_FAILS_WITH("'\\u56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("2")));
+        auto result = OpenCL::Lexer::tokenize("L'\\u3435'");
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == L'\u3435');
     }
 }
 
@@ -466,6 +476,10 @@ TEST_CASE("Lexing unicode", "[lexer]")
         LEXER_FAILS_WITH(
             (std::array<char, 11>{'L', '\'', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
             Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_FAILS_WITH((std::array<char, 18>{'L', '\'', -24, -78, -109, '\'', ' ', 'L', '\'', -24, -78, -109,
+                                               (char)0xE0, (char)0x80, (char)0x80, '\'', 0})
+                             .data(),
+                         Catch::Contains(INVALID_UTF8_SEQUENCE));
         LEXER_FAILS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
                          Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
@@ -502,7 +516,6 @@ TEST_CASE("Lexing string literals", "[lexer]")
     SECTION("Fails")
     {
         LEXER_FAILS_WITH("\"\n\"", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("string literal")));
-        LEXER_FAILS_WITH(R"("\S")", Catch::Contains(INCORRECT_CHARACTER_LITERAL.args("\\S")));
     }
 }
 

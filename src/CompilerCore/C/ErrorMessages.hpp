@@ -130,11 +130,17 @@ namespace OpenCL
 
             constexpr auto INVALID_OCTAL_CHARACTER = Format("Invalid octal character '{}'");
 
-            constexpr auto INCORRECT_CHARACTER_LITERAL = Format("Incorrect character literal '{}'");
-
             constexpr auto INVALID_INTEGER_LITERAL_SUFFIX = Format("Invalid integer literal suffix '{}'");
 
+            constexpr auto INVALID_ESCAPE_SEQUENCE = Format("Invalid escape sequence '{}'");
+
             constexpr auto INVALID_FLOATING_POINT_LITERAL = Format("Invalid floating point literal '{}'");
+
+            constexpr auto INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS =
+                Format("Invalid universal character. Expected {} more hex digits");
+
+            constexpr auto INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N =
+                Format("Invalid universal character. Illegal value of {} ({})");
 
             constexpr auto BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT =
                 "Binary floating point literal must contain an exponent";
