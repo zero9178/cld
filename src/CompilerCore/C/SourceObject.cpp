@@ -22,7 +22,7 @@ OpenCL::LanguageOptions OpenCL::SourceObject::getLanguageOptions() const
 std::uint64_t OpenCL::SourceObject::getLineNumber(std::uint64_t offset) const noexcept
 {
     auto result = std::lower_bound(m_starts.begin(), m_starts.end(), offset);
-    return result == m_starts.begin() ? 0 : *(result - 1);
+    return result == m_starts.begin() ? 1 : *(result - 1);
 }
 
 std::uint64_t OpenCL::SourceObject::getLineStartOffset(std::uint64_t line) const noexcept

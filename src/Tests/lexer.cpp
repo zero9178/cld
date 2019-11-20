@@ -405,7 +405,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Octals")
     {
         LEXER_FAILS_WITH("'\\9'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
-        LEXER_FAILS_WITH("'\\0700'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE));
+        LEXER_FAILS_WITH("'\\0700'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         auto result = OpenCL::Lexer::tokenize("'\\070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -416,7 +416,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     {
         LEXER_FAILS_WITH("'\\xG'", Catch::Contains(INVALID_HEXADECIMAL_CHARACTER.args("G")));
         LEXER_FAILS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
-        LEXER_FAILS_WITH("'\\x0700'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE));
+        LEXER_FAILS_WITH("'\\x0700'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         auto result = OpenCL::Lexer::tokenize("'\\x070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -451,8 +451,8 @@ TEST_CASE("Lexing unicode", "[lexer]")
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
             REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
             REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == u'貓');
-            LEXER_FAILS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE));
-            LEXER_FAILS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE));
+            LEXER_FAILS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+            LEXER_FAILS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         }
         SECTION("UTF-32")
         {
@@ -463,6 +463,11 @@ TEST_CASE("Lexing unicode", "[lexer]")
             REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
             REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == U'🍌');
         }
+        LEXER_FAILS_WITH(
+            (std::array<char, 11>{'L', '\'', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
+            Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_FAILS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
+                         Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
 }
 

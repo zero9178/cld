@@ -12,6 +12,7 @@
 #include <cassert>
 #include <map>
 #include <regex>
+#include <string_view>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
@@ -505,43 +506,70 @@ namespace
     //        }
     //    }
 
+    llvm::raw_ostream& operator<<(llvm::raw_ostream& os, std::string_view sv)
+    {
+        return os.write(sv.data(), sv.size());
+    }
+
+    int columnWidthUTF8Safe(std::string_view sv)
+    {
+        int columnWidth = 0;
+        int length;
+        for (std::size_t i = 0,e = sv.size(); i < e; i += length)
+        {
+            length = llvm::getNumBytesForUTF8(sv[i]);
+            if (length <= 0 || i + length > sv.size())
+            {
+                length = 1;
+                columnWidth++;
+                continue;
+            }
+        }
+    }
+
     class Context
     {
         OpenCL::LanguageOptions m_languageOptions;
         bool m_inPreprocessor;
         llvm::raw_ostream* m_reporter;
         std::vector<Token> m_result;
-        std::string& m_source;
+        std::string_view m_source;
         std::uint64_t& m_offset;
-        std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> m_lineToOffset;
+        std::vector<std::uint64_t> m_lineStarts;
+
+        std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
+        {
+            auto result = std::lower_bound(m_lineStarts.begin(), m_lineStarts.end(), offset);
+            return result == m_lineStarts.begin() ? 1 : std::distance(m_lineStarts.begin(), result - 1) + 1;
+        }
+
+        std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept
+        {
+            assert(line - 1 < m_lineStarts.size());
+            return m_lineStarts[line - 1];
+        }
+
+        std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept
+        {
+            assert(line - 1 < m_lineStarts.size());
+            return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
+        }
 
     public:
-        std::uint64_t line = 1;
-        std::uint64_t column = 1;
-        std::uint64_t currLineStart;
-        std::uint64_t currColumnStart;
-        std::uint64_t currOffset;
+        std::uint64_t tokenStartOffset;
 
-        Context(std::string& source, std::uint64_t& offset, OpenCL::LanguageOptions languageOptions,
-                bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
+        Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
+                OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
             : m_languageOptions(languageOptions),
               m_inPreprocessor(inPreprocessor),
               m_reporter(reporter),
               m_source(source),
-              m_offset(offset)
+              m_offset(offset),
+              m_lineStarts(std::move(lineStarts))
         {
-            auto begin = source.cbegin();
-            while (begin != source.cend())
-            {
-                auto newLine = std::find(begin, source.cend(), '\n');
-                m_lineToOffset.insert({m_lineToOffset.size() + 1,
-                                       {std::distance(source.cbegin(), begin), std::distance(begin, newLine)}});
-                begin = newLine == source.cend() ? newLine : newLine + 1;
-            }
         }
 
-        void reportError(const std::string& message, std::uint64_t lineNumber, std::uint64_t columnNumber,
-                         std::vector<std::pair<std::uint64_t, std::uint64_t>> arrows = {})
+        void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
             assert(!m_inPreprocessor);
             if (!m_reporter)
@@ -549,78 +577,141 @@ namespace
                 return;
             }
 
-            *m_reporter << lineNumber << ':' << columnNumber << ": ";
-            llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << "error: ";
-            *m_reporter << message << '\n';
-            std::vector<std::string> lines;
-            lines.reserve(this->line - currLineStart + 1);
-            std::transform(
-                m_lineToOffset.find(currLineStart),
-                [&] {
-                    auto result = m_lineToOffset.find(this->line);
-                    assert(result != m_lineToOffset.end());
-                    return ++result;
-                }(),
-                std::back_inserter(lines),
-                [this](const auto& pair) { return m_source.substr(pair.second.first, pair.second.second); });
-            auto numSize = std::to_string(this->line).size();
-            auto remainder = numSize % 4;
-            if (remainder)
+            auto startLine = 0;
+            auto endLine = 0;
+            std::vector<std::string_view> lines;
+            auto numSize = 0;
             {
-                numSize += 4 - remainder;
+                auto line = getLineNumber(location);
+                *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
+                llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << "error: ";
+                *m_reporter << message << '\n';
+                startLine = getLineNumber(tokenStartOffset);
+                endLine = getLineNumber(m_offset);
+                lines.reserve(endLine - startLine + 1);
+                for (auto i = startLine; i <= endLine; i++)
+                {
+                    auto start = getLineStartOffset(i);
+                    lines.push_back(m_source.substr(start, getLineEndOffset(i) - start));
+                }
+                numSize = std::to_string(line).size();
+                auto remainder = numSize % 4;
+                if (remainder)
+                {
+                    numSize += 4 - remainder;
+                }
             }
-            for (auto i = currLineStart; i <= this->line; i++)
+            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(lines.size());
+            for (auto i = startLine; i <= endLine; i++)
+            {
+                auto begin = getLineStartOffset(i);
+                auto end = getLineEndOffset(i);
+                for (auto iter : arrows)
+                {
+                    if (iter < begin || iter >= end)
+                    {
+                        continue;
+                    }
+                    auto printed = lines[i - startLine].substr(0, iter - begin);
+                    auto utf8Width = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
+                    columnsOfArrowsForLine[i - startLine].push_back(iter - begin
+                                                                    - (utf8Width < 0 ? 0 : printed.size() - utf8Width));
+                }
+            }
+            for (auto i = startLine; i <= endLine; i++)
             {
                 // Text
                 *m_reporter << llvm::format_decimal(i, numSize) << '|';
-                auto string = lines[i - currLineStart];
-                auto tokenStartsString = string.substr(currColumnStart, i == this->line ? 0 : std::string::npos);
-                auto tokenEndsString = string.substr(i == currLineStart ? currColumnStart : 0, this->column);
-                if (i == currLineStart)
-                {
-                    // Token starts in this line
-                    *m_reporter << string.substr(0, currColumnStart);
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << tokenStartsString;
-                    // If the token ends and starts in the same line then the if block for token ending gets to print it
-                }
 
-                if (i != this->line && i != currLineStart)
+                auto string = lines[i - startLine];
+                const auto& arrowsForLine = columnsOfArrowsForLine[i - startLine];
+                if (i != startLine && i != endLine)
                 {
-                    // Token does not end nor start in this line
-                    m_reporter->changeColor(llvm::raw_ostream::RED) << string;
+                    // The token spans multiple lines and we are neither at the first nor last line. Therefore
+                    // this line consist only of the token
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string;
+                }
+                else if (i == startLine && i == endLine)
+                {
+                    // The token does not span lines and starts as well as ends here
+                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    *m_reporter << string.substr(0, column);
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get()
+                        << string.substr(column, m_offset - tokenStartOffset);
+                    *m_reporter << string.substr(m_offset);
+                }
+                else if (i == startLine)
+                {
+                    // The token starts here and does not end here
+                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    *m_reporter << string.substr(0, column);
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string.substr(column);
                 }
                 else
                 {
-                    // Token ends in this line
-
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << tokenEndsString;
-                    auto test = llvm::sys::unicode::columnWidthUTF8(tokenEndsString);
-                    *m_reporter << string.substr(this->column);
+                    // The token ends here and did not start here
+                    auto endColumn = m_offset - getLineStartOffset(i);
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string.substr(0, endColumn);
+                    *m_reporter << string.substr(endColumn);
                 }
                 *m_reporter << '\n';
-                // Underline
+
+                // Underline + Arrows
                 m_reporter->indent(numSize) << '|';
-                if (i == currLineStart)
+                if (i != startLine && i != endLine)
                 {
-                    // Token starts in this line
-                    llvm::WithColor(m_reporter->indent(currColumnStart), llvm::raw_ostream::RED)
-                        << std::string(llvm::sys::unicode::columnWidthUTF8(tokenStartsString), '~');
-                    // TODO: Arrows
+                    // The token spans multiple lines and we are neither at the first nor last line. Therefore
+                    // this line consist only of the token
+                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({string.data(), string.size()});
+                    auto underline = std::string(utf8With < 0 ? string.size() : utf8With, '~');
+                    for (auto iter : arrowsForLine)
+                    {
+                        assert(iter < underline.size());
+                        underline[iter] = '^';
+                    }
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
                 }
-                if (i != this->line && i != currLineStart)
+                else if (i == startLine && i == endLine)
                 {
-                    // Token does not end nor start in this line
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED)
-                        << std::string(llvm::sys::unicode::columnWidthUTF8(string), '~');
-                    // TODO: Arrows
+                    // The token does not span lines and starts as well as ends here
+                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto printed = string.substr(column, m_offset - tokenStartOffset);
+                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
+                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    for (auto iter : arrowsForLine)
+                    {
+                        assert(iter - column < underline.size());
+                        underline[iter - column] = '^';
+                    }
+                    llvm::WithColor(m_reporter->indent(column), llvm::raw_ostream::RED) << underline;
+                }
+                else if (i == startLine)
+                {
+                    // The token starts here and does not end here
+                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto printed = string.substr(column);
+                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
+                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    for (auto iter : arrowsForLine)
+                    {
+                        assert(iter < underline.size());
+                        underline[iter] = '^';
+                    }
+                    llvm::WithColor(m_reporter->indent(column), llvm::raw_ostream::RED) << underline;
                 }
                 else
                 {
-                    // Token ends in this line
-                    llvm::WithColor(m_reporter->indent(i == currLineStart ? currColumnStart : 0),
-                                    llvm::raw_ostream::RED)
-                        << std::string(llvm::sys::unicode::columnWidthUTF8(tokenEndsString), '~');
-                    // TODO: Arrows
+                    // The token ends here and did not start here
+                    auto endColumn = m_offset - getLineStartOffset(i);
+                    auto printed = string.substr(0, endColumn);
+                    auto utf8With = llvm::sys::unicode::columnWidthUTF8({printed.data(), printed.size()});
+                    auto underline = std::string(utf8With < 0 ? printed.size() : utf8With, '~');
+                    for (auto iter : arrowsForLine)
+                    {
+                        assert(iter < underline.size());
+                        underline[iter] = '^';
+                    }
+                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
                 }
                 *m_reporter << '\n';
             }
@@ -649,8 +740,8 @@ namespace
 
         void push(TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            m_result.emplace_back(currOffset, tokenType, m_source.substr(currOffset, m_offset - currOffset),
-                                  std::move(value));
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
+            m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
     };
 
@@ -762,20 +853,9 @@ namespace
                                                         resultEnd, llvm::strictConversion);
                     if (res != llvm::conversionOK)
                     {
-                        auto last = std::make_reverse_iterator(characters.c_str());
-                        auto first = std::make_reverse_iterator(start);
-                        auto newline = std::find(first, last, '\n');
-                        std::uint64_t column;
-                        if (newline != last)
-                        {
-                            column = std::distance(first, last);
-                        }
-                        else
-                        {
-                            column = context.column;
-                        }
-                        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.line, column,
-                                            {{context.line, column}});
+                        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE,
+                                            context.tokenStartOffset,
+                                            {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
                     }
                     else
                     {
@@ -783,9 +863,8 @@ namespace
                         {
                             if (*curr > largestCharacter)
                             {
-                                context.reportError(
-                                    OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE,
-                                    context.currLineStart, context.currColumnStart);
+                                context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                                    context.tokenStartOffset);
                             }
                         }
                     }
@@ -875,8 +954,17 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
 
     StateMachine stateMachine;
     std::uint64_t offset = 0;
-    Context context(source, offset, languageOptions, isInPreprocessor, reporter);
     std::vector<std::uint64_t> starts = {0};
+    for (auto iter : source)
+    {
+        if (iter == '\n')
+        {
+            starts.push_back(offset);
+        }
+        offset++;
+    }
+    offset = 0;
+    Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
     for (auto iter : source)
     {
         while (std::visit(
@@ -892,9 +980,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                     {
                         if (!std::holds_alternative<Start>(stateMachine))
                         {
-                            context.currLineStart = context.line;
-                            context.currColumnStart = context.column - 1;
-                            context.currOffset = offset;
+                            context.tokenStartOffset = offset;
                         }
                     }
                     return false;
@@ -922,9 +1008,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                     {
                         if (!std::holds_alternative<Start>(stateMachine))
                         {
-                            context.currLineStart = context.line;
-                            context.currColumnStart = context.column - 1;
-                            context.currOffset = offset;
+                            context.tokenStartOffset = offset;
                         }
                     }
                     return !advance;
@@ -932,16 +1016,6 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             },
             stateMachine))
             ;
-        if (iter == '\n')
-        {
-            context.line++;
-            context.column = 1;
-            starts.push_back(offset);
-        }
-        else
-        {
-            context.column++;
-        }
         offset++;
     }
 

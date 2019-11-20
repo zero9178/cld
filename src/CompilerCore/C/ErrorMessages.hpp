@@ -147,7 +147,7 @@ namespace OpenCL
 
             constexpr auto INVALID_UTF8_SEQUENCE = "Invalid UTF-8 Sequence";
 
-            constexpr auto CHARACTER_TOO_LARGE_FOR_ENCLOSING_TYPE = "Character too large for enclosing type";
+            constexpr auto CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE = "Character too large for literal type";
         } // namespace Lexer
 
         namespace PP
