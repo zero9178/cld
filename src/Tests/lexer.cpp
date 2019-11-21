@@ -382,6 +382,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == '5');
+        LEXER_FAILS_WITH("''", Catch::Contains(CHARACTER_LITERAL_CANNOT_BE_EMPTY));
     }
     SECTION("Escape characters")
     {
@@ -413,7 +414,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Hex")
     {
-        LEXER_FAILS_WITH("'\\xG'", Catch::Contains(INVALID_HEXADECIMAL_CHARACTER.args("G")));
+        LEXER_FAILS_WITH("'\\xG'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         LEXER_FAILS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         auto result = OpenCL::Lexer::tokenize("'\\x070'");
         REQUIRE(result.data().size() == 1);

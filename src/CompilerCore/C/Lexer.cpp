@@ -495,21 +495,8 @@ namespace
             return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
         }
 
-    public:
-        std::uint64_t tokenStartOffset;
-
-        Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
-                OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
-            : m_languageOptions(languageOptions),
-              m_inPreprocessor(inPreprocessor),
-              m_reporter(reporter),
-              m_source(source),
-              m_offset(offset),
-              m_lineStarts(std::move(lineStarts))
-        {
-        }
-
-        void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+        void report(const std::string& suffix, llvm::raw_ostream::Colors colour, const std::string& message,
+                    const std::uint64_t& location, const std::vector<uint64_t>& arrows) const
         {
             assert(!m_inPreprocessor);
             if (!m_reporter)
@@ -524,7 +511,7 @@ namespace
             {
                 auto line = getLineNumber(location);
                 *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
-                llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << "error: ";
+                llvm::WithColor(*m_reporter, colour) << suffix << ": ";
                 *m_reporter << message << '\n';
                 startLine = getLineNumber(tokenStartOffset);
                 endLine = getLineNumber(m_offset);
@@ -569,14 +556,14 @@ namespace
                 {
                     // The token spans multiple lines and we are neither at the first nor last line. Therefore
                     // this line consist only of the token
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string;
+                    llvm::WithColor(*m_reporter, colour).get() << string;
                 }
                 else if (i == startLine && i == endLine)
                 {
                     // The token does not span lines and starts as well as ends here
                     auto column = tokenStartOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get()
+                    llvm::WithColor(*m_reporter, colour).get()
                         << string.substr(column, m_offset - tokenStartOffset + 1);
                     *m_reporter << string.substr(m_offset + 1);
                 }
@@ -585,13 +572,13 @@ namespace
                     // The token starts here and does not end here
                     auto column = tokenStartOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string.substr(column);
+                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column);
                 }
                 else
                 {
                     // The token ends here and did not start here
                     auto endColumn = m_offset + 1 - getLineStartOffset(i);
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED).get() << string.substr(0, endColumn);
+                    llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
                     *m_reporter << string.substr(endColumn);
                 }
                 *m_reporter << '\n';
@@ -608,7 +595,7 @@ namespace
                         assert(iter < underline.size());
                         underline[iter] = '^';
                     }
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
+                    llvm::WithColor(*m_reporter, colour) << underline;
                 }
                 else if (i == startLine && i == endLine)
                 {
@@ -621,7 +608,7 @@ namespace
                         assert(iter - column < underline.size());
                         underline[iter - column] = '^';
                     }
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
+                    llvm::WithColor(*m_reporter, colour) << underline;
                 }
                 else if (i == startLine)
                 {
@@ -634,7 +621,7 @@ namespace
                         assert(iter < underline.size());
                         underline[iter] = '^';
                     }
-                    llvm::WithColor(m_reporter->indent(column), llvm::raw_ostream::RED) << underline;
+                    llvm::WithColor(m_reporter->indent(column), colour) << underline;
                 }
                 else
                 {
@@ -646,11 +633,35 @@ namespace
                         assert(iter < underline.size());
                         underline[iter] = '^';
                     }
-                    llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << underline;
+                    llvm::WithColor(*m_reporter, colour) << underline;
                 }
                 *m_reporter << '\n';
             }
             m_reporter->flush();
+        }
+
+    public:
+        std::uint64_t tokenStartOffset;
+
+        Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
+                OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
+            : m_languageOptions(languageOptions),
+              m_inPreprocessor(inPreprocessor),
+              m_reporter(reporter),
+              m_source(source),
+              m_offset(offset),
+              m_lineStarts(std::move(lineStarts))
+        {
+        }
+
+        void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+        {
+            report("error", llvm::raw_ostream::RED, message, location, arrows);
+        }
+
+        void reportWarning(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+        {
+            report("warning", llvm::raw_ostream::CYAN, message, location, arrows);
         }
 
         [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
@@ -793,7 +804,7 @@ namespace
 
     std::uint32_t hexToValue(std::string_view value)
     {
-        return std::stoul()
+        return std::stoul(std::string(value.begin(), value.end()), nullptr, 16);
     }
 
     std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, Context& context)
@@ -840,6 +851,7 @@ namespace
             auto* resultEnd = result.data() + result.size();
 
             const auto* end = characters.data() + characters.size();
+            bool errorOccured = false;
             for (const auto* iter = characters.data(); iter != end;)
             {
                 if (*iter != '\\')
@@ -856,6 +868,7 @@ namespace
                         context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE,
                                             context.tokenStartOffset,
                                             {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
+                        errorOccured = true;
                     }
                     else
                     {
@@ -865,6 +878,7 @@ namespace
                             {
                                 context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
                                                     context.tokenStartOffset);
+                                errorOccured = true;
                             }
                         }
                     }
@@ -887,6 +901,7 @@ namespace
                         context.reportError(
                             OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
                             {start, start + 1});
+                        errorOccured = true;
                         continue;
                     }
                     else
@@ -907,29 +922,46 @@ namespace
                                 OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
                                     std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
                                 start, std::move(arrows));
+                            errorOccured = true;
                             iter = hexEnd;
                             continue;
                         }
                         *resultStart = universalCharacterToValue(
                             {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
                             context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
+                        if (*resultStart > largestCharacter)
+                        {
+                            context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                                context.tokenStartOffset);
+                            errorOccured = true;
+                        }
                         resultStart++;
+                        iter = hexEnd;
                         continue;
                     }
                 }
                 else if (iter[1] == 'x')
                 {
-                    // TODO: Hexadecimal sequence
                     iter += 2;
                     auto lastHex = std::find_if(iter, end, [](char c) {
-                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z');
+                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
                     });
                     if (lastHex == iter)
                     {
+                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                        context.reportError(OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED,
+                                            start, {start, start + 1});
+                        errorOccured = true;
                         continue;
                     }
 
                     *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
+                    if (*resultStart > largestCharacter)
+                    {
+                        context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                            context.tokenStartOffset);
+                        errorOccured = true;
+                    }
                     resultStart++;
 
                     iter = lastHex;
@@ -944,15 +976,23 @@ namespace
                     if (lastOctal == iter)
                     {
                         // First character is 8 or 9. That's why we didn't encounter a single octal digit.
-                        // Also since there must be at least one character after \ lastOctal is definitely not end here.
+                        // Also since there must be at least one character after \, lastOctal is definitely not end
+                        // here.
                         auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
                         context.reportError(
                             OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
                             start, {start, start + 1});
+                        errorOccured = true;
                         continue;
                     }
 
                     *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+                    if (*resultStart > largestCharacter)
+                    {
+                        context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                            context.tokenStartOffset);
+                        errorOccured = true;
+                    }
                     resultStart++;
 
                     iter = lastOctal;
@@ -967,11 +1007,33 @@ namespace
                         *resultStart = *character;
                         resultStart++;
                     }
+                    else
+                    {
+                        errorOccured = true;
+                    }
                     iter += 2;
                 }
             }
 
-            // TODO: check res, handle escape characters, make character literal only single character wide
+            if (std::distance(result.data(), resultStart) == 0)
+            {
+                if (!errorOccured)
+                {
+                    std::vector<std::uint64_t> arrows(wide ? 3 : 2);
+                    std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+                    context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
+                                        context.tokenStartOffset, std::move(arrows));
+                }
+                return Start{};
+            }
+            else if (std::distance(result.data(), resultStart) > 1)
+            {
+                std::vector<std::uint64_t> arrows((wide ? 3 : 2) + characters.size());
+                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+                context.reportWarning(OpenCL::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
+                                      context.tokenStartOffset, std::move(arrows));
+            }
+
             if (!context.isInPreprocessor())
             {
                 if (wide)

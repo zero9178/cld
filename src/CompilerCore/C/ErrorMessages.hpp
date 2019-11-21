@@ -126,8 +126,6 @@ namespace OpenCL
         {
             constexpr auto AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED = "At least one hexadecimal digit required";
 
-            constexpr auto INVALID_HEXADECIMAL_CHARACTER = Format("Invalid hexadecimal character '{}'");
-
             constexpr auto INVALID_OCTAL_CHARACTER = Format("Invalid octal character '{}'");
 
             constexpr auto INVALID_INTEGER_LITERAL_SUFFIX = Format("Invalid integer literal suffix '{}'");
@@ -160,6 +158,10 @@ namespace OpenCL
             constexpr auto INVALID_UTF8_SEQUENCE = "Invalid UTF-8 Sequence";
 
             constexpr auto CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE = "Character too large for literal type";
+
+            constexpr auto CHARACTER_LITERAL_CANNOT_BE_EMPTY = "Character literal cannot be empty";
+
+            constexpr auto DISCARDING_ALL_BUT_FIRST_CHARACTER = "Discarding all but first character";
         } // namespace Lexer
 
         namespace PP
