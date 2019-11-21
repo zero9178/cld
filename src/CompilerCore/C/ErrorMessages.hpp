@@ -132,7 +132,7 @@ namespace OpenCL
 
             constexpr auto INVALID_INTEGER_LITERAL_SUFFIX = Format("Invalid integer literal suffix '{}'");
 
-            constexpr auto INVALID_ESCAPE_SEQUENCE = Format("Invalid escape sequence '{}'");
+            constexpr auto INVALID_ESCAPE_SEQUENCE_N = Format("Invalid escape sequence '{}'");
 
             constexpr auto INVALID_FLOATING_POINT_LITERAL = Format("Invalid floating point literal '{}'");
 
@@ -141,6 +141,12 @@ namespace OpenCL
 
             constexpr auto INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N =
                 Format("Invalid universal character. Illegal value of {} ({})");
+
+            constexpr auto VALUE_MUSTNT_BE_LESS_THAN_A0 = "Value musnt't be less than 0x00A0";
+
+            constexpr auto VALUE_MUSTNT_BE_IN_RANGE = "Value mustn't be in range of 0xD800 to 0xDFFF";
+
+            constexpr auto EXPECTED_CHARACTER_AFTER_BACKSLASH = "Expected character after \\";
 
             constexpr auto BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT =
                 "Binary floating point literal must contain an exponent";

@@ -22,112 +22,6 @@ using namespace OpenCL::Lexer;
 
 namespace
 {
-    //    std::int32_t charactersToCharLiteral(std::ostream* reporter, const std::string& characters, std::uint64_t
-    //    line,
-    //                                         std::uint64_t column, const std::string& lineText)
-    //    {
-    //        if (characters.empty() || characters[0] != '\\')
-    //        {
-    //            return characters.front();
-    //        }
-    //        if (characters == "\\'")
-    //        {
-    //            return '\'';
-    //        }
-    //        if (characters == "\\\"")
-    //        {
-    //            return '"';
-    //        }
-    //        if (characters == "\\?")
-    //        {
-    //            return '\?';
-    //        }
-    //        if (characters == "\\\\")
-    //        {
-    //            return '\\';
-    //        }
-    //        if (characters == "\\a")
-    //        {
-    //            return '\a';
-    //        }
-    //        if (characters == "\\b")
-    //        {
-    //            return '\b';
-    //        }
-    //        if (characters == "\\f")
-    //        {
-    //            return '\f';
-    //        }
-    //        if (characters == "\\n")
-    //        {
-    //            return '\n';
-    //        }
-    //        if (characters == "\\r")
-    //        {
-    //            return '\r';
-    //        }
-    //        if (characters == "\\t")
-    //        {
-    //            return '\t';
-    //        }
-    //        if (characters == "\\v")
-    //        {
-    //            return '\v';
-    //        }
-    //        else if (characters.front() == '\\')
-    //        {
-    //            std::int32_t number = 0;
-    //            if (characters[1] == 'x')
-    //            {
-    //                if (characters.size() <= 2)
-    //                {
-    //                    reportError(reporter, OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED,
-    //                    line,
-    //                                column - characters.size() + 1, lineText,
-    //                                {{column - characters.size() - 1, column - 1}});
-    //                    return 0;
-    //                }
-    //                std::istringstream ss(characters.substr(2, characters.size() - 1));
-    //                if (!(ss >> std::hex >> number))
-    //                {
-    //                    reportError(reporter,
-    //                    OpenCL::ErrorMessages::Lexer::INVALID_HEXADECIMAL_CHARACTER.args(ss.str()),
-    //                                line, column - characters.size() + 1, lineText,
-    //                                {{column - characters.size() - 1, column - 1}});
-    //                }
-    //            }
-    //            else if (std::isdigit(characters[1]))
-    //            {
-    //                std::istringstream ss(characters.substr(1, characters.size() - 1));
-    //                if (!(ss >> std::oct >> number))
-    //                {
-    //                    reportError(reporter, OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(ss.str()),
-    //                    line,
-    //                                column - characters.size() + 1, lineText,
-    //                                {{column - characters.size() - 1, column - 1}});
-    //                }
-    //            }
-    //            else
-    //            {
-    //                reportError(reporter, OpenCL::ErrorMessages::Lexer::INCORRECT_CHARACTER_LITERAL.args(characters),
-    //                line,
-    //                            column - characters.size() - 2, lineText, {{column - characters.size() - 1, column}});
-    //                return 0;
-    //            }
-    //            if (number > std::numeric_limits<std::uint8_t>::max())
-    //            {
-    //                reportError(
-    //                    reporter,
-    //                    OpenCL::ErrorMessages::Lexer::CHARACTER_MUSTNT_HAVE_HIGHER_VALUE_THAN_MAXIMUM_VALUE_OF_UCHAR,
-    //                    line, column - characters.size() - 1, lineText, {{column - characters.size() - 1, column}});
-    //            }
-    //            return number;
-    //        }
-    //        reportError(reporter, OpenCL::ErrorMessages::Lexer::INCORRECT_CHARACTER_LITERAL.args(characters), line,
-    //                    column - characters.size() - 1, lineText, {{column - characters.size() - 1, column}});
-    //        return 0;
-    //    }
-
     bool isKeyword(const std::string& characters)
     {
         return characters == "auto" || characters == "double" || characters == "int" || characters == "struct"
@@ -873,29 +767,64 @@ namespace
         {
             if (result != '$' && result != '@' && result != '`')
             {
-                std::string storage;
-                llvm::raw_string_ostream os(storage);
-                os.write_hex(result);
                 std::vector<std::uint64_t> arrows(value.size());
                 std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
                 context.reportError(
                     OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                        storage, "Value mustn't be less than 0xA0"),
+                        value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
                     offsetOfFirstC, std::move(arrows));
             }
         }
         else if (result >= 0xD800 && result <= 0xDFFF)
         {
-            std::string storage;
-            llvm::raw_string_ostream os(storage);
-            os.write_hex(result);
             std::vector<std::uint64_t> arrows(value.size());
             std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
             context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    storage, "Value mustn't be in range of 0xD800 to 0xDFFF"),
+                                    value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                                 offsetOfFirstC, std::move(arrows));
         }
         return result;
+    }
+
+    std::uint32_t octalToValue(std::string_view value)
+    {
+        return std::stoul(std::string(value.begin(), value.end()), nullptr, 8);
+    }
+
+    std::uint32_t hexToValue(std::string_view value)
+    {
+        return std::stoul()
+    }
+
+    std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, Context& context)
+    {
+        switch (escape)
+        {
+            case '\'': return '\'';
+            case '"': return '"';
+            case 'b': return '\b';
+            case 't': return '\t';
+            case '\\': return '\\';
+            case 'f': return '\f';
+            case 'v': return '\v';
+            case '?': return '\?';
+            case 'n': return '\n';
+            case 'a': return '\a';
+            case 'r': return '\r';
+            case ' ':
+            {
+                context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
+                                    {backslash, backslash + 1});
+                return {};
+            }
+            default:
+            {
+                context.reportError(
+                    OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
+                    backslash + 1, {backslash, backslash + 1});
+                return {};
+            }
+        }
     }
 
     StateMachine CharacterLiteral::advance(char c, Context& context) noexcept
@@ -956,7 +885,7 @@ namespace
                         // Let's assume the user thought \u might be an escape character
                         auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
                         context.reportError(
-                            OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE.args(big ? "\\U" : "\\u"), start,
+                            OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
                             {start, start + 1});
                         continue;
                     }
@@ -988,28 +917,71 @@ namespace
                         continue;
                     }
                 }
+                else if (iter[1] == 'x')
+                {
+                    // TODO: Hexadecimal sequence
+                    iter += 2;
+                    auto lastHex = std::find_if(iter, end, [](char c) {
+                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z');
+                    });
+                    if (lastHex == iter)
+                    {
+                        continue;
+                    }
+
+                    *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
+                    resultStart++;
+
+                    iter = lastHex;
+                }
+                else if (iter[1] >= '0' && iter[1] <= '9')
+                {
+                    // We take 8 and 9 here as well to tell the user its an invalid octal instead of an invalid simple
+                    // escape sequence
+                    iter++;
+                    auto lastOctal = std::find_if(iter, iter + std::min<std::size_t>(3, std::distance(iter, end)),
+                                                  [](char c) { return c < '0' || c > '7'; });
+                    if (lastOctal == iter)
+                    {
+                        // First character is 8 or 9. That's why we didn't encounter a single octal digit.
+                        // Also since there must be at least one character after \ lastOctal is definitely not end here.
+                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
+                        context.reportError(
+                            OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
+                            start, {start, start + 1});
+                        continue;
+                    }
+
+                    *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+                    resultStart++;
+
+                    iter = lastOctal;
+                }
                 else
                 {
-                    // TODO: temp, escape sequences go here
+                    // Escape sequence or illegal escape
+                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
+                    auto character = escapeCharToValue(iter[1], start, context);
+                    if (character)
+                    {
+                        *resultStart = *character;
+                        resultStart++;
+                    }
                     iter += 2;
                 }
             }
 
-            // TODO: check res, handle escape characters, make character literal only single character wide. Check
-            //  ranges
+            // TODO: check res, handle escape characters, make character literal only single character wide
             if (!context.isInPreprocessor())
             {
                 if (wide)
                 {
                     std::int32_t value;
                     std::memcpy(&value, &result[0], sizeof(std::int32_t));
-                    // TODO: Error on platforms where wchar_t isn't 32 bit if value is bigger than max utf 16.
-                    //  Conversion to utf 16 is truncation otherwise
                     context.push(TokenType::Literal, value);
                 }
                 else
                 {
-                    // TODO: check that result[0] isn't bigger than 255
                     context.push(TokenType::Literal, static_cast<std::int32_t>(static_cast<std::uint8_t>(result[0])));
                 }
             }

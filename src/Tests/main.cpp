@@ -14,15 +14,11 @@ int main(int argc, char* argv[])
     if (returnCode != 0) // Indicates a command line error
         return returnCode;
 
-        // writing to session.configData() or session.Config() here
-        // overrides command line args
-        // only do this if you know you need to
+    // writing to session.configData() or session.Config() here
+    // overrides command line args
+    // only do this if you know you need to
 
-#ifdef _WIN32
     OpenCL::colourConsoleOutput = true;
-#else
-    OpenCL::colourConsoleOutput = session.config().getReporterName() == "console";
-#endif
 
     int numFailed = session.run();
 
@@ -35,9 +31,9 @@ int main(int argc, char* argv[])
 bool OpenCL::colourConsoleOutput = false;
 
 #ifdef __clang__
-#if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0
+    #if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0
 
-#include <windows.h>
+        #include <windows.h>
 
 extern "C" int lprofGetHostName(char* Name, int Len)
 {
@@ -51,5 +47,5 @@ extern "C" int lprofGetHostName(char* Name, int Len)
     return 0;
 }
 
-#endif
+    #endif
 #endif
