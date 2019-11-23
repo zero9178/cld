@@ -122,6 +122,17 @@ namespace OpenCL
                 Wide
             } type;
             std::vector<std::uint32_t> characters;
+
+            bool operator==(const std::wstring& wideString) const
+            {
+                if (type != Wide)
+                {
+                    return false;
+                }
+                else
+                {
+                }
+            }
         };
 
         class Token

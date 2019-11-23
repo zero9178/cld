@@ -51,7 +51,7 @@ CATCH_REGISTER_ENUM(
     OpenCL::Lexer::TokenType::DefaultKeyword, OpenCL::Lexer::TokenType::UnionKeyword,
     OpenCL::Lexer::TokenType::EnumKeyword, OpenCL::Lexer::TokenType::GotoKeyword, OpenCL::Lexer::TokenType::Ellipse)
 
-#define LEXER_FAILS_WITH(input, match)                                                 \
+#define LEXER_OUTPUTS_WITH(input, match)                                               \
     do                                                                                 \
     {                                                                                  \
         std::string s;                                                                 \
@@ -86,9 +86,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE(std::holds_alternative<std::uint32_t>(result.data()[0].getValue()));
             CHECK(std::get<std::uint32_t>(result.data()[0].getValue()) == 534534);
 
-            LEXER_FAILS_WITH("5u5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("u5")));
+            LEXER_OUTPUTS_WITH("5u5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("u5")));
         }
-        LEXER_FAILS_WITH("5x3", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x3")));
+        LEXER_OUTPUTS_WITH("5x3", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x3")));
     }
     SECTION("Floating point")
     {
@@ -119,9 +119,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
             CHECK(std::get<double>(result.data()[0].getValue()) == 0.5);
         }
-        LEXER_FAILS_WITH("0.5.3", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3")));
-        LEXER_FAILS_WITH("0.5.3F", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3F")));
-        LEXER_FAILS_WITH("0.53fF", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.53fF")));
+        LEXER_OUTPUTS_WITH("0.5.3", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3")));
+        LEXER_OUTPUTS_WITH("0.5.3F", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3F")));
+        LEXER_OUTPUTS_WITH("0.53fF", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.53fF")));
         std::array<std::pair<const char*, double>, 6> results = {
             std::pair{"1e-19", 1e-19},   std::pair{"2e32", 2e32},   std::pair{"01e-19", 01e-19},
             std::pair{"01E-19", 01e-19}, std::pair{"02e32", 02e32}, std::pair{"02E32", 02e32}};
@@ -185,9 +185,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             CHECK(std::get<double>(result.data()[0].getValue()) == 0x0.DE488631p-8);
         }
 
-        LEXER_FAILS_WITH("0x0.5", Catch::Contains(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT));
-        LEXER_FAILS_WITH("0x0.5p", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0x0.5p")));
-        LEXER_FAILS_WITH("0x5x5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x5")));
+        LEXER_OUTPUTS_WITH("0x0.5", Catch::Contains(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT));
+        LEXER_OUTPUTS_WITH("0x0.5p", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0x0.5p")));
+        LEXER_OUTPUTS_WITH("0x5x5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x5")));
     }
     SECTION("Integer type selection")
     {
@@ -250,8 +250,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::uint64_t>(result.data()[0].getValue()));
         CHECK(std::get<std::uint64_t>(result.data()[0].getValue()) == 534534);
 
-        LEXER_FAILS_WITH("534534lL", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("lL")));
-        LEXER_FAILS_WITH("534534Ll", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("Ll")));
+        LEXER_OUTPUTS_WITH("534534lL", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("lL")));
+        LEXER_OUTPUTS_WITH("534534Ll", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("Ll")));
     }
 }
 
@@ -347,7 +347,7 @@ TEST_CASE("Lexing comments", "[lexer]")
     REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Plus);
     CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Asterisk);
-    LEXER_FAILS_WITH("/*", Catch::Contains(OpenCL::ErrorMessages::Lexer::UNTERMINATED_COMMENT));
+    LEXER_OUTPUTS_WITH("/*", Catch::Contains(OpenCL::ErrorMessages::Lexer::UNTERMINATED_COMMENT));
 }
 
 TEST_CASE("Backslashes", "[lexer]")
@@ -382,7 +382,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == '5');
-        LEXER_FAILS_WITH("''", Catch::Contains(CHARACTER_LITERAL_CANNOT_BE_EMPTY));
+        LEXER_OUTPUTS_WITH("''", Catch::Contains(CHARACTER_LITERAL_CANNOT_BE_EMPTY));
     }
     SECTION("Escape characters")
     {
@@ -402,10 +402,12 @@ TEST_CASE("Lexing character literals", "[lexer]")
                 REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == chara);
             }
         }
+        LEXER_OUTPUTS_WITH("'\\o'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\o")));
+        LEXER_OUTPUTS_WITH("L'\\o'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\o")));
     }
     SECTION("Octals")
     {
-        LEXER_FAILS_WITH("'\\9'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
+        LEXER_OUTPUTS_WITH("'\\9'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
         auto result = OpenCL::Lexer::tokenize("'\\070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -414,8 +416,8 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Hex")
     {
-        LEXER_FAILS_WITH("'\\xG'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
-        LEXER_FAILS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
+        LEXER_OUTPUTS_WITH("'\\xG'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
+        LEXER_OUTPUTS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         auto result = OpenCL::Lexer::tokenize("'\\x070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -433,18 +435,18 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Universal characters")
     {
-        LEXER_FAILS_WITH("'\\u'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\u")));
-        LEXER_FAILS_WITH("'\\U'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\U")));
-        LEXER_FAILS_WITH("'\\u56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("2")));
-        LEXER_FAILS_WITH("'\\u0090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                          "0090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
-        LEXER_FAILS_WITH("L'\\uD977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                           "D977", VALUE_MUSTNT_BE_IN_RANGE)));
-        LEXER_FAILS_WITH("'\\U56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("6")));
-        LEXER_FAILS_WITH("'\\U00000090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                              "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
-        LEXER_FAILS_WITH("L'\\U0000D977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                               "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("'\\u'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\u")));
+        LEXER_OUTPUTS_WITH("'\\U'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\U")));
+        LEXER_OUTPUTS_WITH("'\\u56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("2")));
+        LEXER_OUTPUTS_WITH("'\\u0090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                            "0090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
+        LEXER_OUTPUTS_WITH("L'\\uD977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                             "D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("'\\U56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("6")));
+        LEXER_OUTPUTS_WITH("'\\U00000090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
+        LEXER_OUTPUTS_WITH("L'\\U0000D977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                 "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
         auto result = OpenCL::Lexer::tokenize("L'\\u3435'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
@@ -456,6 +458,8 @@ TEST_CASE("Lexing character literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
         REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == L'\U00003435');
     }
+    LEXER_OUTPUTS_WITH("'asdf'", Catch::Contains(DISCARDING_ALL_BUT_FIRST_CHARACTER));
+    LEXER_OUTPUTS_WITH("'as\ndawd'", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("Character literal")));
 }
 
 TEST_CASE("Lexing unicode", "[lexer]")
@@ -470,8 +474,8 @@ TEST_CASE("Lexing unicode", "[lexer]")
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
             REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
             REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == u'貓');
-            LEXER_FAILS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
-            LEXER_FAILS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+            LEXER_OUTPUTS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+            LEXER_OUTPUTS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         }
         SECTION("UTF-32")
         {
@@ -482,15 +486,15 @@ TEST_CASE("Lexing unicode", "[lexer]")
             REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
             REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == U'🍌');
         }
-        LEXER_FAILS_WITH(
+        LEXER_OUTPUTS_WITH(
             (std::array<char, 11>{'L', '\'', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
             Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_FAILS_WITH((std::array<char, 18>{'L', '\'', -24, -78, -109, '\'', ' ', 'L', '\'', -24, -78, -109,
-                                               (char)0xE0, (char)0x80, (char)0x80, '\'', 0})
-                             .data(),
-                         Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_FAILS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
-                         Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_OUTPUTS_WITH((std::array<char, 18>{'L', '\'', -24, -78, -109, '\'', ' ', 'L', '\'', -24, -78, -109,
+                                                 (char)0xE0, (char)0x80, (char)0x80, '\'', 0})
+                               .data(),
+                           Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
+                           Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
 }
 
@@ -506,25 +510,64 @@ TEST_CASE("Lexing string literals", "[lexer]")
     }
     SECTION("Escapes")
     {
-        auto result = OpenCL::Lexer::tokenize(R"("dwadawdwa\n\r\f\\ab\x07\"")");
+        auto result = OpenCL::Lexer::tokenize(R"("\\\b\t\'\f\v\?\n\a\r\"")");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
-        CHECK(std::get<std::string>(result.data()[0].getValue()) == "dwadawdwa\n\r\f\\ab\x07\"");
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "\\\b\t\'\f\v\?\n\a\r\"");
+    }
+    SECTION("Octals")
+    {
+        LEXER_OUTPUTS_WITH("\"\\9\"", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
+        auto result = OpenCL::Lexer::tokenize("\"\\070\"");
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::string>(result.data()[0].getValue()) == "\070");
+    }
+    SECTION("Hex")
+    {
+        LEXER_OUTPUTS_WITH("\"\\xG\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
+        LEXER_OUTPUTS_WITH("\"\\x\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
+        auto result = OpenCL::Lexer::tokenize("\"\\x070\"");
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::string>(result.data()[0].getValue()) == "\x070");
     }
     SECTION("Multibyte")
     {
         auto result = OpenCL::Lexer::tokenize(
-            "L\"test\"", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, 2, 4, 4, 80));
+            "L\"5\"", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, 2, 4, 4, 80));
         REQUIRE(result.data().size() == 1);
-        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
-        REQUIRE(std::holds_alternative<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()));
-        CHECK(std::get<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()).type
-              == OpenCL::Lexer::NonCharString::Wide);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::string>(result.data()[0].getValue()) == L"5");
     }
-    SECTION("Fails")
+    SECTION("Universal characters")
     {
-        LEXER_FAILS_WITH("\"\n\"", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("string literal")));
+        LEXER_OUTPUTS_WITH("'\\u'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\u")));
+        LEXER_OUTPUTS_WITH("'\\U'", Catch::Contains(INVALID_ESCAPE_SEQUENCE_N.args("\\U")));
+        LEXER_OUTPUTS_WITH("'\\u56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("2")));
+        LEXER_OUTPUTS_WITH("'\\u0090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                            "0090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
+        LEXER_OUTPUTS_WITH("L'\\uD977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                             "D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("'\\U56'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args("6")));
+        LEXER_OUTPUTS_WITH("'\\U00000090'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
+        LEXER_OUTPUTS_WITH("L'\\U0000D977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                 "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        auto result = OpenCL::Lexer::tokenize("L'\\u3435'");
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == L'\u3435');
+        result = OpenCL::Lexer::tokenize("L'\\U00003435'");
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+        REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
+        REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == L'\U00003435');
     }
 }
 

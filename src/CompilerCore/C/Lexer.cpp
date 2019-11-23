@@ -519,7 +519,7 @@ namespace
                 for (auto i = startLine; i <= endLine; i++)
                 {
                     auto start = getLineStartOffset(i);
-                    lines.push_back(m_source.substr(start, getLineEndOffset(i) - start));
+                    lines.push_back(m_source.substr(start, getLineEndOffset(i) - start - 1));
                 }
                 numSize = std::to_string(line).size();
                 auto remainder = numSize % 4;
@@ -535,7 +535,7 @@ namespace
                 auto end = getLineEndOffset(i);
                 for (auto iter : arrows)
                 {
-                    if (iter < begin || iter >= end)
+                    if (iter < begin || iter >= end - 1)
                     {
                         continue;
                     }
@@ -854,12 +854,21 @@ namespace
             bool errorOccured = false;
             for (const auto* iter = characters.data(); iter != end;)
             {
+                if (*iter == '\n')
+                {
+                    context.reportError(
+                        OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("Character literal"),
+                        context.tokenStartOffset,
+                        {context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data())});
+                    iter++;
+                    errorOccured = true;
+                    continue;
+                }
                 if (*iter != '\\')
                 {
                     const auto* start = iter;
-                    iter = std::find_if(iter, end, [](char c) { return c == '\\'; });
+                    iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
 
-                    const auto* curr = resultStart;
                     auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
                                                         reinterpret_cast<const llvm::UTF8*>(iter), &resultStart,
                                                         resultEnd, llvm::strictConversion);
@@ -869,18 +878,6 @@ namespace
                                             context.tokenStartOffset,
                                             {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
                         errorOccured = true;
-                    }
-                    else
-                    {
-                        for (; curr < resultStart; curr++)
-                        {
-                            if (*curr > largestCharacter)
-                            {
-                                context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                                    context.tokenStartOffset);
-                                errorOccured = true;
-                            }
-                        }
                     }
                     continue;
                 }
@@ -929,12 +926,6 @@ namespace
                         *resultStart = universalCharacterToValue(
                             {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
                             context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
-                        if (*resultStart > largestCharacter)
-                        {
-                            context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                                context.tokenStartOffset);
-                            errorOccured = true;
-                        }
                         resultStart++;
                         iter = hexEnd;
                         continue;
@@ -956,12 +947,6 @@ namespace
                     }
 
                     *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
-                    if (*resultStart > largestCharacter)
-                    {
-                        context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                            context.tokenStartOffset);
-                        errorOccured = true;
-                    }
                     resultStart++;
 
                     iter = lastHex;
@@ -987,12 +972,6 @@ namespace
                     }
 
                     *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
-                    if (*resultStart > largestCharacter)
-                    {
-                        context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                            context.tokenStartOffset);
-                        errorOccured = true;
-                    }
                     resultStart++;
 
                     iter = lastOctal;
@@ -1015,6 +994,15 @@ namespace
                 }
             }
 
+            for (auto iter = result.data(); iter != resultStart; iter++)
+            {
+                if (*iter > largestCharacter)
+                {
+                    context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                        context.tokenStartOffset);
+                    errorOccured = true;
+                }
+            }
             if (std::distance(result.data(), resultStart) == 0)
             {
                 if (!errorOccured)
@@ -1062,13 +1050,17 @@ namespace
         if (c == '"' && (characters.empty() || characters.back() != '\\'))
         {
             auto originalCharacters = characters;
-            auto csize = characters.size();
             bool followsInclude =
                 context.isInPreprocessor() && context.getResult().size() >= 2
                 && (context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
                     && context.getResult().back().getTokenType() == TokenType::Identifier
                     && std::get<std::string>(context.getResult().back().getValue()) == "include");
-            if (!followsInclude) {}
+            if (followsInclude && !wide)
+            {
+                context.push(TokenType::StringLiteral, characters);
+                return Start{};
+            }
+
             if (wide) {}
             else
             {
@@ -1110,11 +1102,11 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     std::vector<std::uint64_t> starts = {0};
     for (auto iter : source)
     {
+        offset++;
         if (iter == '\n')
         {
             starts.push_back(offset);
         }
-        offset++;
     }
     offset = 0;
     Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
