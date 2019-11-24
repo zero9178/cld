@@ -131,6 +131,8 @@ namespace OpenCL
                 }
                 else
                 {
+                    return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end(),
+                                      [](auto lhs, auto rhs) { return lhs == rhs; });
                 }
             }
         };

@@ -541,8 +541,8 @@ TEST_CASE("Lexing string literals", "[lexer]")
             "L\"5\"", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, 2, 4, 4, 80));
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
-        REQUIRE(std::get<std::string>(result.data()[0].getValue()) == L"5");
+        REQUIRE(std::holds_alternative<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()));
+        REQUIRE(std::get<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()) == L"5");
     }
     SECTION("Universal characters")
     {
