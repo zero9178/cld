@@ -771,7 +771,8 @@ namespace
      * @param value string that either consist of 4 or 8 hex digits
      * @return Unicode value
      */
-    std::uint32_t universalCharacterToValue(std::string_view value, std::uint64_t offsetOfFirstC, Context& context)
+    std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t offsetOfFirstC,
+                                                           Context& context)
     {
         auto result = std::stoul(std::string{value.begin(), value.end()}, nullptr, 16);
         if (result < 0xA0)
@@ -784,6 +785,7 @@ namespace
                     OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                         value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
                     offsetOfFirstC, std::move(arrows));
+                return {};
             }
         }
         else if (result >= 0xD800 && result <= 0xDFFF)
@@ -793,6 +795,7 @@ namespace
             context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                     value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                                 offsetOfFirstC, std::move(arrows));
+            return {};
         }
         return result;
     }
@@ -920,10 +923,18 @@ namespace
                         iter = hexEnd;
                         continue;
                     }
-                    *resultStart = universalCharacterToValue(
+                    auto uc = universalCharacterToValue(
                         {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
                         context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
-                    resultStart++;
+                    if (uc)
+                    {
+                        *resultStart = *uc;
+                        resultStart++;
+                    }
+                    else
+                    {
+                        errorOccured = true;
+                    }
                     iter = hexEnd;
                     continue;
                 }
@@ -1078,7 +1089,8 @@ namespace
                                                                llvm::strictConversion);
                     if (conversion != llvm::conversionOK)
                     {
-                        // TODO: Error handling
+                        OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32 conversion this
+                                            // code can't be reached
                     }
                     else if (wide)
                     {
@@ -1102,7 +1114,8 @@ namespace
                                                                         dest + utf16.size(), llvm::strictConversion);
                             if (conversion != llvm::conversionOK)
                             {
-                                // TODO: Error handling
+                                OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32
+                                                    // conversion this code can't be reached
                             }
                             else
                             {

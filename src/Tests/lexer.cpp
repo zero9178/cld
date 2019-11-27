@@ -495,6 +495,15 @@ TEST_CASE("Lexing unicode", "[lexer]")
                            Catch::Contains(INVALID_UTF8_SEQUENCE));
         LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
                            Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_OUTPUTS_WITH(
+            (std::array<char, 11>{'L', '"', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '"', 0}).data(),
+            Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_OUTPUTS_WITH((std::array<char, 18>{'L', '"', -24, -78, -109, '"', ' ', 'L', '"', -24, -78, -109,
+                                                 (char)0xE0, (char)0x80, (char)0x80, '"', 0})
+                               .data(),
+                           Catch::Contains(INVALID_UTF8_SEQUENCE));
+        LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '"', (char)0xE0, (char)0x80, (char)0x80, '"', 0}).data(),
+                           Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
 }
 
@@ -507,6 +516,16 @@ TEST_CASE("Lexing string literals", "[lexer]")
         CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "test");
+        result = OpenCL::Lexer::tokenize("\"\"");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "");
+        result = OpenCL::Lexer::tokenize("L\"\"");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()));
+        CHECK(std::get<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()) == L"");
     }
     SECTION("Escapes")
     {
@@ -569,6 +588,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(std::holds_alternative<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()));
         REQUIRE(std::get<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()) == L"\U00003435");
     }
+    LEXER_OUTPUTS_WITH("\"as\ndawd\"", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args("String literal")));
 }
 
 TEST_CASE("Lexing keywords", "[lexer]")
