@@ -838,172 +838,178 @@ namespace
         }
     }
 
+    std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& characters, Context& context,
+                                                                bool wide)
+    {
+        std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
+            return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
+        }();
+        std::vector<llvm::UTF32> result;
+        result.resize(characters.size());
+        auto* resultStart = result.data();
+        auto* resultEnd = result.data() + result.size();
+
+        const auto* end = characters.data() + characters.size();
+        bool errorOccured = false;
+        for (const auto* iter = characters.data(); iter != end;)
+        {
+            if (*iter == '\n')
+            {
+                context.reportError(OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("Character literal"),
+                                    context.tokenStartOffset,
+                                    {context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data())});
+                iter++;
+                errorOccured = true;
+                continue;
+            }
+            if (*iter != '\\')
+            {
+                const auto* start = iter;
+                iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
+
+                auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
+                                                    reinterpret_cast<const llvm::UTF8*>(iter), &resultStart, resultEnd,
+                                                    llvm::strictConversion);
+                if (res != llvm::conversionOK)
+                {
+                    context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
+                                        {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
+                    errorOccured = true;
+                }
+                continue;
+            }
+            // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
+            // iter + 1 == end the last character would be '\\' and following that '\'' or '\"'.
+            // Therefore the character literal wouldn't have ended and we wouldn't be here.
+            if (iter[1] == 'u' || iter[1] == 'U')
+            {
+                bool big = iter[1] == 'U';
+                iter += 2;
+                if (iter == end
+                    || (!(*iter >= '0' || *iter <= '9') && !(*iter >= 'a' && *iter <= 'f')
+                        && !(*iter >= 'A' && *iter <= 'F')))
+                {
+                    // First character followed after \u or \U is not a hex digit or its the end of string
+                    // Let's assume the user thought \u might be an escape character
+                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                    context.reportError(
+                        OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
+                        {start, start + 1});
+                    errorOccured = true;
+                    continue;
+                }
+                else
+                {
+                    auto hexStart = iter;
+                    auto hexEnd = std::find_if(
+                        hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
+                        [](char c) {
+                            return !(c >= '0' || c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+                        });
+                    if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
+                    {
+                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                        std::vector<std::uint64_t> arrows = {start, start + 1};
+                        arrows.resize(2 + std::distance(hexStart, hexEnd));
+                        std::iota(arrows.begin() + 2, arrows.end(), start + 2);
+                        context.reportError(
+                            OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                                std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
+                            start, std::move(arrows));
+                        errorOccured = true;
+                        iter = hexEnd;
+                        continue;
+                    }
+                    *resultStart = universalCharacterToValue(
+                        {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
+                        context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
+                    resultStart++;
+                    iter = hexEnd;
+                    continue;
+                }
+            }
+            else if (iter[1] == 'x')
+            {
+                iter += 2;
+                auto lastHex = std::find_if(iter, end, [](char c) {
+                    return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+                });
+                if (lastHex == iter)
+                {
+                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                    context.reportError(OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
+                                        {start, start + 1});
+                    errorOccured = true;
+                    continue;
+                }
+
+                *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
+                resultStart++;
+
+                iter = lastHex;
+            }
+            else if (iter[1] >= '0' && iter[1] <= '9')
+            {
+                // We take 8 and 9 here as well to tell the user its an invalid octal instead of an invalid simple
+                // escape sequence
+                iter++;
+                auto lastOctal = std::find_if(iter, iter + std::min<std::size_t>(3, std::distance(iter, end)),
+                                              [](char c) { return c < '0' || c > '7'; });
+                if (lastOctal == iter)
+                {
+                    // First character is 8 or 9. That's why we didn't encounter a single octal digit.
+                    // Also since there must be at least one character after \, lastOctal is definitely not end
+                    // here.
+                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
+                    context.reportError(
+                        OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), start,
+                        {start, start + 1});
+                    errorOccured = true;
+                    continue;
+                }
+
+                *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+                resultStart++;
+
+                iter = lastOctal;
+            }
+            else
+            {
+                // Escape sequence or illegal escape
+                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
+                auto character = escapeCharToValue(iter[1], start, context);
+                if (character)
+                {
+                    *resultStart = *character;
+                    resultStart++;
+                }
+                else
+                {
+                    errorOccured = true;
+                }
+                iter += 2;
+            }
+        }
+
+        for (auto iter = result.data(); iter != resultStart; iter++)
+        {
+            if (*iter > largestCharacter)
+            {
+                context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                    context.tokenStartOffset);
+                errorOccured = true;
+            }
+        }
+        result.resize(std::distance(result.data(), resultStart));
+        return {result, errorOccured};
+    }
+
     StateMachine CharacterLiteral::advance(char c, Context& context) noexcept
     {
         if (c == '\'' && (characters.empty() || characters.back() != '\\'))
         {
-            std::uint32_t largestCharacter = [&context, this]() -> std::uint32_t {
-                return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
-            }();
-            std::vector<std::uint32_t> result;
-            result.resize(characters.size());
-            auto* resultStart = result.data();
-            auto* resultEnd = result.data() + result.size();
-
-            const auto* end = characters.data() + characters.size();
-            bool errorOccured = false;
-            for (const auto* iter = characters.data(); iter != end;)
-            {
-                if (*iter == '\n')
-                {
-                    context.reportError(
-                        OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args("Character literal"),
-                        context.tokenStartOffset,
-                        {context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data())});
-                    iter++;
-                    errorOccured = true;
-                    continue;
-                }
-                if (*iter != '\\')
-                {
-                    const auto* start = iter;
-                    iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
-
-                    auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
-                                                        reinterpret_cast<const llvm::UTF8*>(iter), &resultStart,
-                                                        resultEnd, llvm::strictConversion);
-                    if (res != llvm::conversionOK)
-                    {
-                        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE,
-                                            context.tokenStartOffset,
-                                            {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
-                        errorOccured = true;
-                    }
-                    continue;
-                }
-                // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
-                // iter + 1 == end the last character would be '\\' and following that '\''.
-                // Therefore the character literal wouldn't have ended and we wouldn't be here.
-                if (iter[1] == 'u' || iter[1] == 'U')
-                {
-                    bool big = iter[1] == 'U';
-                    iter += 2;
-                    if (iter == end
-                        || (!(*iter >= '0' || *iter <= '9') && !(*iter >= 'a' && *iter <= 'f')
-                            && !(*iter >= 'A' && *iter <= 'F')))
-                    {
-                        // First character followed after \u or \U is not a hex digit or its the end of string
-                        // Let's assume the user thought \u might be an escape character
-                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                        context.reportError(
-                            OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
-                            {start, start + 1});
-                        errorOccured = true;
-                        continue;
-                    }
-                    else
-                    {
-                        auto hexStart = iter;
-                        auto hexEnd = std::find_if(
-                            hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
-                            [](char c) {
-                                return !(c >= '0' || c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-                            });
-                        if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
-                        {
-                            auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                            std::vector<std::uint64_t> arrows = {start, start + 1};
-                            arrows.resize(2 + std::distance(hexStart, hexEnd));
-                            std::iota(arrows.begin() + 2, arrows.end(), start + 2);
-                            context.reportError(
-                                OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-                                    std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-                                start, std::move(arrows));
-                            errorOccured = true;
-                            iter = hexEnd;
-                            continue;
-                        }
-                        *resultStart = universalCharacterToValue(
-                            {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
-                            context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
-                        resultStart++;
-                        iter = hexEnd;
-                        continue;
-                    }
-                }
-                else if (iter[1] == 'x')
-                {
-                    iter += 2;
-                    auto lastHex = std::find_if(iter, end, [](char c) {
-                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-                    });
-                    if (lastHex == iter)
-                    {
-                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                        context.reportError(OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED,
-                                            start, {start, start + 1});
-                        errorOccured = true;
-                        continue;
-                    }
-
-                    *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
-                    resultStart++;
-
-                    iter = lastHex;
-                }
-                else if (iter[1] >= '0' && iter[1] <= '9')
-                {
-                    // We take 8 and 9 here as well to tell the user its an invalid octal instead of an invalid simple
-                    // escape sequence
-                    iter++;
-                    auto lastOctal = std::find_if(iter, iter + std::min<std::size_t>(3, std::distance(iter, end)),
-                                                  [](char c) { return c < '0' || c > '7'; });
-                    if (lastOctal == iter)
-                    {
-                        // First character is 8 or 9. That's why we didn't encounter a single octal digit.
-                        // Also since there must be at least one character after \, lastOctal is definitely not end
-                        // here.
-                        auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
-                        context.reportError(
-                            OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
-                            start, {start, start + 1});
-                        errorOccured = true;
-                        continue;
-                    }
-
-                    *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
-                    resultStart++;
-
-                    iter = lastOctal;
-                }
-                else
-                {
-                    // Escape sequence or illegal escape
-                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
-                    auto character = escapeCharToValue(iter[1], start, context);
-                    if (character)
-                    {
-                        *resultStart = *character;
-                        resultStart++;
-                    }
-                    else
-                    {
-                        errorOccured = true;
-                    }
-                    iter += 2;
-                }
-            }
-
-            for (auto iter = result.data(); iter != resultStart; iter++)
-            {
-                if (*iter > largestCharacter)
-                {
-                    context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                        context.tokenStartOffset);
-                    errorOccured = true;
-                }
-            }
-            if (std::distance(result.data(), resultStart) == 0)
+            auto [result, errorOccured] = processCharacters(characters, context, wide);
+            if (result.empty())
             {
                 if (!errorOccured)
                 {
@@ -1012,9 +1018,9 @@ namespace
                     context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
                                         context.tokenStartOffset, std::move(arrows));
                 }
-                return Start{};
+                return {};
             }
-            else if (std::distance(result.data(), resultStart) > 1)
+            else if (result.size() > 1)
             {
                 std::vector<std::uint64_t> arrows((wide ? 3 : 2) + characters.size());
                 std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
@@ -1049,7 +1055,6 @@ namespace
     {
         if (c == '"' && (characters.empty() || characters.back() != '\\'))
         {
-            auto originalCharacters = characters;
             bool followsInclude =
                 context.isInPreprocessor() && context.getResult().size() >= 2
                 && (context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
@@ -1061,11 +1066,61 @@ namespace
                 return Start{};
             }
 
-            if (wide) {}
-            else
+            auto [result, errorOccured] = processCharacters(characters, context, wide);
+            if (!errorOccured)
             {
-                context.push(TokenType::StringLiteral, characters);
+                if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
+                {
+                    const auto* start = result.data();
+                    std::vector<llvm::UTF8> utf8(result.size() * 5);
+                    auto* dest = utf8.data();
+                    auto conversion = llvm::ConvertUTF32toUTF8(&start, start + result.size(), &dest, dest + utf8.size(),
+                                                               llvm::strictConversion);
+                    if (conversion != llvm::conversionOK)
+                    {
+                        // TODO: Error handling
+                    }
+                    else if (wide)
+                    {
+                        context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, {utf8.data(), dest}});
+                    }
+                    else
+                    {
+                        context.push(TokenType::StringLiteral, std::string{utf8.data(), dest});
+                    }
+                }
+                else
+                {
+                    switch (context.getLanguageOptions().getSizeOfWChar())
+                    {
+                        case 2:
+                        {
+                            const auto* start = result.data();
+                            std::vector<llvm::UTF16> utf16(result.size() * 3);
+                            auto* dest = utf16.data();
+                            auto conversion = llvm::ConvertUTF32toUTF16(&start, start + result.size(), &dest,
+                                                                        dest + utf16.size(), llvm::strictConversion);
+                            if (conversion != llvm::conversionOK)
+                            {
+                                // TODO: Error handling
+                            }
+                            else
+                            {
+                                context.push(TokenType::StringLiteral,
+                                             NonCharString{NonCharString::Wide, {utf16.data(), dest}});
+                            }
+                            break;
+                        }
+                        case 4:
+                        {
+                            context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, result});
+                            break;
+                        }
+                        default: OPENCL_UNREACHABLE;
+                    }
+                }
             }
+            return Start{};
         }
         characters += c;
         return std::move(*this);
