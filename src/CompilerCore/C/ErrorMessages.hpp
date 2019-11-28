@@ -153,6 +153,10 @@ namespace OpenCL
 
             constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
 
+            constexpr auto CHARACTER_LITERAL = "Character literal";
+
+            constexpr auto STRING_LITERAL = "String literal";
+
             constexpr auto UNTERMINATED_COMMENT = "Unterminated comment";
 
             constexpr auto INVALID_UTF8_SEQUENCE = "Invalid UTF-8 Sequence";
