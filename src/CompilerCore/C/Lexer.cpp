@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cassert>
 #include <numeric>
-#include <regex>
 #include <string_view>
 
 #include "ErrorMessages.hpp"
@@ -902,6 +901,12 @@ namespace
             auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset + 1);
             m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
+
+        void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {}) noexcept
+        {
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset + 1 - diff);
+            m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
+        }
     };
 
     struct Start;
@@ -925,11 +930,11 @@ namespace
 
     struct MaybeMBIdentifier final
     {
-        std::array<char, 8> characters;
+        std::array<llvm::UTF8, 4> characters;
         std::size_t maxSize;
         std::size_t size = 1;
 
-        StateMachine advance(char c, Context& context) noexcept;
+        std::pair<StateMachine, bool> advance(char c, Context& context) noexcept;
     };
 
     struct CharacterLiteral final
@@ -951,8 +956,9 @@ namespace
     struct Text final
     {
         std::string characters;
+        std::array<llvm::UTF8, 4> unicodeBuffer = {0};
 
-        StateMachine advance(char, Context& context) noexcept;
+        std::pair<StateMachine, bool> advance(char, Context& context) noexcept;
     };
 
     struct LineComment final
@@ -991,7 +997,7 @@ namespace
             {
                 if (llvm::getNumBytesForUTF8(c) > 1)
                 {
-                    return MaybeMBIdentifier{{c}, llvm::getNumBytesForUTF8(c)};
+                    return MaybeMBIdentifier{{static_cast<llvm::UTF8>(c)}, llvm::getNumBytesForUTF8(c)};
                 }
                 else if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
                 {
@@ -1002,7 +1008,7 @@ namespace
         }
     }
 
-    StateMachine MaybeMBIdentifier::advance(char c, Context& context) noexcept
+    std::pair<StateMachine, bool> MaybeMBIdentifier::advance(char c, Context& context) noexcept
     {
         if (size < maxSize)
         {
@@ -1010,9 +1016,26 @@ namespace
         }
         else
         {
-            // TODO: Logic for determining to error or go to identifier
+            const auto* source = characters.data();
+            llvm::UTF32 result;
+            if (llvm::convertUTF8Sequence(&source, source + size, &result, llvm::strictConversion)
+                != llvm::conversionOK)
+            {
+                // TODO: Error UTF8 failure
+                OPENCL_UNREACHABLE;
+            }
+            if (llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(result)
+                && !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(result))
+            {
+                return {Text{{characters.begin(), characters.begin() + size}}, false};
+            }
+            else
+            {
+                // TODO: Ignore whitespace, Error on unknown character.
+                OPENCL_UNREACHABLE;
+            }
         }
-        return *this;
+        return {*this, true};
     }
 
     /**
@@ -1406,7 +1429,25 @@ namespace
         }
     }
 
-    StateMachine Text::advance(char c, Context& context) noexcept {}
+    std::pair<StateMachine, bool> Text::advance(char c, Context& context) noexcept
+    {
+        // TODO: Support unicode
+        if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+        {
+            // TODO: Backslashes are allowed to concat identifiers to form a keyword
+            if (isKeyword(characters))
+            {
+                context.push(1, charactersToKeyword(characters));
+            }
+            else
+            {
+                context.push(1, TokenType::Identifier, std::move(characters));
+            }
+            return {Start{}, false};
+        }
+        characters += c;
+        return {*this, true};
+    }
 } // namespace
 
 OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
@@ -1416,7 +1457,6 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     {
         source += '\n';
     }
-    static std::regex identifierMatch("[a-zA-Z_]\\w*");
 
     StateMachine stateMachine;
     std::uint64_t offset = 0;
