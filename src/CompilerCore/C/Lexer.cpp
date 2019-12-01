@@ -1,5 +1,6 @@
 #include "Lexer.hpp"
 
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
@@ -21,163 +22,194 @@ using namespace OpenCL::Lexer;
 
 namespace
 {
-    bool isKeyword(const std::string& characters)
+    template <std::size_t N>
+    bool operator==(const std::vector<llvm::UTF32>& characters, const char32_t (&c)[N])
     {
-        return characters == "auto" || characters == "double" || characters == "int" || characters == "struct"
-               || characters == "break" || characters == "else" || characters == "long" || characters == "switch"
-               || characters == "case" || characters == "enum" || characters == "register" || characters == "typedef"
-               || characters == "char" || characters == "extern" || characters == "return" || characters == "union"
-               || characters == "const" || characters == "float" || characters == "short" || characters == "unsigned"
-               || characters == "continue" || characters == "for" || characters == "signed" || characters == "void"
-               || characters == "default" || characters == "goto" || characters == "sizeof" || characters == "volatile"
-               || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
-               || characters == "while" || characters == "inline" || characters == "_Bool";
+        return std::equal(characters.begin(), characters.end(), c, c + N,
+                          [](auto lhs, auto rhs) { return lhs == rhs; });
     }
 
-    TokenType charactersToKeyword(const std::string& characters)
+    bool isKeyword(const std::vector<llvm::UTF32>& characters)
+    {
+        return characters == U"auto" || characters == U"double" || characters == U"int" || characters == U"struct"
+               || characters == U"break" || characters == U"else" || characters == U"long" || characters == U"switch"
+               || characters == U"case" || characters == U"enum" || characters == U"register"
+               || characters == U"typedef" || characters == U"char" || characters == U"extern"
+               || characters == U"return" || characters == U"union" || characters == U"const" || characters == U"float"
+               || characters == U"short" || characters == U"unsigned" || characters == U"continue"
+               || characters == U"for" || characters == U"signed" || characters == U"void" || characters == U"default"
+               || characters == U"goto" || characters == U"sizeof" || characters == U"volatile"
+               || characters == U"restrict" || characters == U"do" || characters == U"if" || characters == U"static"
+               || characters == U"while" || characters == U"inline" || characters == U"_Bool";
+    }
+
+    TokenType charactersToKeyword(const std::vector<llvm::UTF32>& characters)
     {
         using namespace OpenCL::Lexer;
-        if (characters == "auto")
+        if (characters == U"auto")
         {
             return TokenType::AutoKeyword;
         }
-        if (characters == "double")
+        if (characters == U"double")
         {
             return TokenType::DoubleKeyword;
         }
-        if (characters == "int")
+        if (characters == U"int")
         {
             return TokenType::IntKeyword;
         }
-        if (characters == "struct")
+        if (characters == U"struct")
         {
             return TokenType::StructKeyword;
         }
-        if (characters == "break")
+        if (characters == U"break")
         {
             return TokenType::BreakKeyword;
         }
-        if (characters == "else")
+        if (characters == U"else")
         {
             return TokenType::ElseKeyword;
         }
-        if (characters == "long")
+        if (characters == U"long")
         {
             return TokenType::LongKeyword;
         }
-        if (characters == "switch")
+        if (characters == U"switch")
         {
             return TokenType::SwitchKeyword;
         }
-        if (characters == "case")
+        if (characters == U"case")
         {
             return TokenType::CaseKeyword;
         }
-        if (characters == "enum")
+        if (characters == U"enum")
         {
             return TokenType::EnumKeyword;
         }
-        if (characters == "register")
+        if (characters == U"register")
         {
             return TokenType::RegisterKeyword;
         }
-        if (characters == "typedef")
+        if (characters == U"typedef")
         {
             return TokenType::TypedefKeyword;
         }
-        if (characters == "char")
+        if (characters == U"char")
         {
             return TokenType::CharKeyword;
         }
-        if (characters == "extern")
+        if (characters == U"extern")
         {
             return TokenType::ExternKeyword;
         }
-        if (characters == "return")
+        if (characters == U"return")
         {
             return TokenType::ReturnKeyword;
         }
-        if (characters == "union")
+        if (characters == U"union")
         {
             return TokenType::UnionKeyword;
         }
-        if (characters == "const")
+        if (characters == U"const")
         {
             return TokenType::ConstKeyword;
         }
-        if (characters == "float")
+        if (characters == U"float")
         {
             return TokenType::FloatKeyword;
         }
-        if (characters == "short")
+        if (characters == U"short")
         {
             return TokenType::ShortKeyword;
         }
-        if (characters == "unsigned")
+        if (characters == U"unsigned")
         {
             return TokenType::UnsignedKeyword;
         }
-        if (characters == "continue")
+        if (characters == U"continue")
         {
             return TokenType::ContinueKeyword;
         }
-        if (characters == "for")
+        if (characters == U"for")
         {
             return TokenType::ForKeyword;
         }
-        if (characters == "signed")
+        if (characters == U"signed")
         {
             return TokenType::SignedKeyword;
         }
-        if (characters == "default")
+        if (characters == U"default")
         {
             return TokenType::DefaultKeyword;
         }
-        if (characters == "goto")
+        if (characters == U"goto")
         {
             return TokenType::GotoKeyword;
         }
-        if (characters == "sizeof")
+        if (characters == U"sizeof")
         {
             return TokenType::SizeofKeyword;
         }
-        if (characters == "volatile")
+        if (characters == U"volatile")
         {
             return TokenType::VolatileKeyword;
         }
-        if (characters == "do")
+        if (characters == U"do")
         {
             return TokenType::DoKeyword;
         }
-        if (characters == "if")
+        if (characters == U"if")
         {
             return TokenType::IfKeyword;
         }
-        if (characters == "static")
+        if (characters == U"static")
         {
             return TokenType::StaticKeyword;
         }
-        if (characters == "while")
+        if (characters == U"while")
         {
             return TokenType::WhileKeyword;
         }
-        if (characters == "void")
+        if (characters == U"void")
         {
             return TokenType::VoidKeyword;
         }
-        if (characters == "restrict")
+        if (characters == U"restrict")
         {
             return TokenType::RestrictKeyword;
         }
-        if (characters == "inline")
+        if (characters == U"inline")
         {
             return TokenType::InlineKeyword;
         }
-        if (characters == "_Bool")
+        if (characters == U"_Bool")
         {
             return TokenType::UnderlineBool;
         }
         OPENCL_UNREACHABLE;
+    }
+
+    std::string codePointToUTF8(llvm::UTF32 c)
+    {
+        std::string result(UNI_MAX_UTF8_BYTES_PER_CODE_POINT, ' ');
+        auto* start = result.data();
+        auto res = llvm::ConvertCodePointToUTF8(c, start);
+        assert(res);
+        result.resize(std::distance(result.data(), start));
+        return result;
+    }
+
+    std::string utf32ToUtf8(const std::vector<llvm::UTF32>& utf32)
+    {
+        std::string destination(utf32.size(), ' ');
+        const auto* sourcesStart = utf32.data();
+        auto* targetStart = destination.data();
+        auto res = llvm::ConvertUTF32toUTF8(
+            &sourcesStart, sourcesStart + utf32.size(), reinterpret_cast<llvm::UTF8**>(&targetStart),
+            reinterpret_cast<llvm::UTF8*>(targetStart + destination.size()), llvm::strictConversion);
+        assert(res == llvm::conversionOK);
+        destination.resize(std::distance(destination.data(), targetStart));
+        return destination;
     }
 
     // C99 Annex D
@@ -716,10 +748,10 @@ namespace
                 return;
             }
 
-            auto startLine = 0;
-            auto endLine = 0;
+            std::uint64_t startLine = 0;
+            std::uint64_t endLine = 0;
             std::vector<std::string_view> lines;
-            auto numSize = 0;
+            std::uint64_t numSize = 0;
             {
                 auto line = getLineNumber(location);
                 *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
@@ -910,7 +942,6 @@ namespace
     };
 
     struct Start;
-    struct MaybeMBIdentifier;
     struct CharacterLiteral;
     struct StringLiteral;
     struct Text;
@@ -920,73 +951,63 @@ namespace
     struct AfterInclude;
     struct L;
 
-    using StateMachine = std::variant<Start, MaybeMBIdentifier, CharacterLiteral, StringLiteral, Text, LineComment,
-                                      BlockComment, Number, AfterInclude, L>;
+    using StateMachine =
+        std::variant<Start, CharacterLiteral, StringLiteral, Text, LineComment, BlockComment, Number, AfterInclude, L>;
 
     struct Start final
     {
-        StateMachine advance(char c, Context& context) noexcept;
-    };
-
-    struct MaybeMBIdentifier final
-    {
-        std::array<llvm::UTF8, 4> characters;
-        std::size_t maxSize;
-        std::size_t size = 1;
-
-        std::pair<StateMachine, bool> advance(char c, Context& context) noexcept;
+        StateMachine advance(std::uint32_t c, Context& context) noexcept;
     };
 
     struct CharacterLiteral final
     {
         bool wide = false;
-        std::string characters;
+        std::vector<llvm::UTF32> characters;
 
-        StateMachine advance(char c, Context& context) noexcept;
+        StateMachine advance(std::uint32_t c, Context& context) noexcept;
     };
 
     struct StringLiteral final
     {
         bool wide = false;
-        std::string characters;
+        std::vector<llvm::UTF32> characters;
 
-        StateMachine advance(char c, Context& context) noexcept;
+        StateMachine advance(std::uint32_t c, Context& context) noexcept;
     };
 
     struct Text final
     {
-        std::string characters;
-        std::array<llvm::UTF8, 4> unicodeBuffer = {0};
+        std::vector<llvm::UTF32> characters;
 
-        std::pair<StateMachine, bool> advance(char, Context& context) noexcept;
+        std::pair<StateMachine, bool> advance(std::uint32_t, Context& context) noexcept;
     };
 
     struct LineComment final
     {
-        void advance(char, Context& context) noexcept {}
+        void advance(std::uint32_t, Context& context) noexcept {}
     };
 
     struct BlockComment final
     {
-        void advance(char, Context& context) noexcept {}
+        void advance(std::uint32_t, Context& context) noexcept {}
     };
 
     struct Number final
     {
-        void advance(char, Context& context) noexcept {}
+        void advance(std::uint32_t, Context& context) noexcept {}
     };
 
     struct AfterInclude final
     {
-        void advance(char, Context& context) noexcept {}
+        void advance(std::uint32_t, Context& context) noexcept {}
     };
 
     struct L final
     {
-        std::pair<StateMachine, bool> advance(char, Context& context) noexcept;
+        std::pair<StateMachine, bool> advance(std::uint32_t, Context& context) noexcept;
     };
 
-    StateMachine Start::advance(char c, Context&) noexcept
+    StateMachine Start::advance(std::uint32_t c, Context&) noexcept
     {
         switch (c)
         {
@@ -995,47 +1016,13 @@ namespace
             case 'L': return L{};
             default:
             {
-                if (llvm::getNumBytesForUTF8(c) > 1)
+                if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
                 {
-                    return MaybeMBIdentifier{{static_cast<llvm::UTF8>(c)}, llvm::getNumBytesForUTF8(c)};
-                }
-                else if (c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-                {
-                    return Text{std::string(1, c)};
+                    return Text{std::vector<llvm::UTF32>(1, c)};
                 }
                 return *this;
             }
         }
-    }
-
-    std::pair<StateMachine, bool> MaybeMBIdentifier::advance(char c, Context& context) noexcept
-    {
-        if (size < maxSize)
-        {
-            characters[size++] = c;
-        }
-        else
-        {
-            const auto* source = characters.data();
-            llvm::UTF32 result;
-            if (llvm::convertUTF8Sequence(&source, source + size, &result, llvm::strictConversion)
-                != llvm::conversionOK)
-            {
-                // TODO: Error UTF8 failure
-                OPENCL_UNREACHABLE;
-            }
-            if (llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(result)
-                && !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(result))
-            {
-                return {Text{{characters.begin(), characters.begin() + size}}, false};
-            }
-            else
-            {
-                // TODO: Ignore whitespace, Error on unknown character.
-                OPENCL_UNREACHABLE;
-            }
-        }
-        return {*this, true};
     }
 
     /**
@@ -1043,10 +1030,11 @@ namespace
      * @param value string that either consist of 4 or 8 hex digits
      * @return Unicode value
      */
-    std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t offsetOfFirstC,
-                                                           Context& context)
+    std::optional<std::uint32_t> universalCharacterToValue(const llvm::ArrayRef<llvm::UTF32>& value,
+                                                           std::uint64_t offsetOfFirstC, Context& context)
     {
-        auto result = std::stoul(std::string{value.begin(), value.end()}, nullptr, 16);
+        auto str = std::string{value.begin(), value.end()};
+        auto result = std::stoul(str, nullptr, 16);
         if (result < 0xA0)
         {
             if (result != '$' && result != '@' && result != '`')
@@ -1055,7 +1043,7 @@ namespace
                 std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
                 context.reportError(
                     OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                        value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
+                        str, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
                     offsetOfFirstC, std::move(arrows));
                 return {};
             }
@@ -1065,24 +1053,24 @@ namespace
             std::vector<std::uint64_t> arrows(value.size());
             std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
             context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                                    str, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                                 offsetOfFirstC, std::move(arrows));
             return {};
         }
         return result;
     }
 
-    std::uint32_t octalToValue(std::string_view value)
+    std::uint32_t octalToValue(const llvm::ArrayRef<llvm::UTF32>& value)
     {
         return std::stoul(std::string(value.begin(), value.end()), nullptr, 8);
     }
 
-    std::uint32_t hexToValue(std::string_view value)
+    std::uint32_t hexToValue(const llvm::ArrayRef<llvm::UTF32>& value)
     {
         return std::stoul(std::string(value.begin(), value.end()), nullptr, 16);
     }
 
-    std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, Context& context)
+    std::optional<std::uint32_t> escapeCharToValue(llvm::UTF32 escape, std::uint64_t backslash, Context& context)
     {
         switch (escape)
         {
@@ -1105,16 +1093,16 @@ namespace
             }
             default:
             {
-                context.reportError(
-                    OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
-                    backslash + 1, {backslash, backslash + 1});
+                context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(
+                                        std::string("\\") + codePointToUTF8(escape)),
+                                    backslash + 1, {backslash, backslash + 1});
                 return {};
             }
         }
     }
 
-    std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& characters, Context& context,
-                                                                bool wide, const char* literalType)
+    std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::vector<llvm::UTF32>& characters,
+                                                                Context& context, bool wide, const char* literalType)
     {
         std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
             return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
@@ -1122,7 +1110,6 @@ namespace
         std::vector<llvm::UTF32> result;
         result.resize(characters.size());
         auto* resultStart = result.data();
-        auto* resultEnd = result.data() + result.size();
 
         const auto* end = characters.data() + characters.size();
         bool errorOccured = false;
@@ -1140,17 +1127,9 @@ namespace
             if (*iter != '\\')
             {
                 const auto* start = iter;
-                iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
-
-                auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
-                                                    reinterpret_cast<const llvm::UTF8*>(iter), &resultStart, resultEnd,
-                                                    llvm::strictConversion);
-                if (res != llvm::conversionOK)
-                {
-                    context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
-                                        {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
-                    errorOccured = true;
-                }
+                iter = std::find_if(iter, end, [](llvm::UTF32 c) { return c == '\\' || c == '\n'; });
+                std::copy(start, iter, resultStart);
+                resultStart += std::distance(start, iter);
                 continue;
             }
             // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
@@ -1178,7 +1157,7 @@ namespace
                     auto hexStart = iter;
                     auto hexEnd = std::find_if(
                         hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
-                        [](char c) {
+                        [](llvm::UTF32 c) {
                             return !(c >= '0' || c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
                         });
                     if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
@@ -1244,9 +1223,9 @@ namespace
                     // Also since there must be at least one character after \, lastOctal is definitely not end
                     // here.
                     auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
-                    context.reportError(
-                        OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), start,
-                        {start, start + 1});
+                    context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(
+                                            std::string(1, static_cast<char>(*lastOctal))),
+                                        start, {start, start + 1});
                     errorOccured = true;
                     continue;
                 }
@@ -1287,7 +1266,7 @@ namespace
         return {result, errorOccured};
     }
 
-    StateMachine CharacterLiteral::advance(char c, Context& context) noexcept
+    StateMachine CharacterLiteral::advance(std::uint32_t c, Context& context) noexcept
     {
         if (c == '\'' && (characters.empty() || characters.back() != '\\'))
         {
@@ -1331,11 +1310,11 @@ namespace
             }
             return Start{};
         }
-        characters += c;
+        characters.push_back(c);
         return std::move(*this);
     }
 
-    StateMachine StringLiteral::advance(char c, Context& context) noexcept
+    StateMachine StringLiteral::advance(std::uint32_t c, Context& context) noexcept
     {
         if (c == '"' && (characters.empty() || characters.back() != '\\'))
         {
@@ -1346,7 +1325,7 @@ namespace
                     && std::get<std::string>(context.getResult().back().getValue()) == "include");
             if (followsInclude && !wide)
             {
-                context.push(TokenType::StringLiteral, characters);
+                context.push(TokenType::StringLiteral, utf32ToUtf8(characters));
                 return Start{};
             }
 
@@ -1356,23 +1335,15 @@ namespace
             {
                 if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
                 {
-                    const auto* start = result.data();
-                    std::vector<llvm::UTF8> utf8(result.size() * 5);
-                    auto* dest = utf8.data();
-                    auto conversion = llvm::ConvertUTF32toUTF8(&start, start + result.size(), &dest, dest + utf8.size(),
-                                                               llvm::strictConversion);
-                    if (conversion != llvm::conversionOK)
+                    auto utf8 = utf32ToUtf8(characters);
+                    if (wide)
                     {
-                        OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32 conversion this
-                                            // code can't be reached
-                    }
-                    else if (wide)
-                    {
-                        context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, {utf8.data(), dest}});
+                        context.push(TokenType::StringLiteral,
+                                     NonCharString{NonCharString::Wide, {utf8.begin(), utf8.end()}});
                     }
                     else
                     {
-                        context.push(TokenType::StringLiteral, std::string{utf8.data(), dest});
+                        context.push(TokenType::StringLiteral, std::move(utf8));
                     }
                 }
                 else
@@ -1409,11 +1380,11 @@ namespace
             }
             return Start{};
         }
-        characters += c;
+        characters.push_back(c);
         return std::move(*this);
     }
 
-    std::pair<StateMachine, bool> L::advance(char c, Context&) noexcept
+    std::pair<StateMachine, bool> L::advance(std::uint32_t c, Context&) noexcept
     {
         if (c == '"')
         {
@@ -1425,13 +1396,12 @@ namespace
         }
         else
         {
-            return {Text{"L"}, false};
+            return {Text{{'L'}}, false};
         }
     }
 
-    std::pair<StateMachine, bool> Text::advance(char c, Context& context) noexcept
+    std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context) noexcept
     {
-        // TODO: Support unicode
         if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
         {
             // TODO: Backslashes are allowed to concat identifiers to form a keyword
@@ -1441,11 +1411,11 @@ namespace
             }
             else
             {
-                context.push(1, TokenType::Identifier, std::move(characters));
+                context.push(1, TokenType::Identifier, utf32ToUtf8(characters));
             }
             return {Start{}, false};
         }
-        characters += c;
+        characters.push_back(c);
         return {*this, true};
     }
 } // namespace
@@ -1471,17 +1441,25 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     }
     offset = 0;
     Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
-    for (auto iter : source)
+    for (const auto* iter = source.data(); iter != source.data() + source.size();)
     {
+        auto* before = iter;
+        llvm::UTF32 result;
+        if (llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&iter),
+                                      reinterpret_cast<const llvm::UTF8*>(source.data() + source.size()), &result,
+                                      llvm::strictConversion))
+        {
+            // TODO: Conversion error
+        }
         while (std::visit(
-            [iter, &stateMachine, &context, offset](auto&& state) mutable -> bool {
-                if constexpr (std::is_convertible_v<decltype(state.advance(iter, context)), bool>)
+            [result, &stateMachine, &context, offset](auto&& state) mutable -> bool {
+                if constexpr (std::is_convertible_v<decltype(state.advance(result, context)), bool>)
                 {
-                    return !state.advance(iter, context);
+                    return !state.advance(result, context);
                 }
-                else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(iter, context))>)
+                else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(result, context))>)
                 {
-                    stateMachine = state.advance(iter, context);
+                    stateMachine = state.advance(result, context);
                     if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
                     {
                         if (!std::holds_alternative<Start>(stateMachine))
@@ -1491,14 +1469,14 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                     }
                     return false;
                 }
-                else if constexpr (std::is_void_v<decltype(state.advance(iter, context))>)
+                else if constexpr (std::is_void_v<decltype(state.advance(result, context))>)
                 {
-                    state.advance(iter, context);
+                    state.advance(result, context);
                     return false;
                 }
                 else
                 {
-                    auto&& [lhs, rhs] = state.advance(iter, context);
+                    auto&& [lhs, rhs] = state.advance(result, context);
                     bool advance;
                     if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
                     {
@@ -1522,7 +1500,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             },
             stateMachine))
             ;
-        offset++;
+        offset += std::distance(before, iter);
     }
 
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
