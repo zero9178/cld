@@ -64,9 +64,9 @@ CATCH_REGISTER_ENUM(
         }                                                                              \
     } while (0)
 
-TEST_CASE("Lexing Identifiers", "[lexer]")
+SCENARIO("Lexing Identifiers", "[lexer]")
 {
-    SECTION("Initial characters")
+    GIVEN("Initial characters")
     {
         std::vector<const char*> allowedCharacters = {
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",   "s",
@@ -75,7 +75,7 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
             "À", "Ö", "ʰ", "Ά", "Є", "Ա", "ՙ", "ա", "ְ",  "ء", "ې", "ँ",  "ঁ",  "ৰ", "ਂ",  "ଁ",  "ஂ",  "ªµ·º"};
         for (auto c : allowedCharacters)
         {
-            DYNAMIC_SECTION(c)
+            THEN(c)
             {
                 auto result = OpenCL::Lexer::tokenize(c);
                 REQUIRE_FALSE(result.data().empty());
@@ -84,6 +84,16 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
                 CHECK(std::get<std::string>(result.data()[0].getValue()) == c);
             }
+        }
+        AND_THEN("an universal character")
+        {
+            auto result = OpenCL::Lexer::tokenize("\\u00B5");
+            REQUIRE_FALSE(result.data().empty());
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
+            CHECK(result.data()[0].getRepresentation() == "\\u00B5");
         }
     }
 }
