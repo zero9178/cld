@@ -1514,7 +1514,7 @@ namespace
     {
         if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
         {
-            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), );
+            // TODO: context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), );
             return {Start{}, false};
         }
 

@@ -2,13 +2,12 @@ cmake_minimum_required(VERSION 3.10)
 if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.15.0")
     cmake_policy(SET CMP0092 NEW)
 endif ()
-project(OpenCLParser C CXX)
+project(OpenCLParser CXX)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_STANDARD 99)
 
 find_package(LLVM REQUIRED)
 
-if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND NOT "${CMAKE_CXX_FLAGS}" MATCHES "-flto")
     add_compile_options("-Wa,-mbig-obj")
 endif ()
 
