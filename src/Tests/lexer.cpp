@@ -96,6 +96,46 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             CHECK(result.data()[0].getRepresentation() == "\\u00B5");
         }
     }
+    GIVEN("non initial characters")
+    {
+        std::vector<const char*> allowedCharacters = {
+            "_a", "_b", "_c", "_d", "_e", "_f", "_g", "_h", "_i", "_j", "_k", "_l", "_m", "_n", "_o", "_p", "_q",
+            "_r", "_s", "_t", "_u", "_v", "_w", "_x", "_y", "_z", "_0", "_1", "_2", "_3", "_4", "_5", "_6", "_7",
+            "_8", "_9", "_A", "_B", "_C", "_D", "_E", "_F", "_G", "_H", "_I", "_J", "_K", "_L", "_M", "_N", "_O",
+            "_P", "_Q", "_R", "_S", "_T", "_U", "_V", "_W", "_X", "_Y", "_Z", "__", "_ª", "_µ", "_·", "_º", "_À",
+            "_Ö", "_ʰ", "_Ά", "_Є", "_Ա", "_ՙ", "_ա", "_ְ",  "ء_", "ې_", "_ँ",  "_ঁ",  "_ৰ", "_ਂ",  "_ଁ",  "_ஂ",  "_ªµ·º"};
+        for (auto c : allowedCharacters)
+        {
+            THEN(c)
+            {
+                auto result = OpenCL::Lexer::tokenize(c);
+                REQUIRE(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+                REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+                CHECK(std::get<std::string>(result.data()[0].getValue()) == c);
+            }
+        }
+        AND_THEN("an universal character")
+        {
+            auto result = OpenCL::Lexer::tokenize("_\\u00B5");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "_µ");
+            CHECK(result.data()[0].getRepresentation() == "_\\u00B5");
+        }
+    }
+    GIVEN("A universal character")
+    {
+        WHEN("incomplete")
+        {
+            LEXER_OUTPUTS_WITH("_\\ute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+        }
+        WHEN("incomplete and multiline")
+        {
+            LEXER_OUTPUTS_WITH("_\\\\\nute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+        }
+    }
 }
 
 TEST_CASE("Lexing Number Literals", "[lexer]")

@@ -140,7 +140,7 @@ namespace OpenCL
             constexpr auto INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N =
                 Format("Invalid universal character. Illegal value of {} ({})");
 
-            constexpr auto VALUE_MUSTNT_BE_LESS_THAN_A0 = "Value musnt't be less than 0x00A0";
+            constexpr auto VALUE_MUSTNT_BE_LESS_THAN_A0 = "Value mustn't be less than 0x00A0";
 
             constexpr auto VALUE_MUSTNT_BE_IN_RANGE = "Value mustn't be in range of 0xD800 to 0xDFFF";
 
@@ -166,6 +166,8 @@ namespace OpenCL
             constexpr auto CHARACTER_LITERAL_CANNOT_BE_EMPTY = "Character literal cannot be empty";
 
             constexpr auto DISCARDING_ALL_BUT_FIRST_CHARACTER = "Discarding all but first character";
+
+            constexpr auto STRAY_N_IN_PROGRAM = Format("Stray '{}' in program");
         } // namespace Lexer
 
         namespace PP

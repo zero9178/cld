@@ -1,5 +1,7 @@
 #include "Lexer.hpp"
 
+#include <llvm/ADT/ScopeExit.h>
+#include <llvm/ADT/SparseSet.h>
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
@@ -684,6 +686,22 @@ namespace
         return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
     }
 
+    struct Start;
+    struct CharacterLiteral;
+    struct StringLiteral;
+    struct Text;
+    struct MaybeUC;
+    struct BackSlash;
+    struct UniversalCharacter;
+    struct LineComment;
+    struct BlockComment;
+    struct Number;
+    struct AfterInclude;
+    struct L;
+
+    using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash,
+                                      UniversalCharacter, LineComment, BlockComment, Number, AfterInclude, L>;
+
     class Context
     {
         OpenCL::LanguageOptions m_languageOptions;
@@ -859,6 +877,25 @@ namespace
 
     public:
         std::uint64_t tokenStartOffset;
+        struct Transition
+        {
+            std::uint64_t offset;
+            std::uint64_t indexOfNewState;
+        };
+
+    private:
+        struct IndexExtractor
+        {
+            using argument_type = Transition;
+
+            std::uint64_t operator()(const Transition& transition)
+            {
+                return transition.offset;
+            }
+        };
+
+    public:
+        llvm::SparseSet<Transition, IndexExtractor> transitionStack;
 
         Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
                 OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
@@ -869,6 +906,7 @@ namespace
               m_offset(offset),
               m_lineStarts(std::move(lineStarts))
         {
+            transitionStack.setUniverse(std::variant_size_v<StateMachine>);
         }
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
@@ -1163,21 +1201,6 @@ namespace
         return {result, errorOccured};
     }
 
-    struct Start;
-    struct CharacterLiteral;
-    struct StringLiteral;
-    struct Text;
-    struct BackSlash;
-    struct UniversalCharacter;
-    struct LineComment;
-    struct BlockComment;
-    struct Number;
-    struct AfterInclude;
-    struct L;
-
-    using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, BackSlash, UniversalCharacter,
-                                      LineComment, BlockComment, Number, AfterInclude, L>;
-
     struct Start final
     {
         StateMachine advance(std::uint32_t c, Context& context) noexcept;
@@ -1206,12 +1229,19 @@ namespace
         std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
     };
 
+    struct MaybeUC final
+    {
+        std::optional<Text> suspText{};
+
+        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
+    };
+
     struct BackSlash final
     {
-        bool first = true;
         std::unique_ptr<StateMachine> prevState{};
+        bool first = true;
 
-        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
+        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
     };
 
     struct UniversalCharacter final
@@ -1255,7 +1285,7 @@ namespace
             case '\'': return CharacterLiteral{};
             case '"': return StringLiteral{};
             case 'L': return L{};
-            case '\\': return BackSlash{};
+            case '\\': return MaybeUC{};
             default:
             {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
@@ -1417,11 +1447,14 @@ namespace
 
     std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
     {
-        if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
-            && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+        if (c == '\\')
         {
-            // TODO: Backslashes are allowed to concat identifiers to form a keyword. Universal characters as
-            //       well
+            return {MaybeUC{std::move(*this)}, true};
+        }
+        else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
+                 && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+        {
+            // TODO: Backslashes are allowed to concat identifiers to form a keyword
             if (isKeyword(characters))
             {
                 context.push(1, charactersToKeyword(characters));
@@ -1439,33 +1472,41 @@ namespace
         return {std::move(*this), true};
     }
 
-    std::pair<StateMachine, bool> BackSlash::advance(std::uint32_t c, Context& context)
+    std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context) noexcept
     {
-        if (first)
+        if (c == 'u' || c == 'U')
         {
-            if (c == 'u' || c == 'U')
+            // If Universal character, its in or starting an identifier, not in a character or string literal
+            if (suspText)
             {
-                // If Universal character, its in or starting an identifier, not in a character or string literal
-                if (prevState)
-                {
-                    if (std::holds_alternative<Text>(*prevState))
-                    {
-                        return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
-                    }
-                    // TODO: push whatever state encountered backslash
-                }
-                return {UniversalCharacter{c == 'U'}, true};
+                return {UniversalCharacter{c == 'U', std::move(suspText)}, true};
             }
-            first = false;
+            return {UniversalCharacter{c == 'U'}, true};
         }
-        if (c == '\n' && prevState)
+        else if (suspText)
         {
-            return {std::move(*prevState), true};
+            return {BackSlash{std::make_unique<StateMachine>(std::move(*suspText))}, false};
         }
-        if (llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+        else
         {
-            return {std::move(*this), true};
+            return {BackSlash{}, false};
         }
+    }
+
+    std::pair<StateMachine, bool> BackSlash::advance(std::uint32_t c, Context& context) noexcept
+    {
+        if (c == '\n')
+        {
+            if (prevState)
+            {
+                return {std::move(*prevState), true};
+            }
+            else
+            {
+                return {Start{}, true};
+            }
+        }
+        // TODO: error stray backslash
         return {Start{}, false};
     }
 
@@ -1473,7 +1514,7 @@ namespace
     {
         if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
         {
-            // TODO: Error due to stray backslash
+            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), );
             return {Start{}, false};
         }
 
@@ -1557,6 +1598,13 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         std::uint64_t step = 1;
         while (std::visit(
             [iter, &step, &stateMachine, &context, &offset, end](auto&& state) mutable -> bool {
+                auto stateIndex = stateMachine.index();
+                auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context] {
+                    if (stateIndex != stateMachine.index())
+                    {
+                        // context.transitionStack
+                    }
+                });
                 using T = std::decay_t<decltype(state)>;
                 constexpr bool needsCodepoint =
                     std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
