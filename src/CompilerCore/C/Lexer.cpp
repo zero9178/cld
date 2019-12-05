@@ -1211,7 +1211,26 @@ namespace
         return {result, errorOccured};
     }
 
-    std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint) {}
+    std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint)
+    {
+        if (codepoint <= 0x007F)
+        {
+            return 1;
+        }
+        else if (codepoint <= 0x07FF)
+        {
+            return 2;
+        }
+        else if (codepoint <= 0xFFFF)
+        {
+            return 3;
+        }
+        else if (codepoint <= 0x10FFFF)
+        {
+            return 4;
+        }
+        OPENCL_UNREACHABLE;
+    }
 
     struct Start final
     {
