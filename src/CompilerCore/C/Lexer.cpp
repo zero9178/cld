@@ -890,12 +890,12 @@ namespace
 
             std::uint64_t operator()(const Transition& transition)
             {
-                return transition.offset;
+                return transition.indexOfNewState;
             }
         };
 
     public:
-        llvm::SparseSet<Transition, IndexExtractor> transitionStack;
+        llvm::SparseSet<Transition, IndexExtractor> transitions;
 
         Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
                 OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
@@ -906,7 +906,7 @@ namespace
               m_offset(offset),
               m_lineStarts(std::move(lineStarts))
         {
-            transitionStack.setUniverse(std::variant_size_v<StateMachine>);
+            transitions.setUniverse(std::variant_size_v<StateMachine>);
         }
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
@@ -914,9 +914,19 @@ namespace
             report("error", llvm::raw_ostream::RED, message, location, arrows);
         }
 
+        void reportNote(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+        {
+            report("note", llvm::raw_ostream::CYAN, message, location, arrows);
+        }
+
         void reportWarning(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("warning", llvm::raw_ostream::CYAN, message, location, arrows);
+            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows);
+        }
+
+        [[nodiscard]] std::uint64_t getOffset() const
+        {
+            return m_offset;
         }
 
         [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
@@ -1200,6 +1210,8 @@ namespace
         result.resize(std::distance(result.data(), resultStart));
         return {result, errorOccured};
     }
+
+    std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint) {}
 
     struct Start final
     {
@@ -1514,7 +1526,15 @@ namespace
     {
         if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
         {
-            // TODO: context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), );
+            auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
+            assert(result != context.transitions.end());
+            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset,
+                                {result->offset});
+            std::vector<std::uint64_t> arrows(context.getOffset() - result->offset);
+            std::iota(arrows.begin(), arrows.end(), result->offset);
+            context.reportNote(OpenCL::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(
+                                   (big ? 8 : 4) - characters.size()),
+                               result->offset, std::move(arrows));
             return {Start{}, false};
         }
 
@@ -1597,12 +1617,24 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     {
         std::uint64_t step = 1;
         while (std::visit(
-            [iter, &step, &stateMachine, &context, &offset, end](auto&& state) mutable -> bool {
+            [iter, &step, &stateMachine, &context, offset, end](auto&& state) mutable -> bool {
                 auto stateIndex = stateMachine.index();
-                auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context] {
+                auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context, offset] {
                     if (stateIndex != stateMachine.index())
                     {
-                        // context.transitionStack
+                        if (auto result = context.transitions.find({0, stateMachine.index()});
+                            result != context.transitions.end())
+                        {
+                            result++;
+                            while (result != context.transitions.end())
+                            {
+                                result = context.transitions.erase(result);
+                            }
+                        }
+                        if (stateMachine.index())
+                        {
+                            context.transitions.insert({offset, stateMachine.index()});
+                        }
                     }
                 });
                 using T = std::decay_t<decltype(state)>;

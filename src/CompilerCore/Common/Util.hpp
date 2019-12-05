@@ -49,6 +49,19 @@ namespace OpenCL
         return std::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
                           std::forward<Variant>(variant));
     }
+
+    template <typename T, typename... Ts>
+    constexpr size_t getIndex(std::variant<Ts...> const&)
+    {
+        size_t r = 0;
+        auto test = [&](bool b) {
+            if (!b)
+                ++r;
+            return b;
+        };
+        (test(std::is_same_v<T, Ts>) || ...);
+        return r;
+    }
 } // namespace OpenCL
 
 #ifdef NDEBUG

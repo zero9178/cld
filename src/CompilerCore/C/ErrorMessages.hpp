@@ -198,6 +198,12 @@ namespace OpenCL
         constexpr auto PREVIOUS_STORAGE_SPECIFIER_HERE = "Previous storage specifier encountered here:";
 
         constexpr auto MISSING_N = Format("Missing {}");
+
+        namespace Lexer
+        {
+            constexpr auto UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS =
+                Format("Universal character requires {} more digits");
+        }
     } // namespace Notes
 } // namespace OpenCL
 

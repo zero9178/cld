@@ -11,7 +11,7 @@
 #include "TestConfig.hpp"
 
 using namespace OpenCL::ErrorMessages::Lexer;
-
+using namespace OpenCL::Notes::Lexer;
 using namespace Catch::Matchers;
 
 CATCH_REGISTER_ENUM(
@@ -129,11 +129,14 @@ SCENARIO("Lexing Identifiers", "[lexer]")
     {
         WHEN("incomplete")
         {
-            LEXER_OUTPUTS_WITH("_\\ute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+            LEXER_OUTPUTS_WITH("_\\ute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
+                                             && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
         }
         WHEN("incomplete and multiline")
         {
-            LEXER_OUTPUTS_WITH("_\\\\\nute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+            LEXER_OUTPUTS_WITH("_\\\\\nute",
+                               Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
+                                   && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
         }
     }
 }

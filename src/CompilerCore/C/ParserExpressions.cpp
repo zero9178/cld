@@ -96,19 +96,6 @@ namespace
         LogicalOr
     };
 
-    template <typename T, typename... Ts>
-    constexpr size_t getIndex(std::variant<Ts...> const&)
-    {
-        size_t r = 0;
-        auto test = [&](bool b) {
-            if (!b)
-                ++r;
-            return b;
-        };
-        (test(std::is_same_v<T, Ts>) || ...);
-        return r;
-    }
-
     StateVariant parseBinaryOperators(EndState endState, std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
                                       std::vector<OpenCL::Lexer::Token>::const_iterator end,
                                       OpenCL::Parser::Context& context)
@@ -215,7 +202,7 @@ namespace
             // We are using an index instead of visit to save on stack space and increase speed
             switch (state.index())
             {
-                case getIndex<std::monostate>(state):
+                case OpenCL::getIndex<std::monostate>(state):
                 {
                     auto result = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
 
@@ -257,7 +244,7 @@ namespace
                     }
                     break;
                 }
-                case getIndex<std::optional<Term>>(state):
+                case OpenCL::getIndex<std::optional<Term>>(state):
                 {
                     auto& result = std::get<std::optional<Term>>(state);
 
@@ -288,7 +275,7 @@ namespace
                     }
                     break;
                 }
-                case getIndex<std::optional<AdditiveExpression>>(state):
+                case OpenCL::getIndex<std::optional<AdditiveExpression>>(state):
                 {
                     auto& result = std::get<std::optional<AdditiveExpression>>(state);
 
@@ -319,7 +306,7 @@ namespace
                     }
                     break;
                 }
-                case getIndex<std::optional<ShiftExpression>>(state):
+                case OpenCL::getIndex<std::optional<ShiftExpression>>(state):
                 {
                     auto& result = std::get<std::optional<ShiftExpression>>(state);
 
@@ -364,7 +351,7 @@ namespace
                     }
                     break;
                 }
-                case getIndex<std::optional<RelationalExpression>>(state):
+                case OpenCL::getIndex<std::optional<RelationalExpression>>(state):
                 {
                     auto& result = std::get<std::optional<RelationalExpression>>(state);
 
@@ -396,7 +383,7 @@ namespace
                     }
                     break;
                 }
-                case getIndex<std::optional<EqualityExpression>>(state):
+                case OpenCL::getIndex<std::optional<EqualityExpression>>(state):
                 {
                     auto& result = std::get<std::optional<EqualityExpression>>(state);
 
@@ -418,7 +405,7 @@ namespace
                     state = BitAndExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<BitAndExpression>(state):
+                case OpenCL::getIndex<BitAndExpression>(state):
                 {
                     std::vector<BitAndExpression> list;
                     list.push_back(std::move(std::get<BitAndExpression>(state)));
@@ -431,7 +418,7 @@ namespace
                     state = BitXorExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<BitXorExpression>(state):
+                case OpenCL::getIndex<BitXorExpression>(state):
                 {
                     std::vector<BitXorExpression> list;
                     list.push_back(std::move(std::get<BitXorExpression>(state)));
@@ -443,7 +430,7 @@ namespace
                     state = BitOrExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<BitOrExpression>(state):
+                case OpenCL::getIndex<BitOrExpression>(state):
                 {
                     std::vector<BitOrExpression> list;
                     list.push_back(std::move(std::get<BitOrExpression>(state)));
@@ -456,7 +443,7 @@ namespace
                     state = LogicalAndExpression(start, begin, std::move(list));
                     break;
                 }
-                case getIndex<LogicalAndExpression>(state):
+                case OpenCL::getIndex<LogicalAndExpression>(state):
                 {
                     std::vector<LogicalAndExpression> list;
                     list.push_back(std::move(std::get<LogicalAndExpression>(state)));
