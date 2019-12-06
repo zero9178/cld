@@ -110,9 +110,10 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             {
                 auto result = OpenCL::Lexer::tokenize(c);
                 REQUIRE(result.data().size() == 1);
-                REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+                CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
                 CHECK(std::get<std::string>(result.data()[0].getValue()) == c);
+                CHECK(result.data()[0].getRepresentation() == c);
             }
         }
         AND_THEN("an universal character")
@@ -137,6 +138,27 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             LEXER_OUTPUTS_WITH("_\\\\\nute",
                                Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
                                    && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
+        }
+    }
+    GIVEN("A multiline identifier")
+    {
+        WHEN("A normal identifier")
+        {
+            auto result = OpenCL::Lexer::tokenize("te\\\nst");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "test");
+            CHECK(result.data()[0].getRepresentation() == "te\\\nst");
+        }
+        WHEN("A universal character")
+        {
+            auto result = OpenCL::Lexer::tokenize("_\\\\\nu00B5");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "_µ");
+            CHECK(result.data()[0].getRepresentation() == "_\\\\\nu00B5");
         }
     }
 }

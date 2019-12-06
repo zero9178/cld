@@ -731,7 +731,8 @@ namespace
         }
 
         void report(const std::string& suffix, llvm::raw_ostream::Colors colour, const std::string& message,
-                    const std::uint64_t& location, const std::vector<uint64_t>& arrows) const
+                    const std::uint64_t& location, const std::vector<uint64_t>& arrows, std::uint64_t startOffset,
+                    std::uint64_t endOffset) const
         {
             assert(!m_inPreprocessor);
             if (!m_reporter)
@@ -743,13 +744,14 @@ namespace
             std::uint64_t endLine = 0;
             std::vector<std::string_view> lines;
             std::uint64_t numSize = 0;
+
             {
                 auto line = getLineNumber(location);
                 *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
                 llvm::WithColor(*m_reporter, colour) << suffix << ": ";
                 *m_reporter << message << '\n';
-                startLine = getLineNumber(tokenStartOffset);
-                endLine = getLineNumber(m_offset);
+                startLine = getLineNumber(startOffset);
+                endLine = getLineNumber(endOffset);
                 lines.reserve(endLine - startLine + 1);
                 for (auto i = startLine; i <= endLine; i++)
                 {
@@ -796,23 +798,22 @@ namespace
                 else if (i == startLine && i == endLine)
                 {
                     // The token does not span lines and starts as well as ends here
-                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
-                    llvm::WithColor(*m_reporter, colour).get()
-                        << string.substr(column, m_offset - tokenStartOffset + 1);
-                    *m_reporter << string.substr(m_offset + 1);
+                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column, endOffset - startOffset + 1);
+                    *m_reporter << string.substr(endOffset + 1);
                 }
                 else if (i == startLine)
                 {
                     // The token starts here and does not end here
-                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(column);
                 }
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = m_offset + 1 - getLineStartOffset(i);
+                    auto endColumn = endOffset + 1 - getLineStartOffset(i);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
                     *m_reporter << string.substr(endColumn);
                 }
@@ -835,9 +836,9 @@ namespace
                 else if (i == startLine && i == endLine)
                 {
                     // The token does not span lines and starts as well as ends here
-                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
-                    auto underline = stringOfSameWidth(string.substr(column, m_offset - tokenStartOffset + 1), '~');
+                    auto underline = stringOfSameWidth(string.substr(column, endOffset - startOffset + 1), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter - column < underline.size());
@@ -848,7 +849,7 @@ namespace
                 else if (i == startLine)
                 {
                     // The token starts here and does not end here
-                    auto column = tokenStartOffset - getLineStartOffset(i);
+                    auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
                     auto underline = stringOfSameWidth(string.substr(column), '~');
                     for (auto iter : arrowsForLine)
@@ -861,7 +862,7 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = 1 + m_offset - getLineStartOffset(i);
+                    auto endColumn = 1 + endOffset - getLineStartOffset(i);
                     auto underline = stringOfSameWidth(string.substr(0, endColumn), '~');
                     for (auto iter : arrowsForLine)
                     {
@@ -911,17 +912,17 @@ namespace
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("error", llvm::raw_ostream::RED, message, location, arrows);
+            report("error", llvm::raw_ostream::RED, message, location, arrows, tokenStartOffset, m_offset);
         }
 
         void reportNote(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("note", llvm::raw_ostream::CYAN, message, location, arrows);
+            report("note", llvm::raw_ostream::CYAN, message, location, arrows, tokenStartOffset, m_offset);
         }
 
         void reportWarning(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows);
+            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows, tokenStartOffset, m_offset);
         }
 
         [[nodiscard]] std::uint64_t getOffset() const
