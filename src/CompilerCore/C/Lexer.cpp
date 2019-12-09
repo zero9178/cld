@@ -800,8 +800,8 @@ namespace
                     // The token does not span lines and starts as well as ends here
                     auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
-                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column, endOffset - startOffset + 1);
-                    *m_reporter << string.substr(endOffset + 1);
+                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column, endOffset - startOffset);
+                    *m_reporter << string.substr(endOffset);
                 }
                 else if (i == startLine)
                 {
@@ -813,7 +813,7 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = endOffset + 1 - getLineStartOffset(i);
+                    auto endColumn = endOffset - getLineStartOffset(i);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
                     *m_reporter << string.substr(endColumn);
                 }
@@ -838,7 +838,7 @@ namespace
                     // The token does not span lines and starts as well as ends here
                     auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
-                    auto underline = stringOfSameWidth(string.substr(column, endOffset - startOffset + 1), '~');
+                    auto underline = stringOfSameWidth(string.substr(column, endOffset - startOffset), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter - column < underline.size());
@@ -862,7 +862,7 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = 1 + endOffset - getLineStartOffset(i);
+                    auto endColumn = endOffset - getLineStartOffset(i);
                     auto underline = stringOfSameWidth(string.substr(0, endColumn), '~');
                     for (auto iter : arrowsForLine)
                     {
@@ -952,13 +952,13 @@ namespace
 
         void push(TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset + 1);
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
             m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
 
         void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {}) noexcept
         {
-            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset + 1 - diff);
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset - diff);
             m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
     };
@@ -1636,97 +1636,97 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     for (const auto* iter = source.data(); iter != end;)
     {
         std::uint64_t step = 1;
-        while (std::visit(
-            [iter, &step, &stateMachine, &context, offset, end](auto&& state) mutable -> bool {
-                auto stateIndex = stateMachine.index();
-                auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context, offset] {
-                    if (stateIndex != stateMachine.index())
-                    {
-                        if (auto result = context.transitions.find({0, stateMachine.index()});
-                            result != context.transitions.end())
-                        {
-                            result++;
-                            while (result != context.transitions.end())
-                            {
-                                result = context.transitions.erase(result);
-                            }
-                        }
-                        if (stateMachine.index())
-                        {
-                            context.transitions.insert({offset, stateMachine.index()});
-                        }
-                    }
-                });
-                using T = std::decay_t<decltype(state)>;
-                constexpr bool needsCodepoint =
-                    std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
-                std::conditional_t<needsCodepoint, std::uint32_t, char> c;
-                if constexpr (needsCodepoint)
+        std::uint64_t prevOffset = offset;
+        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) mutable -> bool {
+            auto stateIndex = stateMachine.index();
+            auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context, offset] {
+                if (stateIndex != stateMachine.index())
                 {
-                    llvm::UTF32 result;
-                    auto start = iter;
-                    if (llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
-                                                  reinterpret_cast<const llvm::UTF8*>(end), &result,
-                                                  llvm::strictConversion)
-                        != llvm::conversionOK)
+                    if (auto result = context.transitions.find({0, stateMachine.index()});
+                        result != context.transitions.end())
                     {
-                        // TODO: Error
+                        result++;
+                        while (result != context.transitions.end())
+                        {
+                            result = context.transitions.erase(result);
+                        }
                     }
-                    c = result;
-                    step = std::distance(iter, start);
+                    if (stateMachine.index())
+                    {
+                        context.transitions.insert({offset, stateMachine.index()});
+                    }
+                }
+            });
+            using T = std::decay_t<decltype(state)>;
+            constexpr bool needsCodepoint =
+                std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
+            std::conditional_t<needsCodepoint, std::uint32_t, char> c{};
+            if constexpr (needsCodepoint)
+            {
+                llvm::UTF32 result;
+                auto start = iter;
+                if (llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
+                                              reinterpret_cast<const llvm::UTF8*>(end), &result, llvm::strictConversion)
+                    != llvm::conversionOK)
+                {
+                    // TODO: Error
+                }
+                c = result;
+                step = std::distance(iter, start);
+            }
+            else
+            {
+                c = *iter;
+            }
+            offset = prevOffset + step;
+            if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
+            {
+                return !state.advance(c, context);
+            }
+            else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
+            {
+                stateMachine = state.advance(c, context);
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                {
+                    if (!std::holds_alternative<Start>(stateMachine))
+                    {
+                        context.tokenStartOffset = offset - step;
+                    }
+                }
+                return false;
+            }
+            else if constexpr (std::is_void_v<decltype(state.advance(c, context))>)
+            {
+                state.advance(c, context);
+                return false;
+            }
+            else
+            {
+                auto&& [lhs, rhs] = state.advance(c, context);
+                bool proceed;
+                if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
+                {
+                    stateMachine = std::move(rhs);
+                    proceed = lhs;
                 }
                 else
                 {
-                    c = *iter;
+                    stateMachine = std::move(lhs);
+                    proceed = rhs;
                 }
-                if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
                 {
-                    return !state.advance(c, context);
-                }
-                else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
-                {
-                    stateMachine = state.advance(c, context);
-                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                    if (!std::holds_alternative<Start>(stateMachine))
                     {
-                        if (!std::holds_alternative<Start>(stateMachine))
-                        {
-                            context.tokenStartOffset = offset;
-                        }
+                        context.tokenStartOffset = offset - step;
                     }
-                    return false;
                 }
-                else if constexpr (std::is_void_v<decltype(state.advance(c, context))>)
-                {
-                    state.advance(c, context);
-                    return false;
-                }
-                else
-                {
-                    auto&& [lhs, rhs] = state.advance(c, context);
-                    bool proceed;
-                    if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
-                    {
-                        stateMachine = std::move(rhs);
-                        proceed = lhs;
-                    }
-                    else
-                    {
-                        stateMachine = std::move(lhs);
-                        proceed = rhs;
-                    }
-                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
-                    {
-                        if (!std::holds_alternative<Start>(stateMachine))
-                        {
-                            context.tokenStartOffset = offset;
-                        }
-                    }
-                    return !proceed;
-                }
-            },
-            stateMachine))
+                return !proceed;
+            }
+        };
+        while (std::visit(visitor, stateMachine))
             ;
-        offset += step;
+        offset = prevOffset + step;
         iter += step;
     }
 
