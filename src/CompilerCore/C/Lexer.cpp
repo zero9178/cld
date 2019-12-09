@@ -925,6 +925,24 @@ namespace
             report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows, tokenStartOffset, m_offset);
         }
 
+        void reportError(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                         std::vector<std::uint64_t> arrows = {})
+        {
+            report("error", llvm::raw_ostream::RED, message, location, arrows, start, end);
+        }
+
+        void reportNote(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                        std::vector<std::uint64_t> arrows = {})
+        {
+            report("note", llvm::raw_ostream::CYAN, message, location, arrows, start, end);
+        }
+
+        void reportWarning(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                           std::vector<std::uint64_t> arrows = {})
+        {
+            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows, start, end);
+        }
+
         [[nodiscard]] std::uint64_t getOffset() const
         {
             return m_offset;
@@ -1514,6 +1532,13 @@ namespace
                 return {UniversalCharacter{c == 'U', std::move(suspText)}, true};
             }
             return {UniversalCharacter{c == 'U'}, true};
+        }
+        else if (c == '\\')
+        {
+            // Another backslash. Therefore we do not know yet if this might still turn into a universal character!
+            // Also we are basically using a singly linked list as stack here making it possible to put infinite
+            // backslashes to concat lines
+            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
         else if (suspText)
         {
