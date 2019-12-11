@@ -1,5 +1,6 @@
 #include "Lexer.hpp"
 
+#pragma warning(push, 0)
 #include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SparseSet.h>
 #include <llvm/Support/ConvertUTF.h>
@@ -8,6 +9,7 @@
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
 #include <llvm/Support/raw_ostream.h>
+#pragma warning(pop)
 
 #include <CompilerCore/Common/Util.hpp>
 
@@ -988,30 +990,31 @@ namespace
      * @param value string that either consist of 4 or 8 hex digits
      * @return Unicode value
      */
-    std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t offsetOfFirstC,
-                                                           Context& context)
+    std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t startOffset,
+                                                           std::uint64_t endOffset, Context& context)
     {
+        assert(value.size() == 4 || value.size() == 8);
         auto result = std::stoul(std::string{value.begin(), value.end()}, nullptr, 16);
         if (result < 0xA0)
         {
             if (result != '$' && result != '@' && result != '`')
             {
                 std::vector<std::uint64_t> arrows(value.size());
-                std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
+                std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
                 context.reportError(
                     OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                         value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
-                    offsetOfFirstC, std::move(arrows));
+                    endOffset - value.size(), startOffset, endOffset, std::move(arrows));
                 return {};
             }
         }
         else if (result >= 0xD800 && result <= 0xDFFF)
         {
             std::vector<std::uint64_t> arrows(value.size());
-            std::iota(arrows.begin(), arrows.end(), offsetOfFirstC);
+            std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
             context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                     value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                                offsetOfFirstC, std::move(arrows));
+                                endOffset - value.size(), startOffset, endOffset, std::move(arrows));
             return {};
         }
         return result;
@@ -1073,11 +1076,11 @@ namespace
         bool errorOccured = false;
         for (const auto* iter = characters.data(); iter != end;)
         {
+            auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
             if (*iter == '\n')
             {
                 context.reportError(OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
-                                    context.tokenStartOffset,
-                                    {context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data())});
+                                    context.tokenStartOffset, {offset});
                 iter++;
                 errorOccured = true;
                 continue;
@@ -1140,9 +1143,8 @@ namespace
                         iter = hexEnd;
                         continue;
                     }
-                    auto uc = universalCharacterToValue(
-                        {hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
-                        context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()), context);
+                    auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
+                                                        offset - 2, offset + (big ? 8 : 4), context);
                     if (uc)
                     {
                         *resultStart = *uc;
@@ -1188,7 +1190,7 @@ namespace
                     // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                     // Also since there must be at least one character after \, lastOctal is definitely not end
                     // here.
-                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data()) - 1;
+                    auto start = offset - 1;
                     context.reportError(
                         OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), start,
                         {start, start + 1});
@@ -1204,7 +1206,7 @@ namespace
             else
             {
                 // Escape sequence or illegal escape
-                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
+                auto start = offset;
                 auto character = escapeCharToValue(iter[1], start, context);
                 if (character)
                 {
@@ -1560,10 +1562,10 @@ namespace
             {
                 auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
                 assert(result != context.transitions.end());
-                std::vector<std::uint64_t> arrows(context.getOffset() - result->offset - 2);
-                std::iota(arrows.begin(), arrows.end(), result->offset + 1);
+                std::vector<std::uint64_t> arrows(context.getOffset() - result->offset - 1);
+                std::iota(arrows.begin(), arrows.end(), result->offset);
                 context.reportError(OpenCL::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE,
-                                    result->offset, result->offset, context.getOffset() - 1, std::move(arrows));
+                                    result->offset - 1, result->offset - 1, context.getOffset() - 1, std::move(arrows));
             }
             if (prevState)
             {
@@ -1582,8 +1584,8 @@ namespace
         }
         auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
         assert(result != context.transitions.end());
-        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset, result->offset,
-                            result->offset + 1, {result->offset});
+        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset - 1,
+                            result->offset - 1, result->offset, {result->offset - 1});
         return {Start{}, false};
     }
 
@@ -1593,11 +1595,12 @@ namespace
         {
             auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
             assert(result != context.transitions.end());
-            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset,
-                                result->offset, result->offset + 1, {result->offset});
+            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset - 1,
+                                result->offset - 1, result->offset, {result->offset - 1});
             context.reportNote(OpenCL::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(
                                    (big ? 8 : 4) - characters.size()),
-                               result->offset, result->offset, context.getOffset() - codePointToUtf8ByteCount(c));
+                               result->offset - 1, result->offset - 1,
+                               context.getOffset() - codePointToUtf8ByteCount(c));
             return {Start{}, false};
         }
 
@@ -1606,9 +1609,10 @@ namespace
         {
             return {std::move(*this), true};
         }
-        auto firstCPos = context.transitions.find({0, OpenCL::getIndex<UniversalCharacter>(StateMachine{})});
-        assert(firstCPos != context.transitions.end());
-        auto result = universalCharacterToValue({characters.data(), characters.size()}, firstCPos->offset, context);
+        auto ucStart = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
+        assert(ucStart != context.transitions.end());
+        auto result = universalCharacterToValue({characters.data(), characters.size()}, ucStart->offset - 1,
+                                                context.getOffset(), context);
         if (!result)
         {
             return {Start{}, true};
@@ -1683,25 +1687,31 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;
         auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) mutable -> bool {
-            auto stateIndex = stateMachine.index();
-            auto exit = llvm::make_scope_exit([stateIndex, &stateMachine, &context, offset] {
-                if (stateIndex != stateMachine.index())
-                {
-                    if (auto result = context.transitions.find({0, stateMachine.index()});
-                        result != context.transitions.end())
+            bool proceed = true;
+            auto exit = llvm::make_scope_exit(
+                [stateIndex = stateMachine.index(), &stateMachine, &context, offset, &proceed, &step]() mutable {
+                    if (proceed)
                     {
-                        result++;
-                        while (result != context.transitions.end())
+                        offset += step;
+                    }
+                    std::vector v(context.transitions.begin(), context.transitions.end());
+                    if (stateIndex != stateMachine.index())
+                    {
+                        if (auto result = context.transitions.find({0, stateMachine.index()});
+                            result != context.transitions.end())
                         {
-                            result = context.transitions.erase(result);
+                            result++;
+                            while (result != context.transitions.end())
+                            {
+                                result = context.transitions.erase(result);
+                            }
+                        }
+                        if (stateMachine.index() != OpenCL::getIndex<Start>(StateMachine{}))
+                        {
+                            context.transitions.insert({offset, stateMachine.index()});
                         }
                     }
-                    if (stateMachine.index())
-                    {
-                        context.transitions.insert({offset, stateMachine.index()});
-                    }
-                }
-            });
+                });
             using T = std::decay_t<decltype(state)>;
             constexpr bool needsCodepoint =
                 std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
@@ -1726,7 +1736,8 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             offset = prevOffset + step;
             if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
             {
-                return !state.advance(c, context);
+                proceed = state.advance(c, context);
+                return !proceed;
             }
             else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
             {
@@ -1748,7 +1759,6 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             else
             {
                 auto&& [lhs, rhs] = state.advance(c, context);
-                bool proceed;
                 if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
                 {
                     stateMachine = std::move(rhs);

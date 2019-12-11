@@ -1,6 +1,8 @@
 #include "catch.hpp"
 
+#pragma warning(push, 0)
 #include <llvm/Support/Format.h>
+#pragma warning(pop)
 
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Lexer.hpp>
