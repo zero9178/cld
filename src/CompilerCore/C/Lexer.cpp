@@ -715,7 +715,9 @@ namespace
         std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
         {
             auto result = std::lower_bound(m_lineStarts.begin(), m_lineStarts.end(), offset);
-            return result == m_lineStarts.begin() ? 1 : std::distance(m_lineStarts.begin(), result - 1) + 1;
+            return result == m_lineStarts.begin() ?
+                       1 :
+                       std::distance(m_lineStarts.begin(), *result != offset ? result - 1 : result) + 1;
         }
 
         std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept
@@ -731,7 +733,7 @@ namespace
         }
 
         void report(const std::string& suffix, llvm::raw_ostream::Colors colour, const std::string& message,
-                    const std::uint64_t& location, const std::vector<uint64_t>& arrows, std::uint64_t startOffset,
+                    std::uint64_t location, const std::vector<uint64_t>& arrows, std::uint64_t startOffset,
                     std::uint64_t endOffset) const
         {
             assert(!m_inPreprocessor);
@@ -801,7 +803,7 @@ namespace
                     auto column = startOffset - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(column, endOffset - startOffset);
-                    *m_reporter << string.substr(endOffset);
+                    *m_reporter << string.substr(column + endOffset - startOffset);
                 }
                 else if (i == startLine)
                 {
@@ -854,10 +856,10 @@ namespace
                     auto underline = stringOfSameWidth(string.substr(column), '~');
                     for (auto iter : arrowsForLine)
                     {
-                        assert(iter < underline.size());
-                        underline[iter] = '^';
+                        assert(iter - column < underline.size());
+                        underline[iter - column] = '^';
                     }
-                    llvm::WithColor(m_reporter->indent(column), colour) << underline;
+                    llvm::WithColor(*m_reporter, colour) << underline;
                 }
                 else
                 {
@@ -1290,6 +1292,7 @@ namespace
     {
         std::unique_ptr<StateMachine> prevState{};
         bool first = true;
+        bool error = false;
 
         std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
     };
@@ -1504,8 +1507,7 @@ namespace
         else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
                  && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
         {
-            // TODO: Backslashes are allowed to concat identifiers to form a keyword
-            if (isKeyword(characters))
+            if (!context.isInPreprocessor() && isKeyword(characters))
             {
                 context.push(1, charactersToKeyword(characters));
             }
@@ -1522,7 +1524,7 @@ namespace
         return {std::move(*this), true};
     }
 
-    std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context) noexcept
+    std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context&) noexcept
     {
         if (c == 'u' || c == 'U')
         {
@@ -1554,6 +1556,15 @@ namespace
     {
         if (c == '\n')
         {
+            if (error)
+            {
+                auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
+                assert(result != context.transitions.end());
+                std::vector<std::uint64_t> arrows(context.getOffset() - result->offset - 2);
+                std::iota(arrows.begin(), arrows.end(), result->offset + 1);
+                context.reportError(OpenCL::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE,
+                                    result->offset, result->offset, context.getOffset() - 1, std::move(arrows));
+            }
             if (prevState)
             {
                 return {std::move(*prevState), true};
@@ -1563,7 +1574,16 @@ namespace
                 return {Start{}, true};
             }
         }
-        // TODO: error stray backslash
+        else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
+                 || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+        {
+            error = true;
+            return {std::move(*this), true};
+        }
+        auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
+        assert(result != context.transitions.end());
+        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset, result->offset,
+                            result->offset + 1, {result->offset});
         return {Start{}, false};
     }
 
@@ -1574,12 +1594,10 @@ namespace
             auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
             assert(result != context.transitions.end());
             context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset,
-                                {result->offset});
-            std::vector<std::uint64_t> arrows(context.getOffset() - result->offset);
-            std::iota(arrows.begin(), arrows.end(), result->offset);
+                                result->offset, result->offset + 1, {result->offset});
             context.reportNote(OpenCL::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(
                                    (big ? 8 : 4) - characters.size()),
-                               result->offset, std::move(arrows));
+                               result->offset, result->offset, context.getOffset() - codePointToUtf8ByteCount(c));
             return {Start{}, false};
         }
 
@@ -1588,7 +1606,9 @@ namespace
         {
             return {std::move(*this), true};
         }
-        auto result = universalCharacterToValue({characters.data(), characters.size()}, /*TODO:*/ 0, context);
+        auto firstCPos = context.transitions.find({0, OpenCL::getIndex<UniversalCharacter>(StateMachine{})});
+        assert(firstCPos != context.transitions.end());
+        auto result = universalCharacterToValue({characters.data(), characters.size()}, firstCPos->offset, context);
         if (!result)
         {
             return {Start{}, true};

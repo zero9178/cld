@@ -168,6 +168,9 @@ namespace OpenCL
             constexpr auto DISCARDING_ALL_BUT_FIRST_CHARACTER = "Discarding all but first character";
 
             constexpr auto STRAY_N_IN_PROGRAM = Format("Stray '{}' in program");
+
+            constexpr auto NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE =
+                "No whitespace allowed between backslash and newline";
         } // namespace Lexer
 
         namespace PP

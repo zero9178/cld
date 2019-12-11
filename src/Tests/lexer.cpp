@@ -133,14 +133,42 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             LEXER_OUTPUTS_WITH("_\\ute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
                                              && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
         }
-        WHEN("incomplete and multiline")
+        WHEN("disallowed")
         {
-            LEXER_OUTPUTS_WITH("_\\\\\nute",
-                               Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
-                                   && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
+            LEXER_OUTPUTS_WITH("_\\u0099", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                               "0099", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         }
     }
-    GIVEN("A multiline identifier")
+    GIVEN("Keywords")
+    {
+        {
+            using namespace OpenCL::Lexer;
+            auto result = OpenCL::Lexer::tokenize(
+                "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool");
+            std::vector correct = {TokenType::AutoKeyword,     TokenType::EnumKeyword,     TokenType::RestrictKeyword,
+                                   TokenType::UnsignedKeyword, TokenType::BreakKeyword,    TokenType::ExternKeyword,
+                                   TokenType::ReturnKeyword,   TokenType::VoidKeyword,     TokenType::CaseKeyword,
+                                   TokenType::FloatKeyword,    TokenType::ShortKeyword,    TokenType::VolatileKeyword,
+                                   TokenType::CharKeyword,     TokenType::ForKeyword,      TokenType::SignedKeyword,
+                                   TokenType::WhileKeyword,    TokenType::ConstKeyword,    TokenType::GotoKeyword,
+                                   TokenType::SizeofKeyword,   TokenType::ContinueKeyword, TokenType::IfKeyword,
+                                   TokenType::StaticKeyword,   TokenType::DefaultKeyword,  TokenType::InlineKeyword,
+                                   TokenType::StructKeyword,   TokenType::DoKeyword,       TokenType::IntKeyword,
+                                   TokenType::SwitchKeyword,   TokenType::DoubleKeyword,   TokenType::LongKeyword,
+                                   TokenType::TypedefKeyword,  TokenType::ElseKeyword,     TokenType::RegisterKeyword,
+                                   TokenType::UnionKeyword,    TokenType::UnderlineBool};
+            std::vector<TokenType> tokens;
+            tokens.reserve(result.data().size());
+            std::transform(result.data().begin(), result.data().end(), std::back_inserter(tokens),
+                           [](const Token& token) { return token.getTokenType(); });
+            CHECK_THAT(tokens, Catch::Equals(correct));
+        }
+    }
+}
+
+SCENARIO("Lexing backslashes", "[lexer]")
+{
+    GIVEN("Newline after backslash")
     {
         WHEN("A normal identifier")
         {
@@ -159,6 +187,29 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
             CHECK(std::get<std::string>(result.data()[0].getValue()) == "_µ");
             CHECK(result.data()[0].getRepresentation() == "_\\\\\nu00B5");
+            WHEN("incomplete and multiline")
+            {
+                LEXER_OUTPUTS_WITH("_\\\\\nute",
+                                   Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
+                                       && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
+            }
+        }
+        WHEN("keyword contains concatenating backslash")
+        {
+            auto result = OpenCL::Lexer::tokenize("f\\\nor");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::ForKeyword);
+            REQUIRE(result.data()[0].getRepresentation() == "f\\\nor");
+        }
+    }
+    GIVEN("Whitespace after backslash")
+    {
+        LEXER_OUTPUTS_WITH("i\\    \nf", Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
+        LEXER_OUTPUTS_WITH("i\\  5  \nf", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+        WHEN("Chained")
+        {
+            LEXER_OUTPUTS_WITH("i\\ \n\\ \n\\ \n\\ \nf",
+                               Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
         }
     }
 }
@@ -620,28 +671,6 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(std::get<OpenCL::Lexer::NonCharString>(result.data()[0].getValue()) == L"\U00003435");
     }
     LEXER_OUTPUTS_WITH("\"as\ndawd\"", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args(STRING_LITERAL)));
-}
-
-TEST_CASE("Lexing keywords", "[lexer]")
-{
-    using namespace OpenCL::Lexer;
-    auto result = OpenCL::Lexer::tokenize(
-        "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool");
-    std::vector correct = {
-        TokenType::AutoKeyword,     TokenType::EnumKeyword,   TokenType::RestrictKeyword, TokenType::UnsignedKeyword,
-        TokenType::BreakKeyword,    TokenType::ExternKeyword, TokenType::ReturnKeyword,   TokenType::VoidKeyword,
-        TokenType::CaseKeyword,     TokenType::FloatKeyword,  TokenType::ShortKeyword,    TokenType::VolatileKeyword,
-        TokenType::CharKeyword,     TokenType::ForKeyword,    TokenType::SignedKeyword,   TokenType::WhileKeyword,
-        TokenType::ConstKeyword,    TokenType::GotoKeyword,   TokenType::SizeofKeyword,   TokenType::ContinueKeyword,
-        TokenType::IfKeyword,       TokenType::StaticKeyword, TokenType::DefaultKeyword,  TokenType::InlineKeyword,
-        TokenType::StructKeyword,   TokenType::DoKeyword,     TokenType::IntKeyword,      TokenType::SwitchKeyword,
-        TokenType::DoubleKeyword,   TokenType::LongKeyword,   TokenType::TypedefKeyword,  TokenType::ElseKeyword,
-        TokenType::RegisterKeyword, TokenType::UnionKeyword,  TokenType::UnderlineBool};
-    std::vector<TokenType> tokens;
-    tokens.reserve(result.data().size());
-    std::transform(result.data().begin(), result.data().end(), std::back_inserter(tokens),
-                   [](const Token& token) { return token.getTokenType(); });
-    CHECK_THAT(tokens, Catch::Equals(correct));
 }
 
 TEST_CASE("Lexing positions", "[lexer]")
