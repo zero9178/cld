@@ -1143,8 +1143,8 @@ namespace
                         iter = hexEnd;
                         continue;
                     }
-                    auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)},
-                                                        offset - 2, offset + (big ? 8 : 4), context);
+                    auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
+                                                        offset + 2 + (big ? 8 : 4), context);
                     if (uc)
                     {
                         *resultStart = *uc;
