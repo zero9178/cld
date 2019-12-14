@@ -695,14 +695,17 @@ namespace
     struct MaybeUC;
     struct BackSlash;
     struct UniversalCharacter;
+    struct Number;
+    struct HexNumber;
+    struct FloatNumber;
     struct LineComment;
     struct BlockComment;
-    struct Number;
     struct AfterInclude;
     struct L;
 
-    using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash,
-                                      UniversalCharacter, LineComment, BlockComment, Number, AfterInclude, L>;
+    using StateMachine =
+        std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash, UniversalCharacter, LineComment,
+                     BlockComment, Number, HexNumber, FloatNumber, AfterInclude, L>;
 
     class Context
     {
@@ -1320,7 +1323,21 @@ namespace
 
     struct Number final
     {
-        void advance(char, Context& context) noexcept {}
+        std::string numberChars{};
+
+        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
+    };
+
+    struct HexNumber final
+    {
+        std::pair<StateMachine, bool> advance(char, Context& context);
+    };
+
+    struct FloatNumber final
+    {
+        std::string numberChars{};
+
+        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
     };
 
     struct AfterInclude final
@@ -1341,6 +1358,16 @@ namespace
             case '"': return StringLiteral{};
             case 'L': return L{};
             case '\\': return MaybeUC{};
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9': return Number{{static_cast<char>(c)}};
             default:
             {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
@@ -1630,6 +1657,47 @@ namespace
         newText.characters.resize(newText.characters.size()
                                   - std::distance(start, newText.characters.data() + newText.characters.size()));
         return {std::move(newText), true};
+    }
+
+    std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
+    {
+        // C is utf32 because for the integer suffix just like gcc and clang we do not 'strictly' follow the spec by
+        // only consuming u, U, l and L, but also consume anything that could be an identifier as none of the parsing
+        // rules allow for an identifier to follow a number. Therefore we can output a better error message for invalid
+        // suffixes
+        constexpr auto toLower = 0b100000;
+        // We treat the exponential part (both p and e) as suffix that we later check for an add again when evaluating
+        if (c >= '0' && c <= '9')
+        {
+            numberChars += c;
+            return {std::move(*this), true};
+        }
+
+        if ((c | toLower) == 'x' && numberChars == "0")
+        {
+            return {HexNumber{}, true};
+        }
+
+        if (c == '.' || c == 'e' || c == 'E')
+        {
+            return {FloatNumber{numberChars + static_cast<char>(c)}, true};
+        }
+
+        return {Start{}, false};
+    }
+
+    std::pair<StateMachine, bool> FloatNumber::advance(std::uint32_t c, Context& context)
+    {
+        if (c >= '0' && c <= '9')
+        {
+            numberChars += c;
+            return {std::move(*this), true};
+        }
+    }
+
+    std::pair<StateMachine, bool> HexNumber::advance(char c, Context& context)
+    {
+        return {Start{}, true};
     }
 
     template <class T>
