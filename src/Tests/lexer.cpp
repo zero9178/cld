@@ -456,9 +456,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE(std::holds_alternative<std::uint32_t>(result.data()[0].getValue()));
             CHECK(std::get<std::uint32_t>(result.data()[0].getValue()) == 534534);
 
-            LEXER_OUTPUTS_WITH("5u5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("u5")));
+            LEXER_OUTPUTS_WITH("5u5", Catch::Contains(INVALID_LITERAL_SUFFIX.args("u5")));
         }
-        LEXER_OUTPUTS_WITH("5x3", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x3")));
+        LEXER_OUTPUTS_WITH("5x3", Catch::Contains(INVALID_LITERAL_SUFFIX.args("x3")));
     }
     SECTION("Floating point")
     {
@@ -489,9 +489,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
             CHECK(std::get<double>(result.data()[0].getValue()) == 0.5);
         }
-        LEXER_OUTPUTS_WITH("0.5.3", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3")));
-        LEXER_OUTPUTS_WITH("0.5.3F", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.5.3F")));
-        LEXER_OUTPUTS_WITH("0.53fF", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0.53fF")));
+        LEXER_OUTPUTS_WITH("0.5.3", Catch::Contains(INVALID_LITERAL_SUFFIX.args(".3")));
+        LEXER_OUTPUTS_WITH("0.5.3F", Catch::Contains(INVALID_LITERAL_SUFFIX.args(".3F")));
+        LEXER_OUTPUTS_WITH("0.53fF", Catch::Contains(INVALID_LITERAL_SUFFIX.args("fF")));
         std::array<std::pair<const char*, double>, 6> results = {
             std::pair{"1e-19", 1e-19},   std::pair{"2e32", 2e32},   std::pair{"01e-19", 01e-19},
             std::pair{"01E-19", 01e-19}, std::pair{"02e32", 02e32}, std::pair{"02E32", 02e32}};
@@ -556,8 +556,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         }
 
         LEXER_OUTPUTS_WITH("0x0.5", Catch::Contains(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT));
-        LEXER_OUTPUTS_WITH("0x0.5p", Catch::Contains(INVALID_FLOATING_POINT_LITERAL.args("0x0.5p")));
-        LEXER_OUTPUTS_WITH("0x5x5", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("x5")));
+        LEXER_OUTPUTS_WITH("0x0.5p", Catch::Contains(EXPECTED_DIGITS_AFTER_EXPONENT));
+        LEXER_OUTPUTS_WITH("0x5x5", Catch::Contains(INVALID_LITERAL_SUFFIX.args("x5")));
     }
     SECTION("Integer type selection")
     {
@@ -593,7 +593,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         str << llvm::format_hex(overInt64, 0) << "ll";
         test(str.str(), std::uint64_t(overInt64));
         output.clear();
-        str << "0x" << llvm::format_hex(overInt64, 0) << "ull";
+        str << llvm::format_hex(overInt64, 0) << "ull";
         test(str.str(), std::uint64_t(overInt64));
         output.clear();
     }
@@ -620,8 +620,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         REQUIRE(std::holds_alternative<std::uint64_t>(result.data()[0].getValue()));
         CHECK(std::get<std::uint64_t>(result.data()[0].getValue()) == 534534);
 
-        LEXER_OUTPUTS_WITH("534534lL", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("lL")));
-        LEXER_OUTPUTS_WITH("534534Ll", Catch::Contains(INVALID_INTEGER_LITERAL_SUFFIX.args("Ll")));
+        LEXER_OUTPUTS_WITH("534534lL", Catch::Contains(INVALID_LITERAL_SUFFIX.args("lL")));
+        LEXER_OUTPUTS_WITH("534534Ll", Catch::Contains(INVALID_LITERAL_SUFFIX.args("Ll")));
     }
 }
 

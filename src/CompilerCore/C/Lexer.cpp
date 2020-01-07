@@ -747,7 +747,7 @@ namespace
             std::uint64_t startLine = 0;
             std::uint64_t endLine = 0;
             std::vector<std::string_view> lines;
-            std::uint64_t numSize = 0;
+            std::size_t numSize = 0;
 
             {
                 auto line = getLineNumber(location);
@@ -1234,14 +1234,47 @@ namespace
         return {result, errorOccured};
     }
 
+    template <class T, class... Args>
+    std::optional<Token::ValueType> castInteger(std::uint64_t integer)
+    {
+        // Clang
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+        // GCC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+        // MSVC
+#pragma warning(push)
+#pragma warning(disable : 4018)
+#pragma warning(disable : 4389)
+        if (integer <= std::numeric_limits<T>::max())
+        {
+            return {static_cast<T>(integer)};
+        }
+        else if constexpr (sizeof...(Args) != 0)
+        {
+            return castInteger<Args...>(integer);
+        }
+        else
+        {
+            return {};
+        }
+#pragma GCC diagnostic pop
+#pragma clang diagnostic pop
+#pragma warning(pop)
+    }
+
     template <class... Integers>
     std::optional<Token::ValueType> parseInteger(const char* begin, const char* end)
     {
         static_assert((std::is_integral_v<Integers> && ...));
-        std::uint64_t result;
-        const char* endPtr = end;
-        std::strtoull(begin, const_cast<char**>(&endPtr), 0);
-        // assert(endPtr)
+        static_assert(sizeof...(Integers) >= 1);
+        // *end is not NULL. strtoull requires a null terminated string as input
+        std::string input(begin, end);
+        char* endPtr;
+        auto result = std::strtoull(input.data(), &endPtr, 0);
+        assert(*endPtr == '\0');
+        return castInteger<Integers...>(result);
     }
 
     std::optional<Token::ValueType> processNumber(const char* begin, const char* end, std::uint64_t beginLocation,
@@ -1267,22 +1300,33 @@ namespace
             return std::none_of(legalValues.begin(), legalValues.end(), [c](char allowed) { return allowed == c; });
         };
         auto suffixBegin = std::find_if(begin + (isHex ? 2 : 0), end, searchFunction);
-        if (suffixBegin != end)
+        // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
+        // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
+        // then continue our search
+        constexpr unsigned toLower = 32;
+        if (suffixBegin != end && (*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
         {
-            // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
-            // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
-            // then continue our search
-            constexpr unsigned toLower = 64;
-            if ((*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
+            isFloat = true;
+            suffixBegin++;
+            if (suffixBegin != end && (*suffixBegin == '+' || *suffixBegin == '-'))
             {
-                isFloat = true;
                 suffixBegin++;
-                if (suffixBegin != end && (*suffixBegin == '+' || *suffixBegin == '-'))
-                {
-                    suffixBegin++;
-                }
-                suffixBegin = std::find_if(suffixBegin, end, searchFunction);
             }
+            auto prev = suffixBegin;
+            suffixBegin = std::find_if(suffixBegin, end, searchFunction);
+            if (prev == suffixBegin)
+            {
+                context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+                                    beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
+                                    context.getOffset() - 1);
+                return {};
+            }
+        }
+        else if (isHex && isFloat)
+        {
+            context.reportError(OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+                                context.getOffset() - 1, context.tokenStartOffset, context.getOffset() - 1);
+            return {};
         }
         bool isHexOrOctal = isHex;
         if (!isHex && !isFloat && *begin == '0')
@@ -1417,7 +1461,7 @@ namespace
                 }
                 else
                 {
-                    return parseInteger<std::uint64_t>(begin, suffixBegin);
+                    return parseInteger<std::int64_t>(begin, suffixBegin);
                 }
             }
             else if (suffix.size() == 3
@@ -1426,11 +1470,50 @@ namespace
             {
                 return parseInteger<std::uint64_t>(begin, suffixBegin);
             }
-            else
+        }
+        else
+        {
+            std::string input(begin, suffixBegin);
+            char* endPtr;
+            if (suffix.empty()
+                || (context.getLanguageOptions().getSizeOfLongDoubleBits() == 64 && (suffix == "l" || suffix == "L")))
             {
-                // TODO: Error. Invalid suffix
+                auto result = std::strtod(input.data(), &endPtr);
+                assert(*endPtr == '\0');
+                return result;
+            }
+            else if (suffix == "f" || suffix == "F")
+            {
+                auto result = std::strtof(input.data(), &endPtr);
+                assert(*endPtr == '\0');
+                return result;
+            }
+            else if (suffix == "l" || suffix == "L")
+            {
+                // TODO: Emulate somehow 80 bit on MSVC. Emulate 128 bit on every compiler
+                if (context.getLanguageOptions().getSizeOfLongDoubleBits() == 128)
+                {
+                    llvm::errs() << "Not implemented yet";
+                    std::terminate();
+                }
+#ifdef _MSC_VER
+                else
+                {
+                    llvm::errs() << "Not implemented yet";
+                    std::terminate();
+                }
+#else
+                auto result = std::strtold(input.data(), &endPtr);
+                assert(*endPtr == '\0');
+                return result;
+#endif
             }
         }
+        std::vector<std::uint64_t> arrows(suffix.size());
+        std::iota(arrows.begin(), arrows.end(), beginLocation + std::distance(begin, suffixBegin));
+        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+                            beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
+                            context.getOffset() - 1, std::move(arrows));
         return {};
     }
 
@@ -1848,7 +1931,10 @@ namespace
     {
         // Consuming all characters first before then doing a proper parse
         if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
-            || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+            || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (!numberChars.empty() && (c == '+' || c == '-')
+                && (numberChars.back() == 'e' || numberChars.back() == 'E' || numberChars.back() == 'p'
+                    || numberChars.back() == 'P')))
         {
             numberChars.resize(numberChars.size() + 4);
             auto start = numberChars.data() + numberChars.size() - 4;
