@@ -696,16 +696,13 @@ namespace
     struct BackSlash;
     struct UniversalCharacter;
     struct Number;
-    struct HexNumber;
-    struct FloatNumber;
     struct LineComment;
     struct BlockComment;
     struct AfterInclude;
     struct L;
 
-    using StateMachine =
-        std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash, UniversalCharacter, LineComment,
-                     BlockComment, Number, HexNumber, FloatNumber, AfterInclude, L>;
+    using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash,
+                                      UniversalCharacter, LineComment, BlockComment, Number, AfterInclude, L>;
 
     class Context
     {
@@ -1237,6 +1234,206 @@ namespace
         return {result, errorOccured};
     }
 
+    template <class... Integers>
+    std::optional<Token::ValueType> parseInteger(const char* begin, const char* end)
+    {
+        static_assert((std::is_integral_v<Integers> && ...));
+        std::uint64_t result;
+        const char* endPtr = end;
+        std::strtoull(begin, const_cast<char**>(&endPtr), 0);
+        // assert(endPtr)
+    }
+
+    std::optional<Token::ValueType> processNumber(const char* begin, const char* end, std::uint64_t beginLocation,
+                                                  Context& context)
+    {
+        assert(std::distance(begin, end) >= 1);
+        bool isHex = std::distance(begin, end) >= 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X');
+        std::vector<char> legalValues(10);
+        std::iota(legalValues.begin(), legalValues.end(), '0');
+        if (isHex)
+        {
+            legalValues.resize(10 + 12);
+            std::iota(legalValues.begin() + 10, legalValues.end(), 'A');
+            std::iota(legalValues.begin() + 10 + 6, legalValues.end(), 'a');
+        }
+        bool isFloat = false;
+        auto searchFunction = [&legalValues, &isFloat](char c) mutable {
+            if (c == '.' && !isFloat)
+            {
+                isFloat = true;
+                return false;
+            }
+            return std::none_of(legalValues.begin(), legalValues.end(), [c](char allowed) { return allowed == c; });
+        };
+        auto suffixBegin = std::find_if(begin + (isHex ? 2 : 0), end, searchFunction);
+        if (suffixBegin != end)
+        {
+            // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
+            // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
+            // then continue our search
+            constexpr unsigned toLower = 64;
+            if ((*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
+            {
+                isFloat = true;
+                suffixBegin++;
+                if (suffixBegin != end && (*suffixBegin == '+' || *suffixBegin == '-'))
+                {
+                    suffixBegin++;
+                }
+                suffixBegin = std::find_if(suffixBegin, end, searchFunction);
+            }
+        }
+        bool isHexOrOctal = isHex;
+        if (!isHex && !isFloat && *begin == '0')
+        {
+            isHexOrOctal = true;
+            auto result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
+            if (result != suffixBegin)
+            {
+                context.reportError(
+                    OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                        std::string(1, *result)),
+                    beginLocation + std::distance(begin, result), {beginLocation + std::distance(begin, result)});
+                return {};
+            }
+        }
+        auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
+        if (!isFloat)
+        {
+            if (suffix.empty())
+            {
+                switch (context.getLanguageOptions().getSizeOfInt())
+                {
+                    case 2:
+                        if (isHexOrOctal)
+                        {
+                            if (context.getLanguageOptions().getSizeOfLong() == 4)
+                            {
+                                return parseInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t,
+                                                    std::int64_t, std::uint64_t>(begin, suffixBegin);
+                            }
+                            else
+                            {
+                                return parseInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
+                                    begin, suffixBegin);
+                            }
+                        }
+                        else
+                        {
+                            if (context.getLanguageOptions().getSizeOfLong() == 4)
+                            {
+                                return parseInteger<std::int16_t, std::int32_t, std::int64_t>(begin, suffixBegin);
+                            }
+                            else
+                            {
+                                return parseInteger<std::int16_t, std::int64_t>(begin, suffixBegin);
+                            }
+                        }
+                    case 4:
+                        if (isHexOrOctal)
+                        {
+                            return parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin,
+                                                                                                          suffixBegin);
+                        }
+                        else
+                        {
+                            return parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
+                        }
+                    case 8:
+                        if (isHexOrOctal)
+                        {
+                            return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                        }
+                        else
+                        {
+                            return parseInteger<std::int64_t>(begin, suffixBegin);
+                        }
+                    default: OPENCL_UNREACHABLE;
+                }
+            }
+            else if (suffix == "u" || suffix == "U")
+            {
+                switch (context.getLanguageOptions().getSizeOfInt())
+                {
+                    case 2:
+                        if (context.getLanguageOptions().getSizeOfLong() == 4)
+                        {
+                            return parseInteger<std::uint16_t, std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                        }
+                        else
+                        {
+                            return parseInteger<std::uint16_t, std::uint64_t>(begin, suffixBegin);
+                        }
+                    case 4: return parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                    case 8: return parseInteger<std::uint64_t>(begin, suffixBegin);
+                    default: OPENCL_UNREACHABLE;
+                }
+            }
+            else if (suffix == "L" || suffix == "l")
+            {
+                if (isHexOrOctal)
+                {
+                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    {
+                        return parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin,
+                                                                                                      suffixBegin);
+                    }
+                    else
+                    {
+                        return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                    }
+                }
+                else
+                {
+                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    {
+                        return parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
+                    }
+                    else
+                    {
+                        return parseInteger<std::int64_t>(begin, suffixBegin);
+                    }
+                }
+            }
+            else if (suffix.size() == 2
+                     && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
+                     && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
+            {
+                if (context.getLanguageOptions().getSizeOfLong() == 4)
+                {
+                    return parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                }
+                else
+                {
+                    return parseInteger<std::uint64_t>(begin, suffixBegin);
+                }
+            }
+            else if (suffix == "ll" || suffix == "LL")
+            {
+                if (isHexOrOctal)
+                {
+                    return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                }
+                else
+                {
+                    return parseInteger<std::uint64_t>(begin, suffixBegin);
+                }
+            }
+            else if (suffix.size() == 3
+                     && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
+                     && (suffix.find("LL") != std::string_view::npos || suffix.find("ll") != std::string_view::npos))
+            {
+                return parseInteger<std::uint64_t>(begin, suffixBegin);
+            }
+            else
+            {
+                // TODO: Error. Invalid suffix
+            }
+        }
+        return {};
+    }
+
     std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint)
     {
         if (codepoint <= 0x007F)
@@ -1322,18 +1519,6 @@ namespace
     };
 
     struct Number final
-    {
-        std::string numberChars{};
-
-        std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
-    };
-
-    struct HexNumber final
-    {
-        std::pair<StateMachine, bool> advance(char, Context& context);
-    };
-
-    struct FloatNumber final
     {
         std::string numberChars{};
 
@@ -1661,43 +1846,23 @@ namespace
 
     std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
     {
-        // C is utf32 because for the integer suffix just like gcc and clang we do not 'strictly' follow the spec by
-        // only consuming u, U, l and L, but also consume anything that could be an identifier as none of the parsing
-        // rules allow for an identifier to follow a number. Therefore we can output a better error message for invalid
-        // suffixes
-        constexpr auto toLower = 0b100000;
-        // We treat the exponential part (both p and e) as suffix that we later check for an add again when evaluating
-        if (c >= '0' && c <= '9')
+        // Consuming all characters first before then doing a proper parse
+        if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
+            || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
         {
-            numberChars += c;
-            return {std::move(*this), true};
+            numberChars.resize(numberChars.size() + 4);
+            auto start = numberChars.data() + numberChars.size() - 4;
+            llvm::ConvertCodePointToUTF8(c, start);
+            numberChars.resize(numberChars.size() - std::distance(start, numberChars.data() + numberChars.size()));
+            return {*this, true};
         }
-
-        if ((c | toLower) == 'x' && numberChars == "0")
+        auto result = processNumber(numberChars.data(), numberChars.data() + numberChars.size(),
+                                    context.tokenStartOffset, context);
+        if (result)
         {
-            return {HexNumber{}, true};
+            context.push(TokenType::Literal, std::move(*result));
         }
-
-        if (c == '.' || c == 'e' || c == 'E')
-        {
-            return {FloatNumber{numberChars + static_cast<char>(c)}, true};
-        }
-
         return {Start{}, false};
-    }
-
-    std::pair<StateMachine, bool> FloatNumber::advance(std::uint32_t c, Context& context)
-    {
-        if (c >= '0' && c <= '9')
-        {
-            numberChars += c;
-            return {std::move(*this), true};
-        }
-    }
-
-    std::pair<StateMachine, bool> HexNumber::advance(char c, Context& context)
-    {
-        return {Start{}, true};
     }
 
     template <class T>

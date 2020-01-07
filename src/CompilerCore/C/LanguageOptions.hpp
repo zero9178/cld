@@ -22,7 +22,6 @@ namespace OpenCL
         std::uint8_t m_sizeOfShort;
         std::uint8_t m_sizeOfInt;
         std::uint8_t m_sizeOfLong;
-        std::uint8_t m_sizeOfLongLong;
         std::uint8_t m_sizeOfLongDoubleBits;
 
     public:

@@ -69,7 +69,7 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfLong() const
 
 std::uint8_t OpenCL::LanguageOptions::getSizeOfLongLong() const
 {
-    return m_sizeOfLongLong;
+    return 64;
 }
 
 OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
