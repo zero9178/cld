@@ -696,13 +696,16 @@ namespace
     struct BackSlash;
     struct UniversalCharacter;
     struct Number;
+    struct Dot;
+    struct Punctuator;
     struct LineComment;
     struct BlockComment;
     struct AfterInclude;
     struct L;
 
-    using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash,
-                                      UniversalCharacter, LineComment, BlockComment, Number, AfterInclude, L>;
+    using StateMachine =
+        std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash, UniversalCharacter, LineComment,
+                     BlockComment, Number, Dot, Punctuator, AfterInclude, L>;
 
     class Context
     {
@@ -972,16 +975,34 @@ namespace
             return m_inPreprocessor;
         }
 
-        void push(TokenType tokenType, Token::ValueType value = {}) noexcept
+        void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {})
         {
-            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
-            m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
+            auto view = m_source.substr(start, end - start);
+            m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value));
         }
 
-        void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {}) noexcept
+        void push(TokenType tokenType, Token::ValueType value = {})
         {
-            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset - diff);
-            m_result.emplace_back(tokenStartOffset, tokenType, std::string(view.begin(), view.end()), std::move(value));
+            push(tokenStartOffset, m_offset, tokenType, std::move(value));
+        }
+
+        void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {})
+        {
+            push(tokenStartOffset, m_offset - diff, tokenType, std::move(value));
+        }
+
+        std::uint64_t mapStream(std::uint64_t offset)
+        {
+            assert(offset >= tokenStartOffset);
+            auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
+            offset -= tokenStartOffset;
+            std::size_t pos = 0;
+            while ((pos = view.find("\\\n", pos)) != std::string::npos && pos <= offset)
+            {
+                offset += 2;
+                pos += 2;
+            }
+            return offset + tokenStartOffset;
         }
     };
 
@@ -1317,8 +1338,8 @@ namespace
             if (prev == suffixBegin)
             {
                 context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
-                                    beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
-                                    context.getOffset() - 1);
+                                    context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
+                                    context.tokenStartOffset, context.getOffset() - 1);
                 return {};
             }
         }
@@ -1338,7 +1359,8 @@ namespace
                 context.reportError(
                     OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                         std::string(1, *result)),
-                    beginLocation + std::distance(begin, result), {beginLocation + std::distance(begin, result)});
+                    context.mapStream(beginLocation + std::distance(begin, result)),
+                    {beginLocation + std::distance(begin, result)});
                 return {};
             }
         }
@@ -1473,7 +1495,7 @@ namespace
         }
         else
         {
-            std::string input(begin, suffixBegin);
+            auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
             char* endPtr;
             if (suffix.empty()
                 || (context.getLanguageOptions().getSizeOfLongDoubleBits() == 64 && (suffix == "l" || suffix == "L")))
@@ -1510,10 +1532,10 @@ namespace
             }
         }
         std::vector<std::uint64_t> arrows(suffix.size());
-        std::iota(arrows.begin(), arrows.end(), beginLocation + std::distance(begin, suffixBegin));
+        std::iota(arrows.begin(), arrows.end(), context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
         context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-                            beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
-                            context.getOffset() - 1, std::move(arrows));
+                            context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
+                            context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
         return {};
     }
 
@@ -1608,6 +1630,25 @@ namespace
         std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
     };
 
+    struct Dot final
+    {
+        std::uint8_t dotCount = 1;
+
+        std::pair<StateMachine, bool> advance(char c, Context& context);
+    };
+
+    struct Punctuator final
+    {
+        std::underlying_type_t<TokenType> first;
+
+    private:
+        static constexpr std::underlying_type_t<TokenType> POUND_PERCENT =
+            std::numeric_limits<std::underlying_type_t<TokenType>>::max() - 1;
+
+    public:
+        std::pair<StateMachine, bool> advance(char c, Context& context);
+    };
+
     struct AfterInclude final
     {
         void advance(char, Context& context) noexcept {}
@@ -1622,6 +1663,7 @@ namespace
     {
         switch (c)
         {
+            case '.': return Dot{};
             case '\'': return CharacterLiteral{};
             case '"': return StringLiteral{};
             case 'L': return L{};
@@ -1636,6 +1678,21 @@ namespace
             case '7':
             case '8':
             case '9': return Number{{static_cast<char>(c)}};
+            case '#': return Punctuator{static_cast<int>(TokenType::Pound)};
+            case '~': return Punctuator{static_cast<int>(TokenType::BitWiseNegation)};
+            case ':': return Punctuator{static_cast<int>(TokenType::Colon)};
+            case '-': return Punctuator{static_cast<int>(TokenType::Minus)};
+            case '>': return Punctuator{static_cast<int>(TokenType::GreaterThan)};
+            case '<': return Punctuator{static_cast<int>(TokenType::LessThan)};
+            case '&': return Punctuator{static_cast<int>(TokenType::Ampersand)};
+            case '|': return Punctuator{static_cast<int>(TokenType::BitOr)};
+            case '+': return Punctuator{static_cast<int>(TokenType::Plus)};
+            case '=': return Punctuator{static_cast<int>(TokenType::Assignment)};
+            case '!': return Punctuator{static_cast<int>(TokenType::LogicalNegation)};
+            case '*': return Punctuator{static_cast<int>(TokenType::Asterisk)};
+            case '/': return Punctuator{static_cast<int>(TokenType::Division)};
+            case '%': return Punctuator{static_cast<int>(TokenType::Percent)};
+            case '^': return Punctuator{static_cast<int>(TokenType::BitXor)};
             default:
             {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
@@ -1825,7 +1882,7 @@ namespace
     {
         if (c == 'u' || c == 'U')
         {
-            // If Universal character, its in or starting an identifier, not in a character or string literal
+            // If Universal character, it's in or starting an identifier, not in a character or string literal
             if (suspText)
             {
                 return {UniversalCharacter{c == 'U', std::move(suspText)}, true};
@@ -1929,6 +1986,10 @@ namespace
 
     std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
     {
+        if (c == '\\')
+        {
+            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
+        }
         // Consuming all characters first before then doing a proper parse
         if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
             || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -1946,9 +2007,174 @@ namespace
                                     context.tokenStartOffset, context);
         if (result)
         {
-            context.push(TokenType::Literal, std::move(*result));
+            context.push(1, TokenType::Literal, std::move(*result));
         }
         return {Start{}, false};
+    }
+
+    std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
+    {
+        if (c == '\\')
+        {
+            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
+        }
+        if (c == '.')
+        {
+            if (++dotCount == 3)
+            {
+                context.push(TokenType::Ellipse);
+                return {Start{}, true};
+            }
+            return {std::move(*this), true};
+        }
+        else if (c >= '0' && c <= '9')
+        {
+            return {Number{"."}, false};
+        }
+        assert(dotCount >= 0 && dotCount < 3);
+        context.push(context.tokenStartOffset, context.tokenStartOffset + 1, TokenType::Dot);
+        if (dotCount == 2)
+        {
+            auto start = context.mapStream(context.tokenStartOffset + 1);
+            context.push(start, start + 1, TokenType::Dot);
+        }
+        return {Start{}, false};
+    }
+
+    std::pair<StateMachine, bool> Punctuator::advance(char c, Context& context)
+    {
+        if (c == '\\')
+        {
+            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
+        }
+        switch (first)
+        {
+            case static_cast<int>(TokenType::BitWiseNegation):
+                context.push(1, TokenType::BitWiseNegation);
+                return {Start{}, false};
+            case static_cast<int>(TokenType::Minus):
+                switch (c)
+                {
+                    case '>': context.push(TokenType::Arrow); return {Start{}, true};
+                    case '-': context.push(TokenType::Decrement); return {Start{}, true};
+                    case '=': context.push(TokenType::MinusAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::Minus); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::GreaterThan):
+                switch (c)
+                {
+                    case '>': first = static_cast<int>(TokenType::ShiftRight); return {std::move(*this), true};
+                    case '=': context.push(TokenType::GreaterThanOrEqual); return {Start{}, true};
+                    default: context.push(1, TokenType::GreaterThan); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::LessThan):
+                switch (c)
+                {
+                    case '<': first = static_cast<int>(TokenType::ShiftLeft); return {std::move(*this), true};
+                    case '=': context.push(TokenType::LessThanOrEqual); return {Start{}, true};
+                    case ':': context.push(TokenType::OpenSquareBracket); return {Start{}, true};
+                    case '%': context.push(TokenType::OpenBrace); return {Start{}, true};
+                    default: context.push(1, TokenType::LessThan); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Ampersand):
+                switch (c)
+                {
+                    case '&': context.push(TokenType::LogicAnd); return {Start{}, true};
+                    case '=': context.push(TokenType::BitAndAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::Ampersand); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::BitOr):
+                switch (c)
+                {
+                    case '|': context.push(TokenType::LogicOr); return {Start{}, true};
+                    case '=': context.push(TokenType::BitOrAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::BitOr); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Plus):
+                switch (c)
+                {
+                    case '+': context.push(TokenType::Increment); return {Start{}, true};
+                    case '=': context.push(TokenType::PlusAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::Plus); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Assignment):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::Equal); return {Start{}, true};
+                    default: context.push(1, TokenType::Assignment); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::LogicalNegation):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::NotEqual); return {Start{}, true};
+                    default: context.push(1, TokenType::LogicalNegation); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Asterisk):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::MultiplyAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::Asterisk); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Division):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::DivideAssign); return {Start{}, true};
+                    case '/': return {LineComment{}, true};
+                    case '*': return {BlockComment{}, true};
+                    default: context.push(1, TokenType::Division); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Percent):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::ModuloAssign); return {Start{}, true};
+                    case '>': context.push(TokenType::CloseBrace); return {Start{}, true};
+                    case ':': first = static_cast<int>(TokenType::Pound); return {std::move(*this), true};
+                    default: context.push(1, TokenType::Percent); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Colon):
+                switch (c)
+                {
+                    case '>': context.push(TokenType::CloseSquareBracket); return {Start{}, true};
+                    default: context.push(1, TokenType::Colon); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::BitXor):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::BitXorAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::BitXor); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::ShiftLeft):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::ShiftLeftAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::ShiftLeft); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::ShiftRight):
+                switch (c)
+                {
+                    case '=': context.push(TokenType::ShiftRightAssign); return {Start{}, true};
+                    default: context.push(1, TokenType::ShiftRight); return {Start{}, false};
+                }
+            case static_cast<int>(TokenType::Pound):
+                switch (c)
+                {
+                    case '#': context.push(TokenType::DoublePound); return {Start{}, true};
+                    case '%': first = POUND_PERCENT; return {std::move(*this), true};
+                    default: context.push(1, TokenType::Pound); return {Start{}, false};
+                }
+            case POUND_PERCENT:
+                if (c == ':')
+                {
+                    context.push(TokenType::DoublePound);
+                    return {Start{}, true};
+                }
+                else
+                {
+                    // TODO:
+                    return {Start{}, false};
+                }
+            default: OPENCL_UNREACHABLE;
+        }
     }
 
     template <class T>
@@ -2365,11 +2591,13 @@ std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_
     //    }
     //    return std::string(begin->getLine() - 1, '\n') + std::string(begin->getColumn(), ' ')
     //           + reconstructTrimmed(begin, end);
+    return "";
 }
 
 std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                               std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {
+    return "";
     //    std::string result;
     //    for (auto curr = begin; curr != end; curr++)
     //    {

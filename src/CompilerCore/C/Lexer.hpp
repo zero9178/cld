@@ -109,7 +109,7 @@ namespace OpenCL
             Pound,         ///<[PP]
             DoublePound,   ///<[PP]
             Miscellaneous, ///<[PP]
-            TOKEN_MAX_VALUE = DoublePound,
+            TOKEN_MAX_VALUE = Miscellaneous,
         };
 
         class Token;

@@ -201,7 +201,40 @@ SCENARIO("Lexing backslashes", "[lexer]")
             auto result = OpenCL::Lexer::tokenize("f\\\nor");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::ForKeyword);
-            REQUIRE(result.data()[0].getRepresentation() == "f\\\nor");
+            CHECK(result.data()[0].getRepresentation() == "f\\\nor");
+        }
+        GIVEN("A number")
+        {
+            auto result = OpenCL::Lexer::tokenize("5\\\ne+3");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
+            CHECK(std::get<double>(result.data()[0].getValue()) == 5e+3);
+            CHECK(result.data()[0].getRepresentation() == "5\\\ne+3");
+            WHEN("Floating point")
+            {
+                result = OpenCL::Lexer::tokenize(".\\\n5e+3");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
+                CHECK(std::get<double>(result.data()[0].getValue()) == .5e+3);
+                CHECK(result.data()[0].getRepresentation() == ".\\\n5e+3");
+            }
+            WHEN("With errors")
+            {
+                LEXER_OUTPUTS_WITH("5.\\\n5f5", Catch::Contains(INVALID_LITERAL_SUFFIX.args("f5")));
+            }
+        }
+        GIVEN("Dots")
+        {
+            auto result = OpenCL::Lexer::tokenize(".\\\n.");
+            REQUIRE(result.data().size() == 2);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Dot);
+            CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Dot);
+            CHECK(result.data()[0].getOffset() == 0);
+            CHECK(result.data()[1].getOffset() == 3);
+            CHECK(result.data()[0].getRepresentation() == ".");
+            CHECK(result.data()[1].getRepresentation() == ".");
         }
     }
     GIVEN("Whitespace after backslash")
