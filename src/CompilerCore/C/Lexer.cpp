@@ -697,7 +697,7 @@ namespace
     struct UniversalCharacter;
     struct Number;
     struct Dot;
-    struct Punctuator;
+    struct Punctuation;
     struct LineComment;
     struct BlockComment;
     struct AfterInclude;
@@ -705,7 +705,7 @@ namespace
 
     using StateMachine =
         std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash, UniversalCharacter, LineComment,
-                     BlockComment, Number, Dot, Punctuator, AfterInclude, L>;
+                     BlockComment, Number, Dot, Punctuation, AfterInclude, L>;
 
     class Context
     {
@@ -991,7 +991,7 @@ namespace
             push(tokenStartOffset, m_offset - diff, tokenType, std::move(value));
         }
 
-        std::uint64_t mapStream(std::uint64_t offset)
+        [[nodiscard]] std::uint64_t mapStream(std::uint64_t offset) const
         {
             assert(offset >= tokenStartOffset);
             auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
@@ -1003,6 +1003,11 @@ namespace
                 pos += 2;
             }
             return offset + tokenStartOffset;
+        }
+
+        [[nodiscard]] std::string_view currentView() const
+        {
+            return m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
         }
     };
 
@@ -1615,12 +1620,14 @@ namespace
 
     struct LineComment final
     {
-        void advance(char, Context& context) noexcept {}
+        StateMachine advance(char c, Context& context) noexcept;
     };
 
     struct BlockComment final
     {
-        void advance(char, Context& context) noexcept {}
+        std::optional<char> lastChar{};
+
+        StateMachine advance(char c, Context& context) noexcept;
     };
 
     struct Number final
@@ -1637,7 +1644,7 @@ namespace
         std::pair<StateMachine, bool> advance(char c, Context& context);
     };
 
-    struct Punctuator final
+    struct Punctuation final
     {
         std::underlying_type_t<TokenType> first;
 
@@ -1651,7 +1658,10 @@ namespace
 
     struct AfterInclude final
     {
-        void advance(char, Context& context) noexcept {}
+        char delimiter;
+        std::string characters{};
+
+        StateMachine advance(char c, Context& context);
     };
 
     struct L final
@@ -1659,12 +1669,23 @@ namespace
         static std::pair<StateMachine, bool> advance(char, Context& context) noexcept;
     };
 
-    StateMachine Start::advance(std::uint32_t c, Context&) noexcept
+    StateMachine Start::advance(std::uint32_t c, Context& context) noexcept
     {
         switch (c)
         {
             case '.': return Dot{};
-            case '\'': return CharacterLiteral{};
+            case '\'':
+            {
+                if (context.isInPreprocessor() && context.getResult().size() >= 2
+                    && context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
+                    && context.getResult()[context.getResult().size() - 1].getTokenType() == TokenType::Identifier
+                    && std::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue())
+                           == "include")
+                {
+                    return AfterInclude{'\''};
+                }
+                return CharacterLiteral{};
+            }
             case '"': return StringLiteral{};
             case 'L': return L{};
             case '\\': return MaybeUC{};
@@ -1678,21 +1699,51 @@ namespace
             case '7':
             case '8':
             case '9': return Number{{static_cast<char>(c)}};
-            case '#': return Punctuator{static_cast<int>(TokenType::Pound)};
-            case '~': return Punctuator{static_cast<int>(TokenType::BitWiseNegation)};
-            case ':': return Punctuator{static_cast<int>(TokenType::Colon)};
-            case '-': return Punctuator{static_cast<int>(TokenType::Minus)};
-            case '>': return Punctuator{static_cast<int>(TokenType::GreaterThan)};
-            case '<': return Punctuator{static_cast<int>(TokenType::LessThan)};
-            case '&': return Punctuator{static_cast<int>(TokenType::Ampersand)};
-            case '|': return Punctuator{static_cast<int>(TokenType::BitOr)};
-            case '+': return Punctuator{static_cast<int>(TokenType::Plus)};
-            case '=': return Punctuator{static_cast<int>(TokenType::Assignment)};
-            case '!': return Punctuator{static_cast<int>(TokenType::LogicalNegation)};
-            case '*': return Punctuator{static_cast<int>(TokenType::Asterisk)};
-            case '/': return Punctuator{static_cast<int>(TokenType::Division)};
-            case '%': return Punctuator{static_cast<int>(TokenType::Percent)};
-            case '^': return Punctuator{static_cast<int>(TokenType::BitXor)};
+            case '<':
+            {
+                if (context.isInPreprocessor() && context.getResult().size() >= 2
+                    && context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
+                    && context.getResult()[context.getResult().size() - 1].getTokenType() == TokenType::Identifier
+                    && std::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue())
+                           == "include")
+                {
+                    return AfterInclude{'>'};
+                }
+                return Punctuation{static_cast<int>(TokenType::LessThan)};
+            }
+            case '#': return Punctuation{static_cast<int>(TokenType::Pound)};
+            case ':': return Punctuation{static_cast<int>(TokenType::Colon)};
+            case '-': return Punctuation{static_cast<int>(TokenType::Minus)};
+            case '>': return Punctuation{static_cast<int>(TokenType::GreaterThan)};
+            case '&': return Punctuation{static_cast<int>(TokenType::Ampersand)};
+            case '|': return Punctuation{static_cast<int>(TokenType::BitOr)};
+            case '+': return Punctuation{static_cast<int>(TokenType::Plus)};
+            case '=': return Punctuation{static_cast<int>(TokenType::Assignment)};
+            case '!': return Punctuation{static_cast<int>(TokenType::LogicalNegation)};
+            case '*': return Punctuation{static_cast<int>(TokenType::Asterisk)};
+            case '/': return Punctuation{static_cast<int>(TokenType::Division)};
+            case '%': return Punctuation{static_cast<int>(TokenType::Percent)};
+            case '^': return Punctuation{static_cast<int>(TokenType::BitXor)};
+            case '~':
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::BitWiseNegation);
+                return *this;
+            case '(':
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::OpenParentheses);
+                return *this;
+            case ')':
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::CloseParentheses);
+                return *this;
+            case '{': context.push(context.getOffset() - 1, context.getOffset(), TokenType::OpenBrace); return *this;
+            case '}': context.push(context.getOffset() - 1, context.getOffset(), TokenType::CloseBrace); return *this;
+            case '[':
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::OpenSquareBracket);
+                return *this;
+            case ']':
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::CloseSquareBracket);
+                return *this;
+            case ';': context.push(context.getOffset() - 1, context.getOffset(), TokenType::SemiColon); return *this;
+            case ',': context.push(context.getOffset() - 1, context.getOffset(), TokenType::Comma); return *this;
+            case '?': context.push(context.getOffset() - 1, context.getOffset(), TokenType::QuestionMark); return *this;
             default:
             {
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
@@ -2041,7 +2092,7 @@ namespace
         return {Start{}, false};
     }
 
-    std::pair<StateMachine, bool> Punctuator::advance(char c, Context& context)
+    std::pair<StateMachine, bool> Punctuation::advance(char c, Context& context)
     {
         if (c == '\\')
         {
@@ -2049,9 +2100,6 @@ namespace
         }
         switch (first)
         {
-            case static_cast<int>(TokenType::BitWiseNegation):
-                context.push(1, TokenType::BitWiseNegation);
-                return {Start{}, false};
             case static_cast<int>(TokenType::Minus):
                 switch (c)
                 {
@@ -2160,7 +2208,11 @@ namespace
                 {
                     case '#': context.push(TokenType::DoublePound); return {Start{}, true};
                     case '%': first = POUND_PERCENT; return {std::move(*this), true};
-                    default: context.push(1, TokenType::Pound); return {Start{}, false};
+                    default:
+                        context.push(context.tokenStartOffset,
+                                     context.tokenStartOffset + (context.currentView().front() == '#' ? 1 : 2),
+                                     TokenType::Pound);
+                        return {Start{}, false};
                 }
             case POUND_PERCENT:
                 if (c == ':')
@@ -2170,11 +2222,44 @@ namespace
                 }
                 else
                 {
-                    // TODO:
+                    context.push(context.tokenStartOffset,
+                                 context.tokenStartOffset + (context.currentView().front() == '#' ? 1 : 2),
+                                 TokenType::Pound);
+                    context.push(context.getOffset() - 2, context.getOffset() - 1, TokenType::Percent);
                     return {Start{}, false};
                 }
             default: OPENCL_UNREACHABLE;
         }
+    }
+
+    StateMachine AfterInclude::advance(char c, Context& context)
+    {
+        if (c != delimiter)
+        {
+            characters += c;
+            return std::move(*this);
+        }
+        context.push(TokenType::StringLiteral, std::move(characters));
+        return Start{};
+    }
+
+    StateMachine LineComment::advance(char c, Context&) noexcept
+    {
+        if (c == '\n')
+        {
+            return Start{};
+        }
+        return *this;
+    }
+
+    StateMachine BlockComment::advance(char c, Context&) noexcept
+    {
+        if (lastChar && *lastChar == '*' && c == '/')
+        {
+            return Start{};
+        }
+        lastChar = c;
+        return *this;
     }
 
     template <class T>

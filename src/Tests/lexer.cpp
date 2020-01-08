@@ -892,6 +892,41 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(6).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(7).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(OpenCL::Lexer::reconstructTrimmed(result.data().begin(), result.data().end()) == "%: %: #%: %:# # %: %: #");
+
+    result = OpenCL::Lexer::tokenize("#%");
+    REQUIRE(result.data().size() == 2);
+    CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Percent);
+    CHECK(result.data().at(0).getOffset() == 0);
+    CHECK(result.data().at(1).getOffset() == 1);
+    CHECK(result.data().at(0).getRepresentation() == "#");
+    CHECK(result.data().at(1).getRepresentation() == "%");
+
+    result = OpenCL::Lexer::tokenize("%:\\\n%");
+    REQUIRE(result.data().size() == 2);
+    CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Percent);
+    CHECK(result.data().at(0).getRepresentation() == "%:");
+    CHECK(result.data().at(1).getRepresentation() == "%");
+
+    result = OpenCL::Lexer::tokenize("#\\\n%");
+    REQUIRE(result.data().size() == 2);
+    CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Percent);
+    CHECK(result.data().at(0).getRepresentation() == "#");
+    CHECK(result.data().at(1).getRepresentation() == "%");
+
+    result = OpenCL::Lexer::tokenize("%:\\\n:");
+    REQUIRE(result.data().size() == 2);
+    CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::Pound);
+    CHECK(result.data().at(1).getTokenType() == OpenCL::Lexer::TokenType::Colon);
+    CHECK(result.data().at(0).getRepresentation() == "%:");
+    CHECK(result.data().at(1).getRepresentation() == ":");
+
+    result = OpenCL::Lexer::tokenize("%:\\\n%:");
+    REQUIRE(result.data().size() == 1);
+    CHECK(result.data().at(0).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
+    CHECK(result.data().at(0).getRepresentation() == "%:\\\n%:");
 }
 
 TEST_CASE("Lexing input reconstruction", "[lexer]")
@@ -909,7 +944,7 @@ TEST_CASE("Lexing include directives", "[lexer]")
     SECTION("< >")
     {
         auto result = OpenCL::Lexer::tokenize("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>",
-                                              OpenCL::LanguageOptions::native(), false, &ss);
+                                              OpenCL::LanguageOptions::native(), true, &ss);
         CHECK(ss.str().empty());
         REQUIRE(result.data().size() == 3);
         CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
@@ -922,7 +957,7 @@ TEST_CASE("Lexing include directives", "[lexer]")
     SECTION("\" \"")
     {
         auto result = OpenCL::Lexer::tokenize("#include \"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"",
-                                              OpenCL::LanguageOptions::native(), false, &ss);
+                                              OpenCL::LanguageOptions::native(), true, &ss);
         CHECK(ss.str().empty());
         REQUIRE(result.data().size() == 3);
         CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
