@@ -180,6 +180,14 @@ namespace OpenCL
             void setMacroId(std::uint64_t macroId) noexcept;
 
             [[nodiscard]] std::string getRepresentation() const;
+
+            [[nodiscard]] std::uint64_t getLine(const SourceObject& sourceObject) const noexcept;
+
+            [[nodiscard]] std::uint64_t getSourceLine(const SourceObject& sourceObject) const noexcept;
+
+            [[nodiscard]] std::uint64_t getColumn(const SourceObject& sourceObject) const noexcept;
+
+            [[nodiscard]] std::uint64_t getSourceColumn(const SourceObject& sourceObject) const noexcept;
         };
 
         /**

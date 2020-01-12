@@ -127,14 +127,24 @@ namespace OpenCL
         [[nodiscard]] const std::string& getActionArgument() const;
     };
 
+    /**
+     * Class used to present Messages from various components of the compiler, eg. Parser or Semantics.
+     *
+     * This class operates on Tokens and it's associated SourceObject
+     *
+     * By passing modifiers one can also add effects to the outputted message
+     */
     class Message final
     {
     public:
+        /**
+         * Severity of the message
+         */
         enum Severity : std::uint8_t
         {
-            Error,
-            Note,
-            Warning
+            Error,  ///< An error occurred. Modifier colour and text are red
+            Note,   ///< A Note used to further explain a warning or Error. Modifier colour and text are cyan
+            Warning ///< A warning is issued. Modifier colour and text are purple
         };
 
     private:
@@ -149,21 +159,72 @@ namespace OpenCL
                 std::optional<Modifier> modifier = {});
 
     public:
+        /**
+         * Generates an error Message
+         * @param message Message to be printed
+         * @param token Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines that this token is contained in.
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message error(std::string message, std::vector<Lexer::Token>::const_iterator token,
                              std::optional<Modifier> modifier = {});
 
+        /**
+         * Generates an error Message
+         * @param message Message to be printed
+         * @param begin Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines from begin until exclusive end.
+         * @param end Exclusive end of all tokens whose lines need to be printed
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message error(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                              std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
+        /**
+         * Generates a note Message
+         * @param message Message to be printed
+         * @param token Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines that this token is contained in.
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message note(std::string message, std::vector<Lexer::Token>::const_iterator token,
                             std::optional<Modifier> modifier = {});
 
+        /**
+         * Generates a note Message
+         * @param message Message to be printed
+         * @param begin Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines from begin until exclusive end.
+         * @param end Exclusive end of all tokens whose lines need to be printed
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message note(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                             std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 
+        /**
+         * Generates a warning Message
+         * @param message Message to be printed
+         * @param token Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines that this token is contained in.
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message warning(std::string message, std::vector<Lexer::Token>::const_iterator token,
                                std::optional<Modifier> modifier = {});
 
+        /**
+         * Generates a warning Message
+         * @param message Message to be printed
+         * @param begin Token that is used for the source location to be printed. The source code displayed is
+         * guaranteed to display all lines from begin until exclusive end.
+         * @param end Exclusive end of all tokens whose lines need to be printed
+         * @param modifier optional modifier to apply
+         * @return Message object
+         */
         static Message warning(std::string message, std::vector<Lexer::Token>::const_iterator begin,
                                std::vector<Lexer::Token>::const_iterator end, std::optional<Modifier> modifier = {});
 

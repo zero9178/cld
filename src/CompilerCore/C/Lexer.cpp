@@ -2726,6 +2726,28 @@ std::uint64_t Token::getSourceOffset() const noexcept
     return m_sourceOffset;
 }
 
+std::uint64_t Token::getLine(const OpenCL::SourceObject& sourceObject) const noexcept
+{
+    return sourceObject.getLineNumber(getOffset());
+}
+
+std::uint64_t Token::getSourceLine(const OpenCL::SourceObject& sourceObject) const noexcept
+{
+    return sourceObject.getLineNumber(getSourceOffset());
+}
+
+std::uint64_t Token::getColumn(const OpenCL::SourceObject& sourceObject) const noexcept
+{
+    auto line = sourceObject.getLineNumber(getOffset());
+    return getOffset() - sourceObject.getLineStartOffset(line);
+}
+
+std::uint64_t Token::getSourceColumn(const OpenCL::SourceObject& sourceObject) const noexcept
+{
+    auto line = sourceObject.getLineNumber(getOffset());
+    return getOffset() - sourceObject.getLineStartOffset(line);
+}
+
 std::string OpenCL::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
                                        std::vector<Token>::const_iterator end)
 {
