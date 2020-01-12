@@ -779,7 +779,7 @@ namespace
                 for (auto i = startLine; i <= endLine; i++)
                 {
                     auto begin = getLineStartOffset(i);
-                    auto end = getLineEndOffset(i);
+                    auto end = getLineEndOffset(i) - 1;
                     // For every arrow, transform the byte offset into a character width offset, then check if the byte
                     // offset points to one of the bytes of a code point and make it point at the full width of it
                     std::vector<std::vector<std::uint64_t>> replacements;
@@ -796,7 +796,7 @@ namespace
                     }
                     for (auto iter : arrows)
                     {
-                        if (iter < begin || iter >= end - 1)
+                        if (iter < begin || iter >= end)
                         {
                             continue;
                         }
@@ -1527,39 +1527,23 @@ namespace
         else
         {
             auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
-            char* endPtr;
             if (suffix.empty()
                 || (context.getLanguageOptions().getSizeOfLongDoubleBits() == 64 && (suffix == "l" || suffix == "L")))
             {
-                auto result = std::strtod(input.data(), &endPtr);
-                assert(*endPtr == '\0');
-                return result;
+                return llvm::APFloat(llvm::APFloat::IEEEdouble(), input);
             }
             else if (suffix == "f" || suffix == "F")
             {
-                auto result = std::strtof(input.data(), &endPtr);
-                assert(*endPtr == '\0');
-                return result;
+                return llvm::APFloat(llvm::APFloat::IEEEsingle(), input);
             }
             else if (suffix == "l" || suffix == "L")
             {
-                // TODO: Emulate somehow 80 bit on MSVC. Emulate 128 bit on every compiler
-                if (context.getLanguageOptions().getSizeOfLongDoubleBits() == 128)
+                switch (context.getLanguageOptions().getSizeOfLongDoubleBits())
                 {
-                    llvm::errs() << "Not implemented yet";
-                    std::terminate();
+                    case 80: return llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input);
+                    case 128: return llvm::APFloat(llvm::APFloat::IEEEquad(), input);
+                    default: OPENCL_UNREACHABLE;
                 }
-#ifdef _MSC_VER
-                else
-                {
-                    llvm::errs() << "Not implemented yet";
-                    std::terminate();
-                }
-#else
-                auto result = std::strtold(input.data(), &endPtr);
-                assert(*endPtr == '\0');
-                return result;
-#endif
             }
         }
         std::vector<std::uint64_t> arrows(suffix.size());

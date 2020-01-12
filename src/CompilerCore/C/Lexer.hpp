@@ -5,6 +5,8 @@
 #include <llvm/Support/raw_ostream.h>
 #pragma warning(pop)
 
+#include <llvm/ADT/APFloat.h>
+
 #include <memory>
 #include <string>
 #include <variant>
@@ -141,14 +143,8 @@ namespace OpenCL
 
         class Token
         {
-            // TODO: Figure out semantics for long double on MSVC. Since MSVC's long double is 80 we would have to
-            //  use some sort of emulation. Maybe even switch to llvm::APInt and llvm::APFloat? Not sure yet
             using variant = std::variant<std::monostate, std::int16_t, std::uint16_t, std::int32_t, std::uint32_t,
-                                         std::int64_t, std::uint64_t, float, double,
-#ifndef _MSV_VER
-                                         long double,
-#endif
-                                         std::string, NonCharString>;
+                                         std::int64_t, std::uint64_t, llvm::APFloat, std::string, NonCharString>;
             variant m_value;              ///< Optional value of the token
             std::string m_representation; ///< Original spelling of the token
             std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro

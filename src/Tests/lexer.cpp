@@ -221,16 +221,20 @@ SCENARIO("Lexing backslashes", "[lexer]")
             auto result = OpenCL::Lexer::tokenize("5\\\ne+3");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 5e+3);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 5e+3);
             CHECK(result.data()[0].getRepresentation() == "5\\\ne+3");
             WHEN("Floating point")
             {
                 result = OpenCL::Lexer::tokenize(".\\\n5e+3");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-                REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-                CHECK(std::get<double>(result.data()[0].getValue()) == .5e+3);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                CHECK(fp.convertToDouble() == .5e+3);
                 CHECK(result.data()[0].getRepresentation() == ".\\\n5e+3");
             }
             WHEN("With errors")
@@ -516,8 +520,10 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 534534.0);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 534534.0);
         }
         SECTION("Float")
         {
@@ -525,8 +531,49 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<float>(result.data()[0].getValue()));
-            CHECK(std::get<float>(result.data()[0].getValue()) == 534534.f);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            REQUIRE(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEsingle);
+            CHECK(fp.convertToFloat() == 534534.f);
+        }
+        SECTION("Long double")
+        {
+            SECTION("64 bit")
+            {
+                auto result = OpenCL::Lexer::tokenize(
+                    "534534.0L", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 4, 2, 4, 8, 64));
+                REQUIRE_FALSE(result.data().empty());
+                CHECK(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                CHECK(fp.convertToDouble() == 534534.0);
+            }
+            SECTION("80 bit")
+            {
+                auto result = OpenCL::Lexer::tokenize(
+                    "1.18e4900L", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 4, 2, 4, 8, 80));
+                REQUIRE_FALSE(result.data().empty());
+                CHECK(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_x87DoubleExtended);
+                CHECK(fp.bitwiseIsEqual(llvm::APFloat(llvm::APFloat::x87DoubleExtended(), "1.18e4900")));
+            }
+            SECTION("128 bit")
+            {
+                auto result = OpenCL::Lexer::tokenize(
+                    "1.18e4900L", OpenCL::LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 4, 2, 4, 8, 128));
+                REQUIRE_FALSE(result.data().empty());
+                CHECK(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEquad);
+                CHECK(fp.bitwiseIsEqual(llvm::APFloat(llvm::APFloat::IEEEquad(), "1.18e4900")));
+            }
         }
         SECTION("Dot only")
         {
@@ -534,8 +581,10 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 0.5);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 0.5);
         }
         LEXER_OUTPUTS_WITH("0.5.3", Catch::Contains(INVALID_LITERAL_SUFFIX.args(".3")));
         LEXER_OUTPUTS_WITH("0.5.3F", Catch::Contains(INVALID_LITERAL_SUFFIX.args(".3F")));
@@ -551,8 +600,10 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-                REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-                CHECK(std::get<double>(result.data()[0].getValue()) == resulting);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                CHECK(fp.convertToDouble() == resulting);
             }
         }
     }
@@ -581,26 +632,34 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             auto result = OpenCL::Lexer::tokenize("0x0.DE488631p8");
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 0x0.DE488631p8);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
             result = OpenCL::Lexer::tokenize("0x0.DE488631P8");
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 0x0.DE488631p8);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
             result = OpenCL::Lexer::tokenize("0x0.DE488631P+8");
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 0x0.DE488631p8);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
             result = OpenCL::Lexer::tokenize("0x0.DE488631P-8");
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
-            REQUIRE(std::holds_alternative<double>(result.data()[0].getValue()));
-            CHECK(std::get<double>(result.data()[0].getValue()) == 0x0.DE488631p-8);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+            CHECK(fp.convertToDouble() == 0x0.DE488631p-8);
         }
 
         LEXER_OUTPUTS_WITH("0x0.5", Catch::Contains(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT));
