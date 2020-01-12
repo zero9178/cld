@@ -157,7 +157,11 @@ namespace OpenCL
 
             constexpr auto STRING_LITERAL = "String literal";
 
-            constexpr auto UNTERMINATED_COMMENT = "Unterminated comment";
+            constexpr auto UNTERMINATED_N = Format("Unterminated {}");
+
+            constexpr auto BLOCK_COMMENT = "Block comment";
+
+            constexpr auto INCLUDE_DIRECTIVE = "Include directive";
 
             constexpr auto INVALID_UTF8_SEQUENCE = "Invalid UTF-8 Sequence";
 

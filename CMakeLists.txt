@@ -7,10 +7,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(LLVM REQUIRED)
 
-if (MINGW AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND NOT "${CMAKE_CXX_FLAGS}" MATCHES "-flto")
-    add_compile_options("-Wa,-mbig-obj")
-endif ()
-
 if (DEFINED SANITIZER)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=${SANITIZER}")
 endif ()

@@ -66,6 +66,19 @@ CATCH_REGISTER_ENUM(
         }                                                                              \
     } while (0)
 
+#define PP_LEXER_OUTPUTS_WITH(input, match)                                           \
+    do                                                                                \
+    {                                                                                 \
+        std::string s;                                                                \
+        llvm::raw_string_ostream ss(s);                                               \
+        OpenCL::Lexer::tokenize(input, OpenCL::LanguageOptions::native(), true, &ss); \
+        CHECK_THAT(s, match);                                                         \
+        if (!s.empty() && OpenCL::colourConsoleOutput)                                \
+        {                                                                             \
+            OpenCL::Lexer::tokenize(input, OpenCL::LanguageOptions::native(), true);  \
+        }                                                                             \
+    } while (0)
+
 SCENARIO("Lexing Identifiers", "[lexer]")
 {
     GIVEN("Initial characters")
@@ -338,7 +351,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     LEXER_OUTPUTS_WITH("'as\ndawd'", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args(CHARACTER_LITERAL)));
 }
 
-TEST_CASE("Lexing unicode in literals", "[lexer]")
+TEST_CASE("Lexing unicode", "[lexer]")
 {
     SECTION("Characters")
     {
@@ -381,6 +394,8 @@ TEST_CASE("Lexing unicode in literals", "[lexer]")
         LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '"', (char)0xE0, (char)0x80, (char)0x80, '"', 0}).data(),
                            Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
+    LEXER_OUTPUTS_WITH((std::array<char, 11>{-24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, 0}).data(),
+                       Catch::Contains(INVALID_UTF8_SEQUENCE));
 }
 
 TEST_CASE("Lexing string literals", "[lexer]")
@@ -708,6 +723,14 @@ TEST_CASE("Lexing Punctuators", "[lexer]")
     CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Assignment);
 }
 
+TEST_CASE("Lexing unknown characters", "[lexer]")
+{
+    LEXER_OUTPUTS_WITH("貓 〺", Catch::Contains(UNEXPECTED_CHARACTER.args("〺")));
+    LEXER_OUTPUTS_WITH("$", Catch::Contains(UNEXPECTED_CHARACTER.args("$")));
+    LEXER_OUTPUTS_WITH("\\u0024", Catch::Contains(UNEXPECTED_CHARACTER.args("\\u0024")));
+    LEXER_OUTPUTS_WITH("_\\\\\nu0024", Catch::Contains(UNEXPECTED_CHARACTER.args("\\u0024")));
+}
+
 TEST_CASE("Lexing positions", "[lexer]")
 {
     using namespace OpenCL::Lexer;
@@ -879,7 +902,8 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(3).getTokenType() == OpenCL::Lexer::TokenType::CloseBrace);
     CHECK(result.data().at(4).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(5).getTokenType() == OpenCL::Lexer::TokenType::DoublePound);
-    CHECK(OpenCL::Lexer::reconstructTrimmed(result.data().begin(), result.data().end()) == "<: :> <% %> %: %:%:");
+    CHECK(OpenCL::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end())
+          == "<: :> <% %> %: %:%:");
 
     result = OpenCL::Lexer::tokenize("%: %: #%: %:# # %: %: #");
     REQUIRE(result.data().size() == 8);
@@ -891,7 +915,8 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(5).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(6).getTokenType() == OpenCL::Lexer::TokenType::Pound);
     CHECK(result.data().at(7).getTokenType() == OpenCL::Lexer::TokenType::Pound);
-    CHECK(OpenCL::Lexer::reconstructTrimmed(result.data().begin(), result.data().end()) == "%: %: #%: %:# # %: %: #");
+    CHECK(OpenCL::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end())
+          == "%: %: #%: %:# # %: %: #");
 
     result = OpenCL::Lexer::tokenize("#%");
     REQUIRE(result.data().size() == 2);
@@ -934,37 +959,48 @@ TEST_CASE("Lexing input reconstruction", "[lexer]")
     auto source =
         "ad(){}<% %> \"test\" 52345 ; , - ~ ! + * / % && || & | ^ == != < <= > >= = += -= /= *= %= <<= >>= &= |= ^= >> << ++ -- : ? void char short int long float double signed unsigned typedef extern static auto register const sizeof return break continue do else for if while [] struct . -> switch case default union volatile enum goto ... restrict inline # ##";
     auto result = OpenCL::Lexer::tokenize(source);
-    REQUIRE(OpenCL::Lexer::reconstructTrimmed(result.data().begin(), result.data().end()) == source);
+    REQUIRE(OpenCL::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end()) == source);
 }
 
 TEST_CASE("Lexing include directives", "[lexer]")
 {
-    std::string storage;
-    llvm::raw_string_ostream ss(storage);
-    SECTION("< >")
     {
-        auto result = OpenCL::Lexer::tokenize("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>",
-                                              OpenCL::LanguageOptions::native(), true, &ss);
-        CHECK(ss.str().empty());
-        REQUIRE(result.data().size() == 3);
-        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
-        REQUIRE(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
-        CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
-        REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
-        CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
-        CHECK(result.data()[2].getRepresentation() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
+        std::string storage;
+        llvm::raw_string_ostream ss(storage);
+        SECTION("< >")
+        {
+            auto result = OpenCL::Lexer::tokenize("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>",
+                                                  OpenCL::LanguageOptions::native(), true, &ss);
+            CHECK(ss.str().empty());
+            REQUIRE(result.data().size() == 3);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
+            REQUIRE(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
+            REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+            CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
+            CHECK(result.data()[2].getRepresentation() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
+        }
+        SECTION("\" \"")
+        {
+            auto result = OpenCL::Lexer::tokenize("#include \"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"",
+                                                  OpenCL::LanguageOptions::native(), true, &ss);
+            CHECK(ss.str().empty());
+            REQUIRE(result.data().size() == 3);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
+            REQUIRE(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
+            REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
+            CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\nwd3rf?ß");
+            CHECK(result.data()[2].getRepresentation() == "\"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"");
+        }
     }
-    SECTION("\" \"")
-    {
-        auto result = OpenCL::Lexer::tokenize("#include \"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"",
-                                              OpenCL::LanguageOptions::native(), true, &ss);
-        CHECK(ss.str().empty());
-        REQUIRE(result.data().size() == 3);
-        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Pound);
-        REQUIRE(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
-        CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
-        REQUIRE(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::StringLiteral);
-        CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
-        CHECK(result.data()[2].getRepresentation() == "\"agejf 4er325öüöü-3/3423354f\\wd3rf?ß\"");
-    }
+}
+
+TEST_CASE("Lexing unterminated tokens", "[lexer]")
+{
+    LEXER_OUTPUTS_WITH("ad\n\"test", Catch::Contains(UNTERMINATED_N.args(STRING_LITERAL)));
+    LEXER_OUTPUTS_WITH("ad\n'test", Catch::Contains(UNTERMINATED_N.args(CHARACTER_LITERAL)));
+    LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
+    PP_LEXER_OUTPUTS_WITH("ad\n#include \"test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
+    PP_LEXER_OUTPUTS_WITH("ad\n#include <test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
 }

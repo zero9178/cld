@@ -18,6 +18,7 @@
 #include <numeric>
 #include <optional>
 #include <string_view>
+#include <unordered_set>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
@@ -737,7 +738,7 @@ namespace
             return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
         }
 
-        void report(const std::string& suffix, llvm::raw_ostream::Colors colour, const std::string& message,
+        void report(const std::string& prefix, llvm::raw_ostream::Colors colour, const std::string& message,
                     std::uint64_t location, const std::vector<uint64_t>& arrows, std::uint64_t startOffset,
                     std::uint64_t endOffset) const
         {
@@ -755,7 +756,7 @@ namespace
             {
                 auto line = getLineNumber(location);
                 *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
-                llvm::WithColor(*m_reporter, colour) << suffix << ": ";
+                llvm::WithColor(*m_reporter, colour) << prefix << ": ";
                 *m_reporter << message << '\n';
                 startLine = getLineNumber(startOffset);
                 endLine = getLineNumber(endOffset);
@@ -772,21 +773,36 @@ namespace
                     numSize += 4 - remainder;
                 }
             }
-            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(lines.size());
-            for (auto i = startLine; i <= endLine; i++)
+            std::vector<std::unordered_set<std::uint64_t>> columnsOfArrowsForLine(lines.size());
+            if (!arrows.empty())
             {
-                auto begin = getLineStartOffset(i);
-                auto end = getLineEndOffset(i);
-                for (auto iter : arrows)
+                for (auto i = startLine; i <= endLine; i++)
                 {
-                    if (iter < begin || iter >= end - 1)
+                    auto begin = getLineStartOffset(i);
+                    auto end = getLineEndOffset(i);
+                    // For every arrow, transform the byte offset into a character width offset, then check if the byte
+                    // offset points to one of the bytes of a code point and make it point at the full width of it
+                    std::vector<std::vector<std::uint64_t>> replacements;
+                    std::uint64_t currentWidth = 0;
+                    for (auto j = begin; j != end;)
                     {
-                        continue;
+                        auto step = llvm::getNumBytesForUTF8(lines[i - startLine][j - begin]);
+                        auto size = columnWidthUTF8Safe(lines[i - startLine].substr(j - begin, step));
+                        std::vector<std::uint64_t> columns(size);
+                        std::iota(columns.begin(), columns.end(), currentWidth);
+                        replacements.resize(replacements.size() + step, columns);
+                        currentWidth += size;
+                        j += step;
                     }
-                    auto printed = lines[i - startLine].substr(0, iter - begin);
-                    auto utf8Width = columnWidthUTF8Safe({printed.data(), printed.size()});
-                    columnsOfArrowsForLine[i - startLine].push_back(iter - begin
-                                                                    - (utf8Width < 0 ? 0 : printed.size() - utf8Width));
+                    for (auto iter : arrows)
+                    {
+                        if (iter < begin || iter >= end - 1)
+                        {
+                            continue;
+                        }
+                        auto vector = replacements[iter - begin];
+                        columnsOfArrowsForLine[i - startLine].insert(vector.begin(), vector.end());
+                    }
                 }
             }
             for (auto i = startLine; i <= endLine; i++)
@@ -844,12 +860,13 @@ namespace
                 {
                     // The token does not span lines and starts as well as ends here
                     auto column = startOffset - getLineStartOffset(i);
-                    *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
+                    auto space = stringOfSameWidth(string.substr(0, column), ' ');
+                    *m_reporter << space;
                     auto underline = stringOfSameWidth(string.substr(column, endOffset - startOffset), '~');
                     for (auto iter : arrowsForLine)
                     {
-                        assert(iter - column < underline.size());
-                        underline[iter - column] = '^';
+                        assert(iter - space.size() < underline.size());
+                        underline[iter - space.size()] = '^';
                     }
                     llvm::WithColor(*m_reporter, colour) << underline;
                 }
@@ -857,12 +874,13 @@ namespace
                 {
                     // The token starts here and does not end here
                     auto column = startOffset - getLineStartOffset(i);
-                    *m_reporter << stringOfSameWidth(string.substr(0, column), ' ');
+                    auto space = stringOfSameWidth(string.substr(0, column), ' ');
+                    *m_reporter << space;
                     auto underline = stringOfSameWidth(string.substr(column), '~');
                     for (auto iter : arrowsForLine)
                     {
-                        assert(iter - column < underline.size());
-                        underline[iter - column] = '^';
+                        assert(iter - space.size() < underline.size());
+                        underline[iter - space.size()] = '^';
                     }
                     llvm::WithColor(*m_reporter, colour) << underline;
                 }
@@ -901,6 +919,9 @@ namespace
                 return transition.indexOfNewState;
             }
         };
+
+        friend OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, OpenCL::LanguageOptions languageOptions,
+                                                            bool inPreprocessor, llvm::raw_ostream* reporter);
 
     public:
         llvm::SparseSet<Transition, IndexExtractor> transitions;
@@ -1005,9 +1026,14 @@ namespace
             return offset + tokenStartOffset;
         }
 
+        [[nodiscard]] std::string_view view(std::uint64_t startOffset, std::uint64_t endOffset) const
+        {
+            return m_source.substr(startOffset, endOffset - startOffset);
+        }
+
         [[nodiscard]] std::string_view currentView() const
         {
-            return m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
+            return view(tokenStartOffset, m_offset);
         }
     };
 
@@ -1674,19 +1700,19 @@ namespace
         switch (c)
         {
             case '.': return Dot{};
-            case '\'':
+            case '\'': return CharacterLiteral{};
+            case '"':
             {
                 if (context.isInPreprocessor() && context.getResult().size() >= 2
                     && context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
-                    && context.getResult()[context.getResult().size() - 1].getTokenType() == TokenType::Identifier
+                    && context.getResult().back().getTokenType() == TokenType::Identifier
                     && std::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue())
                            == "include")
                 {
-                    return AfterInclude{'\''};
+                    return AfterInclude{'"'};
                 }
-                return CharacterLiteral{};
+                return StringLiteral{};
             }
-            case '"': return StringLiteral{};
             case 'L': return L{};
             case '\\': return MaybeUC{};
             case '0':
@@ -1746,15 +1772,24 @@ namespace
             case '?': context.push(context.getOffset() - 1, context.getOffset(), TokenType::QuestionMark); return *this;
             default:
             {
+                std::string buffer(4, ' ');
+                auto* start = buffer.data();
+                llvm::ConvertCodePointToUTF8(c, start);
+                buffer.resize(std::distance(buffer.data(), start));
                 if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
                     || (llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
                         && !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(c)))
                 {
-                    std::string buffer(4, ' ');
-                    auto* start = buffer.data();
-                    llvm::ConvertCodePointToUTF8(c, start);
-                    buffer.resize(std::distance(buffer.data(), start));
                     return Text{std::move(buffer)};
+                }
+                else if (c != ' ' && c != '\t' && c != '\r' && c != '\f' && c != '\v' && c != '\n'
+                         && !llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+                {
+                    std::vector<std::uint64_t> arrows(buffer.size());
+                    std::iota(arrows.begin(), arrows.end(), context.getOffset() - buffer.size());
+                    context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
+                                        context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
+                                        context.getOffset(), std::move(arrows));
                 }
                 return *this;
             }
@@ -2023,7 +2058,11 @@ namespace
         if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(*result)
             || !(suspText || !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(*result)))
         {
-            // TODO: Error as if unknown character was encountered in Start
+            std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart->offset - 1));
+            std::iota(arrows.begin(), arrows.end(), ucStart->offset - 1);
+            context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
+                                    (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
+                                ucStart->offset - 1, ucStart->offset - 1, context.getOffset(), std::move(arrows));
             return {Start{}, true};
         }
         auto newText = suspText ? std::move(*suspText) : Text{};
@@ -2354,7 +2393,10 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                                               reinterpret_cast<const llvm::UTF8*>(end), &result, llvm::strictConversion)
                     != llvm::conversionOK)
                 {
-                    // TODO: Error
+                    step = llvm::getNumBytesForUTF8(*iter);
+                    context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
+                                        {offset});
+                    return false;
                 }
                 c = result;
                 step = std::distance(iter, start);
@@ -2414,6 +2456,39 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         offset = prevOffset + step;
         iter += step;
     }
+    OpenCL::match(
+        stateMachine, [](auto&&) {},
+        [&context](CharacterLiteral&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::CHARACTER_LITERAL),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        },
+        [&context](StringLiteral&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::STRING_LITERAL),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        },
+        [&context](AfterInclude&) {
+            // This is the only error the Lexer is allowed to produce if we are in the Preprocessor
+            context.m_inPreprocessor = false;
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+            context.m_inPreprocessor = true;
+        },
+        [&context](BlockComment&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::BLOCK_COMMENT),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        });
 
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }
@@ -2667,38 +2742,41 @@ std::uint64_t Token::getSourceOffset() const noexcept
     return m_sourceOffset;
 }
 
-std::string OpenCL::Lexer::reconstruct(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                       std::vector<OpenCL::Lexer::Token>::const_iterator end)
+std::string OpenCL::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
+                                       std::vector<Token>::const_iterator end)
 {
-    //    if (begin == end)
-    //    {
-    //        return {};
-    //    }
-    //    return std::string(begin->getLine() - 1, '\n') + std::string(begin->getColumn(), ' ')
-    //           + reconstructTrimmed(begin, end);
+    if (begin == end)
+    {
+        return {};
+    }
+    auto lineNumber = sourceObject.getLineNumber(begin->getOffset());
+    return std::string(lineNumber - 1, '\n')
+           + std::string(begin->getOffset() - sourceObject.getLineStartOffset(lineNumber), ' ')
+           + reconstructTrimmed(sourceObject, begin, end);
     return "";
 }
 
-std::string OpenCL::Lexer::reconstructTrimmed(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+std::string OpenCL::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
+                                              std::vector<OpenCL::Lexer::Token>::const_iterator begin,
                                               std::vector<OpenCL::Lexer::Token>::const_iterator end)
 {
-    return "";
-    //    std::string result;
-    //    for (auto curr = begin; curr != end; curr++)
-    //    {
-    //        if (curr != begin)
-    //        {
-    //            auto prev = curr - 1;
-    //            if (curr->getLine() == prev->getLine())
-    //            {
-    //                result += std::string(curr->getColumn() - (prev->getColumn() + prev->getLength()), ' ');
-    //            }
-    //            else
-    //            {
-    //                result += '\n' + std::string(curr->getColumn(), ' ');
-    //            }
-    //        }
-    //        result += curr->getRepresentation();
-    //    }
-    //    return result;
+    std::string result;
+    for (auto curr = begin; curr != end; curr++)
+    {
+        if (curr != begin)
+        {
+            auto prev = curr - 1;
+            auto currLineNumber = sourceObject.getLineNumber(curr->getOffset());
+            if (currLineNumber == sourceObject.getLineNumber(prev->getOffset()))
+            {
+                result += std::string(curr->getOffset() - (prev->getOffset() + prev->getLength()), ' ');
+            }
+            else
+            {
+                result += '\n' + std::string(curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
+            }
+        }
+        result += curr->getRepresentation();
+    }
+    return result;
 }

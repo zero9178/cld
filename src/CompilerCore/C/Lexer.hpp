@@ -198,10 +198,12 @@ namespace OpenCL
          */
         std::string tokenValue(TokenType tokenType);
 
-        std::string reconstruct(std::vector<Token>::const_iterator begin, std::vector<Token>::const_iterator end);
+        std::string reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
+                                std::vector<Token>::const_iterator end);
 
-        std::string reconstructTrimmed(std::vector<Token>::const_iterator begin,
-                                       std::vector<Token>::const_iterator end);
+        std::string reconstructTrimmed(const SourceObject& sourceObject,
+                                       std::vector<OpenCL::Lexer::Token>::const_iterator begin,
+                                       std::vector<OpenCL::Lexer::Token>::const_iterator end);
     } // namespace Lexer
 } // namespace OpenCL
 

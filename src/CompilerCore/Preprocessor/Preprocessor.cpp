@@ -344,17 +344,19 @@ namespace
                 && (tokenIter - 1)->getTokenType() == OpenCL::Lexer::TokenType::Pound)
             {
                 replacementSubstituted.insert(replacementSubstituted.end(), argStart, tokenIter - 1);
-                auto stringValue = OpenCL::Lexer::reconstructTrimmed(argument->second.begin(), argument->second.end());
-                auto string = '\''
-                              + std::accumulate(stringValue.begin(), stringValue.end(), std::string{},
-                                                [](const std::string& init, char character) {
-                                                    if (character == '\'' || character == '"' || character == '\\')
-                                                    {
-                                                        return init + '\\' + character;
-                                                    }
-                                                    return init + character;
-                                                })
-                              + '\'';
+                //                auto stringValue = OpenCL::Lexer::reconstructTrimmed(, argument->second.begin(),
+                //                                                                     argument->second.end());
+                //                auto string = '\''
+                //                              + std::accumulate(stringValue.begin(), stringValue.end(), std::string{},
+                //                                                [](const std::string& init, char character) {
+                //                                                    if (character == '\'' || character == '"' ||
+                //                                                    character == '\\')
+                //                                                    {
+                //                                                        return init + '\\' + character;
+                //                                                    }
+                //                                                    return init + character;
+                //                                                })
+                //                              + '\'';
                 //                replacementSubstituted.emplace_back(tokenIter->getLine(), tokenIter->getColumn(),
                 //                                                    tokenIter->getLength(),
                 //                                                    OpenCL::Lexer::TokenType::StringLiteral,
