@@ -151,6 +151,8 @@ namespace OpenCL
 
             constexpr auto UNEXPECTED_CHARACTER = Format("Unexpected character '{}'");
 
+            constexpr auto NON_PRINTABLE_CHARACTER_N = Format("Non printable character '{}'");
+
             constexpr auto NEWLINE_IN_N_USE_BACKLASH_N = Format("Newline in {} use \\n instead");
 
             constexpr auto CHARACTER_LITERAL = "Character literal";

@@ -1063,3 +1063,39 @@ TEST_CASE("Lexing unterminated tokens", "[lexer]")
     PP_LEXER_OUTPUTS_WITH("ad\n#include \"test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
     PP_LEXER_OUTPUTS_WITH("ad\n#include <test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
 }
+
+namespace
+{
+    void lex(const std::vector<std::uint8_t>& data)
+    {
+        std::string input(data.size(), ' ');
+        std::transform(data.begin(), data.end(), input.begin(), [](std::uint8_t byte) -> char {
+            char result;
+            std::memcpy(&result, &byte, 1);
+            return result;
+        });
+
+        OpenCL::Lexer::tokenize(input);
+    }
+} // namespace
+
+TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
+{
+    lex({0x20, 0xd2, 0x20, 0x0});
+    lex({0xea});
+    lex({
+        0x15,
+        0x27,
+    });
+    lex({
+        0xff,
+        0xff,
+        0x27,
+    });
+    lex({
+        0x0,
+        0x0,
+        0xa,
+        0x0,
+    });
+}
