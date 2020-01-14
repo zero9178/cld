@@ -89,6 +89,20 @@
         <entry>
           <key>
             <LocalCompilerPath>
+              <option name="path" value="C:\clang\9.0.1\bin\clang++.exe" />
+            </LocalCompilerPath>
+          </key>
+          <value>
+            <LocalCompilerSettings>
+              <option name="name" value="Clang" />
+              <option name="version" value="9.0.1" />
+              <option name="target" value="x86_64" />
+            </LocalCompilerSettings>
+          </value>
+        </entry>
+        <entry>
+          <key>
+            <LocalCompilerPath>
               <option name="path" value="/usr/bin/c++" />
             </LocalCompilerPath>
           </key>
@@ -132,6 +146,67 @@
     </option>
     <option name="compilerMatches">
       <map>
+        <entry>
+          <key>
+            <LocalCompilerPath>
+              <option name="path" value="C:\clang\9.0.1\bin\clang++.exe" />
+            </LocalCompilerPath>
+          </key>
+          <value>
+            <CompilerMatches>
+              <option name="chosenMatch">
+                <CompilerMatch>
+                  <option name="remoteCompilerInfo">
+                    <RemoteCompilerInfo>
+                      <option name="id" value="clangdefault" />
+                      <option name="name" value="clang default" />
+                      <option name="language" value="c++" />
+                      <option name="version" value="clang version 9.0.0-2 (tags/RELEASE_900/final)" />
+                      <option name="executable" value="/usr/bin/clang++" />
+                    </RemoteCompilerInfo>
+                  </option>
+                </CompilerMatch>
+              </option>
+              <option name="otherMatches">
+                <list>
+                  <CompilerMatch>
+                    <option name="remoteCompilerInfo">
+                      <RemoteCompilerInfo>
+                        <option name="id" value="clangdefault" />
+                        <option name="name" value="clang default" />
+                        <option name="language" value="c++" />
+                        <option name="version" value="clang version 9.0.0-2 (tags/RELEASE_900/final)" />
+                        <option name="executable" value="/usr/bin/clang++" />
+                      </RemoteCompilerInfo>
+                    </option>
+                  </CompilerMatch>
+                  <CompilerMatch>
+                    <option name="remoteCompilerInfo">
+                      <RemoteCompilerInfo>
+                        <option name="id" value="g8" />
+                        <option name="name" value="g++ 8.x" />
+                        <option name="language" value="c++" />
+                        <option name="version" value="g++-8 (Ubuntu 8.3.0-23ubuntu2) 8.3.0" />
+                        <option name="executable" value="/usr/bin/g++-8" />
+                      </RemoteCompilerInfo>
+                    </option>
+                  </CompilerMatch>
+                  <CompilerMatch>
+                    <option name="remoteCompilerInfo">
+                      <RemoteCompilerInfo>
+                        <option name="id" value="gdefault" />
+                        <option name="name" value="g++ default" />
+                        <option name="language" value="c++" />
+                        <option name="version" value="g++ (Ubuntu 9.2.1-9ubuntu2) 9.2.1 20191008" />
+                        <option name="executable" value="/usr/bin/g++" />
+                      </RemoteCompilerInfo>
+                    </option>
+                  </CompilerMatch>
+                </list>
+              </option>
+            </CompilerMatches>
+          </value>
+        </entry>
         <entry>
           <key>
             <LocalCompilerPath>

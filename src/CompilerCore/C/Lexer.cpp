@@ -18,7 +18,6 @@
 #include <numeric>
 #include <optional>
 #include <string_view>
-#include <unordered_set>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
@@ -554,11 +553,6 @@ namespace
         {0x0085, 0x0085}, {0x00A0, 0x00A0}, {0x1680, 0x1680}, {0x180E, 0x180E}, {0x2000, 0x200A},
         {0x2028, 0x2029}, {0x202F, 0x202F}, {0x205F, 0x205F}, {0x3000, 0x3000}};
 
-    llvm::raw_ostream& operator<<(llvm::raw_ostream& os, std::string_view sv)
-    {
-        return os.write(sv.data(), sv.size());
-    }
-
     int charWidth(int UCS)
     {
         if (!llvm::sys::unicode::isPrintable(UCS))
@@ -703,6 +697,23 @@ namespace
         return step;
     }
 
+    std::uint8_t getNumUTF8ForUTF32(std::uint32_t c)
+    {
+        if (c <= 0x7F)
+        {
+            return 1;
+        }
+        if (c <= 0x7FF)
+        {
+            return 2;
+        }
+        if (c <= 0xFFFF)
+        {
+            return 3;
+        }
+        return 4;
+    }
+
     struct Start;
     struct CharacterLiteral;
     struct StringLiteral;
@@ -753,14 +764,16 @@ namespace
         }
 
         void report(const std::string& prefix, llvm::raw_ostream::Colors colour, const std::string& message,
-                    std::uint64_t location, const std::vector<uint64_t>& arrows, std::uint64_t startOffset,
-                    std::uint64_t endOffset) const
+                    std::uint64_t location, std::vector<std::uint64_t>&& arrows, std::uint64_t underlineStart,
+                    std::uint64_t underlineEnd) const
         {
             assert(!m_inPreprocessor);
             if (!m_reporter)
             {
                 return;
             }
+            std::sort(arrows.begin(), arrows.end());
+            arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
 
             std::uint64_t startLine = 0;
             std::uint64_t endLine = 0;
@@ -774,62 +787,111 @@ namespace
                 llvm::WithColor(*m_reporter, colour) << prefix << ": ";
                 *m_reporter << message << '\n';
 
-                startLine = getLineNumber(startOffset);
-                endLine = getLineNumber(endOffset);
+                startLine = getLineNumber(underlineStart);
+                endLine = getLineNumber(underlineEnd);
                 lines.reserve(endLine - startLine + 1);
                 for (auto i = startLine; i <= endLine; i++)
                 {
-                    auto start = getLineStartOffset(i);
-                    auto stringView = m_source.substr(start, getLineEndOffset(i) - start - 1);
-                    std::string line;
+                    const auto start = getLineStartOffset(i);
+                    const auto end = getLineEndOffset(i);
+                    const auto stringView = m_source.substr(start, end - start - 1);
+
                     auto sourceStart = stringView.data();
-                    while (sourceStart != stringView.data() + stringView.size())
+                    const auto sourceEnd = stringView.data() + stringView.size();
+                    std::vector<llvm::UTF32> utf32;
+                    utf32.reserve(stringView.size());
+                    std::int64_t delta = 0;
+                    while (sourceStart != sourceEnd)
                     {
-                        std::vector<llvm::UTF32> utf32(std::distance(sourceStart, stringView.data() + stringView.size())
-                                                       * 4);
+                        llvm::ConversionResult result;
+                        do
                         {
-                            auto targetStart = utf32.data();
-                            auto result = llvm::ConvertUTF8toUTF32(
-                                reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                reinterpret_cast<const llvm::UTF8*>(stringView.data() + stringView.size()),
-                                &targetStart, utf32.data() + utf32.size(), llvm::strictConversion);
-                            utf32.resize(std::distance(utf32.data(), targetStart));
-                            for (auto& iter : utf32)
-                            {
-                                if (!llvm::sys::unicode::isPrintable(iter))
-                                {
-                                    iter = 0xFFFD;
-                                }
-                            }
+                            utf32.emplace_back();
+                            result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                                               reinterpret_cast<const llvm::UTF8*>(sourceEnd),
+                                                               &utf32.back(), llvm::strictConversion);
                             if (result != llvm::conversionOK)
                             {
-                                utf32.push_back(0xFFFD);
-                                if (sourceStart != stringView.data() + stringView.size())
+                                utf32.pop_back();
+                            }
+                            else if (!llvm::sys::unicode::isPrintable(utf32.back()))
+                            {
+                                if (underlineStart > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                    && underlineStart < end)
                                 {
-                                    sourceStart += getNumBytesForUTF8(*sourceStart);
+                                    underlineStart += delta;
                                 }
+                                if (underlineEnd > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                    && underlineEnd < end)
+                                {
+                                    underlineEnd += delta;
+                                }
+                                for (auto& iter : arrows)
+                                {
+                                    if (iter > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                        && iter < end)
+                                    {
+                                        iter += delta;
+                                    }
+                                }
+                                delta += 3 - getNumUTF8ForUTF32(utf32.back());
+                                utf32.back() = 0xFFFD;
+                            }
+                        } while (result == llvm::conversionOK && sourceStart != sourceEnd);
+
+                        if (result != llvm::conversionOK)
+                        {
+                            utf32.push_back(0xFFFD);
+                            if (sourceStart != sourceEnd)
+                            {
+                                if (underlineStart > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                    && underlineStart < end)
+                                {
+                                    underlineStart += delta;
+                                }
+                                if (underlineEnd > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                    && underlineEnd < end)
+                                {
+                                    underlineEnd += delta;
+                                }
+                                for (auto& iter : arrows)
+                                {
+                                    if (iter > static_cast<std::uint64_t>(sourceStart - stringView.data())
+                                        && iter < end)
+                                    {
+                                        iter += delta;
+                                    }
+                                }
+                                const auto step = std::min<std::uint64_t>(getNumBytesForUTF8(*sourceStart),
+                                                                          std::distance(sourceStart, sourceEnd));
+                                delta += 3 - step;
+                                sourceStart += step;
                             }
                         }
-                        line.resize(line.size() + utf32.size());
-                        const auto* targetStart = utf32.data();
-                        auto lineStart = line.data() - utf32.size();
-                        llvm::ConvertUTF32toUTF8(
-                            reinterpret_cast<const llvm::UTF32**>(&targetStart), utf32.data() + utf32.size(),
-                            reinterpret_cast<llvm::UTF8**>(&lineStart),
-                            reinterpret_cast<llvm::UTF8*>(line.data() + line.size()), llvm::strictConversion);
                     }
+
+                    std::string line(4 * utf32.size(), '\0');
+                    const auto* targetStart = utf32.data();
+                    auto lineStart = line.data() + line.size() - 4 * utf32.size();
+                    llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart),
+                                             utf32.data() + utf32.size(), reinterpret_cast<llvm::UTF8**>(&lineStart),
+                                             reinterpret_cast<llvm::UTF8*>(line.data() + line.size()),
+                                             llvm::strictConversion);
+                    line.resize(line.size() - std::distance(lineStart, line.data() + line.size()));
                     lines.push_back(std::move(line));
                 }
 
                 numSize = std::to_string(lineNumber).size();
-                auto remainder = numSize % 4;
+                const auto remainder = numSize % 4;
                 if (remainder)
                 {
                     numSize += 4 - remainder;
                 }
             }
 
-            std::vector<std::unordered_set<std::uint64_t>> columnsOfArrowsForLine(lines.size());
+            // Using a vector here for T instead of an associative container doesn't eliminate duplicates but I
+            // have a strong suspicion that cache locality would be faster anyways. Also, it doesn't matter lol
+            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(lines.size());
             if (!arrows.empty())
             {
                 for (auto i = startLine; i <= endLine; i++)
@@ -858,7 +920,8 @@ namespace
                             continue;
                         }
                         auto vector = replacements[iter - begin];
-                        columnsOfArrowsForLine[i - startLine].insert(vector.begin(), vector.end());
+                        columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
+                                                                     vector.begin(), vector.end());
                     }
                 }
             }
@@ -879,22 +942,22 @@ namespace
                 else if (i == startLine && i == endLine)
                 {
                     // The token does not span lines and starts as well as ends here
-                    auto column = startOffset - getLineStartOffset(i);
+                    auto column = underlineStart - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
-                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column, endOffset - startOffset);
-                    *m_reporter << string.substr(column + endOffset - startOffset);
+                    llvm::WithColor(*m_reporter, colour).get() << string.substr(column, underlineEnd - underlineStart);
+                    *m_reporter << string.substr(column + underlineEnd - underlineStart);
                 }
                 else if (i == startLine)
                 {
                     // The token starts here and does not end here
-                    auto column = startOffset - getLineStartOffset(i);
+                    auto column = underlineStart - getLineStartOffset(i);
                     *m_reporter << string.substr(0, column);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(column);
                 }
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = endOffset - getLineStartOffset(i);
+                    auto endColumn = underlineEnd - getLineStartOffset(i);
                     llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
                     *m_reporter << string.substr(endColumn);
                 }
@@ -917,10 +980,10 @@ namespace
                 else if (i == startLine && i == endLine)
                 {
                     // The token does not span lines and starts as well as ends here
-                    auto column = startOffset - getLineStartOffset(i);
+                    auto column = underlineStart - getLineStartOffset(i);
                     auto space = stringOfSameWidth(string.substr(0, column), ' ');
                     *m_reporter << space;
-                    auto underline = stringOfSameWidth(string.substr(column, endOffset - startOffset), '~');
+                    auto underline = stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~');
                     for (auto iter : arrowsForLine)
                     {
                         assert(iter - space.size() < underline.size());
@@ -931,7 +994,7 @@ namespace
                 else if (i == startLine)
                 {
                     // The token starts here and does not end here
-                    auto column = startOffset - getLineStartOffset(i);
+                    auto column = underlineStart - getLineStartOffset(i);
                     auto space = stringOfSameWidth(string.substr(0, column), ' ');
                     *m_reporter << space;
                     auto underline = stringOfSameWidth(string.substr(column), '~');
@@ -945,7 +1008,7 @@ namespace
                 else
                 {
                     // The token ends here and did not start here
-                    auto endColumn = endOffset - getLineStartOffset(i);
+                    auto endColumn = underlineEnd - getLineStartOffset(i);
                     auto underline = stringOfSameWidth(string.substr(0, endColumn), '~');
                     for (auto iter : arrowsForLine)
                     {
@@ -998,35 +1061,36 @@ namespace
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("error", llvm::raw_ostream::RED, message, location, arrows, tokenStartOffset, m_offset);
+            report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), tokenStartOffset, m_offset);
         }
 
         void reportNote(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("note", llvm::raw_ostream::CYAN, message, location, arrows, tokenStartOffset, m_offset);
+            report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), tokenStartOffset, m_offset);
         }
 
         void reportWarning(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
         {
-            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows, tokenStartOffset, m_offset);
+            report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), tokenStartOffset,
+                   m_offset);
         }
 
         void reportError(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
                          std::vector<std::uint64_t> arrows = {})
         {
-            report("error", llvm::raw_ostream::RED, message, location, arrows, start, end);
+            report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), start, end);
         }
 
         void reportNote(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
                         std::vector<std::uint64_t> arrows = {})
         {
-            report("note", llvm::raw_ostream::CYAN, message, location, arrows, start, end);
+            report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), start, end);
         }
 
         void reportWarning(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
                            std::vector<std::uint64_t> arrows = {})
         {
-            report("warning", llvm::raw_ostream::MAGENTA, message, location, arrows, start, end);
+            report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), start, end);
         }
 
         [[nodiscard]] std::uint64_t getOffset() const
