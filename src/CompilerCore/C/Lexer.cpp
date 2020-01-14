@@ -689,6 +689,20 @@ namespace
         return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
     }
 
+    std::uint8_t getNumBytesForUTF8(char firstByte)
+    {
+        std::uint8_t step;
+        if (*reinterpret_cast<uint8_t*>(&firstByte) >= 0b11111000)
+        {
+            step = 1;
+        }
+        else
+        {
+            step = llvm::getNumBytesForUTF8(firstByte);
+        }
+        return step;
+    }
+
     struct Start;
     struct CharacterLiteral;
     struct StringLiteral;
@@ -750,14 +764,16 @@ namespace
 
             std::uint64_t startLine = 0;
             std::uint64_t endLine = 0;
-            std::vector<std::string_view> lines;
+            std::vector<std::string> lines;
+            std::vector<std::uint64_t> byteToCharacterSpace;
             std::size_t numSize = 0;
 
             {
-                auto line = getLineNumber(location);
-                *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
+                auto lineNumber = getLineNumber(location);
+                *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
                 llvm::WithColor(*m_reporter, colour) << prefix << ": ";
                 *m_reporter << message << '\n';
+
                 startLine = getLineNumber(startOffset);
                 endLine = getLineNumber(endOffset);
                 lines.reserve(endLine - startLine + 1);
@@ -765,15 +781,54 @@ namespace
                 {
                     auto start = getLineStartOffset(i);
                     auto stringView = m_source.substr(start, getLineEndOffset(i) - start - 1);
-                    lines.push_back(stringView);
+                    std::string line;
+                    auto sourceStart = stringView.data();
+                    while (sourceStart != stringView.data() + stringView.size())
+                    {
+                        std::vector<llvm::UTF32> utf32(std::distance(sourceStart, stringView.data() + stringView.size())
+                                                       * 4);
+                        {
+                            auto targetStart = utf32.data();
+                            auto result = llvm::ConvertUTF8toUTF32(
+                                reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                reinterpret_cast<const llvm::UTF8*>(stringView.data() + stringView.size()),
+                                &targetStart, utf32.data() + utf32.size(), llvm::strictConversion);
+                            utf32.resize(std::distance(utf32.data(), targetStart));
+                            for (auto& iter : utf32)
+                            {
+                                if (!llvm::sys::unicode::isPrintable(iter))
+                                {
+                                    iter = 0xFFFD;
+                                }
+                            }
+                            if (result != llvm::conversionOK)
+                            {
+                                utf32.push_back(0xFFFD);
+                                if (sourceStart != stringView.data() + stringView.size())
+                                {
+                                    sourceStart += getNumBytesForUTF8(*sourceStart);
+                                }
+                            }
+                        }
+                        line.resize(line.size() + utf32.size());
+                        const auto* targetStart = utf32.data();
+                        auto lineStart = line.data() - utf32.size();
+                        llvm::ConvertUTF32toUTF8(
+                            reinterpret_cast<const llvm::UTF32**>(&targetStart), utf32.data() + utf32.size(),
+                            reinterpret_cast<llvm::UTF8**>(&lineStart),
+                            reinterpret_cast<llvm::UTF8*>(line.data() + line.size()), llvm::strictConversion);
+                    }
+                    lines.push_back(std::move(line));
                 }
-                numSize = std::to_string(line).size();
+
+                numSize = std::to_string(lineNumber).size();
                 auto remainder = numSize % 4;
                 if (remainder)
                 {
                     numSize += 4 - remainder;
                 }
             }
+
             std::vector<std::unordered_set<std::uint64_t>> columnsOfArrowsForLine(lines.size());
             if (!arrows.empty())
             {
@@ -788,15 +843,7 @@ namespace
                     for (auto j = begin; j < end;)
                     {
                         auto firstByte = lines[i - startLine][j - begin];
-                        std::uint8_t step;
-                        if (*reinterpret_cast<std::uint8_t*>(&firstByte) >= 0b11111000)
-                        {
-                            step = 1;
-                        }
-                        else
-                        {
-                            step = llvm::getNumBytesForUTF8(firstByte);
-                        }
+                        std::uint8_t step = getNumBytesForUTF8(firstByte);
                         auto size = columnWidthUTF8Safe(lines[i - startLine].substr(j - begin, step));
                         std::vector<std::uint64_t> columns(size);
                         std::iota(columns.begin(), columns.end(), currentWidth);
@@ -815,6 +862,7 @@ namespace
                     }
                 }
             }
+
             for (auto i = startLine; i <= endLine; i++)
             {
                 // Text
@@ -946,19 +994,6 @@ namespace
               m_lineStarts(std::move(lineStarts))
         {
             transitions.setUniverse(std::variant_size_v<StateMachine>);
-        }
-
-        struct FatalException
-        {
-        };
-
-        [[noreturn]] void reportFatal(const std::string& message, std::uint64_t location)
-        {
-            auto line = getLineNumber(location);
-            *m_reporter << line << ':' << location - getLineStartOffset(line) << ": ";
-            llvm::WithColor(*m_reporter, llvm::raw_ostream::RED) << "fatal error: ";
-            *m_reporter << message << '\n';
-            throw FatalException{};
         }
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
@@ -1798,19 +1833,25 @@ namespace
                         llvm::raw_string_ostream ss(buffer);
                         ss << llvm::format_hex_no_prefix(c, 8);
                         ss.flush();
-                        context.reportFatal(
+                        std::vector<std::uint64_t> arrows(buffer.size() - 2);
+                        std::iota(arrows.begin(), arrows.end(), context.getOffset() - (buffer.size() - 2));
+                        context.reportError(
                             OpenCL::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
-                            context.getOffset());
+                            context.getOffset() - (buffer.size() - 2), context.getOffset() - (buffer.size() - 2),
+                            context.getOffset(), std::move(arrows));
                     }
-                    std::string buffer(4, ' ');
-                    auto* start = buffer.data();
-                    llvm::ConvertCodePointToUTF8(c, start);
-                    buffer.resize(std::distance(buffer.data(), start));
-                    std::vector<std::uint64_t> arrows(buffer.size());
-                    std::iota(arrows.begin(), arrows.end(), context.getOffset() - buffer.size());
-                    context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
-                                        context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
-                                        context.getOffset(), std::move(arrows));
+                    else
+                    {
+                        std::string buffer(4, ' ');
+                        auto* start = buffer.data();
+                        llvm::ConvertCodePointToUTF8(c, start);
+                        buffer.resize(std::distance(buffer.data(), start));
+                        std::vector<std::uint64_t> arrows(buffer.size());
+                        std::iota(arrows.begin(), arrows.end(), context.getOffset() - buffer.size());
+                        context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
+                                            context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
+                                            context.getOffset(), std::move(arrows));
+                    }
                 }
                 return *this;
             }
@@ -2373,160 +2414,152 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     offset = 0;
     Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
     const auto* end = source.data() + source.size();
-    try
+    for (const auto* iter = source.data(); iter != end;)
     {
-        for (const auto* iter = source.data(); iter != end;)
-        {
-            std::uint64_t step = 1;
-            std::uint64_t prevOffset = offset;
-            auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset,
-                            &source](auto&& state) mutable -> bool {
-                bool proceed = true;
-                auto exit = llvm::make_scope_exit(
-                    [stateIndex = stateMachine.index(), &stateMachine, &context, offset, &proceed, &step]() mutable {
-                        if (proceed)
+        std::uint64_t step = 1;
+        std::uint64_t prevOffset = offset;
+        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset,
+                        &source](auto&& state) mutable -> bool {
+            bool proceed = true;
+            auto exit = llvm::make_scope_exit(
+                [stateIndex = stateMachine.index(), &stateMachine, &context, offset, &proceed, &step]() mutable {
+                    if (proceed)
+                    {
+                        offset += step;
+                    }
+                    std::vector v(context.transitions.begin(), context.transitions.end());
+                    if (stateIndex != stateMachine.index())
+                    {
+                        if (auto result = context.transitions.find({0, stateMachine.index()});
+                            result != context.transitions.end())
                         {
-                            offset += step;
-                        }
-                        std::vector v(context.transitions.begin(), context.transitions.end());
-                        if (stateIndex != stateMachine.index())
-                        {
-                            if (auto result = context.transitions.find({0, stateMachine.index()});
-                                result != context.transitions.end())
+                            result++;
+                            while (result != context.transitions.end())
                             {
-                                result++;
-                                while (result != context.transitions.end())
-                                {
-                                    result = context.transitions.erase(result);
-                                }
-                            }
-                            if (stateMachine.index() != OpenCL::getIndex<Start>(StateMachine{}))
-                            {
-                                context.transitions.insert({offset, stateMachine.index()});
+                                result = context.transitions.erase(result);
                             }
                         }
-                    });
-                using T = std::decay_t<decltype(state)>;
-                constexpr bool needsCodepoint =
-                    std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
-                std::conditional_t<needsCodepoint, std::uint32_t, char> c{};
-                if constexpr (needsCodepoint)
-                {
-                    llvm::UTF32 result;
-                    auto start = iter;
-                    if (llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
-                                                  reinterpret_cast<const llvm::UTF8*>(end), &result,
-                                                  llvm::strictConversion)
-                        != llvm::conversionOK)
-                    {
-                        if (*reinterpret_cast<const std::uint8_t*>(iter) >= 0b11111000)
+                        if (stateMachine.index() != OpenCL::getIndex<Start>(StateMachine{}))
                         {
-                            step = 1;
-                        }
-                        else
-                        {
-                            step =
-                                std::min<std::uint8_t>(llvm::getNumBytesForUTF8(*iter), (source.size() - 1) - offset);
-                        }
-                        context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
-                                            {offset});
-                        return false;
-                    }
-                    c = result;
-                    step = std::distance(iter, start);
-                }
-                else
-                {
-                    c = *iter;
-                }
-                offset = prevOffset + step;
-                if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
-                {
-                    proceed = state.advance(c, context);
-                    return !proceed;
-                }
-                else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
-                {
-                    stateMachine = state.advance(c, context);
-                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
-                    {
-                        if (!std::holds_alternative<Start>(stateMachine))
-                        {
-                            context.tokenStartOffset = offset - step;
+                            context.transitions.insert({offset, stateMachine.index()});
                         }
                     }
-                    return false;
-                }
-                else if constexpr (std::is_void_v<decltype(state.advance(c, context))>)
+                });
+            using T = std::decay_t<decltype(state)>;
+            constexpr bool needsCodepoint =
+                std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
+            std::conditional_t<needsCodepoint, std::uint32_t, char> c{};
+            if constexpr (needsCodepoint)
+            {
+                llvm::UTF32 result;
+                auto start = iter;
+                if (llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
+                                              reinterpret_cast<const llvm::UTF8*>(end), &result, llvm::strictConversion)
+                    != llvm::conversionOK)
                 {
-                    state.advance(c, context);
-                    return false;
-                }
-                else
-                {
-                    auto&& [lhs, rhs] = state.advance(c, context);
-                    if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
+                    if (*reinterpret_cast<const std::uint8_t*>(iter) >= 0b11111000)
                     {
-                        stateMachine = std::move(rhs);
-                        proceed = lhs;
+                        step = 1;
                     }
                     else
                     {
-                        stateMachine = std::move(lhs);
-                        proceed = rhs;
+                        step = std::min<std::uint8_t>(llvm::getNumBytesForUTF8(*iter), (source.size() - 1) - offset);
                     }
-                    if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
-                    {
-                        if (!std::holds_alternative<Start>(stateMachine))
-                        {
-                            context.tokenStartOffset = offset - step;
-                        }
-                    }
-                    return !proceed;
+                    context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
+                                        {offset});
+                    return false;
                 }
-            };
-            while (std::visit(visitor, stateMachine))
-                ;
+                c = result;
+                step = std::distance(iter, start);
+            }
+            else
+            {
+                c = *iter;
+            }
             offset = prevOffset + step;
-            iter += step;
-        }
-        OpenCL::match(
-            stateMachine, [](auto&&) {},
-            [&context](CharacterLiteral&) {
-                std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::CHARACTER_LITERAL),
-                                    context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                    std::move(arrows));
-            },
-            [&context](StringLiteral&) {
-                std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::STRING_LITERAL),
-                                    context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                    std::move(arrows));
-            },
-            [&context](AfterInclude&) {
-                // This is the only error the Lexer is allowed to produce if we are in the Preprocessor
-                context.m_inPreprocessor = false;
-                std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
-                                    context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                    std::move(arrows));
-                context.m_inPreprocessor = true;
-            },
-            [&context](BlockComment&) {
-                std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::BLOCK_COMMENT),
-                                    context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                    std::move(arrows));
-            });
+            if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
+            {
+                proceed = state.advance(c, context);
+                return !proceed;
+            }
+            else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
+            {
+                stateMachine = state.advance(c, context);
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                {
+                    if (!std::holds_alternative<Start>(stateMachine))
+                    {
+                        context.tokenStartOffset = offset - step;
+                    }
+                }
+                return false;
+            }
+            else if constexpr (std::is_void_v<decltype(state.advance(c, context))>)
+            {
+                state.advance(c, context);
+                return false;
+            }
+            else
+            {
+                auto&& [lhs, rhs] = state.advance(c, context);
+                if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
+                {
+                    stateMachine = std::move(rhs);
+                    proceed = lhs;
+                }
+                else
+                {
+                    stateMachine = std::move(lhs);
+                    proceed = rhs;
+                }
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                {
+                    if (!std::holds_alternative<Start>(stateMachine))
+                    {
+                        context.tokenStartOffset = offset - step;
+                    }
+                }
+                return !proceed;
+            }
+        };
+        while (std::visit(visitor, stateMachine))
+            ;
+        offset = prevOffset + step;
+        iter += step;
     }
-    catch (const Context::FatalException&)
-    {
-    }
+    OpenCL::match(
+        stateMachine, [](auto&&) {},
+        [&context](CharacterLiteral&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::CHARACTER_LITERAL),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        },
+        [&context](StringLiteral&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::STRING_LITERAL),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        },
+        [&context](AfterInclude&) {
+            // This is the only error the Lexer is allowed to produce if we are in the Preprocessor
+            context.m_inPreprocessor = false;
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+            context.m_inPreprocessor = true;
+        },
+        [&context](BlockComment&) {
+            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
+            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
+            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::BLOCK_COMMENT),
+                                context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                                std::move(arrows));
+        });
 
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }

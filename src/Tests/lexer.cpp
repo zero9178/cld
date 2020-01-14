@@ -379,27 +379,7 @@ TEST_CASE("Lexing unicode", "[lexer]")
             REQUIRE(std::holds_alternative<std::int32_t>(result.data()[0].getValue()));
             REQUIRE(std::get<std::int32_t>(result.data()[0].getValue()) == U'🍌');
         }
-        LEXER_OUTPUTS_WITH(
-            (std::array<char, 11>{'L', '\'', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
-            Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_OUTPUTS_WITH((std::array<char, 18>{'L', '\'', -24, -78, -109, '\'', ' ', 'L', '\'', -24, -78, -109,
-                                                 (char)0xE0, (char)0x80, (char)0x80, '\'', 0})
-                               .data(),
-                           Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '\'', (char)0xE0, (char)0x80, (char)0x80, '\'', 0}).data(),
-                           Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_OUTPUTS_WITH(
-            (std::array<char, 11>{'L', '"', -24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, '"', 0}).data(),
-            Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_OUTPUTS_WITH((std::array<char, 18>{'L', '"', -24, -78, -109, '"', ' ', 'L', '"', -24, -78, -109,
-                                                 (char)0xE0, (char)0x80, (char)0x80, '"', 0})
-                               .data(),
-                           Catch::Contains(INVALID_UTF8_SEQUENCE));
-        LEXER_OUTPUTS_WITH((std::array<char, 8>{'L', '"', (char)0xE0, (char)0x80, (char)0x80, '"', 0}).data(),
-                           Catch::Contains(INVALID_UTF8_SEQUENCE));
     }
-    LEXER_OUTPUTS_WITH((std::array<char, 11>{-24, -78, -109, (char)0xE0, (char)0x80, (char)0x80, 0}).data(),
-                       Catch::Contains(INVALID_UTF8_SEQUENCE));
 }
 
 TEST_CASE("Lexing string literals", "[lexer]")
@@ -1066,7 +1046,7 @@ TEST_CASE("Lexing unterminated tokens", "[lexer]")
 
 namespace
 {
-    void lex(const std::vector<std::uint8_t>& data)
+    std::string toS(const std::vector<std::uint8_t>& data)
     {
         std::string input(data.size(), ' ');
         std::transform(data.begin(), data.end(), input.begin(), [](std::uint8_t byte) -> char {
@@ -1074,8 +1054,51 @@ namespace
             std::memcpy(&result, &byte, 1);
             return result;
         });
+        return input;
+    }
+} // namespace
 
-        OpenCL::Lexer::tokenize(input);
+TEST_CASE("Lexing invalid characters", "[lexer]")
+{
+    LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
+                       Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(
+        toS({'L', '\'', 0xE7, 0xB1, 0x92, '\'', ' ', 'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
+        Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE0, 0x80, 0x80, '\''}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '"'}),
+                       Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({
+                           'L',
+                           '"',
+                           0xE7,
+                           0xB1,
+                           0x92,
+                           '"',
+                           ' ',
+                           'L',
+                           '"',
+                           0xE7,
+                           0xB1,
+                           0x92,
+                           0xE0,
+                           0x80,
+                           0x80,
+                           '"',
+                       }),
+                       Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE0, 0x80, 0x80, '"'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xea}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0x0, 0xa}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000"))
+                                            && Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0000000a")));
+}
+
+namespace
+{
+    void lex(const std::vector<std::uint8_t>& data)
+    {
+        OpenCL::Lexer::tokenize(toS(data));
     }
 } // namespace
 
