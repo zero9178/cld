@@ -2,10 +2,9 @@
 #define OPENCLPARSER_LEXER_HPP
 
 #pragma warning(push, 0)
+#include <llvm/ADT/APFloat.h>
 #include <llvm/Support/raw_ostream.h>
 #pragma warning(pop)
-
-#include <llvm/ADT/APFloat.h>
 
 #include <memory>
 #include <string>

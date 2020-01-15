@@ -181,11 +181,11 @@ SCENARIO("Lexing Identifiers", "[lexer]")
     }
 }
 
-SCENARIO("Lexing backslashes", "[lexer]")
+TEST_CASE("Lexing backslashes", "[lexer]")
 {
-    GIVEN("Newline after backslash")
+    SECTION("Newline after backslash")
     {
-        WHEN("A normal identifier")
+        SECTION("Normal identifier")
         {
             auto result = OpenCL::Lexer::tokenize("te\\\nst");
             REQUIRE(result.data().size() == 1);
@@ -194,7 +194,7 @@ SCENARIO("Lexing backslashes", "[lexer]")
             CHECK(std::get<std::string>(result.data()[0].getValue()) == "test");
             CHECK(result.data()[0].getRepresentation() == "te\\\nst");
         }
-        WHEN("A universal character")
+        SECTION("Universal character")
         {
             auto result = OpenCL::Lexer::tokenize("_\\\\\nu00B5");
             REQUIRE(result.data().size() == 1);
@@ -209,14 +209,14 @@ SCENARIO("Lexing backslashes", "[lexer]")
                                        && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
             }
         }
-        WHEN("keyword contains concatenating backslash")
+        SECTION("Keywords")
         {
             auto result = OpenCL::Lexer::tokenize("f\\\nor");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::ForKeyword);
             CHECK(result.data()[0].getRepresentation() == "f\\\nor");
         }
-        GIVEN("A number")
+        SECTION("Number")
         {
             auto result = OpenCL::Lexer::tokenize("5\\\ne+3");
             REQUIRE(result.data().size() == 1);
@@ -226,7 +226,7 @@ SCENARIO("Lexing backslashes", "[lexer]")
             CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(fp.convertToDouble() == 5e+3);
             CHECK(result.data()[0].getRepresentation() == "5\\\ne+3");
-            WHEN("Floating point")
+            SECTION("Floating point")
             {
                 result = OpenCL::Lexer::tokenize(".\\\n5e+3");
                 REQUIRE(result.data().size() == 1);
@@ -237,12 +237,12 @@ SCENARIO("Lexing backslashes", "[lexer]")
                 CHECK(fp.convertToDouble() == .5e+3);
                 CHECK(result.data()[0].getRepresentation() == ".\\\n5e+3");
             }
-            WHEN("With errors")
+            SECTION("Errors")
             {
                 LEXER_OUTPUTS_WITH("5.\\\n5f5", Catch::Contains(INVALID_LITERAL_SUFFIX.args("f5")));
             }
         }
-        GIVEN("Dots")
+        SECTION("Dots")
         {
             auto result = OpenCL::Lexer::tokenize(".\\\n.");
             REQUIRE(result.data().size() == 2);
@@ -254,7 +254,7 @@ SCENARIO("Lexing backslashes", "[lexer]")
             CHECK(result.data()[1].getRepresentation() == ".");
         }
     }
-    GIVEN("Whitespace after backslash")
+    SECTION("Whitespace after backslash")
     {
         LEXER_OUTPUTS_WITH("i\\    \nf", Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
         LEXER_OUTPUTS_WITH("i\\  5  \nf", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
@@ -263,6 +263,11 @@ SCENARIO("Lexing backslashes", "[lexer]")
             LEXER_OUTPUTS_WITH("i\\ \n\\ \n\\ \n\\ \nf",
                                Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
         }
+    }
+    SECTION("Fuzzer discoveries")
+    {
+        OpenCL::Lexer::tokenize("\\-");
+        OpenCL::Lexer::tokenize("&\\\x1d.");
     }
 }
 
@@ -595,6 +600,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<int32_t>(result.data()[0].getValue()));
         CHECK(std::get<int32_t>(result.data()[0].getValue()) == 56);
+        LEXER_OUTPUTS_WITH("08z1", Catch::Contains(INVALID_OCTAL_CHARACTER.args("8")));
     }
     SECTION("Hex")
     {
@@ -712,7 +718,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
 }
 
-TEST_CASE("Lexing Punctuators", "[lexer]")
+TEST_CASE("Lexing Punctuation", "[lexer]")
 {
     auto result = OpenCL::Lexer::tokenize(
         ". ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>= ~ ^: ^ ==");
@@ -1035,6 +1041,46 @@ TEST_CASE("Lexing include directives", "[lexer]")
     }
 }
 
+TEST_CASE("Lexing Comments", "[lexer]")
+{
+    SECTION("Line comments")
+    {
+        auto result = OpenCL::Lexer::tokenize("test//wdwdw\ntest");
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getOffset() == 0);
+        CHECK(result.data()[0].getLine(result) == 1);
+        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[1].getOffset() == 12);
+        CHECK(result.data()[1].getLine(result) == 2);
+        CHECK(result.data()[1].getColumn(result) == 0);
+        result = OpenCL::Lexer::tokenize("test//wdwdw\\\ntest");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getOffset() == 0);
+        CHECK(result.data()[0].getLine(result) == 1);
+        CHECK(result.data()[0].getColumn(result) == 0);
+    }
+    SECTION("Block comments")
+    {
+        auto result = OpenCL::Lexer::tokenize("test/*wdwdw*/test");
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getOffset() == 0);
+        CHECK(result.data()[0].getLine(result) == 1);
+        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[1].getOffset() == 13);
+        CHECK(result.data()[1].getLine(result) == 1);
+        CHECK(result.data()[1].getColumn(result) == 13);
+        result = OpenCL::Lexer::tokenize("test/*wdwdw*\\\n/test");
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getOffset() == 0);
+        CHECK(result.data()[0].getLine(result) == 1);
+        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[1].getOffset() == 15);
+        CHECK(result.data()[1].getLine(result) == 2);
+        CHECK(result.data()[1].getColumn(result) == 1);
+        LEXER_OUTPUTS_WITH("ad\n/*/", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
+    }
+}
+
 TEST_CASE("Lexing unterminated tokens", "[lexer]")
 {
     LEXER_OUTPUTS_WITH("ad\n\"test", Catch::Contains(UNTERMINATED_N.args(STRING_LITERAL)));
@@ -1098,15 +1144,15 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
     LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xea}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0x0, 0xa}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
+    LEXER_OUTPUTS_WITH("\xaez\xd2\x89",
+                       Catch::Contains(INVALID_UTF8_SEQUENCE) && Catch::Contains(UNEXPECTED_CHARACTER.args("҉")));
+    LEXER_OUTPUTS_WITH("\xaez\xf0\x9e\xbb\xaf", Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH("\xaa\xaa\n\x00", Catch::Contains(INVALID_UTF8_SEQUENCE));
 }
 
-namespace
-{
-    void lex(const std::vector<std::uint8_t>& data)
-    {
-        OpenCL::Lexer::tokenize(toS(data));
-    }
-} // namespace
-
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
-{}
+{
+    OpenCL::Lexer::tokenize("\x01\xa0\xe4[\xc9"
+                            "1111111111\x05\x05\x05\x05\x05\x05\x05\x05\x05"
+                            "09`\x00\x00");
+}

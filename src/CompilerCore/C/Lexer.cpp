@@ -682,14 +682,17 @@ namespace
     std::uint8_t getNumBytesForUTF8(Iter begin, Iter end)
     {
         assert(begin != end);
-        if (*reinterpret_cast<uint8_t*>(&begin) >= 0b11111000)
+        std::uint8_t des;
+        std::int8_t temp = *begin;
+        std::memcpy(&des, &temp, 1);
+        if (des >= 0b11111000)
         {
             return 1;
         }
         else
         {
             auto step = llvm::getNumBytesForUTF8(*begin);
-            for (auto i = 1u; i < step; i++)
+            for (std::uint8_t i = 1; i < step; i++)
             {
                 if (begin + i == end || (*(begin + i) & 0b11000000) != 0b10000000)
                 {
@@ -793,6 +796,15 @@ namespace
 
                 lines.reserve(endLine - startLine + 1);
                 std::string line;
+                std::vector<std::uint64_t> queuedDeletes;
+                std::vector<std::reference_wrapper<std::uint64_t>> toBeChanged;
+                toBeChanged.reserve(2 + arrows.size());
+                toBeChanged.push_back(underlineStart);
+                toBeChanged.push_back(underlineEnd);
+                for (auto& iter : arrows)
+                {
+                    toBeChanged.push_back(iter);
+                }
                 for (auto i = startLine; i <= endLine; i++)
                 {
                     const auto start = getLineStartOffset(i);
@@ -808,76 +820,93 @@ namespace
                         llvm::ConversionResult result;
                         do
                         {
-                            const std::uint64_t currentOffset = start + sourceStart - stringView.data();
-                            if (underlineStart == currentOffset)
-                            {
-                                underlineStart += delta;
-                            }
-                            if (underlineEnd == currentOffset)
-                            {
-                                underlineEnd += delta;
-                            }
-                            for (auto& iter : arrows)
-                            {
-                                if (iter == currentOffset)
-                                {
-                                    iter += delta;
-                                }
-                            }
+                            const std::uint64_t currentOldOffset = start + sourceStart - stringView.data();
                             utf32.emplace_back();
+                            llvm::SmallVector<std::uint64_t, 4> affectedOffsets;
+                            const auto prev = sourceStart;
                             result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
                                                                reinterpret_cast<const llvm::UTF8*>(sourceEnd),
                                                                &utf32.back(), llvm::strictConversion);
-                            if (result != llvm::conversionOK)
+                            if (result == llvm::conversionOK)
+                            {
+                                affectedOffsets.resize(std::distance(prev, sourceStart));
+                                std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
+                                for (auto iter : affectedOffsets)
+                                {
+                                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
+                                    while (changingOffset != toBeChanged.end())
+                                    {
+                                        *changingOffset += delta;
+                                        changingOffset = toBeChanged.erase(changingOffset);
+                                        changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
+                                    }
+                                }
+
+                                if (!llvm::sys::unicode::isPrintable(utf32.back()))
+                                {
+                                    const auto step = getNumUTF8ForUTF32(utf32.back());
+                                    if (step == 4)
+                                    {
+                                        // Can't delete arrows yet because we got reference to the elements held in
+                                        // toBeChanged. Therefore we'll store what the old values of those will be
+                                        // and delete them then
+                                        queuedDeletes.push_back(currentOldOffset + 3 + delta);
+                                    }
+                                    delta += 3 - step;
+                                    utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
+                                }
+                            }
+                            else
                             {
                                 utf32.pop_back();
-                            }
-                            else if (!llvm::sys::unicode::isPrintable(utf32.back()))
-                            {
-                                const auto step = getNumUTF8ForUTF32(utf32.back());
-                                if (step == 4)
-                                {
-                                    arrows.erase(std::remove(arrows.begin(), arrows.end(), currentOffset + 3),
-                                                 arrows.end());
-                                }
-                                delta += 3 - step;
-                                utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
                             }
                         } while (result == llvm::conversionOK && sourceStart != sourceEnd);
 
                         if (result != llvm::conversionOK)
                         {
-                            const std::uint64_t currentOffset = start + sourceStart - stringView.data();
+                            llvm::SmallVector<std::uint64_t, 4> affectedOffsets;
+                            const std::uint64_t currentOldOffset = start + sourceStart - stringView.data();
                             utf32.push_back(0xFFFD);
                             if (sourceStart != sourceEnd)
                             {
                                 const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
+                                affectedOffsets.resize(step);
+                                std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
+                                for (auto iter : affectedOffsets)
+                                {
+                                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
+                                    while (changingOffset != toBeChanged.end())
+                                    {
+                                        *changingOffset += delta;
+                                        changingOffset = toBeChanged.erase(changingOffset);
+                                        changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
+                                    }
+                                }
                                 if (step == 4)
                                 {
-                                    arrows.erase(std::remove(arrows.begin(), arrows.end(), currentOffset + 4),
-                                                 arrows.end());
+                                    queuedDeletes.push_back(currentOldOffset + 3 + delta);
                                 }
                                 delta += 3 - step;
                                 sourceStart += step;
                             }
                         }
                     }
-                    const std::uint64_t newEndOffset = start + sourceStart - stringView.data();
-                    if (underlineStart == newEndOffset)
+                    const std::uint64_t oldEndOffset = start + sourceStart - stringView.data();
+                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), oldEndOffset);
+                    while (changingOffset != toBeChanged.end())
                     {
-                        underlineStart += delta;
+                        *changingOffset += delta;
+                        changingOffset = toBeChanged.erase(changingOffset);
+                        changingOffset = std::find(changingOffset, toBeChanged.end(), oldEndOffset);
                     }
-                    if (underlineEnd == newEndOffset)
-                    {
-                        underlineEnd += delta;
-                    }
-                    for (auto& iter : arrows)
-                    {
-                        if (iter == newEndOffset)
-                        {
-                            iter += delta;
-                        }
-                    }
+
+                    toBeChanged.clear();
+                    arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
+                                                [&queuedDeletes](std::uint64_t arrow) {
+                                                    return std::find(queuedDeletes.begin(), queuedDeletes.end(), arrow)
+                                                           != queuedDeletes.end();
+                                                }),
+                                 arrows.end());
 
                     line.resize(4 * utf32.size(), '\0');
                     const auto* targetStart = utf32.data();
@@ -913,8 +942,8 @@ namespace
                     std::uint64_t currentWidth = 0;
                     for (auto j = begin; j != end;)
                     {
-                        const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + j - begin,
-                                                                     lines[i - startLine].begin() + end - begin);
+                        const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
+                                                                     lines[i - startLine].begin() + (end - begin));
                         const auto size = columnWidthUTF8Safe({lines[i - startLine].data() + j - begin, step});
                         std::vector<std::uint64_t> columns(size);
                         std::iota(columns.begin(), columns.end(), currentWidth);
@@ -1518,11 +1547,10 @@ namespace
             auto result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
             if (result != suffixBegin)
             {
-                context.reportError(
-                    OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                        std::string(1, *result)),
-                    context.mapStream(beginLocation + std::distance(begin, result)),
-                    {beginLocation + std::distance(begin, result)});
+                context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
+                                    context.mapStream(beginLocation + std::distance(begin, result)),
+                                    context.tokenStartOffset, context.getOffset() - 1,
+                                    {context.mapStream(beginLocation + std::distance(begin, result))});
                 return {};
             }
         }
@@ -1736,7 +1764,7 @@ namespace
 
     struct MaybeUC final
     {
-        std::optional<Text> suspText{};
+        std::unique_ptr<StateMachine> prevState{};
 
         std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
     };
@@ -2078,7 +2106,7 @@ namespace
     {
         if (c == '\\')
         {
-            return {MaybeUC{std::move(*this)}, true};
+            return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
         else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
                  && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
@@ -2105,9 +2133,9 @@ namespace
         if (c == 'u' || c == 'U')
         {
             // If Universal character, it's in or starting an identifier, not in a character or string literal
-            if (suspText)
+            if (prevState && std::holds_alternative<Text>(*prevState))
             {
-                return {UniversalCharacter{c == 'U', std::move(suspText)}, true};
+                return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
             }
             return {UniversalCharacter{c == 'U'}, true};
         }
@@ -2118,9 +2146,9 @@ namespace
             // backslashes to concat lines
             return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
-        else if (suspText)
+        else if (prevState)
         {
-            return {BackSlash{std::make_unique<StateMachine>(std::move(*suspText))}, false};
+            return {BackSlash{std::move(prevState)}, false};
         }
         else
         {
@@ -2153,8 +2181,20 @@ namespace
         else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
                  || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
         {
+            if (prevState
+                && (std::holds_alternative<LineComment>(*prevState)
+                    || std::holds_alternative<BlockComment>(*prevState)))
+            {
+                return {std::move(*prevState), false};
+            }
             error = true;
             return {std::move(*this), true};
+        }
+        else if (prevState
+                 && (std::holds_alternative<LineComment>(*prevState)
+                     || std::holds_alternative<BlockComment>(*prevState)))
+        {
+            return {std::move(*prevState), false};
         }
         auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
         assert(result != context.transitions.end());
@@ -2271,7 +2311,7 @@ namespace
     {
         if (c == '\\')
         {
-            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
+            return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
         switch (first)
         {
@@ -2424,6 +2464,10 @@ namespace
         {
             return Start{};
         }
+        else if (c == '\\')
+        {
+            return BackSlash{std::make_unique<StateMachine>(std::move(*this))};
+        }
         return *this;
     }
 
@@ -2432,6 +2476,10 @@ namespace
         if (lastChar && *lastChar == '*' && c == '/')
         {
             return Start{};
+        }
+        else if (c == '\\')
+        {
+            return BackSlash{std::make_unique<StateMachine>(std::move(*this))};
         }
         lastChar = c;
         return *this;
@@ -2589,7 +2637,9 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             }
         };
         while (std::visit(visitor, stateMachine))
-            ;
+        {
+            offset = prevOffset;
+        }
         offset = prevOffset + step;
         iter += step;
     }
