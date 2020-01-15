@@ -1060,40 +1060,44 @@ namespace
 
 TEST_CASE("Lexing invalid characters", "[lexer]")
 {
+    LEXER_OUTPUTS_WITH(toS({'\n', '*', 0x9b}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xde, '\n'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xa, 0x0}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
     LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
                        Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0b11110000, 0b10011110, 0b10111011, 0b10101111}),
+                       Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0001eeef")));
+    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0b11110000, 0b10011110, 0b10111011, 0b10101111, 'a'}),
+                       Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0001eeef")));
+    LEXER_OUTPUTS_WITH(
+        toS({'L', '\'', 0xE7, 0xB1, 0x92, '\'', ' ', 'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
+        Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE0, 0x80, 0x80, '\''}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '"'}),
                        Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(
-    //        toS({'L', '\'', 0xE7, 0xB1, 0x92, '\'', ' ', 'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
-    //        Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE0, 0x80, 0x80, '\''}), Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '"'}),
-    //                       Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({
-    //                           'L',
-    //                           '"',
-    //                           0xE7,
-    //                           0xB1,
-    //                           0x92,
-    //                           '"',
-    //                           ' ',
-    //                           'L',
-    //                           '"',
-    //                           0xE7,
-    //                           0xB1,
-    //                           0x92,
-    //                           0xE0,
-    //                           0x80,
-    //                           0x80,
-    //                           '"',
-    //                       }),
-    //                       Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE0, 0x80, 0x80, '"'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80}), Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({0xea}), Catch::Contains(INVALID_UTF8_SEQUENCE));
-    //    LEXER_OUTPUTS_WITH(toS({0x0, 0xa}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000"))
-    //                                            && Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0000000a")));
+    LEXER_OUTPUTS_WITH(toS({
+                           'L',
+                           '"',
+                           0xE7,
+                           0xB1,
+                           0x92,
+                           '"',
+                           ' ',
+                           'L',
+                           '"',
+                           0xE7,
+                           0xB1,
+                           0x92,
+                           0xE0,
+                           0x80,
+                           0x80,
+                           '"',
+                       }),
+                       Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({'L', '"', 0xE0, 0x80, 0x80, '"'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0xea}), Catch::Contains(INVALID_UTF8_SEQUENCE));
+    LEXER_OUTPUTS_WITH(toS({0x0, 0xa}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
 }
 
 namespace
@@ -1105,22 +1109,4 @@ namespace
 } // namespace
 
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
-{
-    lex({0x20, 0xd2, 0x20, 0x0});
-    lex({0xea});
-    lex({
-        0x15,
-        0x27,
-    });
-    lex({
-        0xff,
-        0xff,
-        0x27,
-    });
-    lex({
-        0x0,
-        0x0,
-        0xa,
-        0x0,
-    });
-}
+{}

@@ -553,10 +553,10 @@ namespace
         {0x0085, 0x0085}, {0x00A0, 0x00A0}, {0x1680, 0x1680}, {0x180E, 0x180E}, {0x2000, 0x200A},
         {0x2028, 0x2029}, {0x202F, 0x202F}, {0x205F, 0x205F}, {0x3000, 0x3000}};
 
-    int charWidth(int UCS)
+    unsigned charWidth(int UCS)
     {
         if (!llvm::sys::unicode::isPrintable(UCS))
-            return llvm::sys::unicode::ErrorNonPrintableCharacter;
+            return charWidth(0xFFFD);
 
         // Sorted list of non-spacing and enclosing combining mark intervals as
         // defined in "3.6 Combination" of
@@ -667,12 +667,7 @@ namespace
                 columnWidth += length * charWidth(0xFFFD);
                 continue;
             }
-            int width = charWidth(buf[0]);
-            if (width < 0)
-            {
-                return llvm::sys::unicode::ErrorNonPrintableCharacter;
-            }
-            columnWidth += width;
+            columnWidth += charWidth(buf[0]);
         }
         return columnWidth;
     }
@@ -683,18 +678,26 @@ namespace
         return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
     }
 
-    std::uint8_t getNumBytesForUTF8(char firstByte)
+    template <class Iter>
+    std::uint8_t getNumBytesForUTF8(Iter begin, Iter end)
     {
-        std::uint8_t step;
-        if (*reinterpret_cast<uint8_t*>(&firstByte) >= 0b11111000)
+        assert(begin != end);
+        if (*reinterpret_cast<uint8_t*>(&begin) >= 0b11111000)
         {
-            step = 1;
+            return 1;
         }
         else
         {
-            step = llvm::getNumBytesForUTF8(firstByte);
+            auto step = llvm::getNumBytesForUTF8(*begin);
+            for (auto i = 1u; i < step; i++)
+            {
+                if (begin + i == end || (*(begin + i) & 0b11000000) != 0b10000000)
+                {
+                    return i;
+                }
+            }
+            return step;
         }
-        return step;
     }
 
     std::uint8_t getNumUTF8ForUTF32(std::uint32_t c)
@@ -746,6 +749,7 @@ namespace
         std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
         {
             auto result = std::lower_bound(m_lineStarts.begin(), m_lineStarts.end(), offset);
+            assert(result != m_lineStarts.end());
             return result == m_lineStarts.begin() ?
                        1 :
                        std::distance(m_lineStarts.begin(), *result != offset ? result - 1 : result) + 1;
@@ -775,21 +779,20 @@ namespace
             std::sort(arrows.begin(), arrows.end());
             arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
 
-            std::uint64_t startLine = 0;
-            std::uint64_t endLine = 0;
-            std::vector<std::string> lines;
-            std::vector<std::uint64_t> byteToCharacterSpace;
+            const auto startLine = getLineNumber(underlineStart);
+            const auto endLine = getLineNumber(underlineEnd);
             std::size_t numSize = 0;
+            std::int64_t delta = 0;
+            std::vector<std::string> lines;
 
             {
-                auto lineNumber = getLineNumber(location);
+                const auto lineNumber = getLineNumber(location);
                 *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
                 llvm::WithColor(*m_reporter, colour) << prefix << ": ";
                 *m_reporter << message << '\n';
 
-                startLine = getLineNumber(underlineStart);
-                endLine = getLineNumber(underlineEnd);
                 lines.reserve(endLine - startLine + 1);
+                std::string line;
                 for (auto i = startLine; i <= endLine; i++)
                 {
                     const auto start = getLineStartOffset(i);
@@ -800,12 +803,27 @@ namespace
                     const auto sourceEnd = stringView.data() + stringView.size();
                     std::vector<llvm::UTF32> utf32;
                     utf32.reserve(stringView.size());
-                    std::int64_t delta = 0;
                     while (sourceStart != sourceEnd)
                     {
                         llvm::ConversionResult result;
                         do
                         {
+                            const std::uint64_t currentOffset = start + sourceStart - stringView.data();
+                            if (underlineStart == currentOffset)
+                            {
+                                underlineStart += delta;
+                            }
+                            if (underlineEnd == currentOffset)
+                            {
+                                underlineEnd += delta;
+                            }
+                            for (auto& iter : arrows)
+                            {
+                                if (iter == currentOffset)
+                                {
+                                    iter += delta;
+                                }
+                            }
                             utf32.emplace_back();
                             result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
                                                                reinterpret_cast<const llvm::UTF8*>(sourceEnd),
@@ -816,61 +834,52 @@ namespace
                             }
                             else if (!llvm::sys::unicode::isPrintable(utf32.back()))
                             {
-                                if (underlineStart > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                    && underlineStart < end)
+                                const auto step = getNumUTF8ForUTF32(utf32.back());
+                                if (step == 4)
                                 {
-                                    underlineStart += delta;
+                                    arrows.erase(std::remove(arrows.begin(), arrows.end(), currentOffset + 3),
+                                                 arrows.end());
                                 }
-                                if (underlineEnd > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                    && underlineEnd < end)
-                                {
-                                    underlineEnd += delta;
-                                }
-                                for (auto& iter : arrows)
-                                {
-                                    if (iter > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                        && iter < end)
-                                    {
-                                        iter += delta;
-                                    }
-                                }
-                                delta += 3 - getNumUTF8ForUTF32(utf32.back());
-                                utf32.back() = 0xFFFD;
+                                delta += 3 - step;
+                                utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
                             }
                         } while (result == llvm::conversionOK && sourceStart != sourceEnd);
 
                         if (result != llvm::conversionOK)
                         {
+                            const std::uint64_t currentOffset = start + sourceStart - stringView.data();
                             utf32.push_back(0xFFFD);
                             if (sourceStart != sourceEnd)
                             {
-                                if (underlineStart > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                    && underlineStart < end)
+                                const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
+                                if (step == 4)
                                 {
-                                    underlineStart += delta;
+                                    arrows.erase(std::remove(arrows.begin(), arrows.end(), currentOffset + 4),
+                                                 arrows.end());
                                 }
-                                if (underlineEnd > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                    && underlineEnd < end)
-                                {
-                                    underlineEnd += delta;
-                                }
-                                for (auto& iter : arrows)
-                                {
-                                    if (iter > static_cast<std::uint64_t>(sourceStart - stringView.data())
-                                        && iter < end)
-                                    {
-                                        iter += delta;
-                                    }
-                                }
-                                const auto step = std::min<std::uint64_t>(getNumBytesForUTF8(*sourceStart),
-                                                                          std::distance(sourceStart, sourceEnd));
                                 delta += 3 - step;
                                 sourceStart += step;
                             }
                         }
                     }
+                    const std::uint64_t newEndOffset = start + sourceStart - stringView.data();
+                    if (underlineStart == newEndOffset)
+                    {
+                        underlineStart += delta;
+                    }
+                    if (underlineEnd == newEndOffset)
+                    {
+                        underlineEnd += delta;
+                    }
+                    for (auto& iter : arrows)
+                    {
+                        if (iter == newEndOffset)
+                        {
+                            iter += delta;
+                        }
+                    }
 
-                    std::string line(4 * utf32.size(), '\0');
+                    line.resize(4 * utf32.size(), '\0');
                     const auto* targetStart = utf32.data();
                     auto lineStart = line.data() + line.size() - 4 * utf32.size();
                     llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart),
@@ -896,17 +905,17 @@ namespace
             {
                 for (auto i = startLine; i <= endLine; i++)
                 {
-                    auto begin = getLineStartOffset(i);
-                    auto end = getLineEndOffset(i) - 1;
+                    const auto begin = getLineStartOffset(i);
+                    const auto end = getLineEndOffset(i) - 1 + delta;
                     // For every arrow, transform the byte offset into a character width offset, then check if the byte
                     // offset points to one of the bytes of a code point and make it point at the full width of it
                     std::vector<std::vector<std::uint64_t>> replacements;
                     std::uint64_t currentWidth = 0;
-                    for (auto j = begin; j < end;)
+                    for (auto j = begin; j != end;)
                     {
-                        auto firstByte = lines[i - startLine][j - begin];
-                        std::uint8_t step = getNumBytesForUTF8(firstByte);
-                        auto size = columnWidthUTF8Safe(lines[i - startLine].substr(j - begin, step));
+                        const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + j - begin,
+                                                                     lines[i - startLine].begin() + end - begin);
+                        const auto size = columnWidthUTF8Safe({lines[i - startLine].data() + j - begin, step});
                         std::vector<std::uint64_t> columns(size);
                         std::iota(columns.begin(), columns.end(), currentWidth);
                         replacements.resize(replacements.size() + step, columns);
@@ -919,7 +928,7 @@ namespace
                         {
                             continue;
                         }
-                        auto vector = replacements[iter - begin];
+                        const auto& vector = replacements[iter - begin];
                         columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
                                                                      vector.begin(), vector.end());
                     }
@@ -1897,12 +1906,13 @@ namespace
                         llvm::raw_string_ostream ss(buffer);
                         ss << llvm::format_hex_no_prefix(c, 8);
                         ss.flush();
-                        std::vector<std::uint64_t> arrows(buffer.size() - 2);
-                        std::iota(arrows.begin(), arrows.end(), context.getOffset() - (buffer.size() - 2));
+                        auto size = getNumUTF8ForUTF32(c);
+                        std::vector<std::uint64_t> arrows(size);
+                        std::iota(arrows.begin(), arrows.end(), context.getOffset() - size);
                         context.reportError(
                             OpenCL::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
-                            context.getOffset() - (buffer.size() - 2), context.getOffset() - (buffer.size() - 2),
-                            context.getOffset(), std::move(arrows));
+                            context.getOffset() - size, context.getOffset() - size, context.getOffset(),
+                            std::move(arrows));
                     }
                     else
                     {
@@ -2482,8 +2492,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     {
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;
-        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset,
-                        &source](auto&& state) mutable -> bool {
+        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) mutable -> bool {
             bool proceed = true;
             auto exit = llvm::make_scope_exit(
                 [stateIndex = stateMachine.index(), &stateMachine, &context, offset, &proceed, &step]() mutable {
@@ -2521,14 +2530,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
                                               reinterpret_cast<const llvm::UTF8*>(end), &result, llvm::strictConversion)
                     != llvm::conversionOK)
                 {
-                    if (*reinterpret_cast<const std::uint8_t*>(iter) >= 0b11111000)
-                    {
-                        step = 1;
-                    }
-                    else
-                    {
-                        step = std::min<std::uint8_t>(llvm::getNumBytesForUTF8(*iter), (source.size() - 1) - offset);
-                    }
+                    step = getNumBytesForUTF8(start, end);
                     context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
                                         {offset});
                     return false;
