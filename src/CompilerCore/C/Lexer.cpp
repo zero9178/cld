@@ -785,7 +785,7 @@ namespace
             const auto startLine = getLineNumber(underlineStart);
             const auto endLine = getLineNumber(underlineEnd);
             std::size_t numSize = 0;
-            std::int64_t delta = 0;
+            std::vector<std::int64_t> deltas;
             std::vector<std::string> lines;
 
             {
@@ -795,6 +795,7 @@ namespace
                 *m_reporter << message << '\n';
 
                 lines.reserve(endLine - startLine + 1);
+                deltas.reserve(lines.size());
                 std::string line;
                 std::vector<std::uint64_t> queuedDeletes;
                 std::vector<std::reference_wrapper<std::uint64_t>> toBeChanged;
@@ -815,6 +816,7 @@ namespace
                     const auto sourceEnd = stringView.data() + stringView.size();
                     std::vector<llvm::UTF32> utf32;
                     utf32.reserve(stringView.size());
+                    deltas.emplace_back();
                     while (sourceStart != sourceEnd)
                     {
                         llvm::ConversionResult result;
@@ -836,7 +838,7 @@ namespace
                                     auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
                                     while (changingOffset != toBeChanged.end())
                                     {
-                                        *changingOffset += delta;
+                                        *changingOffset += deltas.back();
                                         changingOffset = toBeChanged.erase(changingOffset);
                                         changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
                                     }
@@ -850,9 +852,9 @@ namespace
                                         // Can't delete arrows yet because we got reference to the elements held in
                                         // toBeChanged. Therefore we'll store what the old values of those will be
                                         // and delete them then
-                                        queuedDeletes.push_back(currentOldOffset + 3 + delta);
+                                        queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
                                     }
-                                    delta += 3 - step;
+                                    deltas.back() += 3 - step;
                                     utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
                                 }
                             }
@@ -877,16 +879,16 @@ namespace
                                     auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
                                     while (changingOffset != toBeChanged.end())
                                     {
-                                        *changingOffset += delta;
+                                        *changingOffset += deltas.back();
                                         changingOffset = toBeChanged.erase(changingOffset);
                                         changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
                                     }
                                 }
                                 if (step == 4)
                                 {
-                                    queuedDeletes.push_back(currentOldOffset + 3 + delta);
+                                    queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
                                 }
-                                delta += 3 - step;
+                                deltas.back() += 3 - step;
                                 sourceStart += step;
                             }
                         }
@@ -895,7 +897,7 @@ namespace
                     auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), oldEndOffset);
                     while (changingOffset != toBeChanged.end())
                     {
-                        *changingOffset += delta;
+                        *changingOffset += deltas.back();
                         changingOffset = toBeChanged.erase(changingOffset);
                         changingOffset = std::find(changingOffset, toBeChanged.end(), oldEndOffset);
                     }
@@ -935,7 +937,7 @@ namespace
                 for (auto i = startLine; i <= endLine; i++)
                 {
                     const auto begin = getLineStartOffset(i);
-                    const auto end = getLineEndOffset(i) - 1 + delta;
+                    const auto end = getLineEndOffset(i) - 1 + deltas[i - startLine];
                     // For every arrow, transform the byte offset into a character width offset, then check if the byte
                     // offset points to one of the bytes of a code point and make it point at the full width of it
                     std::vector<std::vector<std::uint64_t>> replacements;
@@ -2133,9 +2135,17 @@ namespace
         if (c == 'u' || c == 'U')
         {
             // If Universal character, it's in or starting an identifier, not in a character or string literal
-            if (prevState && std::holds_alternative<Text>(*prevState))
+            if (prevState)
             {
-                return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
+                if (std::holds_alternative<Text>(*prevState))
+                {
+                    return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
+                }
+                else
+                {
+                    // TODO: We have a previous state that currently thinks that it could still continue if finding
+                    // a newline after the backslash. This did not happen and now we need to figure out how to proceed.
+                }
             }
             return {UniversalCharacter{c == 'U'}, true};
         }
@@ -2205,7 +2215,7 @@ namespace
 
     std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Context& context)
     {
-        if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
+        if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') && c != '\\')
         {
             auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
             assert(result != context.transitions.end());
@@ -2216,6 +2226,10 @@ namespace
                                result->offset - 1, result->offset - 1,
                                context.getOffset() - codePointToUtf8ByteCount(c));
             return {Start{}, false};
+        }
+        else if (c == '\\')
+        {
+            return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
 
         characters.push_back(static_cast<char>(c));

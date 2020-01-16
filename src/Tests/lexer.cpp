@@ -208,6 +208,25 @@ TEST_CASE("Lexing backslashes", "[lexer]")
                                    Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
                                        && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
             }
+            std::string buffer;
+            llvm::raw_string_ostream ss(buffer);
+            result = OpenCL::Lexer::tokenize("\x01\\u\\\n00B5", OpenCL::LanguageOptions::native(), false, &ss);
+            ss.flush();
+            CHECK_THAT(buffer, Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000001")));
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
+            CHECK(result.data()[0].getRepresentation() == "\\u\\\n00B5");
+            buffer.clear();
+            result = OpenCL::Lexer::tokenize("\\u\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
+            ss.flush();
+            CHECK_THAT(buffer, Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
+            CHECK(result.data()[0].getRepresentation() == "\\u\\u00B5");
         }
         SECTION("Keywords")
         {
@@ -1106,6 +1125,9 @@ namespace
 
 TEST_CASE("Lexing invalid characters", "[lexer]")
 {
+    LEXER_OUTPUTS_WITH(toS({0x1, 0x1, 0x1, 0x1, '\n', 0}),
+                       Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000001"))
+                           && Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
     LEXER_OUTPUTS_WITH(toS({'\n', '*', 0x9b}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xde, '\n'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xa, 0x0}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
@@ -1147,12 +1169,6 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
     LEXER_OUTPUTS_WITH("\xaez\xd2\x89",
                        Catch::Contains(INVALID_UTF8_SEQUENCE) && Catch::Contains(UNEXPECTED_CHARACTER.args("҉")));
     LEXER_OUTPUTS_WITH("\xaez\xf0\x9e\xbb\xaf", Catch::Contains(INVALID_UTF8_SEQUENCE));
-    LEXER_OUTPUTS_WITH("\xaa\xaa\n\x00", Catch::Contains(INVALID_UTF8_SEQUENCE));
 }
 
-TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
-{
-    OpenCL::Lexer::tokenize("\x01\xa0\xe4[\xc9"
-                            "1111111111\x05\x05\x05\x05\x05\x05\x05\x05\x05"
-                            "09`\x00\x00");
-}
+TEST_CASE("Lexing fuzzer discoveries", "[lexer]") {}
