@@ -218,15 +218,6 @@ TEST_CASE("Lexing backslashes", "[lexer]")
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
             CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
             CHECK(result.data()[0].getRepresentation() == "\\u\\\n00B5");
-            buffer.clear();
-            result = OpenCL::Lexer::tokenize("\\u\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
-            ss.flush();
-            CHECK_THAT(buffer, Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
-            REQUIRE(result.data().size() == 1);
-            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
-            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
-            CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
-            CHECK(result.data()[0].getRepresentation() == "\\u\\u00B5");
         }
         SECTION("Keywords")
         {
@@ -271,6 +262,15 @@ TEST_CASE("Lexing backslashes", "[lexer]")
             CHECK(result.data()[1].getOffset() == 3);
             CHECK(result.data()[0].getRepresentation() == ".");
             CHECK(result.data()[1].getRepresentation() == ".");
+        }
+        SECTION("Character literals")
+        {
+            auto result = OpenCL::Lexer::tokenize("L\\\n'5'");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
+            CHECK(result.data()[0].getOffset() == 0);
+            CHECK(result.data()[0].getRepresentation() == "L\\\n'5'");
+            LEXER_OUTPUTS_WITH("L\\\n'\\90'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
         }
     }
     SECTION("Whitespace after backslash")
@@ -619,7 +619,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         REQUIRE(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<int32_t>(result.data()[0].getValue()));
         CHECK(std::get<int32_t>(result.data()[0].getValue()) == 56);
-        LEXER_OUTPUTS_WITH("08z1", Catch::Contains(INVALID_OCTAL_CHARACTER.args("8")));
+        LEXER_OUTPUTS_WITH("08z1", Catch::Contains(INVALID_OCTAL_CHARACTER.args("8"))
+                                       && Catch::Contains(INVALID_LITERAL_SUFFIX.args("z1")));
     }
     SECTION("Hex")
     {
@@ -1060,6 +1061,59 @@ TEST_CASE("Lexing include directives", "[lexer]")
     }
 }
 
+TEST_CASE("Lexing universal character as suffix", "[lexer]")
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    SECTION("Interrupting universal character")
+    {
+        auto result = OpenCL::Lexer::tokenize("\\u\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
+        CHECK_THAT(buffer, Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
+        CHECK(result.data()[0].getRepresentation() == "\\u00B5");
+    }
+    SECTION("Punctuation")
+    {
+        auto result = OpenCL::Lexer::tokenize("=\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
+        CHECK(buffer.empty());
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Assignment);
+        CHECK(result.data()[0].getRepresentation() == "=");
+        CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[1].getValue()));
+        CHECK(std::get<std::string>(result.data()[1].getValue()) == "µ");
+        CHECK(result.data()[1].getRepresentation() == "\\u00B5");
+    }
+    SECTION("Dots")
+    {
+        auto result = OpenCL::Lexer::tokenize(".\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
+        CHECK(buffer.empty());
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Dot);
+        CHECK(result.data()[0].getRepresentation() == ".");
+        CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[1].getValue()));
+        CHECK(std::get<std::string>(result.data()[1].getValue()) == "µ");
+        CHECK(result.data()[1].getRepresentation() == "\\u00B5");
+
+        buffer.clear();
+        result = OpenCL::Lexer::tokenize("..\\u00B5", OpenCL::LanguageOptions::native(), false, &ss);
+        CHECK(buffer.empty());
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == OpenCL::Lexer::TokenType::Dot);
+        CHECK(result.data()[0].getRepresentation() == ".");
+        CHECK(result.data()[1].getTokenType() == OpenCL::Lexer::TokenType::Dot);
+        CHECK(result.data()[1].getRepresentation() == ".");
+        CHECK(result.data()[2].getTokenType() == OpenCL::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[2].getValue()));
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "µ");
+        CHECK(result.data()[2].getRepresentation() == "\\u00B5");
+    }
+}
+
 TEST_CASE("Lexing Comments", "[lexer]")
 {
     SECTION("Line comments")
@@ -1171,4 +1225,20 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
     LEXER_OUTPUTS_WITH("\xaez\xf0\x9e\xbb\xaf", Catch::Contains(INVALID_UTF8_SEQUENCE));
 }
 
-TEST_CASE("Lexing fuzzer discoveries", "[lexer]") {}
+TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
+{
+    OpenCL::Lexer::tokenize(
+        ",&(((((((((((XW_(z((((((((((((((((((\\((((((/AA 910U(4U0U(((                                                                                                      (\n"
+        "((((((((    (((((\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B(((((((((  0U ,       '  /,&/1 (bK  9099.4) A.>0  (******791 4 $ 6 : 449999041)\n"
+        "!V1 (b'(6,6:&/h N)K51(* 44***7. 6 :)  a**((   U0AA\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\" \"\"1\"\"\"\"\"\"\"\"\"A\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"5\"\"\"\"U\"\"\"\"\"\"\"\"\"\"\"\"\"\";Y);XW 0U U ");
+    OpenCL::Lexer::tokenize("har_^c\"6?c0. 0r_^\x0a\x0ar!!0z?!? u\x0a   ");
+    OpenCL::Lexer::tokenize("h\"&u20U^58v\\u .L<bF\".A !< G\x0a"
+                            "30bG\x0a0G\x0a:::!\x0a<0");
+    OpenCL::Lexer::tokenize(toS({
+        0x2b, 0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x56, 0x6e, 0x5b, 0x2e, 0x0,  0x0,  0x2e, 0x27, 0x2e, 0x0,
+        0x0,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x66, 0xa,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x98, 0x5d, 0x5d, 0x5d, 0x5d,
+        0x5d, 0x5d, 0x2a, 0x2b, 0x25, 0x2a, 0x2a, 0x2b, 0x25, 0x25, 0x2a, 0x2a, 0xa,  0x25, 0x2a, 0x59, 0x1b, 0x37,
+        0x37, 0x37, 0x5d, 0x5d, 0x2a, 0x59, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x2a,
+        0x2b, 0x25, 0x2a, 0x6e, 0x3a, 0x3b, 0x5d, 0x5d, 0x2a, 0x2b, 0x25, 0x0,  0x0,  0x34,
+    }));
+}

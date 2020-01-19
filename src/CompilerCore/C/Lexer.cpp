@@ -770,6 +770,182 @@ namespace
             return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
         }
 
+        void transformToPrintSpace(std::vector<std::uint64_t>&& arrows, std::uint64_t startLine, std::uint64_t endLine,
+                                   std::vector<std::int64_t>& deltas, std::vector<std::string>& lines,
+                                   std::uint64_t& underlineStart, std::uint64_t& underlineEnd,
+                                   std::vector<std::vector<std::uint64_t>>& columnsOfArrowsForLine) const
+        {
+            lines.reserve(endLine - startLine + 1);
+            deltas.reserve(lines.size());
+            std::string line;
+            std::vector<uint64_t> queuedDeletes;
+            std::vector<std::reference_wrapper<uint64_t>> toBeChanged;
+            toBeChanged.reserve(2 + arrows.size());
+            toBeChanged.push_back(underlineStart);
+            toBeChanged.push_back(underlineEnd);
+            for (auto& iter : arrows)
+            {
+                toBeChanged.push_back(iter);
+            }
+            for (auto i = startLine; i <= endLine; i++)
+            {
+                const auto start = getLineStartOffset(i);
+                const auto end = getLineEndOffset(i);
+                const auto stringView = m_source.substr(start, end - start - 1);
+
+                auto sourceStart = stringView.data();
+                const auto sourceEnd = stringView.data() + stringView.size();
+                std::vector<llvm::UTF32> utf32;
+                utf32.reserve(stringView.size());
+                deltas.emplace_back();
+                while (sourceStart != sourceEnd)
+                {
+                    llvm::ConversionResult result;
+                    do
+                    {
+                        const uint64_t currentOldOffset = start + sourceStart - stringView.data();
+                        utf32.emplace_back();
+                        llvm::SmallVector<uint64_t, 4> affectedOffsets;
+                        const auto prev = sourceStart;
+                        result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                                           reinterpret_cast<const llvm::UTF8*>(sourceEnd),
+                                                           &utf32.back(), llvm::strictConversion);
+                        if (result == llvm::conversionOK)
+                        {
+                            affectedOffsets.resize(std::distance(prev, sourceStart));
+                            std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
+                            for (auto iter : affectedOffsets)
+                            {
+                                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
+                                while (changingOffset != toBeChanged.end())
+                                {
+                                    *changingOffset += deltas.back();
+                                    changingOffset = toBeChanged.erase(changingOffset);
+                                    changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
+                                }
+                            }
+
+                            if (!llvm::sys::unicode::isPrintable(utf32.back()))
+                            {
+                                const auto step = getNumUTF8ForUTF32(utf32.back());
+                                if (step == 4)
+                                {
+                                    // Can't delete arrows yet because we got reference to the elements held in
+                                    // toBeChanged. Therefore we'll store what the old values of those will be
+                                    // and delete them then
+                                    queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
+                                }
+                                deltas.back() += 3 - step;
+                                utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
+                            }
+                        }
+                        else
+                        {
+                            utf32.pop_back();
+                        }
+                    } while (result == llvm::conversionOK && sourceStart != sourceEnd);
+
+                    if (result != llvm::conversionOK)
+                    {
+                        llvm::SmallVector<uint64_t, 4> affectedOffsets;
+                        const uint64_t currentOldOffset = start + sourceStart - stringView.data();
+                        utf32.push_back(0xFFFD);
+                        if (sourceStart != sourceEnd)
+                        {
+                            const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
+                            affectedOffsets.resize(step);
+                            std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
+                            for (auto iter : affectedOffsets)
+                            {
+                                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
+                                while (changingOffset != toBeChanged.end())
+                                {
+                                    *changingOffset += deltas.back();
+                                    changingOffset = toBeChanged.erase(changingOffset);
+                                    changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
+                                }
+                            }
+                            if (step == 4)
+                            {
+                                queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
+                            }
+                            deltas.back() += 3 - step;
+                            sourceStart += step;
+                        }
+                    }
+                }
+                const uint64_t oldEndOffset = start + sourceStart - stringView.data();
+                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), oldEndOffset);
+                while (changingOffset != toBeChanged.end())
+                {
+                    *changingOffset += deltas.back();
+                    changingOffset = toBeChanged.erase(changingOffset);
+                    changingOffset = std::find(changingOffset, toBeChanged.end(), oldEndOffset);
+                }
+
+                toBeChanged.clear();
+                arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
+                                            [&queuedDeletes](uint64_t arrow) {
+                                                return std::find(queuedDeletes.begin(), queuedDeletes.end(), arrow)
+                                                       != queuedDeletes.end();
+                                            }),
+                             arrows.end());
+
+                line.resize(4 * utf32.size(), '\0');
+                const auto* targetStart = utf32.data();
+                auto lineStart = line.data() + line.size() - 4 * utf32.size();
+                llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart),
+                                         utf32.data() + utf32.size(), reinterpret_cast<llvm::UTF8**>(&lineStart),
+                                         reinterpret_cast<llvm::UTF8*>(line.data() + line.size()),
+                                         llvm::strictConversion);
+                line.resize(line.size() - std::distance(lineStart, line.data() + line.size()));
+                lines.push_back(std::move(line));
+            }
+
+            //            numSize = std::to_string(lineNumber).size();
+            //            const auto remainder = numSize % 4;
+            //            if (remainder)
+            //            {
+            //                numSize += 4 - remainder;
+            //            }
+
+            // Using a vector here for T instead of an associative container doesn't eliminate duplicates but I
+            // have a strong suspicion that cache locality would be faster anyways. Also, it doesn't matter lol
+            if (!arrows.empty())
+            {
+                for (auto i = startLine; i <= endLine; i++)
+                {
+                    const auto begin = getLineStartOffset(i);
+                    const auto end = getLineEndOffset(i) - 1 + deltas[i - startLine];
+                    // For every arrow, transform the byte offset into a character width offset, then check if the byte
+                    // offset points to one of the bytes of a code point and make it point at the full width of it
+                    std::vector<std::vector<uint64_t>> replacements;
+                    uint64_t currentWidth = 0;
+                    for (auto j = begin; j != end;)
+                    {
+                        const uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
+                                                                lines[i - startLine].begin() + (end - begin));
+                        const auto size = columnWidthUTF8Safe({lines[i - startLine].data() + j - begin, step});
+                        std::vector<uint64_t> columns(size);
+                        std::iota(columns.begin(), columns.end(), currentWidth);
+                        replacements.resize(replacements.size() + step, columns);
+                        currentWidth += size;
+                        j += step;
+                    }
+                    for (auto iter : arrows)
+                    {
+                        if (iter < begin || iter >= end - deltas[i - startLine])
+                        {
+                            continue;
+                        }
+                        const auto& vector = replacements[iter - begin];
+                        columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
+                                                                     vector.begin(), vector.end());
+                    }
+                }
+            }
+        }
+
         void report(const std::string& prefix, llvm::raw_ostream::Colors colour, const std::string& message,
                     std::uint64_t location, std::vector<std::uint64_t>&& arrows, std::uint64_t underlineStart,
                     std::uint64_t underlineEnd) const
@@ -784,187 +960,18 @@ namespace
 
             const auto startLine = getLineNumber(underlineStart);
             const auto endLine = getLineNumber(underlineEnd);
-            std::size_t numSize = 0;
             std::vector<std::int64_t> deltas;
             std::vector<std::string> lines;
 
-            {
-                const auto lineNumber = getLineNumber(location);
-                *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
-                llvm::WithColor(*m_reporter, colour) << prefix << ": ";
-                *m_reporter << message << '\n';
+            const auto lineNumber = getLineNumber(location);
+            *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
+            llvm::WithColor(*m_reporter, colour) << prefix << ": ";
+            *m_reporter << message << '\n';
+            std::size_t numSize = 0;
 
-                lines.reserve(endLine - startLine + 1);
-                deltas.reserve(lines.size());
-                std::string line;
-                std::vector<std::uint64_t> queuedDeletes;
-                std::vector<std::reference_wrapper<std::uint64_t>> toBeChanged;
-                toBeChanged.reserve(2 + arrows.size());
-                toBeChanged.push_back(underlineStart);
-                toBeChanged.push_back(underlineEnd);
-                for (auto& iter : arrows)
-                {
-                    toBeChanged.push_back(iter);
-                }
-                for (auto i = startLine; i <= endLine; i++)
-                {
-                    const auto start = getLineStartOffset(i);
-                    const auto end = getLineEndOffset(i);
-                    const auto stringView = m_source.substr(start, end - start - 1);
-
-                    auto sourceStart = stringView.data();
-                    const auto sourceEnd = stringView.data() + stringView.size();
-                    std::vector<llvm::UTF32> utf32;
-                    utf32.reserve(stringView.size());
-                    deltas.emplace_back();
-                    while (sourceStart != sourceEnd)
-                    {
-                        llvm::ConversionResult result;
-                        do
-                        {
-                            const std::uint64_t currentOldOffset = start + sourceStart - stringView.data();
-                            utf32.emplace_back();
-                            llvm::SmallVector<std::uint64_t, 4> affectedOffsets;
-                            const auto prev = sourceStart;
-                            result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                                               reinterpret_cast<const llvm::UTF8*>(sourceEnd),
-                                                               &utf32.back(), llvm::strictConversion);
-                            if (result == llvm::conversionOK)
-                            {
-                                affectedOffsets.resize(std::distance(prev, sourceStart));
-                                std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
-                                for (auto iter : affectedOffsets)
-                                {
-                                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
-                                    while (changingOffset != toBeChanged.end())
-                                    {
-                                        *changingOffset += deltas.back();
-                                        changingOffset = toBeChanged.erase(changingOffset);
-                                        changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
-                                    }
-                                }
-
-                                if (!llvm::sys::unicode::isPrintable(utf32.back()))
-                                {
-                                    const auto step = getNumUTF8ForUTF32(utf32.back());
-                                    if (step == 4)
-                                    {
-                                        // Can't delete arrows yet because we got reference to the elements held in
-                                        // toBeChanged. Therefore we'll store what the old values of those will be
-                                        // and delete them then
-                                        queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
-                                    }
-                                    deltas.back() += 3 - step;
-                                    utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
-                                }
-                            }
-                            else
-                            {
-                                utf32.pop_back();
-                            }
-                        } while (result == llvm::conversionOK && sourceStart != sourceEnd);
-
-                        if (result != llvm::conversionOK)
-                        {
-                            llvm::SmallVector<std::uint64_t, 4> affectedOffsets;
-                            const std::uint64_t currentOldOffset = start + sourceStart - stringView.data();
-                            utf32.push_back(0xFFFD);
-                            if (sourceStart != sourceEnd)
-                            {
-                                const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
-                                affectedOffsets.resize(step);
-                                std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
-                                for (auto iter : affectedOffsets)
-                                {
-                                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
-                                    while (changingOffset != toBeChanged.end())
-                                    {
-                                        *changingOffset += deltas.back();
-                                        changingOffset = toBeChanged.erase(changingOffset);
-                                        changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
-                                    }
-                                }
-                                if (step == 4)
-                                {
-                                    queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
-                                }
-                                deltas.back() += 3 - step;
-                                sourceStart += step;
-                            }
-                        }
-                    }
-                    const std::uint64_t oldEndOffset = start + sourceStart - stringView.data();
-                    auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), oldEndOffset);
-                    while (changingOffset != toBeChanged.end())
-                    {
-                        *changingOffset += deltas.back();
-                        changingOffset = toBeChanged.erase(changingOffset);
-                        changingOffset = std::find(changingOffset, toBeChanged.end(), oldEndOffset);
-                    }
-
-                    toBeChanged.clear();
-                    arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
-                                                [&queuedDeletes](std::uint64_t arrow) {
-                                                    return std::find(queuedDeletes.begin(), queuedDeletes.end(), arrow)
-                                                           != queuedDeletes.end();
-                                                }),
-                                 arrows.end());
-
-                    line.resize(4 * utf32.size(), '\0');
-                    const auto* targetStart = utf32.data();
-                    auto lineStart = line.data() + line.size() - 4 * utf32.size();
-                    llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart),
-                                             utf32.data() + utf32.size(), reinterpret_cast<llvm::UTF8**>(&lineStart),
-                                             reinterpret_cast<llvm::UTF8*>(line.data() + line.size()),
-                                             llvm::strictConversion);
-                    line.resize(line.size() - std::distance(lineStart, line.data() + line.size()));
-                    lines.push_back(std::move(line));
-                }
-
-                numSize = std::to_string(lineNumber).size();
-                const auto remainder = numSize % 4;
-                if (remainder)
-                {
-                    numSize += 4 - remainder;
-                }
-            }
-
-            // Using a vector here for T instead of an associative container doesn't eliminate duplicates but I
-            // have a strong suspicion that cache locality would be faster anyways. Also, it doesn't matter lol
-            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(lines.size());
-            if (!arrows.empty())
-            {
-                for (auto i = startLine; i <= endLine; i++)
-                {
-                    const auto begin = getLineStartOffset(i);
-                    const auto end = getLineEndOffset(i) - 1 + deltas[i - startLine];
-                    // For every arrow, transform the byte offset into a character width offset, then check if the byte
-                    // offset points to one of the bytes of a code point and make it point at the full width of it
-                    std::vector<std::vector<std::uint64_t>> replacements;
-                    std::uint64_t currentWidth = 0;
-                    for (auto j = begin; j != end;)
-                    {
-                        const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
-                                                                     lines[i - startLine].begin() + (end - begin));
-                        const auto size = columnWidthUTF8Safe({lines[i - startLine].data() + j - begin, step});
-                        std::vector<std::uint64_t> columns(size);
-                        std::iota(columns.begin(), columns.end(), currentWidth);
-                        replacements.resize(replacements.size() + step, columns);
-                        currentWidth += size;
-                        j += step;
-                    }
-                    for (auto iter : arrows)
-                    {
-                        if (iter < begin || iter >= end)
-                        {
-                            continue;
-                        }
-                        const auto& vector = replacements[iter - begin];
-                        columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
-                                                                     vector.begin(), vector.end());
-                    }
-                }
-            }
+            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine;
+            transformToPrintSpace(std::move(arrows), startLine, endLine, deltas, lines, underlineStart, underlineEnd,
+                                  columnsOfArrowsForLine);
 
             for (auto i = startLine; i <= endLine; i++)
             {
@@ -1062,30 +1069,11 @@ namespace
             m_reporter->flush();
         }
 
-    public:
-        std::uint64_t tokenStartOffset;
-        struct Transition
-        {
-            std::uint64_t offset;
-            std::uint64_t indexOfNewState;
-        };
-
-    private:
-        struct IndexExtractor
-        {
-            using argument_type = Transition;
-
-            std::uint64_t operator()(const Transition& transition)
-            {
-                return transition.indexOfNewState;
-            }
-        };
-
         friend OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, OpenCL::LanguageOptions languageOptions,
                                                             bool inPreprocessor, llvm::raw_ostream* reporter);
 
     public:
-        llvm::SparseSet<Transition, IndexExtractor> transitions;
+        std::uint64_t tokenStartOffset;
 
         Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
                 OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
@@ -1096,7 +1084,6 @@ namespace
               m_offset(offset),
               m_lineStarts(std::move(lineStarts))
         {
-            transitions.setUniverse(std::variant_size_v<StateMachine>);
         }
 
         void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
@@ -1136,6 +1123,14 @@ namespace
         [[nodiscard]] std::uint64_t getOffset() const
         {
             return m_offset;
+        }
+
+        template <class F>
+        void withOffset(std::uint64_t offset, F&& f)
+        {
+            auto exit = llvm::make_scope_exit([offset = m_offset, this]() { m_offset = offset; });
+            m_offset = offset;
+            std::forward<F>(f)();
         }
 
         [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
@@ -1290,7 +1285,7 @@ namespace
         bool errorOccured = false;
         for (const auto* iter = characters.data(); iter != end;)
         {
-            auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
+            auto offset = context.mapStream(context.tokenStartOffset + (wide ? 2 : 1)) + (iter - characters.data());
             if (*iter == '\n')
             {
                 context.reportError(OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
@@ -1341,7 +1336,7 @@ namespace
                     auto hexEnd = std::find_if(
                         hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
                         [](char c) {
-                            return !(c >= '0' || c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+                            return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
                         });
                     if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
                     {
@@ -1404,10 +1399,9 @@ namespace
                     // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                     // Also since there must be at least one character after \, lastOctal is definitely not end
                     // here.
-                    auto start = offset - 1;
                     context.reportError(
-                        OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), start,
-                        {start, start + 1});
+                        OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), offset,
+                        {offset, offset + 1});
                     errorOccured = true;
                     continue;
                 }
@@ -1518,6 +1512,7 @@ namespace
         // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
         // then continue our search
         constexpr unsigned toLower = 32;
+        bool errorsOccurred = false;
         if (suffixBegin != end && (*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
         {
             isFloat = true;
@@ -1533,27 +1528,28 @@ namespace
                 context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
                                     context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
                                     context.tokenStartOffset, context.getOffset() - 1);
-                return {};
+                errorsOccurred = true;
             }
         }
         else if (isHex && isFloat)
         {
             context.reportError(OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
                                 context.getOffset() - 1, context.tokenStartOffset, context.getOffset() - 1);
-            return {};
+            errorsOccurred = true;
         }
         bool isHexOrOctal = isHex;
         if (!isHex && !isFloat && *begin == '0')
         {
             isHexOrOctal = true;
             auto result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
-            if (result != suffixBegin)
+            while (result != suffixBegin)
             {
+                errorsOccurred = true;
                 context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
                                     context.mapStream(beginLocation + std::distance(begin, result)),
                                     context.tokenStartOffset, context.getOffset() - 1,
                                     {context.mapStream(beginLocation + std::distance(begin, result))});
-                return {};
+                result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
             }
         }
         auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
@@ -1561,6 +1557,10 @@ namespace
         {
             if (suffix.empty())
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 switch (context.getLanguageOptions().getSizeOfInt())
                 {
                     case 2:
@@ -1612,6 +1612,10 @@ namespace
             }
             else if (suffix == "u" || suffix == "U")
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 switch (context.getLanguageOptions().getSizeOfInt())
                 {
                     case 2:
@@ -1630,6 +1634,10 @@ namespace
             }
             else if (suffix == "L" || suffix == "l")
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 if (isHexOrOctal)
                 {
                     if (context.getLanguageOptions().getSizeOfLong() == 4)
@@ -1658,6 +1666,10 @@ namespace
                      && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
                      && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 if (context.getLanguageOptions().getSizeOfLong() == 4)
                 {
                     return parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
@@ -1669,6 +1681,10 @@ namespace
             }
             else if (suffix == "ll" || suffix == "LL")
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 if (isHexOrOctal)
                 {
                     return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
@@ -1682,6 +1698,10 @@ namespace
                      && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
                      && (suffix.find("LL") != std::string_view::npos || suffix.find("ll") != std::string_view::npos))
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 return parseInteger<std::uint64_t>(begin, suffixBegin);
             }
         }
@@ -1691,14 +1711,26 @@ namespace
             if (suffix.empty()
                 || (context.getLanguageOptions().getSizeOfLongDoubleBits() == 64 && (suffix == "l" || suffix == "L")))
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 return llvm::APFloat(llvm::APFloat::IEEEdouble(), input);
             }
             else if (suffix == "f" || suffix == "F")
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 return llvm::APFloat(llvm::APFloat::IEEEsingle(), input);
             }
             else if (suffix == "l" || suffix == "L")
             {
+                if (errorsOccurred)
+                {
+                    return {};
+                }
                 switch (context.getLanguageOptions().getSizeOfLongDoubleBits())
                 {
                     case 80: return llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input);
@@ -1972,7 +2004,7 @@ namespace
             {
                 if (!errorOccured)
                 {
-                    std::vector<std::uint64_t> arrows(wide ? 3 : 2);
+                    std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
                     std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
                     context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
                                         context.tokenStartOffset, std::move(arrows));
@@ -1981,7 +2013,7 @@ namespace
             }
             else if (result.size() > 1)
             {
-                std::vector<std::uint64_t> arrows((wide ? 3 : 2) + characters.size());
+                std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
                 std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
                 context.reportWarning(OpenCL::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
                                       context.tokenStartOffset, std::move(arrows));
@@ -1991,8 +2023,9 @@ namespace
             {
                 if (wide)
                 {
+                    std::uint32_t buffer = result[0];
                     std::int32_t value;
-                    std::memcpy(&value, &result[0], sizeof(std::int32_t));
+                    std::memcpy(&value, &buffer, sizeof(std::int32_t));
                     context.push(TokenType::Literal, value);
                 }
                 else
@@ -2014,17 +2047,6 @@ namespace
     {
         if (c == '"' && (characters.empty() || characters.back() != '\\'))
         {
-            bool followsInclude =
-                context.isInPreprocessor() && context.getResult().size() >= 2
-                && (context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
-                    && context.getResult().back().getTokenType() == TokenType::Identifier
-                    && std::get<std::string>(context.getResult().back().getValue()) == "include");
-            if (followsInclude && !wide)
-            {
-                context.push(TokenType::StringLiteral, characters);
-                return Start{};
-            }
-
             auto [result, errorOccured] =
                 processCharacters(characters, context, wide, OpenCL::ErrorMessages::Lexer::STRING_LITERAL);
             if (!errorOccured)
@@ -2038,8 +2060,9 @@ namespace
                                                                llvm::strictConversion);
                     if (conversion != llvm::conversionOK)
                     {
-                        OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32 conversion this
-                                            // code can't be reached
+                        // Due to error occurred being true at failed utf8 to utf 32 conversion this
+                        // code can't be reached
+                        OPENCL_UNREACHABLE;
                     }
                     else if (wide)
                     {
@@ -2098,6 +2121,10 @@ namespace
         {
             return {CharacterLiteral{true, {}}, true};
         }
+        else if (c == '\\')
+        {
+            return {MaybeUC{std::make_unique<StateMachine>(L{})}, true};
+        }
         else
         {
             return {Text{"L"}, false};
@@ -2130,7 +2157,7 @@ namespace
         return {std::move(*this), true};
     }
 
-    std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context&) noexcept
+    std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context) noexcept
     {
         if (c == 'u' || c == 'U')
         {
@@ -2141,10 +2168,32 @@ namespace
                 {
                     return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
                 }
+                else if (std::holds_alternative<L>(*prevState))
+                {
+                    return {UniversalCharacter{c == 'U', Text{"L"}}, true};
+                }
                 else
                 {
-                    // TODO: We have a previous state that currently thinks that it could still continue if finding
-                    // a newline after the backslash. This did not happen and now we need to figure out how to proceed.
+                    // *prevState is now either a UniversalCharacter (that is invalid), a Dot that might need to push
+                    // one or more TokenTypes::Dot or a Punctuation that 100% needs to push a token or possibly even
+                    // error
+
+                    auto view = context.currentView();
+                    std::size_t result = std::string_view::npos;
+                    do
+                    {
+                        result = view.rfind('\\', result - 1);
+                        assert(result != std::string_view::npos);
+                    } while (result + 1 >= view.size() || view[result + 1] == '\n');
+                    result += context.tokenStartOffset;
+                    context.withOffset(result + 1, [&context, this] {
+                        std::visit([&context](auto& state) { state.advance(' ', context); }, *prevState);
+                    });
+
+                    // We are 100% starting a new Token with the State UniversalCharacter here so we need to set the
+                    // tokenStartOffset manually as we will not be returning back to Start{}. We just find the
+                    // \ that caused us to go into MaybeUC in the first place
+                    context.tokenStartOffset = result;
                 }
             }
             return {UniversalCharacter{c == 'U'}, true};
@@ -2152,8 +2201,6 @@ namespace
         else if (c == '\\')
         {
             // Another backslash. Therefore we do not know yet if this might still turn into a universal character!
-            // Also we are basically using a singly linked list as stack here making it possible to put infinite
-            // backslashes to concat lines
             return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
         else if (prevState)
@@ -2172,12 +2219,14 @@ namespace
         {
             if (error)
             {
-                auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
-                assert(result != context.transitions.end());
-                std::vector<std::uint64_t> arrows(context.getOffset() - result->offset - 1);
-                std::iota(arrows.begin(), arrows.end(), result->offset);
+                // We get here only if all character between the initial \ and the newline have been whitespace
+                auto result = context.currentView().rfind('\\');
+                assert(result != std::string_view::npos);
+                result += context.tokenStartOffset;
+                std::vector<std::uint64_t> arrows(context.getOffset() - result);
+                std::iota(arrows.begin(), arrows.end(), result);
                 context.reportError(OpenCL::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE,
-                                    result->offset - 1, result->offset - 1, context.getOffset() - 1, std::move(arrows));
+                                    result, result, context.getOffset() - 1, std::move(arrows));
             }
             if (prevState)
             {
@@ -2206,10 +2255,15 @@ namespace
         {
             return {std::move(*prevState), false};
         }
-        auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
-        assert(result != context.transitions.end());
-        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset - 1,
-                            result->offset - 1, result->offset, {result->offset - 1});
+        auto view = context.currentView();
+        // We could have landed here because the next character (disregarding whitespace) was a \ itself. Therefore
+        // remove it from the search
+        view.remove_suffix(1);
+        auto result = view.rfind('\\');
+        assert(result != std::string_view::npos);
+        result += context.tokenStartOffset;
+        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
+                            {result});
         return {Start{}, false};
     }
 
@@ -2217,14 +2271,19 @@ namespace
     {
         if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') && c != '\\')
         {
-            auto result = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
-            assert(result != context.transitions.end());
-            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result->offset - 1,
-                                result->offset - 1, result->offset, {result->offset - 1});
+            auto view = context.currentView();
+            std::size_t result = std::string_view::npos;
+            do
+            {
+                result = view.rfind('\\', result - 1);
+                assert(result != std::string_view::npos);
+            } while (result + 1 >= view.size() || view[result + 1] == '\n');
+            result += context.tokenStartOffset;
+            context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
+                                {result});
             context.reportNote(OpenCL::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(
                                    (big ? 8 : 4) - characters.size()),
-                               result->offset - 1, result->offset - 1,
-                               context.getOffset() - codePointToUtf8ByteCount(c));
+                               result, result, context.getOffset() - codePointToUtf8ByteCount(c));
             return {Start{}, false};
         }
         else if (c == '\\')
@@ -2237,10 +2296,16 @@ namespace
         {
             return {std::move(*this), true};
         }
-        auto ucStart = context.transitions.find({0, OpenCL::getIndex<MaybeUC>(StateMachine{})});
-        assert(ucStart != context.transitions.end());
-        auto result = universalCharacterToValue({characters.data(), characters.size()}, ucStart->offset - 1,
-                                                context.getOffset(), context);
+        auto view = context.currentView();
+        std::size_t ucStart = std::string_view::npos;
+        do
+        {
+            ucStart = view.rfind('\\', ucStart - 1);
+            assert(ucStart != std::string_view::npos);
+        } while (ucStart + 1 >= view.size() || view[ucStart + 1] == '\n');
+        ucStart += context.tokenStartOffset;
+        auto result =
+            universalCharacterToValue({characters.data(), characters.size()}, ucStart, context.getOffset(), context);
         if (!result)
         {
             return {Start{}, true};
@@ -2248,11 +2313,11 @@ namespace
         if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(*result)
             || !(suspText || !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(*result)))
         {
-            std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart->offset - 1));
-            std::iota(arrows.begin(), arrows.end(), ucStart->offset - 1);
+            std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart));
+            std::iota(arrows.begin(), arrows.end(), ucStart);
             context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
                                     (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
-                                ucStart->offset - 1, ucStart->offset - 1, context.getOffset(), std::move(arrows));
+                                ucStart, ucStart, context.getOffset(), std::move(arrows));
             return {Start{}, true};
         }
         auto newText = suspText ? std::move(*suspText) : Text{};
@@ -2296,7 +2361,7 @@ namespace
     {
         if (c == '\\')
         {
-            return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
+            return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
         }
         if (c == '.')
         {
@@ -2530,10 +2595,7 @@ namespace
 OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
                                              llvm::raw_ostream* reporter)
 {
-    if (source.empty() || source.back() != ' ')
-    {
-        source += '\n';
-    }
+    source += '\n';
     source.erase(std::remove(source.begin(), source.end(), '\r'), source.end());
 
     StateMachine stateMachine;
@@ -2555,31 +2617,6 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;
         auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) mutable -> bool {
-            bool proceed = true;
-            auto exit = llvm::make_scope_exit(
-                [stateIndex = stateMachine.index(), &stateMachine, &context, offset, &proceed, &step]() mutable {
-                    if (proceed)
-                    {
-                        offset += step;
-                    }
-                    std::vector v(context.transitions.begin(), context.transitions.end());
-                    if (stateIndex != stateMachine.index())
-                    {
-                        if (auto result = context.transitions.find({0, stateMachine.index()});
-                            result != context.transitions.end())
-                        {
-                            result++;
-                            while (result != context.transitions.end())
-                            {
-                                result = context.transitions.erase(result);
-                            }
-                        }
-                        if (stateMachine.index() != OpenCL::getIndex<Start>(StateMachine{}))
-                        {
-                            context.transitions.insert({offset, stateMachine.index()});
-                        }
-                    }
-                });
             using T = std::decay_t<decltype(state)>;
             constexpr bool needsCodepoint =
                 std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
@@ -2607,8 +2644,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             offset = prevOffset + step;
             if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
             {
-                proceed = state.advance(c, context);
-                return !proceed;
+                return !state.advance(c, context);
             }
             else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
             {
@@ -2629,6 +2665,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
             }
             else
             {
+                bool proceed;
                 auto&& [lhs, rhs] = state.advance(c, context);
                 if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
                 {
