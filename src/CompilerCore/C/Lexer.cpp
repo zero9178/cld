@@ -18,6 +18,7 @@
 #include <numeric>
 #include <optional>
 #include <string_view>
+#include <unordered_map>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
