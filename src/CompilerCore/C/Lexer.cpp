@@ -748,6 +748,14 @@ namespace
         std::string_view m_source;
         std::uint64_t& m_offset;
         std::vector<std::uint64_t> m_lineStarts;
+        struct ThingsToCache
+        {
+            std::vector<std::int64_t> mappingAdded;
+            std::string line;
+            std::int64_t delta;
+            std::vector<std::uint64_t> deletedArrows;
+        };
+        mutable std::unordered_map<std::uint64_t, ThingsToCache> m_lineCache;
 
         std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
         {
@@ -770,70 +778,41 @@ namespace
             return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
         }
 
-        void transformToPrintSpace(std::vector<std::uint64_t>&& arrows, std::uint64_t startLine, std::uint64_t endLine,
-                                   std::vector<std::int64_t>& deltas, std::vector<std::string>& lines,
-                                   std::uint64_t& underlineStart, std::uint64_t& underlineEnd,
-                                   std::vector<std::vector<std::uint64_t>>& columnsOfArrowsForLine) const
+        std::string toSafeUTF8(std::string_view inputLine, std::uint64_t lineStart, std::vector<std::int64_t>& deltas,
+                               std::vector<std::uint64_t>& arrows, std::vector<std::int64_t>& mapping) const
         {
-            lines.reserve(endLine - startLine + 1);
-            deltas.reserve(lines.size());
+            std::vector<std::uint64_t> wereDeleted;
             std::string line;
-            std::vector<uint64_t> queuedDeletes;
-            std::vector<std::reference_wrapper<uint64_t>> toBeChanged;
-            toBeChanged.reserve(2 + arrows.size());
-            toBeChanged.push_back(underlineStart);
-            toBeChanged.push_back(underlineEnd);
-            for (auto& iter : arrows)
+            mapping.resize(lineStart);
+            if (auto cacheEntry = m_lineCache.find(lineStart); cacheEntry == m_lineCache.end())
             {
-                toBeChanged.push_back(iter);
-            }
-            for (auto i = startLine; i <= endLine; i++)
-            {
-                const auto start = getLineStartOffset(i);
-                const auto end = getLineEndOffset(i);
-                const auto stringView = m_source.substr(start, end - start - 1);
-
-                auto sourceStart = stringView.data();
-                const auto sourceEnd = stringView.data() + stringView.size();
-                std::vector<llvm::UTF32> utf32;
-                utf32.reserve(stringView.size());
                 deltas.emplace_back();
+                auto prevSize = mapping.size();
+                auto sourceStart = inputLine.data();
+                const auto sourceEnd = inputLine.data() + inputLine.size();
+                std::vector<llvm::UTF32> utf32;
+                utf32.reserve(inputLine.size());
                 while (sourceStart != sourceEnd)
                 {
                     llvm::ConversionResult result;
                     do
                     {
-                        const uint64_t currentOldOffset = start + sourceStart - stringView.data();
+                        const std::uint64_t currentOldOffset = lineStart + sourceStart - inputLine.data();
                         utf32.emplace_back();
-                        llvm::SmallVector<uint64_t, 4> affectedOffsets;
                         const auto prev = sourceStart;
                         result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
                                                            reinterpret_cast<const llvm::UTF8*>(sourceEnd),
                                                            &utf32.back(), llvm::strictConversion);
                         if (result == llvm::conversionOK)
                         {
-                            affectedOffsets.resize(std::distance(prev, sourceStart));
-                            std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
-                            for (auto iter : affectedOffsets)
-                            {
-                                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
-                                while (changingOffset != toBeChanged.end())
-                                {
-                                    *changingOffset += deltas.back();
-                                    changingOffset = toBeChanged.erase(changingOffset);
-                                    changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
-                                }
-                            }
+                            mapping.resize(currentOldOffset + std::distance(prev, sourceStart), deltas.back());
 
                             if (!llvm::sys::unicode::isPrintable(utf32.back()))
                             {
                                 const auto step = getNumUTF8ForUTF32(utf32.back());
                                 if (step == 4)
                                 {
-                                    // Can't delete arrows yet because we got reference to the elements held in
-                                    // toBeChanged. Therefore we'll store what the old values of those will be
-                                    // and delete them then
-                                    queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
+                                    wereDeleted.push_back(currentOldOffset + 3);
                                 }
                                 deltas.back() += 3 - step;
                                 utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
@@ -847,70 +826,81 @@ namespace
 
                     if (result != llvm::conversionOK)
                     {
-                        llvm::SmallVector<uint64_t, 4> affectedOffsets;
-                        const uint64_t currentOldOffset = start + sourceStart - stringView.data();
+                        const uint64_t currentOldOffset = lineStart + sourceStart - inputLine.data();
                         utf32.push_back(0xFFFD);
                         if (sourceStart != sourceEnd)
                         {
                             const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
-                            affectedOffsets.resize(step);
-                            std::iota(affectedOffsets.begin(), affectedOffsets.end(), currentOldOffset);
-                            for (auto iter : affectedOffsets)
-                            {
-                                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), iter);
-                                while (changingOffset != toBeChanged.end())
-                                {
-                                    *changingOffset += deltas.back();
-                                    changingOffset = toBeChanged.erase(changingOffset);
-                                    changingOffset = std::find(changingOffset, toBeChanged.end(), iter);
-                                }
-                            }
+                            mapping.resize(currentOldOffset + step, deltas.back());
                             if (step == 4)
                             {
-                                queuedDeletes.push_back(currentOldOffset + 3 + deltas.back());
+                                wereDeleted.push_back(currentOldOffset + 3);
                             }
                             deltas.back() += 3 - step;
                             sourceStart += step;
                         }
                     }
                 }
-                const uint64_t oldEndOffset = start + sourceStart - stringView.data();
-                auto changingOffset = std::find(toBeChanged.begin(), toBeChanged.end(), oldEndOffset);
-                while (changingOffset != toBeChanged.end())
-                {
-                    *changingOffset += deltas.back();
-                    changingOffset = toBeChanged.erase(changingOffset);
-                    changingOffset = std::find(changingOffset, toBeChanged.end(), oldEndOffset);
-                }
 
-                toBeChanged.clear();
-                arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
-                                            [&queuedDeletes](uint64_t arrow) {
-                                                return std::find(queuedDeletes.begin(), queuedDeletes.end(), arrow)
-                                                       != queuedDeletes.end();
-                                            }),
-                             arrows.end());
-
+                const std::uint64_t oldEndOffset = lineStart + sourceStart - inputLine.data();
+                mapping.resize(oldEndOffset + 1, deltas.back());
                 line.resize(4 * utf32.size(), '\0');
                 const auto* targetStart = utf32.data();
-                auto lineStart = line.data() + line.size() - 4 * utf32.size();
+                auto lineMemStart = line.data() + line.size() - 4 * utf32.size();
                 llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart),
-                                         utf32.data() + utf32.size(), reinterpret_cast<llvm::UTF8**>(&lineStart),
+                                         utf32.data() + utf32.size(), reinterpret_cast<llvm::UTF8**>(&lineMemStart),
                                          reinterpret_cast<llvm::UTF8*>(line.data() + line.size()),
                                          llvm::strictConversion);
-                line.resize(line.size() - std::distance(lineStart, line.data() + line.size()));
-                lines.push_back(std::move(line));
+                line.resize(line.size() - std::distance(lineMemStart, line.data() + line.size()));
+
+                m_lineCache.insert(
+                    {lineStart,
+                     {std::vector(mapping.begin() + prevSize, mapping.end()), line, deltas.back(), wereDeleted}});
+            }
+            else
+            {
+                line = cacheEntry->second.line;
+                deltas.push_back(cacheEntry->second.delta);
+                mapping.insert(mapping.end(), cacheEntry->second.mappingAdded.begin(),
+                               cacheEntry->second.mappingAdded.end());
+                wereDeleted = cacheEntry->second.deletedArrows;
             }
 
-            //            numSize = std::to_string(lineNumber).size();
-            //            const auto remainder = numSize % 4;
-            //            if (remainder)
-            //            {
-            //                numSize += 4 - remainder;
-            //            }
+            arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
+                                        [&wereDeleted](std::uint64_t offset) {
+                                            return std::any_of(
+                                                wereDeleted.begin(), wereDeleted.end(),
+                                                [offset](std::uint64_t forbidden) { return forbidden == offset; });
+                                        }),
+                         arrows.end());
+            return line;
+        }
 
-            // Using a vector here for T instead of an associative container doesn't eliminate duplicates but I
-            // have a strong suspicion that cache locality would be faster anyways. Also, it doesn't matter lol
+        std::vector<std::vector<std::uint64_t>>
+            transformToPrintSpace(std::vector<std::uint64_t>&& arrows, std::uint64_t startLine, std::uint64_t endLine,
+                                  std::vector<std::int64_t>& deltas, std::vector<std::string>& lines,
+                                  std::uint64_t& underlineStart, std::uint64_t& underlineEnd) const
+        {
+            std::sort(arrows.begin(), arrows.end());
+            arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
+
+            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(endLine - startLine + 1);
+            lines.reserve(columnsOfArrowsForLine.size());
+            deltas.reserve(columnsOfArrowsForLine.size());
+
+            std::vector<std::int64_t> mapping;
+            for (auto i = startLine; i <= endLine; i++)
+            {
+                const auto start = getLineStartOffset(i);
+                const auto end = getLineEndOffset(i);
+                const auto stringView = m_source.substr(start, end - start - 1);
+
+                lines.push_back(toSafeUTF8(stringView, start, deltas, arrows, mapping));
+            }
+
+            underlineStart += mapping[underlineStart];
+            underlineEnd += mapping[underlineEnd];
+
             if (!arrows.empty())
             {
                 for (auto i = startLine; i <= endLine; i++)
@@ -920,30 +910,33 @@ namespace
                     // For every arrow, transform the byte offset into a character width offset, then check if the byte
                     // offset points to one of the bytes of a code point and make it point at the full width of it
                     std::vector<std::vector<uint64_t>> replacements;
-                    uint64_t currentWidth = 0;
+                    std::uint64_t currentWidth = 0;
                     for (auto j = begin; j != end;)
                     {
-                        const uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
-                                                                lines[i - startLine].begin() + (end - begin));
+                        const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
+                                                                     lines[i - startLine].begin() + (end - begin));
                         const auto size = columnWidthUTF8Safe({lines[i - startLine].data() + j - begin, step});
-                        std::vector<uint64_t> columns(size);
+                        std::vector<std::uint64_t> columns(size);
                         std::iota(columns.begin(), columns.end(), currentWidth);
                         replacements.resize(replacements.size() + step, columns);
                         currentWidth += size;
                         j += step;
                     }
+
                     for (auto iter : arrows)
                     {
                         if (iter < begin || iter >= end - deltas[i - startLine])
                         {
                             continue;
                         }
-                        const auto& vector = replacements[iter - begin];
+                        assert(iter + mapping[iter] - begin < replacements.size());
+                        const auto& vector = replacements[iter + mapping[iter] - begin];
                         columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
                                                                      vector.begin(), vector.end());
                     }
                 }
             }
+            return columnsOfArrowsForLine;
         }
 
         void report(const std::string& prefix, llvm::raw_ostream::Colors colour, const std::string& message,
@@ -955,8 +948,6 @@ namespace
             {
                 return;
             }
-            std::sort(arrows.begin(), arrows.end());
-            arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
 
             const auto startLine = getLineNumber(underlineStart);
             const auto endLine = getLineNumber(underlineEnd);
@@ -969,9 +960,14 @@ namespace
             *m_reporter << message << '\n';
             std::size_t numSize = 0;
 
-            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine;
-            transformToPrintSpace(std::move(arrows), startLine, endLine, deltas, lines, underlineStart, underlineEnd,
-                                  columnsOfArrowsForLine);
+            std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine = transformToPrintSpace(
+                std::move(arrows), startLine, endLine, deltas, lines, underlineStart, underlineEnd);
+            numSize = std::to_string(endLine).size();
+            const auto remainder = numSize % 4;
+            if (remainder)
+            {
+                numSize += 4 - remainder;
+            }
 
             for (auto i = startLine; i <= endLine; i++)
             {
