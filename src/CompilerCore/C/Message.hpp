@@ -118,9 +118,9 @@ namespace OpenCL
         Modifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator anEnd,
                  Action action = Underline, std::string actionArgument = {});
 
-        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getBegin() const;
+        [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator begin() const;
 
-        [[nodiscard]] const std::vector<OpenCL::Lexer::Token>::const_iterator& getAnEnd() const;
+        [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator end() const;
 
         [[nodiscard]] Action getAction() const;
 
