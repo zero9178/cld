@@ -5,12 +5,12 @@
 
 namespace OpenCL
 {
-    class SourceObject;
+class SourceObject;
 
-    namespace PP
-    {
-        OpenCL::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
-    }
+namespace PP
+{
+OpenCL::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+}
 } // namespace OpenCL
 
 #endif // OPENCLPARSER_PREPROCESSOR_HPP

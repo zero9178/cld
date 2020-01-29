@@ -76,9 +76,9 @@ int main()
 }
 
 #ifdef __clang__
-#if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0
+    #if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0
 
-#include <windows.h>
+        #include <windows.h>
 
 extern "C" int lprofGetHostName(char* Name, int Len)
 {
@@ -92,5 +92,5 @@ extern "C" int lprofGetHostName(char* Name, int Len)
     return 0;
 }
 
-#endif
+    #endif
 #endif

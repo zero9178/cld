@@ -9,63 +9,62 @@
 
 namespace OpenCL
 {
-    namespace detail
+namespace detail
+{
+template <class... Ts>
+struct overload : Ts...
+{
+    using Ts::operator()...;
+};
+template <class... Ts>
+overload(Ts...)->overload<Ts...>;
+
+template <typename G>
+struct Y
+{
+    template <typename... X>
+    decltype(auto) operator()(X&&... x) const&
     {
-        template <class... Ts>
-        struct overload : Ts...
-        {
-            using Ts::operator()...;
-        };
-        template <class... Ts>
-        overload(Ts...)->overload<Ts...>;
-
-        template <typename G>
-        struct Y
-        {
-            template <typename... X>
-            decltype(auto) operator()(X&&... x) const&
-            {
-                return g(*this, std::forward<X>(x)...);
-            }
-
-            G g;
-        };
-
-        template <typename G>
-        Y(G)->Y<G>;
-    } // namespace detail
-
-    template <typename Variant, typename... Matchers>
-    auto match(Variant&& variant, Matchers&&... matchers)
-    {
-        return std::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
+        return g(*this, std::forward<X>(x)...);
     }
 
-    template <typename Variant, typename... Matchers>
-    auto matchWithSelf(Variant&& variant, Matchers&&... matchers)
-    {
-        return std::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
-                          std::forward<Variant>(variant));
-    }
+    G g;
+};
 
-    template <typename T, typename... Ts>
-    constexpr size_t getIndex(std::variant<Ts...> const&)
-    {
-        size_t r = 0;
-        auto test = [&](bool b) {
-            if (!b)
-                ++r;
-            return b;
-        };
-        (test(std::is_same_v<T, Ts>) || ...);
-        return r;
-    }
+template <typename G>
+Y(G)->Y<G>;
+} // namespace detail
 
-    inline std::string stringOfSameWidth(std::string_view original, char characterToReplace)
-    {
-        auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
-        return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
-    }
+template <typename Variant, typename... Matchers>
+auto match(Variant&& variant, Matchers&&... matchers)
+{
+    return std::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
+}
+
+template <typename Variant, typename... Matchers>
+auto matchWithSelf(Variant&& variant, Matchers&&... matchers)
+{
+    return std::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}}, std::forward<Variant>(variant));
+}
+
+template <typename T, typename... Ts>
+constexpr size_t getIndex(std::variant<Ts...> const&)
+{
+    size_t r = 0;
+    auto test = [&](bool b) {
+        if (!b)
+            ++r;
+        return b;
+    };
+    (test(std::is_same_v<T, Ts>) || ...);
+    return r;
+}
+
+inline std::string stringOfSameWidth(std::string_view original, char characterToReplace)
+{
+    auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
+    return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
+}
 } // namespace OpenCL
 
 #ifdef NDEBUG

@@ -49,11 +49,11 @@ OpenCL::Message OpenCL::Message::warning(std::string message, std::vector<OpenCL
 
 namespace
 {
-    llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
-    {
-        os.write(sv.data(), sv.size());
-        return os;
-    }
+llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
+{
+    os.write(sv.data(), sv.size());
+    return os;
+}
 } // namespace
 
 llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::SourceObject& sourceObject) const

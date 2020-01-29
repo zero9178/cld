@@ -54,31 +54,31 @@ OpenCL::Semantics::TranslationUnit OpenCL::Semantics::SemanticAnalysis::visit(co
 
 namespace
 {
-    template <class T, class InputIterator>
-    bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T& value)
-    {
-        return std::any_of(begin, end, [&value](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
-            auto* t = std::get_if<T>(&declarationSpecifier);
-            if (!t)
-            {
-                return false;
-            }
-            return *t == value;
-        });
-    }
+template <class T, class InputIterator>
+bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T& value)
+{
+    return std::any_of(begin, end, [&value](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+        auto* t = std::get_if<T>(&declarationSpecifier);
+        if (!t)
+        {
+            return false;
+        }
+        return *t == value;
+    });
+}
 
-    template <class T, class InputIterator, class Predicate>
-    bool declarationSpecifierHasIf(InputIterator&& begin, InputIterator&& end, Predicate&& predicate)
-    {
-        return std::any_of(begin, end, [&predicate](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
-            auto* t = std::get_if<T>(&declarationSpecifier);
-            if (!t)
-            {
-                return false;
-            }
-            return predicate(*t);
-        });
-    }
+template <class T, class InputIterator, class Predicate>
+bool declarationSpecifierHasIf(InputIterator&& begin, InputIterator&& end, Predicate&& predicate)
+{
+    return std::any_of(begin, end, [&predicate](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+        auto* t = std::get_if<T>(&declarationSpecifier);
+        if (!t)
+        {
+            return false;
+        }
+        return predicate(*t);
+    });
+}
 } // namespace
 
 std::optional<OpenCL::Semantics::FunctionDefinition>

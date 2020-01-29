@@ -9,7 +9,7 @@
 //#include <sstream>
 //#include <utility>
 //
-//namespace
+// namespace
 //{
 //    template <typename G>
 //    struct Y
@@ -87,7 +87,7 @@
 //    }
 //} // namespace
 //
-//llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sourceType, llvm::Value* source,
+// llvm::Value* OpenCL::Codegen::Context::castTo(const OpenCL::Semantics::Type& sourceType, llvm::Value* source,
 //                                              const OpenCL::Semantics::Type& destinationType,
 //                                              bool explicitConversion)
 //{
@@ -278,7 +278,7 @@
 //        sourceType.get());
 //}
 //
-//llvm::Value* OpenCL::Codegen::Context::toBool(llvm::Value* source)
+// llvm::Value* OpenCL::Codegen::Context::toBool(llvm::Value* source)
 //{
 //    if (source->getType()->isIntegerTy())
 //    {
@@ -300,7 +300,7 @@
 //    return nullptr;
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Expression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Expression& node)
 //{
 //    for (std::size_t i = 0; i < node.getAssignmentExpressions().size(); i++)
 //    {
@@ -316,7 +316,7 @@
 //    return FailureReason("Internal compiler error: Expression must contain atleast one assignment expression");
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionIdentifier& node)
 //{
 //    auto* result = findValue(node.getIdentifier());
 //    if (!result)
@@ -333,7 +333,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 //{
 //    return std::visit(
 //        overload{[this](std::int32_t int32) -> NodeRetType
@@ -377,18 +377,18 @@
 //        node.getValue());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
 //{
 //    return visit(node.getExpression());
 //}
 //
-//OpenCL::Codegen::NodeRetType
-//OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+// OpenCL::Codegen::NodeRetType
+// OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
 //{
 //    return visit(node.getPrimaryExpression());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionSubscript& node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -413,7 +413,7 @@
 //    return std::pair{builder.CreateLoad(plus->first), ptr->getElementType()};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionIncrement& node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -463,7 +463,7 @@
 //    return oldValue;
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDecrement& node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -513,7 +513,7 @@
 //    return oldValue;
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionDot& node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -548,7 +548,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionArrow& node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -589,7 +589,8 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionFunctionCall&
+// node)
 //{
 //    auto result = visit(node.getPostFixExpression());
 //    if (!result)
@@ -655,12 +656,13 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType
-//OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
+// OpenCL::Codegen::NodeRetType
+// OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpressionTypeInitializer& node)
 //{
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpressionAssignment& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpressionAssignment&
+// node)
 //{
 //    auto destination = visit(node.getUnaryFactor());
 //    if (!destination)
@@ -725,13 +727,14 @@
 //    return value;
 //}
 //
-//OpenCL::Codegen::NodeRetType
-//OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+// OpenCL::Codegen::NodeRetType
+// OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
 //{
 //    return visit(node.getPostFixExpression());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator&
+// node)
 //{
 //    auto result = visit(node.getUnaryExpression());
 //    if (!result)
@@ -822,10 +825,10 @@
 //    return result;
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
 //{}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CastExpression& node)
 //{
 //    return std::visit(
 //        overload{[this](const Syntax::UnaryExpression& unaryExpression) -> OpenCL::Codegen::NodeRetType
@@ -862,7 +865,7 @@
 //        node.getVariant());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMultiply(Semantics::Type leftType, llvm::Value* left,
 //                                                                    Semantics::Type rightType, llvm::Value* right)
 //{
 //    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -883,7 +886,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeDivide(Semantics::Type leftType, llvm::Value* left,
 //                                                                  Semantics::Type rightType, llvm::Value* right)
 //{
 //    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -900,12 +903,13 @@
 //    }
 //    else
 //    {
-//        return std::pair{leftPrimitive->isSigned() ? builder.CreateSDiv(left, right) : builder.CreateUDiv(left, right),
+//        return std::pair{leftPrimitive->isSigned() ? builder.CreateSDiv(left, right) : builder.CreateUDiv(left,
+//        right),
 //                         leftType};
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRemainder(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRemainder(Semantics::Type leftType, llvm::Value* left,
 //                                                                     Semantics::Type rightType,
 //                                                                     llvm::Value* right)
 //{
@@ -927,7 +931,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Term& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Term& node)
 //{
 //    auto result = visit(node.getCastExpression());
 //    if (!result)
@@ -948,9 +952,9 @@
 //        {
 //            switch (op)
 //            {
-//            case Syntax::Term::BinaryDotOperator::BinaryMultiply:return makeMultiply(leftType, left, rightType, right);
-//            case Syntax::Term::BinaryDotOperator::BinaryDivide: return makeDivide(leftType, left, rightType, right);
-//            case Syntax::Term::BinaryDotOperator::BinaryRemainder:
+//            case Syntax::Term::BinaryDotOperator::BinaryMultiply:return makeMultiply(leftType, left, rightType,
+//            right); case Syntax::Term::BinaryDotOperator::BinaryDivide: return makeDivide(leftType, left, rightType,
+//            right); case Syntax::Term::BinaryDotOperator::BinaryRemainder:
 //                return makeRemainder(leftType,
 //                                     left,
 //                                     rightType,
@@ -968,7 +972,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeMinus(Semantics::Type leftType, llvm::Value* left,
 //                                                                 Semantics::Type rightType, llvm::Value* right)
 //{
 //    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -1001,7 +1005,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makePlus(Semantics::Type leftType, llvm::Value* left,
 //                                                                Semantics::Type rightType, llvm::Value* right)
 //{
 //    auto* leftPrimitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -1033,7 +1037,7 @@
 //    }
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AdditiveExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AdditiveExpression& node)
 //{
 //    auto result = visit(node.getTerm());
 //    if (!result)
@@ -1062,7 +1066,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Semantics::Type leftType,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeLeftShift(OpenCL::Semantics::Type leftType,
 //                                                                     llvm::Value* left,
 //                                                                     OpenCL::Semantics::Type rightType,
 //                                                                     llvm::Value* right)
@@ -1089,7 +1093,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Semantics::Type leftType,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeRightShift(OpenCL::Semantics::Type leftType,
 //                                                                      llvm::Value* left,
 //                                                                      OpenCL::Semantics::Type rightType,
 //                                                                      llvm::Value* right)
@@ -1116,7 +1120,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ShiftExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ShiftExpression& node)
 //{
 //    auto result = visit(node.getAdditiveExpression());
 //    if (!result)
@@ -1145,7 +1149,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::RelationalExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::RelationalExpression& node)
 //{
 //    auto result = visit(node.getShiftExpression());
 //    if (!result)
@@ -1168,7 +1172,8 @@
 //            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
 //            if (!leftPointer || !rightPointer)
 //            {
-//                return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
+//                return FailureReason("Equality operators only valid for arithmetic as well as pointers to same
+//                types");
 //            }
 //            if (!leftPointer->getElementType().isCompatibleWith(rightPointer->getElementType()))
 //            {
@@ -1247,7 +1252,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EqualityExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::EqualityExpression& node)
 //{
 //    auto result = visit(node.getRelationalExpression());
 //    if (!result)
@@ -1270,7 +1275,8 @@
 //            auto* rightPointer = std::get_if<Semantics::PointerType>(&rightType.get());
 //            if (!leftPointer || !rightPointer)
 //            {
-//                return FailureReason("Equality operators only valid for arithmetic as well as pointers to same types");
+//                return FailureReason("Equality operators only valid for arithmetic as well as pointers to same
+//                types");
 //            }
 //            if (!leftPointer->getElementType().isCompatibleWith(rightPointer->getElementType()))
 //            {
@@ -1308,7 +1314,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitAnd(Semantics::Type leftType, llvm::Value* left,
 //                                                                  Semantics::Type rightType, llvm::Value* right)
 //{
 //    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -1333,7 +1339,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitAndExpression& node)
 //{
 //    auto result = visit(node.getEqualityExpression());
 //    if (!result)
@@ -1360,7 +1366,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Semantics::Type leftType, llvm::Value* left,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitXor(Semantics::Type leftType, llvm::Value* left,
 //                                                                  Semantics::Type rightType, llvm::Value* right)
 //{
 //    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&leftType.get());
@@ -1385,7 +1391,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitXorExpression& node)
 //{
 //    auto result = visit(node.getBitAndExpression());
 //    if (!result)
@@ -1412,7 +1418,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Semantics::Type leftType,
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::makeBitOr(OpenCL::Semantics::Type leftType,
 //                                                                 llvm::Value* left,
 //                                                                 OpenCL::Semantics::Type rightType,
 //                                                                 llvm::Value* right)
@@ -1439,7 +1445,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BitOrExpression& node)
 //{
 //    auto result = visit(node.getBitXorExpression());
 //    if (!result)
@@ -1466,7 +1472,7 @@
 //    return std::pair{left, leftType};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalAndExpression& node)
 //{
 //    auto result = visit(node.getBitOrExpression());
 //    if (!result)
@@ -1513,7 +1519,7 @@
 //    return std::pair{value, type};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LogicalOrExpression& node)
 //{
 //    auto result = visit(node.getAndExpression());
 //    if (!result)
@@ -1560,7 +1566,7 @@
 //    return std::pair{value, type};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ConditionalExpression& node)
 //{
 //    if (node.getOptionalConditionalExpression() && node.getOptionalExpression())
 //    {
@@ -1620,7 +1626,7 @@
 //    }
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ReturnStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ReturnStatement& node)
 //{
 //    auto result = visit(node.getExpression());
 //    if (!result)
@@ -1644,7 +1650,7 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExpressionStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExpressionStatement& node)
 //{
 //    if (node.getOptionalExpression())
 //    {
@@ -1657,7 +1663,7 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::IfStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::IfStatement& node)
 //{
 //    auto booleanE = visit(node.getExpression());
 //    if (!booleanE)
@@ -1710,16 +1716,16 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::SwitchStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::DefaultStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::DefaultStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CaseStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundStatement& node,
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundStatement& node,
 //                                                                     bool pushScope)
 //{
 //    if (pushScope)
@@ -1741,13 +1747,13 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForStatement& node)
 //{}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::InitializerList& node)
 //{}
 //
-//namespace
+// namespace
 //{
 //    template <class T, class InputIterator>
 //    bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T& value)
@@ -1778,7 +1784,7 @@
 //    }
 //} // namespace
 //
-//llvm::Constant* OpenCL::Codegen::Context::createZeroValue(llvm::Type* type)
+// llvm::Constant* OpenCL::Codegen::Context::createZeroValue(llvm::Type* type)
 //{
 //    if (type->isIntegerTy())
 //    {
@@ -1811,7 +1817,7 @@
 //    return nullptr;
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declaration& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Declaration& node)
 //{
 //    const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
 //    std::vector<Semantics::SpecifierQualifierRef> specifierQualifiers;
@@ -1853,7 +1859,8 @@
 //                        {
 //                            return false;
 //                        }
-//                        return std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(specifier->get()
+//                        return
+//                        std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(specifier->get()
 //                                                                                                                .getVariant());
 //                    }))
 //    {
@@ -1984,10 +1991,12 @@
 //                return FailureReason("Variable arrays not allowed in global scope");
 //            }
 //            bool internalLinkage =
-//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
+//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(),
+//                node.getDeclarationSpecifiers().end(),
 //                                        Syntax::StorageClassSpecifier::Extern);
 //            bool externalLinkage =
-//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
+//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(),
+//                node.getDeclarationSpecifiers().end(),
 //                                        Syntax::StorageClassSpecifier::Static);
 //            if (internalLinkage && externalLinkage)
 //            {
@@ -2070,10 +2079,12 @@
 //        {
 //            const auto& functionRP = std::get<Semantics::FunctionType>(type->get());
 //            bool internalLinkage =
-//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
+//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(),
+//                node.getDeclarationSpecifiers().end(),
 //                                        Syntax::StorageClassSpecifier::Extern);
 //            bool externalLinkage =
-//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
+//                declarationSpecifierHas(node.getDeclarationSpecifiers().begin(),
+//                node.getDeclarationSpecifiers().end(),
 //                                        Syntax::StorageClassSpecifier::Static);
 //            if (internalLinkage && externalLinkage)
 //            {
@@ -2082,7 +2093,8 @@
 //            auto* ft = visit(*type);
 //            if (!llvm::isa<llvm::FunctionType>(ft))
 //            {
-//                return FailureReason("Internal Compiler error: Non function type returned from visit to function type");
+//                return FailureReason("Internal Compiler error: Non function type returned from visit to function
+//                type");
 //            }
 //            auto* func = llvm::Function::Create(llvm::cast<llvm::FunctionType>(ft),
 //                                                internalLinkage ? llvm::Function::InternalLinkage :
@@ -2146,12 +2158,12 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason>
-//OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
+// std::optional<OpenCL::FailureReason>
+// OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ForDeclarationStatement& node)
 //{
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::HeadWhileStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::HeadWhileStatement& node)
 //{
 //    auto* function = builder.GetInsertBlock()->getParent();
 //
@@ -2193,16 +2205,16 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FootWhileStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FootWhileStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BreakStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::BreakStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ContinueStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FunctionDefinition& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::FunctionDefinition& node)
 //{
 //    const Semantics::FunctionType* ft = nullptr;
 //    auto name = Semantics::declaratorToName(node.getDeclarator());
@@ -2515,7 +2527,7 @@
 //    return {};
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::TranslationUnit& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::TranslationUnit& node)
 //{
 //    clearScope();
 //    module = std::make_unique<llvm::Module>("main", context);
@@ -2550,31 +2562,31 @@
 //    return {};
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PrimaryExpression& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::PostFixExpression& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::UnaryExpression& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::AssignmentExpression& node)
 //{
 //    return std::visit([this](auto&& value) -> OpenCL::Codegen::NodeRetType
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Initializer& node)
+// OpenCL::Codegen::NodeRetType OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Initializer& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      {
@@ -2582,38 +2594,38 @@
 //                      }, node.getVariant());
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundItem& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::CompoundItem& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Statement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::Statement& node)
 //{
 //    return std::visit([this](auto&& value) -> std::optional<OpenCL::FailureReason>
 //                      { return visit(value); },
 //                      node.getVariant());
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExternalDeclaration& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::ExternalDeclaration& node)
 //{
 //    return std::visit([this](auto&& value)
 //                      { return visit(value); }, node.getVariant());
 //}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LabelStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::LabelStatement& node)
 //{}
 //
-//std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node)
+// std::optional<OpenCL::FailureReason> OpenCL::Codegen::Context::visit(const OpenCL::Syntax::GotoStatement& node)
 //{}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::Type& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::Type& node)
 //{
 //    return std::visit([this](auto&& value) -> llvm::Type*
 //                      { return visit(value); }, node.get());
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PrimitiveType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PrimitiveType& node)
 //{
 //    if (node.isFloatingPoint())
 //    {
@@ -2641,22 +2653,22 @@
 //    return nullptr;
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ArrayType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ArrayType& node)
 //{
 //    return llvm::ArrayType::get(visit(node.getType()), node.getSize());
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::AbstractArrayType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::AbstractArrayType& node)
 //{
 //    return llvm::PointerType::getUnqual(visit(node.getType()));
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ValArrayType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::ValArrayType& node)
 //{
 //    return llvm::PointerType::getUnqual(visit(node.getType()));
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::FunctionType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::FunctionType& node)
 //{
 //    std::vector<llvm::Type*> arguments;
 //    bool isStruct = std::holds_alternative<Semantics::RecordType>(node.getReturnType().get());
@@ -2680,7 +2692,7 @@
 //                                   node.isLastVararg());
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::RecordType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::RecordType& node)
 //{
 //    // TODO: structs must be scoped and allow overshadowing
 //    if (auto* record = module->getTypeByName((node.isUnion() ? "union." : "struct.") + node.getName()))
@@ -2717,12 +2729,12 @@
 //    return record;
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::EnumType&)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::EnumType&)
 //{
 //    return builder.getInt32Ty();
 //}
 //
-//llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PointerType& node)
+// llvm::Type* OpenCL::Codegen::Context::visit(const OpenCL::Semantics::PointerType& node)
 //{
 //    auto* elemType = visit(node.getElementType());
 //    if (elemType->isVoidTy())
@@ -2735,7 +2747,7 @@
 //    }
 //}
 //
-//OpenCL::Semantics::Type OpenCL::Codegen::Context::integerPromotion(const OpenCL::Semantics::Type& type,
+// OpenCL::Semantics::Type OpenCL::Codegen::Context::integerPromotion(const OpenCL::Semantics::Type& type,
 //                                                                   llvm::Value** optionalValue)
 //{
 //    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&type.get()))
@@ -2752,7 +2764,7 @@
 //    return type;
 //}
 //
-//void OpenCL::Codegen::Context::arithmeticCast(Semantics::Type& type, llvm::Value*& value,
+// void OpenCL::Codegen::Context::arithmeticCast(Semantics::Type& type, llvm::Value*& value,
 //                                              const Semantics::Type& otherType)
 //{
 //    if (type.isCompatibleWith(otherType))

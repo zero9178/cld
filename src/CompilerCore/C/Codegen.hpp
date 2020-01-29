@@ -12,22 +12,22 @@
 
 namespace OpenCL::Codegen
 {
-    // using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
+// using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
 
-    using TypeRetType = llvm::Type*;
+using TypeRetType = llvm::Type*;
 
-    class Context final
-    {
-        llvm::LLVMContext context;
-        llvm::IRBuilder<> builder{context};
-        llvm::DIBuilder* debugBuilder;
-        llvm::DIFile* debugUnit = nullptr;
-        std::vector<llvm::BasicBlock*> continueBlocks;
-        std::vector<llvm::BasicBlock*> breakBlocks;
-        std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
-        std::vector<llvm::DIScope*> debugScope;
-        const Semantics::FunctionType* currentFunction;
-    };
+class Context final
+{
+    llvm::LLVMContext context;
+    llvm::IRBuilder<> builder{context};
+    llvm::DIBuilder* debugBuilder;
+    llvm::DIFile* debugUnit = nullptr;
+    std::vector<llvm::BasicBlock*> continueBlocks;
+    std::vector<llvm::BasicBlock*> breakBlocks;
+    std::vector<std::pair<llvm::SwitchInst*, bool>> switchStack;
+    std::vector<llvm::DIScope*> debugScope;
+    const Semantics::FunctionType* currentFunction;
+};
 } // namespace OpenCL::Codegen
 
 #endif // OPENCLPARSER_CODEGEN_HPP

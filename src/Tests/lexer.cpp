@@ -1165,16 +1165,16 @@ TEST_CASE("Lexing unterminated tokens", "[lexer]")
 
 namespace
 {
-    std::string toS(const std::vector<std::uint8_t>& data)
-    {
-        std::string input(data.size(), ' ');
-        std::transform(data.begin(), data.end(), input.begin(), [](std::uint8_t byte) -> char {
-            char result;
-            std::memcpy(&result, &byte, 1);
-            return result;
-        });
-        return input;
-    }
+std::string toS(const std::vector<std::uint8_t>& data)
+{
+    std::string input(data.size(), ' ');
+    std::transform(data.begin(), data.end(), input.begin(), [](std::uint8_t byte) -> char {
+        char result;
+        std::memcpy(&result, &byte, 1);
+        return result;
+    });
+    return input;
+}
 } // namespace
 
 TEST_CASE("Lexing invalid characters", "[lexer]")

@@ -55,79 +55,79 @@
 
 namespace
 {
-    class ProducesNErrors : public Catch::MatcherBase<std::string>
+class ProducesNErrors : public Catch::MatcherBase<std::string>
+{
+    std::size_t m_allowedErrors;
+
+public:
+    explicit ProducesNErrors(std::size_t n) : m_allowedErrors(n) {}
+
+    bool match(const std::string& arg) const override
     {
-        std::size_t m_allowedErrors;
-
-    public:
-        explicit ProducesNErrors(std::size_t n) : m_allowedErrors(n) {}
-
-        bool match(const std::string& arg) const override
+        std::size_t occurrences = 0, pos = 0;
+        while ((pos = arg.find("error: ", pos)) != std::string::npos)
         {
-            std::size_t occurrences = 0, pos = 0;
-            while ((pos = arg.find("error: ", pos)) != std::string::npos)
-            {
-                occurrences++;
-                pos += 7;
-            }
-            return occurrences == m_allowedErrors;
+            occurrences++;
+            pos += 7;
         }
+        return occurrences == m_allowedErrors;
+    }
 
-    protected:
-        std::string describe() const override
-        {
-            return "has " + std::to_string(m_allowedErrors) + " error" + (m_allowedErrors == 1 ? "" : "s");
-        }
-    };
-
-    class ProducesNoErrors : public ProducesNErrors
+protected:
+    std::string describe() const override
     {
-    public:
-        ProducesNoErrors() : ProducesNErrors(0) {}
+        return "has " + std::to_string(m_allowedErrors) + " error" + (m_allowedErrors == 1 ? "" : "s");
+    }
+};
 
-    protected:
-        std::string describe() const override
-        {
-            return "has no errors";
-        }
-    };
+class ProducesNoErrors : public ProducesNErrors
+{
+public:
+    ProducesNoErrors() : ProducesNErrors(0) {}
 
-    class ProducesNNotes : public Catch::MatcherBase<std::string>
+protected:
+    std::string describe() const override
     {
-        std::size_t m_allowedNotes;
+        return "has no errors";
+    }
+};
 
-    public:
-        explicit ProducesNNotes(std::size_t n) : m_allowedNotes(n) {}
+class ProducesNNotes : public Catch::MatcherBase<std::string>
+{
+    std::size_t m_allowedNotes;
 
-        bool match(const std::string& arg) const override
-        {
-            std::size_t occurrences = 0, pos = 0;
-            while ((pos = arg.find("note: ", pos)) != std::string::npos)
-            {
-                occurrences++;
-                pos += 6;
-            }
-            return occurrences == m_allowedNotes;
-        }
+public:
+    explicit ProducesNNotes(std::size_t n) : m_allowedNotes(n) {}
 
-    protected:
-        std::string describe() const override
-        {
-            return "has " + std::to_string(m_allowedNotes) + " note" + (m_allowedNotes == 1 ? "" : "s");
-        }
-    };
-
-    class ProducesNoNotes : public ProducesNNotes
+    bool match(const std::string& arg) const override
     {
-    public:
-        ProducesNoNotes() : ProducesNNotes(0) {}
-
-    protected:
-        std::string describe() const override
+        std::size_t occurrences = 0, pos = 0;
+        while ((pos = arg.find("note: ", pos)) != std::string::npos)
         {
-            return "has no notes";
+            occurrences++;
+            pos += 6;
         }
-    };
+        return occurrences == m_allowedNotes;
+    }
+
+protected:
+    std::string describe() const override
+    {
+        return "has " + std::to_string(m_allowedNotes) + " note" + (m_allowedNotes == 1 ? "" : "s");
+    }
+};
+
+class ProducesNoNotes : public ProducesNNotes
+{
+public:
+    ProducesNoNotes() : ProducesNNotes(0) {}
+
+protected:
+    std::string describe() const override
+    {
+        return "has no notes";
+    }
+};
 } // namespace
 
 using namespace OpenCL::Notes;
@@ -1186,30 +1186,30 @@ TEST_CASE("Parse Expressions", "[parser]")
 
 namespace
 {
-    void parse(const std::string& source)
+void parse(const std::string& source)
+{
+    std::string storage;
+    llvm::raw_string_ostream ss(storage);
+    auto tokens = OpenCL::Lexer::tokenize(source, OpenCL::LanguageOptions::native(), false, &ss);
+    if (!ss.str().empty() || tokens.data().empty())
     {
-        std::string storage;
-        llvm::raw_string_ostream ss(storage);
-        auto tokens = OpenCL::Lexer::tokenize(source, OpenCL::LanguageOptions::native(), false, &ss);
-        if (!ss.str().empty() || tokens.data().empty())
-        {
-            return;
-        }
-
-        OpenCL::Parser::buildTree(tokens, &ss);
+        return;
     }
+
+    OpenCL::Parser::buildTree(tokens, &ss);
+}
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-    void excludeFromAddressSanitizer()
-    {
-        parse(
-            "*l=((((((((((((((((((((((((((((((((((((((((((((((((((((((( (((((((((((((((((((li(((((((((((((( (((((((((((((((((((( ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((( (((((((((li(((((((((((((( (((((((((((((((((((( ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((({(((((((((((((((((((((((((h((((((((((((((((((((((((((((((((((((((((({(((((((((((((((((((((((((h((((((((((((((((((((((((( (((((((((((((((((((({((((((((((((((((((((((((u");
-        parse(
-            "([([[(([([((n([([[([[(([([(([([8[[(([[([(([([([([[[([[([([[(([([(([([8[[(([[([([[(([([(([([8[[(([[([[([[([[(([([(([([8[[([([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([(([([8[[(([([8[[(([[([[([(([([([[[[([((([([(([([7[[((-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([[[[(([([(([([([[([([7[[(([[([((([(");
-        parse(
-            "([([[(([([((n([([[([[(8[[(([([8[[(([[([(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[>=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([(((((A[[[[(([[[[[[([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[([([([([[[(([([[[[(([([(([([([[([([[(([([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[(k[(([[([([(([([8[[((A[[[[(([[[[>=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([(((((A[[[[(([[[[[[([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[(k[((([([(([([7[[((-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([[[[(([([(([([([[([([7[[(([[([((([(");
-    }
+void excludeFromAddressSanitizer()
+{
+    parse(
+        "*l=((((((((((((((((((((((((((((((((((((((((((((((((((((((( (((((((((((((((((((li(((((((((((((( (((((((((((((((((((( ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((( (((((((((li(((((((((((((( (((((((((((((((((((( ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((({(((((((((((((((((((((((((h((((((((((((((((((((((((((((((((((((((((({(((((((((((((((((((((((((h((((((((((((((((((((((((( (((((((((((((((((((({((((((((((((((((((((((((u");
+    parse(
+        "([([[(([([((n([([[([[(([([(([([8[[(([[([(([([([([[[([[([([[(([([(([([8[[(([[([([[(([([(([([8[[(([[([[([[([[(([([(([([8[[([([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([(([([8[[(([([8[[(([[([[([(([([([[[[([((([([(([([7[[((-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([[[[(([([(([([([[([([7[[(([[([((([(");
+    parse(
+        "([([[(([([((n([([[([[(8[[(([([8[[(([[([(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[>=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([(((((A[[[[(([[[[[[([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[([([([([[[(([([[[[(([([(([([([[([([[(([([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[(k[(([[([([(([([8[[((A[[[[(([[[[>=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[([(((((A[[[[(([[[[[[([[([[(([([(([([8[[(([([8[[(([[([(([([([([[[(([([[[[(([([(([([([[([([[(([([(([[([([(([([8[[((A[[[[(([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[([(([([([[[(([([(([([([[([([[(([([(([([-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([([([[[[(k[((([([(([([7[[((-[[([[([[(([(?[(([([8[[([[[([(([([([([[[(([([(([[[[(([([(([([([[([([7[[(([[([((([(");
+}
 #pragma clang diagnostic pop
 } // namespace
 

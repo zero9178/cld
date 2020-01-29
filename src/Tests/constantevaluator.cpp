@@ -15,55 +15,55 @@ using namespace OpenCL::ErrorMessages::Semantics;
 
 namespace
 {
-    std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpression(
-        const std::string& expression,
-        OpenCL::Semantics::ConstantEvaluator::Mode mode = OpenCL::Semantics::ConstantEvaluator::Integer)
+std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpression(
+    const std::string& expression,
+    OpenCL::Semantics::ConstantEvaluator::Mode mode = OpenCL::Semantics::ConstantEvaluator::Integer)
+{
+    std::string storage;
+    llvm::raw_string_ostream ss(storage);
+    OpenCL::SourceObject tokens;
+    REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
+    OpenCL::Parser::Context context(tokens, &ss);
+    auto ref = tokens.data().cbegin();
+    auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.data().cend(), context);
+    INFO(ss.str());
+    REQUIRE((ss.str().empty()));
+    OpenCL::Semantics::SemanticAnalysis analysis(&ss);
+    OpenCL::Semantics::ConstantEvaluator evaluator(
+        [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
+            return analysis.declaratorsToType(
+                {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
+                typeName.getAbstractDeclarator());
+        },
+        {},
+        [&ss, &tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
+            OpenCL::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                   std::move(modifier))
+                .print(ss, tokens);
+        },
+        mode);
+    auto ret = evaluator.visit(parsing);
+    auto string = ss.str();
+    if (OpenCL::colourConsoleOutput && !string.empty())
     {
-        std::string storage;
-        llvm::raw_string_ostream ss(storage);
-        OpenCL::SourceObject tokens;
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(expression));
-        OpenCL::Parser::Context context(tokens, &ss);
-        auto ref = tokens.data().cbegin();
-        auto parsing = OpenCL::Parser::parseConditionalExpression(ref, tokens.data().cend(), context);
-        INFO(ss.str());
-        REQUIRE((ss.str().empty()));
-        OpenCL::Semantics::SemanticAnalysis analysis(&ss);
-        OpenCL::Semantics::ConstantEvaluator evaluator(
+        OpenCL::Semantics::ConstantEvaluator(
             [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
                 return analysis.declaratorsToType(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
             {},
-            [&ss, &tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
+            [&tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
                 OpenCL::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
                                        std::move(modifier))
-                    .print(ss, tokens);
+                        .print(llvm::errs(), tokens)
+                    << '\n';
             },
-            mode);
-        auto ret = evaluator.visit(parsing);
-        auto string = ss.str();
-        if (OpenCL::colourConsoleOutput && !string.empty())
-        {
-            OpenCL::Semantics::ConstantEvaluator(
-                [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
-                    return analysis.declaratorsToType(
-                        {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
-                        typeName.getAbstractDeclarator());
-                },
-                {},
-                [&tokens](std::string message, std::optional<OpenCL::Modifier> modifier) {
-                    OpenCL::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                           std::move(modifier))
-                            .print(llvm::errs(), tokens)
-                        << '\n';
-                },
-                mode)
-                .visit(parsing);
-        }
-        return {ret, string};
+            mode)
+            .visit(parsing);
     }
+    return {ret, string};
+}
 } // namespace
 
 TEST_CASE("Const eval Primary expression", "[constEval]")

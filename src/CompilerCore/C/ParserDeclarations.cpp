@@ -13,29 +13,29 @@ using namespace OpenCL::Syntax;
 
 namespace
 {
-    std::vector<DeclarationSpecifier>
-        parseDeclarationSpecifierList(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                                      std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                      OpenCL::Parser::Context& context)
+std::vector<DeclarationSpecifier>
+    parseDeclarationSpecifierList(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
+                                  std::vector<OpenCL::Lexer::Token>::const_iterator end,
+                                  OpenCL::Parser::Context& context)
+{
+    bool seenTypeSpecifier = false;
+    std::vector<DeclarationSpecifier> declarationSpecifiers;
+    do
     {
-        bool seenTypeSpecifier = false;
-        std::vector<DeclarationSpecifier> declarationSpecifiers;
-        do
+        auto result = parseDeclarationSpecifier(
+            begin, end, context.withRecoveryTokens(OpenCL::Parser::firstDeclarationSpecifierSet));
+        if (result)
         {
-            auto result = parseDeclarationSpecifier(
-                begin, end, context.withRecoveryTokens(OpenCL::Parser::firstDeclarationSpecifierSet));
-            if (result)
+            if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
             {
-                if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
-                {
-                    seenTypeSpecifier = true;
-                }
-                declarationSpecifiers.push_back(std::move(*result));
+                seenTypeSpecifier = true;
             }
-        } while (begin < end && OpenCL::Parser::firstIsInDeclarationSpecifier(*begin, context)
-                 && (begin->getTokenType() != OpenCL::Lexer::TokenType::Identifier || !seenTypeSpecifier));
-        return declarationSpecifiers;
-    }
+            declarationSpecifiers.push_back(std::move(*result));
+        }
+    } while (begin < end && OpenCL::Parser::firstIsInDeclarationSpecifier(*begin, context)
+             && (begin->getTokenType() != OpenCL::Lexer::TokenType::Identifier || !seenTypeSpecifier));
+    return declarationSpecifiers;
+}
 } // namespace
 
 std::vector<OpenCL::Syntax::SpecifierQualifier>

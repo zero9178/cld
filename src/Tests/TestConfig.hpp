@@ -3,7 +3,7 @@
 
 namespace OpenCL
 {
-    extern bool colourConsoleOutput;
+extern bool colourConsoleOutput;
 }
 
 #endif // OPENCLPARSER_TESTCONFIG_HPP
