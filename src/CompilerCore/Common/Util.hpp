@@ -1,6 +1,10 @@
 #ifndef OPENCLPARSER_UTIL_HPP
 #define OPENCLPARSER_UTIL_HPP
 
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/Unicode.h>
+
+#include <string>
 #include <variant>
 
 namespace OpenCL
@@ -55,6 +59,12 @@ namespace OpenCL
         };
         (test(std::is_same_v<T, Ts>) || ...);
         return r;
+    }
+
+    inline std::string stringOfSameWidth(std::string_view original, char characterToReplace)
+    {
+        auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
+        return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
     }
 } // namespace OpenCL
 

@@ -26,28 +26,31 @@
         }                                                          \
     } while (0)
 
-#define functionProduces(parser, source, matches)                  \
-    do                                                             \
-    {                                                              \
-        std::string string;                                        \
-        llvm::raw_string_ostream ss(string);                       \
-        OpenCL::SourceObject tokens;                               \
-        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
-        OpenCL::Parser::Context context(tokens, &ss);              \
-        auto begin = tokens.data().cbegin();                       \
-        parser(begin, tokens.data().cend(), context);              \
-        CHECK((!string.empty() || begin == tokens.data().cend())); \
-        CHECK_THAT(string, matches);                               \
-        if (OpenCL::colourConsoleOutput)                           \
-        {                                                          \
-            auto begin2 = tokens.data().cbegin();                  \
-            OpenCL::Parser::Context context2(tokens);              \
-            parser(begin2, tokens.data().cend(), context2);        \
-            if (!string.empty())                                   \
-            {                                                      \
-                llvm::errs() << '\n';                              \
-            }                                                      \
-        }                                                          \
+#define functionProduces(parser, source, matches)                      \
+    do                                                                 \
+    {                                                                  \
+        std::string string;                                            \
+        llvm::raw_string_ostream ss(string);                           \
+        OpenCL::SourceObject tokens;                                   \
+        REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));     \
+        OpenCL::Parser::Context context(tokens, &ss);                  \
+        auto begin = tokens.data().cbegin();                           \
+        parser(begin, tokens.data().cend(), context);                  \
+        {                                                              \
+            INFO("Function " << #parser << " with source " << source); \
+            CHECK((!string.empty() || begin == tokens.data().cend())); \
+        }                                                              \
+        CHECK_THAT(string, matches);                                   \
+        if (OpenCL::colourConsoleOutput)                               \
+        {                                                              \
+            auto begin2 = tokens.data().cbegin();                      \
+            OpenCL::Parser::Context context2(tokens);                  \
+            parser(begin2, tokens.data().cend(), context2);            \
+            if (!string.empty())                                       \
+            {                                                          \
+                llvm::errs() << '\n';                                  \
+            }                                                          \
+        }                                                              \
     } while (0)
 
 namespace

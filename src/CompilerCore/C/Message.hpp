@@ -163,7 +163,7 @@ namespace OpenCL
          * Generates an error Message
          * @param message Message to be printed
          * @param token Token that is used for the source location to be printed. The source code displayed is
-         * guaranteed to display all lines that this token is contained in.
+         * guaranteed to display all lines that this token is contained in. Can be end
          * @param modifier optional modifier to apply
          * @return Message object
          */
@@ -186,7 +186,7 @@ namespace OpenCL
          * Generates a note Message
          * @param message Message to be printed
          * @param token Token that is used for the source location to be printed. The source code displayed is
-         * guaranteed to display all lines that this token is contained in.
+         * guaranteed to display all lines that this token is contained in. Can be end
          * @param modifier optional modifier to apply
          * @return Message object
          */
@@ -209,7 +209,7 @@ namespace OpenCL
          * Generates a warning Message
          * @param message Message to be printed
          * @param token Token that is used for the source location to be printed. The source code displayed is
-         * guaranteed to display all lines that this token is contained in.
+         * guaranteed to display all lines that this token is contained in. Can be end
          * @param modifier optional modifier to apply
          * @return Message object
          */

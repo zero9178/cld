@@ -58,6 +58,7 @@ namespace
 
 llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::SourceObject& sourceObject) const
 {
+    assert(!m_rangeEnd || m_begin != sourceObject.data().end());
     auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string> {
         switch (getSeverity())
         {
@@ -68,24 +69,29 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
         }
     }();
 
-    const auto begin = [&sourceObject, this] {
-        const auto line = sourceObject.getLineNumber(m_begin->getOffset());
+    auto iterator = m_begin == sourceObject.data().end() ? sourceObject.data().end() - 1 : m_begin;
+    const auto begin = [&sourceObject, iterator] {
+        const auto line = sourceObject.getLineNumber(iterator->getOffset());
         const auto start = sourceObject.getLineStartOffset(line);
         return std::find_if(
-                   std::make_reverse_iterator(m_begin), std::make_reverse_iterator(sourceObject.data().begin()),
+                   std::make_reverse_iterator(iterator), std::make_reverse_iterator(sourceObject.data().begin()),
                    [start](const Lexer::Token& token) { return token.getOffset() + token.getLength() < start; })
             .base();
     }();
-    const auto end = [&sourceObject, this] {
+    const auto end = [&sourceObject, iterator, this] {
+        if (m_rangeEnd && *m_rangeEnd == sourceObject.data().end())
+        {
+            return sourceObject.data().end();
+        }
         const auto line =
-            sourceObject.getLineNumber(m_rangeEnd ? m_rangeEnd.value()->getOffset() : m_begin->getOffset());
+            sourceObject.getLineNumber(m_rangeEnd ? m_rangeEnd.value()->getOffset() : iterator->getOffset());
         const auto end = sourceObject.getLineEndOffset(line);
-        return std::find_if(m_rangeEnd.value_or(m_begin), sourceObject.data().end(),
+        return std::find_if(m_rangeEnd.value_or(iterator), sourceObject.data().end(),
                             [end](const Lexer::Token& token) { return token.getOffset() > end; });
     }();
 
     auto text = OpenCL::Lexer::reconstructTrimmed(sourceObject, begin, end);
-    if (begin != m_begin
+    if (begin != iterator
         && sourceObject.getLineNumber(begin->getOffset())
                != sourceObject.getLineNumber(begin->getOffset() + begin->getLength()))
     {
@@ -100,7 +106,7 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
         text = text.substr(0, text.rfind('\n'));
     }
 
-    const auto locationLine = sourceObject.getLineNumber(m_begin->getOffset());
+    const auto locationLine = sourceObject.getLineNumber(iterator->getOffset());
     os << locationLine << ':' << locationLine - sourceObject.getLineStartOffset(locationLine) << ": ";
     llvm::WithColor(os, colour) << prefix;
     os << m_message << '\n';
@@ -124,7 +130,7 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
         } while (pos != std::string::npos);
     }
 
-    const auto beginLine = sourceObject.getLineNumber(m_begin->getOffset());
+    const auto beginLine = sourceObject.getLineNumber(iterator->getOffset());
     std::vector<std::optional<std::pair<std::uint64_t, std::uint64_t>>> underlined(lines.size());
     if (m_modifier)
     {
@@ -141,7 +147,7 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
     for (std::size_t i = 0; i < lines.size(); i++)
     {
         os << llvm::format_decimal(beginLine + i, numSize) << '|';
-        if (!m_modifier)
+        if (!underlined[i])
         {
             os << lines[i] << '\n';
             continue;
@@ -154,29 +160,43 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
         os << '\n';
 
         os.indent(numSize) << '|';
+        const auto whitespace = stringOfSameWidth(lines[i].substr(0, underlined[i]->first - lineStart), ' ');
+        auto string = stringOfSameWidth(
+            lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first), '~');
         switch (m_modifier->getAction())
         {
             case Modifier::Underline:
             {
-                os.indent(underlined[i]->first - lineStart);
-                llvm::WithColor(os, colour).get() << std::string(underlined[i]->second - underlined[i]->first, '~');
+                os << whitespace;
+                llvm::WithColor(os, colour).get() << string;
                 break;
             }
             case Modifier::PointAtBeginning:
             {
-                os.indent(underlined[i]->first - lineStart);
-                llvm::WithColor(os, colour).get()
-                    << '^' << std::string(underlined[i]->second - underlined[i]->first - 1, '~');
+                os << whitespace;
+                if (!string.empty())
+                {
+                    string[0] = '^';
+                }
+                llvm::WithColor(os, colour).get() << string;
                 break;
             }
             case Modifier::PointAtEnd:
             {
-                os.indent(underlined[i]->first - lineStart);
-                llvm::WithColor(os, colour).get()
-                    << std::string(underlined[i]->second - underlined[i]->first - 1, '~') << '^';
+                os << whitespace;
+                if (!string.empty())
+                {
+                    string.back() = '^';
+                }
+                llvm::WithColor(os, colour).get() << string;
                 break;
             }
-            case Modifier::InsertAtEnd: break;
+            case Modifier::InsertAtEnd:
+            {
+                llvm::WithColor(os.indent(whitespace.size() + string.size()), colour) << '^';
+                break;
+            }
+            default: OPENCL_UNREACHABLE;
         }
         os << '\n';
     }

@@ -605,8 +605,8 @@ std::optional<OpenCL::Syntax::DeclarationSpecifier>
     }
     else
     {
-        context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("storage specifier or typename"), start,
-                                    begin, Modifier{begin - 1, begin, Modifier::InsertAtEnd})});
+        context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("storage specifier or typename"), begin,
+                                    Modifier{begin - 1, begin, Modifier::InsertAtEnd})});
     }
     context.skipUntil(begin, end);
     return {};
@@ -1610,8 +1610,10 @@ std::optional<OpenCL::Syntax::CompoundStatement>
 {
     auto start = begin;
     context.braceEntered(begin);
+    bool braceSeen = true;
     if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
     {
+        braceSeen = false;
         context.skipUntil(begin, end, firstCompoundItem | Context::fromTokenTypes(Lexer::TokenType::CloseBrace));
     }
     std::vector<CompoundItem> items;
@@ -1633,10 +1635,14 @@ std::optional<OpenCL::Syntax::CompoundStatement>
     {
         context.popScope();
     }
-    if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, begin,
-                               Modifier(start == end ? start - 1 : start, start == end ? start : start + 1,
-                                        Modifier::PointAtBeginning))}))
+    auto additional = std::vector{Message::note(
+        Notes::TO_MATCH_N_HERE.args("'{'"), start, begin,
+        Modifier(start == end ? start - 1 : start, start == end ? start : start + 1, Modifier::PointAtBeginning))};
+    if (!braceSeen)
+    {
+        additional.clear();
+    }
+    if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context, std::move(additional)))
     {
         context.skipUntil(begin, end);
     }

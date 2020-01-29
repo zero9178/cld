@@ -1,5 +1,8 @@
 #include "Parser.hpp"
 
+#include <llvm/Support/ConvertUTF.h>
+
+#include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
@@ -968,46 +971,122 @@ std::optional<OpenCL::Syntax::PostFixExpression>
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
         {
-            //            using stringVariant = std::variant<std::string, std::wstring>;
-            //            stringVariant literal = match(
-            //                begin->getValue(), [](const std::string& str) -> stringVariant { return str; },
-            //                [](const std::wstring& str) -> stringVariant { return str; },
-            //                [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
-            //            begin++;
-            //
-            //            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-            //            while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
-            //            {
-            //                literal = match(
-            //                    begin->getValue(),
-            //                    [&literal, &converter](const std::string& str) -> stringVariant {
-            //                        return match(
-            //                            literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str;
-            //                            },
-            //                            [&str, &converter](const std::wstring& lhs) -> stringVariant {
-            //                                return lhs + converter.from_bytes(str);
-            //                            },
-            //                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
-            //                    },
-            //                    [&literal, &converter](const std::wstring& str) -> stringVariant {
-            //                        return match(
-            //                            literal,
-            //                            [&str, &converter](const std::string& lhs) -> stringVariant {
-            //                                return converter.from_bytes(lhs) + str;
-            //                            },
-            //                            [&str](const std::wstring& lhs) -> stringVariant { return lhs + str; },
-            //                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
-            //                    },
-            //                    [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
-            //                begin++;
-            //            }
-            //            newPrimary = PrimaryExpression(PrimaryExpressionConstant(
-            //                start, begin,
-            //                match(
-            //                    literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return
-            //                    str; },
-            //                    [](const std::wstring& str) -> PrimaryExpressionConstant::variant { return str; },
-            //                    [](const auto&) -> PrimaryExpressionConstant::variant { OPENCL_UNREACHABLE; })));
+            using stringVariant = std::variant<std::string, Lexer::NonCharString>;
+            stringVariant literal = match(
+                begin->getValue(), [](const std::string& str) -> stringVariant { return str; },
+                [](const Lexer::NonCharString& str) -> stringVariant { return str; },
+                [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
+            begin++;
+
+            while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
+            {
+                literal = match(
+                    begin->getValue(),
+                    [&literal, &context](const std::string& str) -> stringVariant {
+                        return match(
+                            literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
+                            [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
+                                switch (context.getSourceObject().getLanguageOptions().getSizeOfWChar())
+                                {
+                                    case 2:
+                                    {
+                                        auto* sourceStart = str.data();
+                                        std::vector<llvm::UTF16> utf16(str.size());
+                                        auto* targetStart = utf16.data();
+                                        auto result = llvm::ConvertUTF8toUTF16(
+                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()), &targetStart,
+                                            targetStart + utf16.size(), llvm::strictConversion);
+                                        if (result != llvm::conversionOK)
+                                        {
+                                            OPENCL_UNREACHABLE;
+                                        }
+                                        std::transform(utf16.data(), targetStart, std::back_inserter(lhs.characters),
+                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                        return lhs;
+                                    }
+                                    case 4:
+                                    {
+                                        auto* sourceStart = str.data();
+                                        std::vector<llvm::UTF32> utf32(str.size());
+                                        auto* targetStart = utf32.data();
+                                        auto result = llvm::ConvertUTF8toUTF32(
+                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()), &targetStart,
+                                            targetStart + utf32.size(), llvm::strictConversion);
+                                        if (result != llvm::conversionOK)
+                                        {
+                                            OPENCL_UNREACHABLE;
+                                        }
+                                        std::transform(utf32.data(), targetStart, std::back_inserter(lhs.characters),
+                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                        return lhs;
+                                    }
+                                    default: OPENCL_UNREACHABLE;
+                                }
+                            },
+                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
+                    },
+                    [&literal, &context](Lexer::NonCharString str) -> stringVariant {
+                        return match(
+                            literal,
+                            [&str, &context](const std::string& lhs) -> stringVariant {
+                                switch (context.getSourceObject().getLanguageOptions().getSizeOfWChar())
+                                {
+                                    case 2:
+                                    {
+                                        auto* sourceStart = lhs.data();
+                                        std::vector<llvm::UTF16> utf16(lhs.size());
+                                        auto* targetStart = utf16.data();
+                                        auto result = llvm::ConvertUTF8toUTF16(
+                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()), &targetStart,
+                                            targetStart + utf16.size(), llvm::strictConversion);
+                                        if (result != llvm::conversionOK)
+                                        {
+                                            OPENCL_UNREACHABLE;
+                                        }
+                                        std::transform(utf16.data(), targetStart,
+                                                       std::inserter(str.characters, str.characters.begin()),
+                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                        return lhs;
+                                    }
+                                    case 4:
+                                    {
+                                        auto* sourceStart = lhs.data();
+                                        std::vector<llvm::UTF32> utf32(lhs.size());
+                                        auto* targetStart = utf32.data();
+                                        auto result = llvm::ConvertUTF8toUTF32(
+                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()), &targetStart,
+                                            targetStart + utf32.size(), llvm::strictConversion);
+                                        if (result != llvm::conversionOK)
+                                        {
+                                            OPENCL_UNREACHABLE;
+                                        }
+                                        std::transform(utf32.data(), targetStart, std::back_inserter(str.characters),
+                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                        return lhs;
+                                    }
+                                    default: OPENCL_UNREACHABLE;
+                                }
+                            },
+                            [&str](Lexer::NonCharString lhs) -> stringVariant {
+                                lhs.characters.insert(lhs.characters.end(), str.characters.begin(),
+                                                      str.characters.end());
+                                return lhs;
+                            },
+                            [](const auto&) -> stringVariant { OPENCL_UNREACHABLE; });
+                    },
+                    [](auto &&) -> stringVariant { OPENCL_UNREACHABLE; });
+                begin++;
+            }
+            newPrimary = PrimaryExpression(PrimaryExpressionConstant(
+                start, begin,
+                match(
+                    literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return str; },
+                    [](const Lexer::NonCharString& str) -> PrimaryExpressionConstant::variant { return str; },
+                    [](const auto&) -> PrimaryExpressionConstant::variant { OPENCL_UNREACHABLE; })));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {
@@ -1030,11 +1109,12 @@ std::optional<OpenCL::Syntax::PostFixExpression>
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
                                                 OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                            start, begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
+                                            start, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
             }
             else
             {
-                context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                context.log(
+                    {Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                         OpenCL::Format::List(", ", " or ", "literal", "identifier", "'('"),
                                         '\'' + begin->getRepresentation() + '\''),
                                     start, begin, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});

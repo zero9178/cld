@@ -16,7 +16,7 @@ OpenCL::Semantics::ConstRetType
     return std::visit(
         [this, &node](auto&& value) -> Semantics::ConstRetType {
             using T = std::decay_t<decltype(value)>;
-            if constexpr (!std::is_same_v<T, std::string> && !std::is_same_v<T, std::wstring>)
+            if constexpr (!std::is_same_v<T, std::string> && !std::is_same_v<T, Lexer::NonCharString>)
             {
                 return {value};
             }
@@ -66,8 +66,8 @@ OpenCL::Semantics::ConstRetType
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + node.begin()->getRepresentation()
-                                                                                         + '\''),
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                         '\'' + node.begin()->getRepresentation() + '\''),
                      Modifier(node.begin(), node.begin() + 1));
             return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
