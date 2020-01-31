@@ -107,9 +107,9 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
     }
 
     const auto locationLine = sourceObject.getLineNumber(iterator->getOffset());
-    os << locationLine << ':' << locationLine - sourceObject.getLineStartOffset(locationLine) << ": ";
-    llvm::WithColor(os, colour) << prefix;
-    os << m_message << '\n';
+    os << locationLine << ':' << iterator->getOffset() - sourceObject.getLineStartOffset(locationLine) << ": ";
+    llvm::WithColor(os, colour, true) << prefix;
+    llvm::WithColor(os, llvm::raw_ostream::SAVEDCOLOR, true) << m_message << '\n';
 
     auto numSize = std::to_string(sourceObject.getLineNumber((end - 1)->getOffset() + (end - 1)->getLength())).size();
     const auto remainder = numSize % 4;
@@ -124,7 +124,7 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
         do
         {
             auto result = text.find('\n', pos);
-            lines.emplace_back(text.data() + pos, result != std::string::npos ? pos + result : text.size());
+            lines.emplace_back(text.data() + pos, result != std::string::npos ? result - pos : text.size() - pos);
             pos = result != std::string::npos ? result + 1 : result;
 
         } while (pos != std::string::npos);
@@ -146,20 +146,27 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
     }
     for (std::size_t i = 0; i < lines.size(); i++)
     {
-        os << llvm::format_decimal(beginLine + i, numSize) << '|';
+        os << llvm::format_decimal(beginLine + i, numSize) << " | ";
         if (!underlined[i])
         {
             os << lines[i] << '\n';
             continue;
         }
         const auto lineStart = sourceObject.getLineStartOffset(i + beginLine);
-        os << lines[i].substr(0, underlined[i]->first - lineStart);
-        llvm::WithColor(os, colour).get()
-            << lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first);
-        os << lines[i].substr(underlined[i]->second - lineStart);
+        if (m_modifier->getAction() != Modifier::InsertAtEnd)
+        {
+            os << lines[i].substr(0, underlined[i]->first - lineStart);
+            llvm::WithColor(os, colour).get()
+                << lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first);
+            os << lines[i].substr(underlined[i]->second - lineStart);
+        }
+        else
+        {
+            os << lines[i];
+        }
         os << '\n';
 
-        os.indent(numSize) << '|';
+        os.indent(numSize) << " | ";
         const auto whitespace = stringOfSameWidth(lines[i].substr(0, underlined[i]->first - lineStart), ' ');
         auto string = stringOfSameWidth(
             lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first), '~');

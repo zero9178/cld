@@ -831,8 +831,8 @@ class Context
 
         const auto lineNumber = getLineNumber(location);
         *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
-        llvm::WithColor(*m_reporter, colour) << prefix << ": ";
-        *m_reporter << message << '\n';
+        llvm::WithColor(*m_reporter, colour, true) << prefix << ": ";
+        llvm::WithColor(*m_reporter, llvm::raw_ostream::SAVEDCOLOR, true) << message << '\n';
         std::size_t numSize = 0;
 
         std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine =
@@ -847,7 +847,7 @@ class Context
         for (auto i = startLine; i <= endLine; i++)
         {
             // Text
-            *m_reporter << llvm::format_decimal(i, numSize) << '|';
+            *m_reporter << llvm::format_decimal(i, numSize) << " | ";
 
             auto string = lines[i - startLine];
             const auto& arrowsForLine = columnsOfArrowsForLine[i - startLine];
@@ -882,7 +882,7 @@ class Context
             *m_reporter << '\n';
 
             // Underline + Arrows
-            m_reporter->indent(numSize) << '|';
+            m_reporter->indent(numSize) << " | ";
             if (i != startLine && i != endLine)
             {
                 // The token spans multiple lines and we are neither at the first nor last line. Therefore
@@ -2888,7 +2888,8 @@ std::string OpenCL::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
             }
             else
             {
-                result += '\n' + std::string(curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
+                result += std::string(currLineNumber - sourceObject.getLineNumber(prev->getOffset()), '\n')
+                          + std::string(curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
             }
         }
         result += curr->getRepresentation();

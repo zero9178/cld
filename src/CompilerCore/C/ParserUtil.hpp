@@ -21,7 +21,7 @@ bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator
         if (curr == end)
         {
             context.log(
-                {Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), begin,
+                {Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
                                 Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)})});
         }
         else
