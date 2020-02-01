@@ -23,13 +23,14 @@ private:
     std::uint8_t m_sizeOfInt;
     std::uint8_t m_sizeOfLong;
     std::uint8_t m_sizeOfLongDoubleBits;
+    std::uint8_t m_sizeOfVoidStar;
 
 public:
     static LanguageOptions native(Language language = Language::C99);
 
     LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned, std::uint8_t sizeOfWChar,
                     std::uint8_t sizeOfShort, std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
-                    uint8_t sizeOfLongDoubleBits);
+                    std::uint8_t sizeOfLongDoubleBits, std::uint8_t sizeOfVoidStar);
 
     Language getLanguage() const;
 
@@ -48,6 +49,8 @@ public:
     std::uint8_t getSizeOfLongLong() const;
 
     uint8_t getSizeOfLongDoubleBits() const;
+
+    uint8_t getSizeOfVoidStar() const;
 };
 } // namespace OpenCL
 

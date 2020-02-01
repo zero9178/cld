@@ -30,6 +30,7 @@ std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpressi
     REQUIRE((ss.str().empty()));
     OpenCL::Semantics::SemanticAnalysis analysis(&ss);
     OpenCL::Semantics::ConstantEvaluator evaluator(
+        OpenCL::LanguageOptions::native(),
         [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
             return analysis.declaratorsToType(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
@@ -47,6 +48,7 @@ std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpressi
     if (OpenCL::colourConsoleOutput && !string.empty())
     {
         OpenCL::Semantics::ConstantEvaluator(
+            OpenCL::LanguageOptions::native(),
             [&analysis](const OpenCL::Syntax::TypeName& typeName) -> OpenCL::Semantics::Type {
                 return analysis.declaratorsToType(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},

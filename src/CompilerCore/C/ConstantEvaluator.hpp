@@ -119,6 +119,7 @@ public:
 
 class ConstantEvaluator final
 {
+    LanguageOptions m_languageOptions;
     std::function<Type(const Syntax::TypeName&)> m_typeCallback;
     std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
     std::function<void(std::string, std::optional<Modifier>)> m_loggerCallback;
@@ -138,7 +139,7 @@ private:
 
 public:
     explicit ConstantEvaluator(
-        std::function<Type(const Syntax::TypeName&)> typeCallback = {},
+        const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback = {},
         std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
         std::function<void(std::string, std::optional<Modifier>)> loggerCallback = {}, Mode mode = Integer);
 

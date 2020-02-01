@@ -3,6 +3,7 @@
 
 #pragma warning(push, 0)
 #include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APSInt.h>
 #include <llvm/Support/raw_ostream.h>
 #pragma warning(pop)
 
@@ -142,8 +143,7 @@ struct NonCharString
 
 class Token
 {
-    using variant = std::variant<std::monostate, std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
-                                 std::uint64_t, llvm::APFloat, std::string, NonCharString>;
+    using variant = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, std::string, NonCharString>;
     variant m_value;              ///< Optional value of the token
     std::string m_representation; ///< Original spelling of the token
     std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro

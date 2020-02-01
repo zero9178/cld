@@ -7,7 +7,8 @@
 
 OpenCL::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned,
                                          std::uint8_t sizeOfWChar, std::uint8_t sizeOfShort, std::uint8_t sizeOfInt,
-                                         std::uint8_t sizeOfLong, uint8_t sizeOfLongDoubleBits)
+                                         std::uint8_t sizeOfLong, std::uint8_t sizeOfLongDoubleBits,
+                                         std::uint8_t sizeOfVoidStar)
     : m_language(language),
       m_sizeOfUnderlineBool(sizeOfUnderlineBool),
       m_charIsSigned(charIsSigned),
@@ -15,7 +16,8 @@ OpenCL::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfU
       m_sizeOfShort(sizeOfShort),
       m_sizeOfInt(sizeOfInt),
       m_sizeOfLong(sizeOfLong),
-      m_sizeOfLongDoubleBits(sizeOfLongDoubleBits)
+      m_sizeOfLongDoubleBits(sizeOfLongDoubleBits),
+      m_sizeOfVoidStar(sizeOfVoidStar)
 {
     assert(m_sizeOfShort >= 2);
     assert(m_sizeOfInt >= 2);
@@ -74,20 +76,28 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfLongLong() const
 
 OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
 {
-    return OpenCL::LanguageOptions(language, sizeof(bool), std::numeric_limits<char>::is_signed, sizeof(wchar_t),
-                                   sizeof(short), sizeof(int), sizeof(long), []() -> std::uint8_t {
-                                       switch (std::numeric_limits<long double>::digits)
-                                       {
-                                           case 53: return 64;
-                                           case 64: return 80;
-                                           case 113: return 128;
-                                           default: OPENCL_UNREACHABLE;
-                                       }
-                                   }());
+    return OpenCL::LanguageOptions(
+        language, sizeof(bool), std::numeric_limits<char>::is_signed, sizeof(wchar_t), sizeof(short), sizeof(int),
+        sizeof(long),
+        []() -> std::uint8_t {
+            switch (std::numeric_limits<long double>::digits)
+            {
+                case 53: return 64;
+                case 64: return 80;
+                case 113: return 128;
+                default: OPENCL_UNREACHABLE;
+            }
+        }(),
+        sizeof(void*));
 #pragma clang diagnostic pop
 }
 
 std::uint8_t OpenCL::LanguageOptions::getSizeOfLongDoubleBits() const
 {
     return m_sizeOfLongDoubleBits;
+}
+
+std::uint8_t OpenCL::LanguageOptions::getSizeOfVoidStar() const
+{
+    return m_sizeOfVoidStar;
 }

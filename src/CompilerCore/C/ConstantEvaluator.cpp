@@ -888,10 +888,11 @@ OpenCL::Semantics::ConstRetType
 }
 
 OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(
-    std::function<Type(const Syntax::TypeName&)> typeCallback,
+    const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
     std::function<void(std::string, std::optional<Modifier>)> loggerCallback, Mode mode)
-    : m_typeCallback(std::move(typeCallback)),
+    : m_languageOptions(languageOptions),
+      m_typeCallback(std::move(typeCallback)),
       m_declarationCallback(std::move(declarationCallback)),
       m_loggerCallback(std::move(loggerCallback)),
       m_mode(mode)

@@ -1883,11 +1883,12 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
                 std::uint32_t buffer = result[0];
                 std::int32_t value;
                 std::memcpy(&value, &buffer, sizeof(std::int32_t));
-                context.push(TokenType::Literal, value);
+                context.push(TokenType::Literal, llvm::APSInt(llvm::APInt(32, value, true), false));
             }
             else
             {
-                context.push(TokenType::Literal, static_cast<std::int32_t>(static_cast<std::uint8_t>(result[0])));
+                context.push(TokenType::Literal,
+                             llvm::APSInt(llvm::APInt(32, static_cast<std::uint8_t>(result[0]), true), false));
             }
         }
         else

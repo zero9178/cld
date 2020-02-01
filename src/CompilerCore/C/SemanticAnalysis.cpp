@@ -1145,6 +1145,7 @@ OpenCL::Semantics::ConstantEvaluator
                                                        std::vector<OpenCL::Lexer::Token>::const_iterator exprEnd)
 {
     return Semantics::ConstantEvaluator(
+        /*TODO:*/ LanguageOptions::native(),
         [this](const Syntax::TypeName& typeName) -> Type {
             return declaratorsToType(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
