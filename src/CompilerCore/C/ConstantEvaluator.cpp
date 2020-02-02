@@ -132,7 +132,7 @@ OpenCL::Semantics::ConstRetType
                 logError(size.error(), Modifier(typeName->begin(), typeName->end()));
                 return {};
             }
-            return {*size};
+            return {llvm::APSInt(llvm::APInt(64, *size))};
         },
         [](auto &&) -> OpenCL::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
 }
@@ -802,7 +802,7 @@ OpenCL::Semantics::ConstRetType
                 }
                 else if (auto* value = std::get_if<std::int32_t>(decl))
                 {
-                    return {*value};
+                    return {llvm::APSInt(llvm::APInt(32, *value, true), false)};
                 }
             }
             logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),

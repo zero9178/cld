@@ -45,7 +45,7 @@ std::pair<OpenCL::Semantics::ConstRetType, std::string> evaluateConstantExpressi
         mode);
     auto ret = evaluator.visit(parsing);
     auto string = ss.str();
-    if (OpenCL::colourConsoleOutput && !string.empty())
+    if (!string.empty())
     {
         OpenCL::Semantics::ConstantEvaluator(
             OpenCL::LanguageOptions::native(),

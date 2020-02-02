@@ -19,6 +19,7 @@ private:
     std::uint8_t m_sizeOfUnderlineBool;
     bool m_charIsSigned;
     std::uint8_t m_sizeOfWChar;
+    bool m_wcharIsSigned;
     std::uint8_t m_sizeOfShort;
     std::uint8_t m_sizeOfInt;
     std::uint8_t m_sizeOfLong;
@@ -29,16 +30,18 @@ public:
     static LanguageOptions native(Language language = Language::C99);
 
     LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned, std::uint8_t sizeOfWChar,
-                    std::uint8_t sizeOfShort, std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
+                    bool wcharIsSigned, std::uint8_t sizeOfShort, std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
                     std::uint8_t sizeOfLongDoubleBits, std::uint8_t sizeOfVoidStar);
 
     Language getLanguage() const;
 
     std::uint8_t getSizeOfUnderlineBool() const;
 
-    bool isCharIsSigned() const;
+    bool isCharSigned() const;
 
     std::uint8_t getSizeOfWChar() const;
+
+    bool isWCharSigned() const;
 
     std::uint8_t getSizeOfShort() const;
 
@@ -48,9 +51,9 @@ public:
 
     std::uint8_t getSizeOfLongLong() const;
 
-    uint8_t getSizeOfLongDoubleBits() const;
+    std::uint8_t getSizeOfLongDoubleBits() const;
 
-    uint8_t getSizeOfVoidStar() const;
+    std::uint8_t getSizeOfVoidStar() const;
 };
 } // namespace OpenCL
 

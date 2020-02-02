@@ -173,6 +173,8 @@ constexpr auto STRAY_N_IN_PROGRAM = Format("Stray '{}' in program");
 
 constexpr auto NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE =
     "No whitespace allowed between backslash and newline";
+
+constexpr auto INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE = "Integer value too big to be representable";
 } // namespace Lexer
 
 namespace PP

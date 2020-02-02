@@ -18,8 +18,6 @@ int main(int argc, char* argv[])
     // overrides command line args
     // only do this if you know you need to
 
-    OpenCL::colourConsoleOutput = true;
-
     int numFailed = session.run();
 
     // numFailed is clamped to 255 as some unices only use the lower 8 bits.
@@ -27,8 +25,6 @@ int main(int argc, char* argv[])
     // You can also do any post run clean-up here
     return numFailed;
 }
-
-bool OpenCL::colourConsoleOutput = false;
 
 #ifdef __clang__
     #if _WIN32 && __clang_major__ == 8 && __clang_minor__ == 0 && __clang_patchlevel__ == 0

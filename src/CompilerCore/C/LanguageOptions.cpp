@@ -6,25 +6,28 @@
 #include <limits>
 
 OpenCL::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned,
-                                         std::uint8_t sizeOfWChar, std::uint8_t sizeOfShort, std::uint8_t sizeOfInt,
-                                         std::uint8_t sizeOfLong, std::uint8_t sizeOfLongDoubleBits,
-                                         std::uint8_t sizeOfVoidStar)
+                                         std::uint8_t sizeOfWChar, bool wcharIsSigned, std::uint8_t sizeOfShort,
+                                         std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
+                                         std::uint8_t sizeOfLongDoubleBits, std::uint8_t sizeOfVoidStar)
     : m_language(language),
       m_sizeOfUnderlineBool(sizeOfUnderlineBool),
       m_charIsSigned(charIsSigned),
       m_sizeOfWChar(sizeOfWChar),
+      m_wcharIsSigned(wcharIsSigned),
       m_sizeOfShort(sizeOfShort),
       m_sizeOfInt(sizeOfInt),
       m_sizeOfLong(sizeOfLong),
       m_sizeOfLongDoubleBits(sizeOfLongDoubleBits),
       m_sizeOfVoidStar(sizeOfVoidStar)
 {
+    // C Standard requirements
     assert(m_sizeOfShort >= 2);
     assert(m_sizeOfInt >= 2);
     assert(m_sizeOfShort <= m_sizeOfInt);
     assert(m_sizeOfLong >= 4);
     assert(m_sizeOfInt <= m_sizeOfLong);
 
+    // This implementations limits
     assert(m_sizeOfUnderlineBool <= 8);
     assert(m_sizeOfShort <= 8);
     assert(m_sizeOfWChar <= 8);
@@ -44,7 +47,7 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfUnderlineBool() const
     return m_sizeOfUnderlineBool;
 }
 
-bool OpenCL::LanguageOptions::isCharIsSigned() const
+bool OpenCL::LanguageOptions::isCharSigned() const
 {
     return m_charIsSigned;
 }
@@ -77,8 +80,8 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfLongLong() const
 OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
 {
     return OpenCL::LanguageOptions(
-        language, sizeof(bool), std::numeric_limits<char>::is_signed, sizeof(wchar_t), sizeof(short), sizeof(int),
-        sizeof(long),
+        language, sizeof(bool), std::is_signed_v<wchar_t>, sizeof(wchar_t), std::is_signed_v<wchar_t>, sizeof(short),
+        sizeof(int), sizeof(long),
         []() -> std::uint8_t {
             switch (std::numeric_limits<long double>::digits)
             {
@@ -100,4 +103,9 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfLongDoubleBits() const
 std::uint8_t OpenCL::LanguageOptions::getSizeOfVoidStar() const
 {
     return m_sizeOfVoidStar;
+}
+
+bool OpenCL::LanguageOptions::isWCharSigned() const
+{
+    return m_wcharIsSigned;
 }

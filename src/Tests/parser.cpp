@@ -16,13 +16,10 @@
         REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source)); \
         auto tree = OpenCL::Parser::buildTree(tokens, &ss);        \
         CHECK_THAT(string, matches);                               \
-        if (OpenCL::colourConsoleOutput)                           \
+        OpenCL::Parser::buildTree(tokens);                         \
+        if (!string.empty())                                       \
         {                                                          \
-            OpenCL::Parser::buildTree(tokens);                     \
-            if (!string.empty())                                   \
-            {                                                      \
-                llvm::errs() << '\n';                              \
-            }                                                      \
+            llvm::errs() << '\n';                                  \
         }                                                          \
     } while (0)
 
@@ -41,7 +38,6 @@
             CHECK((!string.empty() || begin == tokens.data().cend())); \
         }                                                              \
         CHECK_THAT(string, matches);                                   \
-        if (OpenCL::colourConsoleOutput)                               \
         {                                                              \
             auto begin2 = tokens.data().cbegin();                      \
             OpenCL::Parser::Context context2(tokens);                  \

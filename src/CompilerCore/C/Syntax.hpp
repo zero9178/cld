@@ -212,8 +212,7 @@ public:
 class PrimaryExpressionConstant final : public Node
 {
 public:
-    using variant = std::variant<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t, float, double, std::string,
-                                 Lexer::NonCharString>;
+    using variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
 
 private:
     variant m_value;

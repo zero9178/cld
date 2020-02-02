@@ -1310,7 +1310,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
 }
 
 template <class T, class... Args>
-std::optional<Token::ValueType> castInteger(std::uint64_t integer)
+Token::ValueType castInteger(std::uint64_t integer)
 {
     // Clang
 #pragma clang diagnostic push
@@ -1322,23 +1322,39 @@ std::optional<Token::ValueType> castInteger(std::uint64_t integer)
 #pragma warning(push)
 #pragma warning(disable : 4018)
 #pragma warning(disable : 4389)
-    if (integer <= std::numeric_limits<T>::max())
+    if constexpr (std::is_signed_v<T>)
     {
-        return {static_cast<T>(integer)};
+        if (llvm::APInt::getSignedMaxValue(sizeof(T) * 8).uge(integer))
+        {
+            return {llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)};
+        }
     }
-    else if constexpr (sizeof...(Args) != 0)
+    else
+    {
+        if (llvm::APInt::getMaxValue(sizeof(T) * 8).uge(integer))
+        {
+            return {llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)};
+        }
+    }
+    if constexpr (sizeof...(Args) != 0)
     {
         return castInteger<Args...>(integer);
     }
     else
     {
-        return {};
+        OPENCL_UNREACHABLE;
     }
 #pragma GCC diagnostic pop
 #pragma clang diagnostic pop
 #pragma warning(pop)
 }
 
+/**
+ * @tparam Integers Integer types allowed to be cast to
+ * @param begin First character in string
+ * @param end First character not part of the string anymore
+ * @return Integer value or Empty optional if integer value is too large
+ */
 template <class... Integers>
 std::optional<Token::ValueType> parseInteger(const char* begin, const char* end)
 {
@@ -1346,6 +1362,12 @@ std::optional<Token::ValueType> parseInteger(const char* begin, const char* end)
     static_assert(sizeof...(Integers) >= 1);
     // *end is not NULL. strtoull requires a null terminated string as input
     std::string input(begin, end);
+    llvm::APInt test;
+    llvm::StringRef(input).getAsInteger(0, test);
+    if (test.getBitWidth() > 64)
+    {
+        return {};
+    }
     char* endPtr;
     auto result = std::strtoull(input.data(), &endPtr, 0);
     assert(*endPtr == '\0');
@@ -1404,6 +1426,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
                             context.getOffset() - 1, context.tokenStartOffset, context.getOffset() - 1);
         errorsOccurred = true;
     }
+
     bool isHexOrOctal = isHex;
     if (!isHex && !isFloat && *begin == '0')
     {
@@ -1419,9 +1442,11 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
         }
     }
+
     auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
     if (!isFloat)
     {
+        std::optional<OpenCL::Lexer::Token::ValueType> result;
         if (suffix.empty())
         {
             if (errorsOccurred)
@@ -1435,45 +1460,48 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
                     {
                         if (context.getLanguageOptions().getSizeOfLong() == 4)
                         {
-                            return parseInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
-                                                std::uint64_t>(begin, suffixBegin);
+                            result = parseInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t,
+                                                  std::int64_t, std::uint64_t>(begin, suffixBegin);
                         }
                         else
                         {
-                            return parseInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(begin,
-                                                                                                          suffixBegin);
+                            result = parseInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
+                                begin, suffixBegin);
                         }
                     }
                     else
                     {
                         if (context.getLanguageOptions().getSizeOfLong() == 4)
                         {
-                            return parseInteger<std::int16_t, std::int32_t, std::int64_t>(begin, suffixBegin);
+                            result = parseInteger<std::int16_t, std::int32_t, std::int64_t>(begin, suffixBegin);
                         }
                         else
                         {
-                            return parseInteger<std::int16_t, std::int64_t>(begin, suffixBegin);
+                            result = parseInteger<std::int16_t, std::int64_t>(begin, suffixBegin);
                         }
                     }
+                    break;
                 case 4:
                     if (isHexOrOctal)
                     {
-                        return parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin,
-                                                                                                      suffixBegin);
+                        result =
+                            parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin, suffixBegin);
                     }
                     else
                     {
-                        return parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
+                        result = parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
                     }
+                    break;
                 case 8:
                     if (isHexOrOctal)
                     {
-                        return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                        result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
                     }
                     else
                     {
-                        return parseInteger<std::int64_t>(begin, suffixBegin);
+                        result = parseInteger<std::int64_t>(begin, suffixBegin);
                     }
+                    break;
                 default: OPENCL_UNREACHABLE;
             }
         }
@@ -1488,14 +1516,15 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
                 case 2:
                     if (context.getLanguageOptions().getSizeOfLong() == 4)
                     {
-                        return parseInteger<std::uint16_t, std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                        result = parseInteger<std::uint16_t, std::uint32_t, std::uint64_t>(begin, suffixBegin);
                     }
                     else
                     {
-                        return parseInteger<std::uint16_t, std::uint64_t>(begin, suffixBegin);
+                        result = parseInteger<std::uint16_t, std::uint64_t>(begin, suffixBegin);
                     }
-                case 4: return parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
-                case 8: return parseInteger<std::uint64_t>(begin, suffixBegin);
+                    break;
+                case 4: result = parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin); break;
+                case 8: result = parseInteger<std::uint64_t>(begin, suffixBegin); break;
                 default: OPENCL_UNREACHABLE;
             }
         }
@@ -1509,22 +1538,22 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             {
                 if (context.getLanguageOptions().getSizeOfLong() == 4)
                 {
-                    return parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin, suffixBegin);
+                    result = parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin, suffixBegin);
                 }
                 else
                 {
-                    return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                    result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
                 }
             }
             else
             {
                 if (context.getLanguageOptions().getSizeOfLong() == 4)
                 {
-                    return parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
+                    result = parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
                 }
                 else
                 {
-                    return parseInteger<std::int64_t>(begin, suffixBegin);
+                    result = parseInteger<std::int64_t>(begin, suffixBegin);
                 }
             }
         }
@@ -1538,11 +1567,11 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             }
             if (context.getLanguageOptions().getSizeOfLong() == 4)
             {
-                return parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                result = parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
             }
             else
             {
-                return parseInteger<std::uint64_t>(begin, suffixBegin);
+                result = parseInteger<std::uint64_t>(begin, suffixBegin);
             }
         }
         else if (suffix == "ll" || suffix == "LL")
@@ -1553,11 +1582,11 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             }
             if (isHexOrOctal)
             {
-                return parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
             }
             else
             {
-                return parseInteger<std::int64_t>(begin, suffixBegin);
+                result = parseInteger<std::int64_t>(begin, suffixBegin);
             }
         }
         else if (suffix.size() == 3
@@ -1568,8 +1597,25 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             {
                 return {};
             }
-            return parseInteger<std::uint64_t>(begin, suffixBegin);
+            result = parseInteger<std::uint64_t>(begin, suffixBegin);
         }
+        else
+        {
+            std::vector<std::uint64_t> arrows(suffix.size());
+            std::iota(arrows.begin(), arrows.end(),
+                      context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
+            context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+                                context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
+                                context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
+            return {};
+        }
+        if (result)
+        {
+            return result;
+        }
+        context.reportError(OpenCL::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
+                            context.tokenStartOffset, context.getOffset() - 1);
+        return {};
     }
     else
     {
@@ -1619,15 +1665,15 @@ std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint)
     {
         return 1;
     }
-    else if (codepoint <= 0x07FF)
+    if (codepoint <= 0x07FF)
     {
         return 2;
     }
-    else if (codepoint <= 0xFFFF)
+    if (codepoint <= 0xFFFF)
     {
         return 3;
     }
-    else if (codepoint <= 0x10FFFF)
+    if (codepoint <= 0x10FFFF)
     {
         return 4;
     }
@@ -1880,10 +1926,9 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
         {
             if (wide)
             {
-                std::uint32_t buffer = result[0];
-                std::int32_t value;
-                std::memcpy(&value, &buffer, sizeof(std::int32_t));
-                context.push(TokenType::Literal, llvm::APSInt(llvm::APInt(32, value, true), false));
+                context.push(TokenType::Literal,
+                             llvm::APSInt(llvm::APInt(context.getLanguageOptions().getSizeOfWChar() * 8, result[0]),
+                                          !context.getLanguageOptions().isWCharSigned()));
             }
             else
             {
@@ -1893,7 +1938,7 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
         }
         else
         {
-            context.push(TokenType::Literal, static_cast<std::int64_t>(result[0]));
+            context.push(TokenType::Literal, llvm::APSInt::get(result[0]));
         }
         return Start{};
     }
