@@ -6,15 +6,17 @@
 
 #include <array>
 
-static std::pair<OpenCL::Semantics::TranslationUnit, std::string> generateSemantics(const std::string& source)
+static std::pair<OpenCL::Semantics::TranslationUnit, std::string>
+    generateSemantics(const std::string& source,
+                      const OpenCL::LanguageOptions& options = OpenCL::LanguageOptions::native())
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     OpenCL::SourceObject tokens;
-    REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source));
+    REQUIRE_NOTHROW(tokens = OpenCL::Lexer::tokenize(source, options));
     auto parsing = OpenCL::Parser::buildTree(tokens, &ss);
     REQUIRE((ss.str().empty() && parsing.second));
-    OpenCL::Semantics::SemanticAnalysis analysis(&ss);
+    OpenCL::Semantics::SemanticAnalysis analysis(tokens, &ss);
     auto semantics = analysis.visit(parsing.first);
     return {semantics, ss.str()};
 }

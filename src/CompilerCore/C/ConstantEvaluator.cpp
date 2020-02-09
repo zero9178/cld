@@ -13,21 +13,102 @@ static_assert(-1 == ~0, "Arithmetic here only works on 2's complement");
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
 {
-    return std::visit(
-        [this, &node](auto&& value) -> Semantics::ConstRetType {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (!std::is_same_v<T, std::string> && !std::is_same_v<T, Lexer::NonCharString>)
+    return match(
+        node.getValue(),
+        [&node, this](const std::string&) -> Semantics::ConstRetType {
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
+                     Modifier(node.begin(), node.end()));
+            return {};
+        },
+        [&node, this](const Lexer::NonCharString&) -> Semantics::ConstRetType {
+            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
+                     Modifier(node.begin(), node.end()));
+            return {};
+        },
+        [this](const llvm::APFloat& floating) -> Semantics::ConstRetType {
+            switch (llvm::APFloat::SemanticsToEnum(floating.getSemantics()))
             {
-                return {value};
-            }
-            else
-            {
-                logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
-                         Modifier(node.begin(), node.end()));
-                return {};
+                case llvm::APFloat::S_IEEEsingle: return {floating, PrimitiveType::createFloat(false, false)};
+                case llvm::APFloat::S_IEEEdouble: return {floating, PrimitiveType::createDouble(false, false)};
+                case llvm::APFloat::S_IEEEquad:
+                case llvm::APFloat::S_x87DoubleExtended:
+                    return {floating, PrimitiveType::createLongDouble(false, false, m_languageOptions)};
+                default: OPENCL_UNREACHABLE;
             }
         },
-        node.getValue());
+        [this](const llvm::APSInt& integer) -> Semantics::ConstRetType {
+            switch (integer.getBitWidth())
+            {
+                case 8:
+                    return {integer, integer.isUnsigned() ? PrimitiveType::createUnsignedChar(false, false) :
+                                                            PrimitiveType::createSignedChar(false, false)};
+                case 16:
+                    if (m_languageOptions.getSizeOfInt() == 2)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
+                                             PrimitiveType::createInt(false, false, m_languageOptions)};
+                    }
+                    else if (m_languageOptions.getSizeOfShort() == 2)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
+                                             PrimitiveType::createShort(false, false, m_languageOptions)};
+                    }
+                    else
+                    {
+                        OPENCL_UNREACHABLE;
+                    }
+                case 32:
+                    if (m_languageOptions.getSizeOfInt() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
+                                             PrimitiveType::createInt(false, false, m_languageOptions)};
+                    }
+                    else if (m_languageOptions.getSizeOfLong() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedLong(false, false, m_languageOptions) :
+                                             PrimitiveType::createLong(false, false, m_languageOptions)};
+                    }
+                    else if (m_languageOptions.getSizeOfShort() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
+                                             PrimitiveType::createShort(false, false, m_languageOptions)};
+                    }
+                    else
+                    {
+                        OPENCL_UNREACHABLE;
+                    }
+                case 64:
+                    if (m_languageOptions.getSizeOfInt() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
+                                             PrimitiveType::createInt(false, false, m_languageOptions)};
+                    }
+                    else if (m_languageOptions.getSizeOfLong() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedLong(false, false, m_languageOptions) :
+                                             PrimitiveType::createLong(false, false, m_languageOptions)};
+                    }
+                    else if (m_languageOptions.getSizeOfShort() == 4)
+                    {
+                        return {integer, integer.isUnsigned() ?
+                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
+                                             PrimitiveType::createShort(false, false, m_languageOptions)};
+                    }
+                    else
+                    {
+                        return {integer, integer.isUnsigned() ? PrimitiveType::createUnsignedLongLong(false, false) :
+                                                                PrimitiveType::createLongLong(false, false)};
+                    }
+                default: OPENCL_UNREACHABLE;
+            }
+        });
 }
 
 OpenCL::Semantics::ConstRetType
@@ -82,7 +163,7 @@ OpenCL::Semantics::ConstRetType
                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
-            return +value;
+            return value.unaryPlus(m_languageOptions);
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
         {
@@ -93,7 +174,7 @@ OpenCL::Semantics::ConstRetType
                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
-            return -value;
+            return value.negate(m_languageOptions);
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
         {
@@ -104,11 +185,11 @@ OpenCL::Semantics::ConstRetType
                          Modifier(node.begin(), node.end(), Modifier::PointAtBeginning));
                 return {};
             }
-            return ~value;
+            return value.bitwiseNegate(m_languageOptions);
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
         {
-            return !value;
+            return value.logicalNegate(m_languageOptions);
         }
     }
     return value;
@@ -132,7 +213,7 @@ OpenCL::Semantics::ConstRetType
                 logError(size.error(), Modifier(typeName->begin(), typeName->end()));
                 return {};
             }
-            return {llvm::APSInt(llvm::APInt(64, *size))};
+            return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createLongLong(false, false)};
         },
         [](auto &&) -> OpenCL::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
 }
@@ -232,7 +313,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
-                value *= other;
+                value.multiplyAssign(other, m_languageOptions);
             }
             break;
             case Syntax::Term::BinaryDotOperator::BinaryDivide:
@@ -246,7 +327,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
-                value /= other;
+                value.divideAssign(other, m_languageOptions);
             }
             break;
             case Syntax::Term::BinaryDotOperator::BinaryRemainder:
@@ -260,7 +341,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
-                value %= other;
+                value.moduloAssign(other, m_languageOptions);
             }
             break;
         }
@@ -318,7 +399,7 @@ OpenCL::Semantics::ConstRetType
                         return {};
                     }
                 }
-                value += other;
+                value.plusAssign(other, m_languageOptions);
             }
             break;
             case Syntax::AdditiveExpression::BinaryDashOperator::BinaryMinus:
@@ -360,7 +441,7 @@ OpenCL::Semantics::ConstRetType
                         return {};
                     }
                 }
-                value -= other;
+                value.minusAssign(other, m_languageOptions);
             }
             break;
         }
@@ -402,7 +483,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
-                value <<= other;
+                value.shiftLeftAssign(other, m_languageOptions);
             }
             break;
             case Syntax::ShiftExpression::ShiftOperator::Right:
@@ -415,7 +496,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                              Modifier(exp.begin() - 1, exp.begin(), Modifier::PointAtBeginning));
                     return {};
                 }
-                value >>= other;
+                value.shiftRightAssign(other, m_languageOptions);
             }
             break;
         }
@@ -453,7 +534,7 @@ OpenCL::Semantics::ConstRetType
                      Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
-        value &= other;
+        value.bitAndAssign(other, m_languageOptions);
     }
     return value;
 }
@@ -489,7 +570,7 @@ OpenCL::Semantics::ConstRetType
                      Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
-        value ^= other;
+        value.bitXorAssign(other, m_languageOptions);
     }
     return value;
 }
@@ -523,7 +604,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                      Modifier(iter->begin() - 1, iter->begin(), Modifier::PointAtBeginning));
             return {};
         }
-        value |= other;
+        value.bitOrAssign(other, m_languageOptions);
     }
     return value;
 }
@@ -667,22 +748,22 @@ OpenCL::Semantics::ConstRetType
         {
             case Syntax::RelationalExpression::RelationalOperator::GreaterThan:
             {
-                value = value > other;
+                value = value.greaterThan(other, m_languageOptions);
             }
             break;
             case Syntax::RelationalExpression::RelationalOperator::GreaterThanOrEqual:
             {
-                value = value >= other;
+                value = value.greaterOrEqual(other, m_languageOptions);
             }
             break;
             case Syntax::RelationalExpression::RelationalOperator::LessThan:
             {
-                value = value < other;
+                value = value.lessThan(other, m_languageOptions);
             }
             break;
             case Syntax::RelationalExpression::RelationalOperator::LessThanOrEqual:
             {
-                value = value <= other;
+                value = value.lessOrEqual(other, m_languageOptions);
             }
             break;
         }
@@ -742,7 +823,7 @@ OpenCL::Semantics::ConstRetType
             else
             {
                 auto& null = value.isInteger() ? value : other;
-                if (null.to<std::int64_t>() != 0)
+                if (null.toUInt() != 0)
                 {
                     logError(ErrorMessages::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
 
@@ -756,12 +837,12 @@ OpenCL::Semantics::ConstRetType
         {
             case Syntax::EqualityExpression::EqualityOperator::Equal:
             {
-                value = value == other;
+                value = value.equal(other, m_languageOptions);
             }
             break;
             case Syntax::EqualityExpression::EqualityOperator::NotEqual:
             {
-                value = value != other;
+                value = value.notEqual(other, m_languageOptions);
             }
             break;
         }
@@ -802,7 +883,8 @@ OpenCL::Semantics::ConstRetType
                 }
                 else if (auto* value = std::get_if<std::int32_t>(decl))
                 {
-                    return {llvm::APSInt(llvm::APInt(32, *value, true), false)};
+                    return {llvm::APSInt(llvm::APInt(m_languageOptions.getSizeOfInt(), *value, true), false),
+                            PrimitiveType::createInt(false, false, m_languageOptions)};
                 }
             }
             logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
@@ -875,8 +957,8 @@ OpenCL::Semantics::ConstRetType
                 case Syntax::AssignmentExpression::AssignOperator::BitAndAssign: return "&=";
                 case Syntax::AssignmentExpression::AssignOperator::BitOrAssign: return "|=";
                 case Syntax::AssignmentExpression::AssignOperator::BitXorAssign: return "^=";
-                default: OPENCL_UNREACHABLE;
             }
+            OPENCL_UNREACHABLE;
         }() + '\''),
                  Modifier(cond.begin() - 1, cond.begin()));
     }
@@ -915,115 +997,45 @@ OpenCL::Semantics::ConstRetType
 
 OpenCL::Semantics::ConstRetType::ConstRetType(const OpenCL::Semantics::ConstRetType::ValueType& value,
                                               const OpenCL::Semantics::Type& type)
-    : m_value(value), m_type(type.isUndefined() ? valueToType(m_value) : type)
+    : m_value(value), m_type(type)
 {
-}
-
-OpenCL::Semantics::Type
-    OpenCL::Semantics::ConstRetType::valueToType(const OpenCL::Semantics::ConstRetType::ValueType& value)
-{
-    return match(
-        value, [](std::int8_t) { return PrimitiveType::createChar(false, false); },
-        [](std::uint8_t) { return PrimitiveType::createUnsignedChar(false, false); },
-        [](std::int16_t) { return PrimitiveType::createShort(false, false); },
-        [](std::uint16_t) { return PrimitiveType::createUnsignedShort(false, false); },
-        [](std::int32_t) { return PrimitiveType::createInt(false, false); },
-        [](std::uint32_t) { return PrimitiveType::createUnsignedInt(false, false); },
-        [](std::int64_t) { return PrimitiveType::createLongLong(false, false); },
-        [](std::uint64_t) { return PrimitiveType::createUnsignedLongLong(false, false); },
-        [](float) { return PrimitiveType::createFloat(false, false); },
-        [](double) { return PrimitiveType::createDouble(false, false); }, [](auto&&) { return Type{}; });
-}
-
-template <class F>
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::applyBinary(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                             F&& binaryOperator) const
-{
-    return match(
-        m_value, [](VoidStar) -> ConstRetType { return {}; }, [](std::monostate) -> ConstRetType { return {}; },
-        [&rhs, &binaryOperator](auto&& value) -> ConstRetType {
-            return match(
-                rhs.m_value, [](VoidStar) -> ConstRetType { return {}; },
-                [](std::monostate) -> ConstRetType { return {}; },
-                [value, &binaryOperator](auto&& otherValue) -> ConstRetType {
-                    return {binaryOperator(value, otherValue)};
-                });
-        });
-}
-
-template <class F>
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::applyIntegerBinary(const OpenCL::Semantics::ConstRetType& rhs,
-                                                        F&& binaryOperator) const
-{
-    return match(
-        m_value, [](VoidStar) -> ConstRetType { return {}; }, [](std::monostate) -> ConstRetType { return {}; },
-        [](float) -> ConstRetType { return {}; }, [](double) -> ConstRetType { return {}; },
-        [&rhs, &binaryOperator](auto&& value) -> ConstRetType {
-            return match(
-                rhs.m_value, [](VoidStar) -> ConstRetType { return {}; },
-                [](std::monostate) -> ConstRetType { return {}; }, [](float) -> ConstRetType { return {}; },
-                [](double) -> ConstRetType { return {}; },
-                [value, &binaryOperator](auto&& otherValue) -> ConstRetType {
-                    return {binaryOperator(value, otherValue)};
-                });
-        });
 }
 
 bool OpenCL::Semantics::ConstRetType::isInteger() const
 {
-    return std::visit(
-        [](auto&& value) {
-            using T = std::decay_t<decltype(value)>;
-            return std::is_integral_v<T> || std::is_same_v<T, std::monostate>;
-        },
-        m_value);
+    return std::holds_alternative<std::monostate>(m_value) || std::holds_alternative<llvm::APSInt>(m_value);
 }
 
 bool OpenCL::Semantics::ConstRetType::isArithmetic() const
 {
-    return std::visit(
-        [](auto&& value) {
-            using T = std::decay_t<decltype(value)>;
-            return std::is_arithmetic_v<T> || std::is_same_v<T, std::monostate>;
+    return !std::holds_alternative<VoidStar>(m_value);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::unaryPlus(const LanguageOptions& options) const
+{
+    return match(
+        m_value,
+        [this](VoidStar address) -> ConstRetType {
+            return {address, m_type};
         },
-        m_value);
+        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [this](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating, m_type};
+        },
+        [this, &options](const llvm::APSInt& integer) -> ConstRetType {
+            if (integer.getBitWidth() < options.getSizeOfInt() * 8)
+            {
+                return {integer.extend(options.getSizeOfInt() * 8), PrimitiveType::createInt(false, false, options)};
+            }
+            return {std::move(integer), m_type};
+        });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator+() const
-{
-    return {match(
-        m_value, [](VoidStar) -> ConstRetType { return {}; }, [this](std::monostate) -> ConstRetType { return *this; },
-        [](auto&& value) -> ConstRetType { return {+value}; })};
-}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::negate(const LanguageOptions& options) const {}
 
-#pragma warning(push)
-#pragma warning(disable : 4146)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::logicalNegate(const LanguageOptions& options) const {}
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator-() const
-{
-    return {match(
-        m_value, [](VoidStar) -> ConstRetType { return {}; }, [this](std::monostate) -> ConstRetType { return *this; },
-        [](auto&& value) -> ConstRetType { return {-value}; })};
-}
-
-#pragma warning(pop)
-
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator!() const
-{
-    return {match(
-        m_value, [](VoidStar value) -> ConstRetType { return {static_cast<std::int32_t>(!value.address)}; },
-        [this](std::monostate) -> ConstRetType { return *this; },
-        [](auto&& value) -> ConstRetType { return {static_cast<std::int32_t>(!value)}; })};
-}
-
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::operator~() const
-{
-    return {match(
-        m_value, [](VoidStar) -> ConstRetType { return {}; }, [this](std::monostate) -> ConstRetType { return *this; },
-        [](float) -> ConstRetType { return {}; }, [](double) -> ConstRetType { return {}; },
-        [](auto&& value) -> ConstRetType { return {~value}; })};
-}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitwiseNegate(const LanguageOptions& options) const {}
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ConstRetType::getType() const
 {
@@ -1035,319 +1047,128 @@ const OpenCL::Semantics::ConstRetType::ValueType& OpenCL::Semantics::ConstRetTyp
     return m_value;
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type) const {}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::multiply(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                          const LanguageOptions& options) const
 {
-    return match(
-        m_value, [this](std::monostate) -> ConstRetType { return *this; },
-        [&type](VoidStar value) -> ConstRetType {
-            return match(
-                type.get(),
-                [&type, value](const PointerType&) -> ConstRetType {
-                    return {value, type};
-                },
-                [&type, value](const PrimitiveType& primitiveType) -> ConstRetType {
-                    if (primitiveType.isFloatingPoint())
-                    {
-                        return {};
-                    }
-                    else
-                    {
-                        switch (primitiveType.getBitCount())
-                        {
-                            case 8:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int8_t>(value.address), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint8_t>(value.address), type};
-                                }
-                            }
-                            case 16:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int16_t>(value.address), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint16_t>(value.address), type};
-                                }
-                            }
-                            case 32:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int32_t>(value.address), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint32_t>(value.address), type};
-                                }
-                            }
-                            case 64:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int64_t>(value.address), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint64_t>(value.address), type};
-                                }
-                            }
-                        }
-                    }
-                    return {};
-                },
-                [](auto &&) -> ConstRetType { return {}; });
-        },
-        [&type](auto&& value) -> ConstRetType {
-            return match(
-                type.get(),
-                [value, &type](const PrimitiveType& primitiveType) -> ConstRetType {
-                    if (primitiveType.isFloatingPoint())
-                    {
-                        switch (primitiveType.getBitCount())
-                        {
-                            case 32: return {static_cast<float>(value), type};
-                            case 64: return {static_cast<double>(value), type};
-                        }
-                    }
-                    else
-                    {
-                        switch (primitiveType.getBitCount())
-                        {
-                            case 8:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int8_t>(value), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint8_t>(value), type};
-                                }
-                            }
-                            case 16:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int16_t>(value), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint16_t>(value), type};
-                                }
-                            }
-                            case 32:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int32_t>(value), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint32_t>(value), type};
-                                }
-                            }
-                            case 64:
-                            {
-                                if (primitiveType.isSigned())
-                                {
-                                    return {static_cast<std::int64_t>(value), type};
-                                }
-                                else
-                                {
-                                    return {static_cast<std::uint64_t>(value), type};
-                                }
-                            }
-                        }
-                    }
-                    return {};
-                },
-                [value, &type](const PointerType&) -> ConstRetType {
-                    using T = std::decay_t<decltype(value)>;
-                    if constexpr (std::is_integral_v<T>)
-                    {
-                        return {VoidStar{static_cast<std::uint64_t>(value)}, type};
-                    }
-                    else
-                    {
-                        (void)value;
-                        (void)type;
-                        return {};
-                    }
-                },
-                [](auto &&) -> ConstRetType { return {}; });
-        });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator*(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::divide(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options) const
 {
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return lhs * rhs; });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator/(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::modulo(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options) const
 {
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return lhs / rhs; });
-}
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator%(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs % rhs; });
-}
-
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator*=(const OpenCL::Semantics::ConstRetType& rhs)
-{
-    return *this = *this * rhs;
-}
-
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator/=(const OpenCL::Semantics::ConstRetType& rhs)
-{
-    return *this = *this / rhs;
-}
-
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator%=(const OpenCL::Semantics::ConstRetType& rhs)
-{
-    return *this = *this % rhs;
-}
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator+(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (isArithmetic() != rhs.isArithmetic())
-    {
-        // One is a pointer
-        auto& ptr = rhs.isArithmetic() ? *this : rhs;
-        auto& other = rhs.isArithmetic() ? rhs : *this;
-        if (!other.isInteger())
-        {
-            return {};
-        }
-        auto size = sizeOf(std::get<PointerType>(ptr.getType().get()).getElementType());
-        if (!size)
-        {
-            return {};
-        }
-        return {VoidStar{std::get<VoidStar>(ptr.getValue()).address + *size * other.to<int64_t>()}, ptr.getType()};
-    }
-    else
-    {
-        return applyBinary(rhs, [](auto lhs, auto rhs) { return lhs + rhs; });
-    }
-}
-
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator+=(const OpenCL::Semantics::ConstRetType& rhs)
-{
-    return *this = *this + rhs;
-}
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator-(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && (rhs.isInteger() || !rhs.isArithmetic()))
-    {
-        auto size = sizeOf(std::get<PointerType>(getType().get()).getElementType());
-        if (!size)
-        {
-            return {};
-        }
-        if (!rhs.isArithmetic())
-        {
-            return {static_cast<std::int64_t>(
-                (std::get<VoidStar>(getValue()).address - std::get<VoidStar>(rhs.getValue()).address) / *size)};
-        }
-        if (!rhs.isInteger())
-        {
-            return {};
-        }
-        return {VoidStar{std::get<VoidStar>(getValue()).address - *size * rhs.template to<int64_t>()}, getType()};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return lhs - rhs; });
-}
-
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator-=(const OpenCL::Semantics::ConstRetType& rhs)
-{
-    return *this = *this - rhs;
-}
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator<<(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs << rhs; });
 }
 
 OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::operator<<=(const OpenCL::Semantics::ConstRetType& rhs)
+    OpenCL::Semantics::ConstRetType::multiplyAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                    const LanguageOptions& options)
 {
-    return *this = *this << rhs;
-}
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator>>(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs >> rhs; });
+    return *this = multiply(rhs, options);
 }
 
 OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::operator>>=(const OpenCL::Semantics::ConstRetType& rhs)
+    OpenCL::Semantics::ConstRetType::divideAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                  const LanguageOptions& options)
 {
-    return *this = *this >> rhs;
+    return *this = divide(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator&(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::moduloAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                  const LanguageOptions& options)
 {
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs & rhs; });
+    return *this = modulo(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator&=(const OpenCL::Semantics::ConstRetType& rhs)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::plus(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                      const LanguageOptions& options) const
 {
-    return *this = *this & rhs;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator^(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::plusAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                             const LanguageOptions& options)
 {
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs ^ rhs; });
+    return *this = plus(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator^=(const OpenCL::Semantics::ConstRetType& rhs)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::minus(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options) const
 {
-    return *this = *this ^ rhs;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator|(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::minusAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                 const LanguageOptions& options)
 {
-    return applyIntegerBinary(rhs, [](auto lhs, auto rhs) { return lhs | rhs; });
+    return *this = minus(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::operator|=(const OpenCL::Semantics::ConstRetType& rhs)
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftLeft(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                           const LanguageOptions& options) const
 {
-    return *this = *this | rhs;
 }
 
-OpenCL::Semantics::ConstRetType::operator bool() const
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::shiftLeftAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                     const LanguageOptions& options)
 {
-    return match(
-        m_value, [](std::monostate) { return false; }, [](VoidStar ptr) { return ptr.address != 0; },
-        [](auto value) { return value != 0; });
+    return *this = shiftLeft(rhs, options);
 }
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftRight(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                            const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::shiftRightAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                      const LanguageOptions& options)
+{
+    return *this = shiftRight(rhs, options);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitAnd(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::bitAndAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                  const LanguageOptions& options)
+{
+    return *this = bitAnd(rhs, options);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitXor(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::bitXorAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                  const LanguageOptions& options)
+{
+    return *this = bitXor(rhs, options);
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitOr(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType&
+    OpenCL::Semantics::ConstRetType::bitOrAssign(const OpenCL::Semantics::ConstRetType& rhs,
+                                                 const LanguageOptions& options)
+{
+    return *this = bitOr(rhs, options);
+}
+
+OpenCL::Semantics::ConstRetType::operator bool() const {}
 
 bool OpenCL::Semantics::ConstRetType::isUndefined() const
 {
@@ -1356,130 +1177,54 @@ bool OpenCL::Semantics::ConstRetType::isUndefined() const
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::toBool() const
 {
-    return {*this ? 1 : 0};
+    return {llvm::APSInt(llvm::APInt(8, *this ? 1 : 0), false), PrimitiveType::createUnderlineBool(false, false)};
 }
 
-// Clang
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-compare"
-// GCC
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-// MSVC
-#pragma warning(push)
-#pragma warning(disable : 4018)
-#pragma warning(disable : 4389)
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator<(const OpenCL::Semantics::ConstRetType& rhs) const
+std::int64_t OpenCL::Semantics::ConstRetType::toInt() const
 {
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          < std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs < rhs); });
+    return match(
+        m_value, [](VoidStar pointer) -> std::int64_t { return pointer.address; },
+        [](const llvm::APFloat& floating) -> std::int64_t { return floating.convertToDouble(); },
+        [](const llvm::APSInt& integer) -> std::int64_t { return integer.getSExtValue(); },
+        [](std::monostate) -> std::int64_t { OPENCL_UNREACHABLE; });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator>(const OpenCL::Semantics::ConstRetType& rhs) const
+std::uint64_t OpenCL::Semantics::ConstRetType::toUInt() const
 {
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          > std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs > rhs); });
+    return match(
+        m_value, [](VoidStar pointer) -> std::uint64_t { return pointer.address; },
+        [](const llvm::APFloat& floating) -> std::uint64_t { return floating.convertToDouble(); },
+        [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
+        [](std::monostate) -> std::uint64_t { OPENCL_UNREACHABLE; });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessThan(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                          const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::greaterThan(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                             const LanguageOptions& options) const
+{
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                             const LanguageOptions& options) const
+{
 }
 
 OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator<=(const OpenCL::Semantics::ConstRetType& rhs) const
+    OpenCL::Semantics::ConstRetType::greaterOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
+                                                    const LanguageOptions& options) const
 {
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          <= std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs <= rhs); });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator>=(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::equal(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options) const
 {
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          >= std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs >= rhs); });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator==(const OpenCL::Semantics::ConstRetType& rhs) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::notEqual(const OpenCL::Semantics::ConstRetType& rhs,
+                                                                          const LanguageOptions& options) const
 {
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          == std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    else if ((!isArithmetic() && rhs.isInteger()) || (isInteger() && !rhs.isArithmetic()))
-    {
-        auto& ptr = isArithmetic() ? rhs : *this;
-        auto& null = isArithmetic() ? *this : rhs;
-        if (null.to<std::int64_t>() != 0)
-        {
-            return {};
-        }
-        return {static_cast<std::int32_t>(std::get<VoidStar>(ptr.getValue()).address == 0)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs == rhs); });
 }
-
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::operator!=(const OpenCL::Semantics::ConstRetType& rhs) const
-{
-    if (isUndefined() || rhs.isUndefined())
-    {
-        return {};
-    }
-    if (!isArithmetic() && !rhs.isArithmetic())
-    {
-        return {static_cast<std::int32_t>(std::get<VoidStar>(getValue()).address
-                                          != std::get<VoidStar>(rhs.getValue()).address)};
-    }
-    else if ((!isArithmetic() && rhs.isInteger()) || (isInteger() && !rhs.isArithmetic()))
-    {
-        auto& ptr = isArithmetic() ? rhs : *this;
-        auto& null = isArithmetic() ? *this : rhs;
-        if (null.to<std::int64_t>() != 0)
-        {
-            return {};
-        }
-        return {static_cast<std::int32_t>(std::get<VoidStar>(ptr.getValue()).address != 0)};
-    }
-    return applyBinary(rhs, [](auto lhs, auto rhs) { return static_cast<std::int32_t>(lhs != rhs); });
-}
-
-#pragma GCC diagnostic pop
-#pragma clang diagnostic pop
-#pragma warning(pop)

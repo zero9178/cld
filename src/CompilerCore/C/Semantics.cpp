@@ -235,33 +235,10 @@ std::uint8_t OpenCL::Semantics::PrimitiveType::getBitCount() const
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                                 bool isSigned, std::uint8_t bitCount)
+                                                                 bool isSigned, std::uint8_t bitCount, std::string name)
 {
-    return OpenCL::Semantics::Type(
-        isConst, isVolatile,
-        [=]() -> const char* {
-            if (isFloatingPoint)
-            {
-                if (bitCount == 32)
-                {
-                    return "float";
-                }
-                else if (bitCount == 64)
-                {
-                    return "double";
-                }
-                return "";
-            }
-            switch (bitCount)
-            {
-                case 8: return isSigned ? "char" : "unsigned char";
-                case 16: return isSigned ? "short" : "unsigned short";
-                case 32: return isSigned ? "int" : "unsigned int";
-                case 64: return isSigned ? "long long" : "unsigned long long";
-                default: return "void";
-            }
-        }(),
-        PrimitiveType(isFloatingPoint, isSigned, bitCount));
+    return OpenCL::Semantics::Type(isConst, isVolatile, std::move(name),
+                                   PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
 
 bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::PrimitiveType& rhs) const
@@ -279,59 +256,92 @@ bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::Primi
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
+                                                                     const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, 8);
+    return create(isConst, isVolatile, false, options.isCharSigned(), 8, "char");
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 8, "signed char");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 8);
+    return create(isConst, isVolatile, false, false, 8, "unsigned char");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 16);
+    return create(isConst, isVolatile, false, false, 8, "_Bool");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
+                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, 16);
+    return create(isConst, isVolatile, false, true, options.getSizeOfShort(), "short");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
+                                                                              const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, 32);
+    return create(isConst, isVolatile, false, false, options.getSizeOfShort(), "unsigned short");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile)
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
+                                                                    const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, 32);
+    return create(isConst, isVolatile, false, true, options.getSizeOfInt(), "int");
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
+                                                                            const LanguageOptions& options)
+{
+    return create(isConst, isVolatile, false, false, options.getSizeOfInt(), "unsigned int");
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
+                                                                     const LanguageOptions& options)
+{
+    return create(isConst, isVolatile, false, true, options.getSizeOfLong(), "long");
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
+                                                                             const LanguageOptions& options)
+{
+    return create(isConst, isVolatile, false, false, options.getSizeOfLong(), "unsigned long");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 64);
+    return create(isConst, isVolatile, false, true, 64, "long long");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 64);
+    return create(isConst, isVolatile, false, false, 64, "unsigned long long");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 32);
+    return create(isConst, isVolatile, true, true, 32, "float");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 64);
+    return create(isConst, isVolatile, true, true, 64, "double");
+}
+
+OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
+                                                                           const LanguageOptions& options)
+{
+    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits() == 64 ? 64 : 128, "long double");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 0);
+    return create(isConst, isVolatile, false, true, 0, "void");
 }
 
 OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type)

@@ -9,8 +9,11 @@
 namespace OpenCL::Tests
 {
 const inline auto x64windowsGnu = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8);
+const inline auto x86windowsGnu = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 4);
 const inline auto x64windowsMsvc = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 8);
+const inline auto x86windowsMsvc = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 4);
 const inline auto x64linux = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 4, true, 2, 4, 8, 80, 8);
+const inline auto x86linux = LanguageOptions(OpenCL::LanguageOptions::C99, 1, true, 4, true, 2, 4, 4, 80, 4);
 } // namespace OpenCL::Tests
 
 namespace Catch

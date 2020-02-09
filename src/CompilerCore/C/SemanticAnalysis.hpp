@@ -16,6 +16,7 @@ class ConstantEvaluator;
 
 class SemanticAnalysis final
 {
+    const SourceObject& m_sourceObject;
     llvm::raw_ostream* m_reporter;
     std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
     std::vector<std::map<std::string, DeclarationTypedefEnums>> m_declarations{1};
@@ -79,7 +80,10 @@ class SemanticAnalysis final
                                  const std::vector<OpenCL::Syntax::Declaration>& declarations);
 
 public:
-    explicit SemanticAnalysis(llvm::raw_ostream* reporter = nullptr) : m_reporter(reporter) {}
+    explicit SemanticAnalysis(const SourceObject& sourceObject, llvm::raw_ostream* reporter = nullptr)
+        : m_sourceObject(sourceObject), m_reporter(reporter)
+    {
+    }
 
     using DeclarationOrSpecifierQualifier =
         std::variant<std::reference_wrapper<const OpenCL::Syntax::DeclarationSpecifier>,

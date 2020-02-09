@@ -11,7 +11,7 @@ OpenCL::SourceObject::SourceObject(std::vector<std::uint64_t> starts, std::vecto
       m_languageOptions(languageOptions),
       m_substitutions(std::move(substitutions))
 {
-    assert(std::is_sorted(starts.begin(), starts.end()));
+    assert(std::is_sorted(m_starts.begin(), m_starts.end()));
 }
 
 OpenCL::LanguageOptions OpenCL::SourceObject::getLanguageOptions() const

@@ -56,19 +56,31 @@ class PrimitiveType final
     PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
+    static OpenCL::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                          std::uint8_t bitCount, std::string name);
 
-    static Type createChar(bool isConst, bool isVolatile);
+    static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+
+    static Type createSignedChar(bool isConst, bool isVolatile);
+
+    static Type createUnderlineBool(bool isConst, bool isVolatile);
 
     static Type createUnsignedChar(bool isConst, bool isVolatile);
 
-    static Type createShort(bool isConst, bool isVolatile);
+    static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
 
-    static Type createUnsignedShort(bool isConst, bool isVolatile);
+    static Type createUnsignedShort(bool isConst, bool isVolatile,
+                                    const LanguageOptions& options = LanguageOptions::native());
 
-    static Type createInt(bool isConst, bool isVolatile);
+    static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
 
-    static Type createUnsignedInt(bool isConst, bool isVolatile);
+    static Type createUnsignedInt(bool isConst, bool isVolatile,
+                                  const LanguageOptions& options = LanguageOptions::native());
+
+    static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+
+    static Type createUnsignedLong(bool isConst, bool isVolatile,
+                                   const LanguageOptions& options = LanguageOptions::native());
 
     static Type createLongLong(bool isConst, bool isVolatile);
 
@@ -77,6 +89,8 @@ public:
     static Type createFloat(bool isConst, bool isVolatile);
 
     static Type createDouble(bool isConst, bool isVolatile);
+
+    static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     static Type createVoid(bool isConst, bool isVolatile);
 

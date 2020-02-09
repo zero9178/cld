@@ -66,7 +66,7 @@ if (NOT MSVC)
         endif ()
     endif ()
 else ()
-    add_compile_options(/bigobj /permissive /W4 /wd4068 /w34716 /Zc:__cplusplus /utf-8 /EHsc)
+    add_compile_options(/bigobj /permissive- /W4 /wd4068 /w34716 /Zc:__cplusplus /utf-8 /EHsc)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif ()
 

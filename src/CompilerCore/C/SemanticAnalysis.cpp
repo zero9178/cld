@@ -17,7 +17,7 @@ void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages
     {
         for (auto& iter : messages)
         {
-            // TODO: (*m_reporter) << iter;
+            iter.print(*m_reporter, m_sourceObject);
         }
     }
 }
@@ -941,7 +941,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                         }
                         else
                         {
-                            members.emplace_back(std::move(type), std::move(name), result.to<std::size_t>());
+                            members.emplace_back(std::move(type), std::move(name), result.toUInt());
                         }
                     }
                 }
@@ -983,7 +983,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
                             }
                             else
                             {
-                                values.emplace_back(name, value.to<std::int32_t>());
+                                values.emplace_back(name, value.toInt());
                             }
                         }
                     }
@@ -1206,7 +1206,7 @@ OpenCL::Semantics::Type
                     }
                     else
                     {
-                        baseType = ArrayType::create(false, false, false, std::move(baseType), size.to<std::size_t>());
+                        baseType = ArrayType::create(false, false, false, std::move(baseType), size.toUInt());
                     }
                 }
                 else
@@ -1289,8 +1289,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                     }
                     else
                     {
-                        baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType),
-                                                     size.to<std::size_t>());
+                        baseType =
+                            ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), size.toUInt());
                     }
                 }
                 else
@@ -1320,8 +1320,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                 }
                 else
                 {
-                    baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType),
-                                                 size.to<std::size_t>());
+                    baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), size.toUInt());
                 }
             }
             else
@@ -1348,7 +1347,8 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
         },
         [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers) -> void {
             std::vector<std::pair<Type, std::string>> arguments(
-                identifiers.getIdentifiers().size(), {PrimitiveType::create(false, false, false, true, 32), ""});
+                identifiers.getIdentifiers().size(),
+                {PrimitiveType::create(false, false, false, true, 32, std::string()), ""});
             using Iterator = std::vector<Lexer::Token>::const_iterator;
             struct TypeBinding
             {

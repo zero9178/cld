@@ -23,18 +23,10 @@ private:
     ValueType m_value;
     Type m_type;
 
-    template <class F>
-    ConstRetType applyBinary(const ConstRetType& rhs, F&& binaryOperator) const;
-
-    template <class F>
-    ConstRetType applyIntegerBinary(const ConstRetType& rhs, F&& binaryOperator) const;
-
-    static Type valueToType(const ValueType& value);
-
 public:
     ConstRetType() = default;
 
-    /* implicit */ ConstRetType(const ValueType& value, const Type& type = Type{});
+    /* implicit */ ConstRetType(const ValueType& value, const Type& type);
 
     [[nodiscard]] const Type& getType() const;
 
@@ -46,74 +38,75 @@ public:
 
     [[nodiscard]] bool isUndefined() const;
 
-    ConstRetType operator+() const;
+    ConstRetType unaryPlus(const LanguageOptions& options) const;
 
-    ConstRetType operator-() const;
+    ConstRetType negate(const LanguageOptions& options) const;
 
-    ConstRetType operator!() const;
+    ConstRetType logicalNegate(const LanguageOptions& options) const;
 
-    ConstRetType operator~() const;
+    ConstRetType bitwiseNegate(const LanguageOptions& options) const;
 
     [[nodiscard]] ConstRetType castTo(const Type& type) const;
 
-    ConstRetType operator*(const ConstRetType& rhs) const;
+    ConstRetType multiply(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator*=(const ConstRetType& rhs);
+    ConstRetType& multiplyAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator/(const ConstRetType& rhs) const;
+    ConstRetType divide(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator/=(const ConstRetType& rhs);
+    ConstRetType& divideAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator%(const ConstRetType& rhs) const;
+    ConstRetType modulo(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator%=(const ConstRetType& rhs);
+    ConstRetType& moduloAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator+(const ConstRetType& rhs) const;
+    ConstRetType plus(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator+=(const ConstRetType& rhs);
+    ConstRetType& plusAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator-(const ConstRetType& rhs) const;
+    ConstRetType minus(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator-=(const ConstRetType& rhs);
+    ConstRetType& minusAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator<<(const ConstRetType& rhs) const;
+    ConstRetType shiftLeft(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator<<=(const ConstRetType& rhs);
+    ConstRetType& shiftLeftAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator>>(const ConstRetType& rhs) const;
+    ConstRetType shiftRight(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator>>=(const ConstRetType& rhs);
+    ConstRetType& shiftRightAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator&(const ConstRetType& rhs) const;
+    ConstRetType bitAnd(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator&=(const ConstRetType& rhs);
+    ConstRetType& bitAndAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator^(const ConstRetType& rhs) const;
+    ConstRetType bitXor(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator^=(const ConstRetType& rhs);
+    ConstRetType& bitXorAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator|(const ConstRetType& rhs) const;
+    ConstRetType bitOr(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType& operator|=(const ConstRetType& rhs);
+    ConstRetType& bitOrAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType operator<(const ConstRetType& rhs) const;
+    ConstRetType lessThan(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType operator>(const ConstRetType& rhs) const;
+    ConstRetType greaterThan(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType operator<=(const ConstRetType& rhs) const;
+    ConstRetType lessOrEqual(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType operator>=(const ConstRetType& rhs) const;
+    ConstRetType greaterOrEqual(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType operator==(const ConstRetType& rhs) const;
+    ConstRetType equal(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    ConstRetType operator!=(const ConstRetType& rhs) const;
+    ConstRetType notEqual(const ConstRetType& rhs, const LanguageOptions& options) const;
 
     [[nodiscard]] ConstRetType toBool() const;
 
     explicit operator bool() const;
 
-    template <class T>
-    [[nodiscard]] T to() const;
+    std::int64_t toInt() const;
+
+    std::uint64_t toUInt() const;
 };
 
 class ConstantEvaluator final
@@ -197,23 +190,6 @@ public:
     ConstRetType visit(const Syntax::ConditionalExpression& node);
 };
 
-template <class T>
-T OpenCL::Semantics::ConstRetType::to() const
-{
-    return std::visit(
-        [](auto&& value) -> T {
-            using U = std::decay_t<decltype(value)>;
-            if constexpr (std::is_convertible_v<U, T>)
-            {
-                return static_cast<T>(value);
-            }
-            else
-            {
-                return T{};
-            }
-        },
-        m_value);
-}
 } // namespace OpenCL::Semantics
 
 #endif // OPENCLPARSER_CONSTANTEVALUATOR_HPP
