@@ -23,7 +23,18 @@ private:
     ValueType m_value;
     Type m_type;
 
+    ConstRetType integerPromotion(const LanguageOptions& options) const;
+
+    static std::pair<ConstRetType, ConstRetType> arithmeticConversions(ConstRetType lhs, ConstRetType rhs,
+                                                                       const LanguageOptions& options);
+
 public:
+    enum Issues
+    {
+        NoIssues,
+        NotRepresentable
+    };
+
     ConstRetType() = default;
 
     /* implicit */ ConstRetType(const ValueType& value, const Type& type);
@@ -46,35 +57,35 @@ public:
 
     ConstRetType bitwiseNegate(const LanguageOptions& options) const;
 
-    [[nodiscard]] ConstRetType castTo(const Type& type) const;
+    [[nodiscard]] ConstRetType castTo(const Type& type, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType multiply(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType multiply(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& multiplyAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& multiplyAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
-    ConstRetType divide(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType divide(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& divideAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& divideAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
     ConstRetType modulo(const ConstRetType& rhs, const LanguageOptions& options) const;
 
     ConstRetType& moduloAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType plus(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType plus(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& plusAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& plusAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
-    ConstRetType minus(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType minus(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& minusAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& minusAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
-    ConstRetType shiftLeft(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType shiftLeft(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& shiftLeftAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& shiftLeftAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
-    ConstRetType shiftRight(const ConstRetType& rhs, const LanguageOptions& options) const;
+    ConstRetType shiftRight(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
-    ConstRetType& shiftRightAssign(const ConstRetType& rhs, const LanguageOptions& options);
+    ConstRetType& shiftRightAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
 
     ConstRetType bitAnd(const ConstRetType& rhs, const LanguageOptions& options) const;
 
@@ -100,7 +111,7 @@ public:
 
     ConstRetType notEqual(const ConstRetType& rhs, const LanguageOptions& options) const;
 
-    [[nodiscard]] ConstRetType toBool() const;
+    [[nodiscard]] ConstRetType toBool(const LanguageOptions& options) const;
 
     explicit operator bool() const;
 

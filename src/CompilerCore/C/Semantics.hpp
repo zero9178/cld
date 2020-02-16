@@ -59,7 +59,7 @@ public:
     static OpenCL::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
                                           std::uint8_t bitCount, std::string name);
 
-    static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+    static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     static Type createSignedChar(bool isConst, bool isVolatile);
 
@@ -67,20 +67,17 @@ public:
 
     static Type createUnsignedChar(bool isConst, bool isVolatile);
 
-    static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+    static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedShort(bool isConst, bool isVolatile,
-                                    const LanguageOptions& options = LanguageOptions::native());
+    static Type createUnsignedShort(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+    static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedInt(bool isConst, bool isVolatile,
-                                  const LanguageOptions& options = LanguageOptions::native());
+    static Type createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options = LanguageOptions::native());
+    static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedLong(bool isConst, bool isVolatile,
-                                   const LanguageOptions& options = LanguageOptions::native());
+    static Type createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     static Type createLongLong(bool isConst, bool isVolatile);
 
@@ -97,6 +94,8 @@ public:
     [[nodiscard]] bool isFloatingPoint() const;
 
     [[nodiscard]] bool isSigned() const;
+
+    [[nodiscard]] std::uint8_t getByteCount() const;
 
     [[nodiscard]] std::uint8_t getBitCount() const;
 
@@ -438,9 +437,9 @@ std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
 
 std::vector<Lexer::Token>::const_iterator declaratorToLoc(const OpenCL::Syntax::Declarator& declarator);
 
-OpenCL::Expected<std::size_t, std::string> sizeOf(const Type& type);
+OpenCL::Expected<std::size_t, std::string> sizeOf(const Type& type, const LanguageOptions& options);
 
-OpenCL::Expected<std::size_t, std::string> alignmentOf(const Type& type);
+OpenCL::Expected<std::size_t, std::string> alignmentOf(const Type& type, const LanguageOptions& options);
 
 bool isVoid(const Type& type);
 } // namespace OpenCL::Semantics

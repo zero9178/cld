@@ -388,7 +388,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
         value = std::get<llvm::APSInt>(result.data()[0].getValue());
         CHECK(value == L'\u3435');
         CHECK(value.getBitWidth() == 8 * sizeof(wchar_t));
-        CHECK(value.isSigned());
+        CHECK(value.isSigned() == std::is_signed_v<wchar_t>);
     }
     LEXER_OUTPUTS_WITH("'asdf'", Catch::Contains(DISCARDING_ALL_BUT_FIRST_CHARACTER));
     LEXER_OUTPUTS_WITH("'as\ndawd'", Catch::Contains(NEWLINE_IN_N_USE_BACKLASH_N.args(CHARACTER_LITERAL)));

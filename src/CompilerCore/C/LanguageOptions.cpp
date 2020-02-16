@@ -80,7 +80,7 @@ std::uint8_t OpenCL::LanguageOptions::getSizeOfLongLong() const
 OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
 {
     return OpenCL::LanguageOptions(
-        language, sizeof(bool), std::is_signed_v<wchar_t>, sizeof(wchar_t), std::is_signed_v<wchar_t>, sizeof(short),
+        language, sizeof(bool), std::is_signed_v<char>, sizeof(wchar_t), std::is_signed_v<wchar_t>, sizeof(short),
         sizeof(int), sizeof(long),
         []() -> std::uint8_t {
             switch (std::numeric_limits<long double>::digits)

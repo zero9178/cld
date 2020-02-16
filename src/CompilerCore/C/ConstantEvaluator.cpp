@@ -8,7 +8,54 @@
 
 #include "ErrorMessages.hpp"
 
-static_assert(-1 == ~0, "Arithmetic here only works on 2's complement");
+namespace
+{
+OpenCL::Semantics::Type getPtrdiff_t(const OpenCL::LanguageOptions& options)
+{
+    if (options.getSizeOfVoidStar() == 4)
+    {
+        if (options.getSizeOfInt() == 4)
+        {
+            return OpenCL::Semantics::PrimitiveType::createInt(false, false, options);
+        }
+        else if (options.getSizeOfLong() == 4)
+        {
+            return OpenCL::Semantics::PrimitiveType::createLong(false, false, options);
+        }
+        else if (options.getSizeOfShort() == 4)
+        {
+            return OpenCL::Semantics::PrimitiveType::createShort(false, false, options);
+        }
+        else
+        {
+            OPENCL_UNREACHABLE;
+        }
+    }
+    else if (options.getSizeOfVoidStar() == 8)
+    {
+        if (options.getSizeOfInt() == 8)
+        {
+            return OpenCL::Semantics::PrimitiveType::createInt(false, false, options);
+        }
+        else if (options.getSizeOfLong() == 8)
+        {
+            return OpenCL::Semantics::PrimitiveType::createLong(false, false, options);
+        }
+        else if (options.getSizeOfShort() == 8)
+        {
+            return OpenCL::Semantics::PrimitiveType::createShort(false, false, options);
+        }
+        else
+        {
+            return OpenCL::Semantics::PrimitiveType::createLongLong(false, false);
+        }
+    }
+    else
+    {
+        OPENCL_UNREACHABLE;
+    }
+}
+} // namespace
 
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
@@ -83,19 +130,19 @@ OpenCL::Semantics::ConstRetType
                         OPENCL_UNREACHABLE;
                     }
                 case 64:
-                    if (m_languageOptions.getSizeOfInt() == 4)
+                    if (m_languageOptions.getSizeOfInt() == 8)
                     {
                         return {integer, integer.isUnsigned() ?
                                              PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
                                              PrimitiveType::createInt(false, false, m_languageOptions)};
                     }
-                    else if (m_languageOptions.getSizeOfLong() == 4)
+                    else if (m_languageOptions.getSizeOfLong() == 8)
                     {
                         return {integer, integer.isUnsigned() ?
                                              PrimitiveType::createUnsignedLong(false, false, m_languageOptions) :
                                              PrimitiveType::createLong(false, false, m_languageOptions)};
                     }
-                    else if (m_languageOptions.getSizeOfShort() == 4)
+                    else if (m_languageOptions.getSizeOfShort() == 8)
                     {
                         return {integer, integer.isUnsigned() ?
                                              PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
@@ -207,13 +254,13 @@ OpenCL::Semantics::ConstRetType
                 // Here we rely on the implementation of the callback to log the error somehow
                 return {};
             }
-            auto size = Semantics::sizeOf(type);
+            auto size = Semantics::sizeOf(type, m_languageOptions);
             if (!size)
             {
                 logError(size.error(), Modifier(typeName->begin(), typeName->end()));
                 return {};
             }
-            return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createLongLong(false, false)};
+            return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createUnsignedLongLong(false, false)};
         },
         [](auto &&) -> OpenCL::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
 }
@@ -236,7 +283,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
             }
             if (auto* primitive = std::get_if<PrimitiveType>(&type.get()))
             {
-                if (m_mode == Integer && (!primitive || primitive->isFloatingPoint() || primitive->getBitCount() == 0))
+                if (m_mode == Integer && (!primitive || primitive->isFloatingPoint() || primitive->getByteCount() == 0))
                 {
                     logError(ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
                              Modifier(cast.first.begin(), cast.first.end()));
@@ -274,7 +321,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
                 return {};
             }
 
-            return value.castTo(type);
+            return value.castTo(type, m_languageOptions);
         });
 }
 
@@ -389,7 +436,7 @@ OpenCL::Semantics::ConstRetType
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
                     auto& elementType = std::get<PointerType>(ptr.getType().get()).getElementType();
-                    auto result = sizeOf(elementType);
+                    auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
                         logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
@@ -430,7 +477,7 @@ OpenCL::Semantics::ConstRetType
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
                     auto& elementType = std::get<PointerType>(ptr.getType().get()).getElementType();
-                    auto result = sizeOf(elementType);
+                    auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
                         logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
@@ -621,7 +668,7 @@ OpenCL::Semantics::ConstRetType
                      Modifier(node.getBitOrExpressions()[0].begin(), node.getBitOrExpressions()[0].end()));
             return {};
         }
-        value = value.isUndefined() ? value : value.toBool();
+        value = value.isUndefined() ? value : value.toBool(m_languageOptions);
         auto other = visit(*iter);
         if (other.isUndefined() || value.isUndefined())
         {
@@ -637,7 +684,7 @@ OpenCL::Semantics::ConstRetType
         {
             break;
         }
-        value = other.isUndefined() ? other : other.toBool();
+        value = other.isUndefined() ? other : other.toBool(m_languageOptions);
     }
     return value;
 }
@@ -654,7 +701,7 @@ OpenCL::Semantics::ConstRetType
                      Modifier(node.getAndExpressions()[0].begin(), node.getAndExpressions()[0].end()));
             return {};
         }
-        value = value.isUndefined() ? value : value.toBool();
+        value = value.isUndefined() ? value : value.toBool(m_languageOptions);
         auto other = visit(*iter);
         if (other.isUndefined() || other.isUndefined())
         {
@@ -670,7 +717,7 @@ OpenCL::Semantics::ConstRetType
         {
             break;
         }
-        value = other.isUndefined() ? other : other.toBool();
+        value = other.isUndefined() ? other : other.toBool(m_languageOptions);
     }
     return value;
 }
@@ -883,7 +930,7 @@ OpenCL::Semantics::ConstRetType
                 }
                 else if (auto* value = std::get_if<std::int32_t>(decl))
                 {
-                    return {llvm::APSInt(llvm::APInt(m_languageOptions.getSizeOfInt(), *value, true), false),
+                    return {llvm::APSInt(llvm::APInt(m_languageOptions.getSizeOfInt() * 8, *value, true), false),
                             PrimitiveType::createInt(false, false, m_languageOptions)};
                 }
             }
@@ -1011,31 +1058,75 @@ bool OpenCL::Semantics::ConstRetType::isArithmetic() const
     return !std::holds_alternative<VoidStar>(m_value);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::unaryPlus(const LanguageOptions& options) const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::integerPromotion(const LanguageOptions& options) const
 {
     return match(
-        m_value,
-        [this](VoidStar address) -> ConstRetType {
-            return {address, m_type};
-        },
+        m_value, [this](VoidStar) -> ConstRetType { return *this; },
         [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [this](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating, m_type};
-        },
+        [this](const llvm::APFloat&) -> ConstRetType { return *this; },
         [this, &options](const llvm::APSInt& integer) -> ConstRetType {
-            if (integer.getBitWidth() < options.getSizeOfInt() * 8)
+            if (integer.getBitWidth() < options.getSizeOfInt() * 8u)
             {
-                return {integer.extend(options.getSizeOfInt() * 8), PrimitiveType::createInt(false, false, options)};
+                auto apsInt = integer.extend(options.getSizeOfInt() * 8);
+                apsInt.setIsSigned(true);
+                return {std::move(apsInt), PrimitiveType::createInt(false, false, options)};
             }
             return {std::move(integer), m_type};
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::negate(const LanguageOptions& options) const {}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::unaryPlus(const LanguageOptions& options) const
+{
+    return integerPromotion(options);
+}
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::logicalNegate(const LanguageOptions& options) const {}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::negate(const LanguageOptions& options) const
+{
+    auto temp = integerPromotion(options);
+    return match(
+        temp.getValue(), [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&temp](llvm::APFloat floating) -> ConstRetType {
+            floating.changeSign();
+            return {floating, temp.getType()};
+        },
+        [&temp](llvm::APSInt integer) -> ConstRetType {
+            integer.negate();
+            return {integer, temp.getType()};
+        });
+}
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitwiseNegate(const LanguageOptions& options) const {}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::logicalNegate(const LanguageOptions& options) const
+{
+    return match(
+        m_value,
+        [&options](VoidStar address) -> ConstRetType {
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
+                    Semantics::PrimitiveType::createInt(false, false, options)};
+        },
+        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&options](const llvm::APFloat& floating) -> ConstRetType {
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, floating.isZero()), false),
+                    Semantics::PrimitiveType::createInt(false, false, options)};
+        },
+        [&options](const llvm::APSInt& integer) -> ConstRetType {
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == 0), false),
+                    Semantics::PrimitiveType::createInt(false, false, options)};
+        });
+}
+
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitwiseNegate(const LanguageOptions& options) const
+{
+    auto temp = integerPromotion(options);
+    return match(
+        temp.getValue(), [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&temp](llvm::APSInt integer) -> ConstRetType {
+            integer.flipAllBits();
+            return {integer, temp.getType()};
+        });
+}
 
 const OpenCL::Semantics::Type& OpenCL::Semantics::ConstRetType::getType() const
 {
@@ -1047,35 +1138,314 @@ const OpenCL::Semantics::ConstRetType::ValueType& OpenCL::Semantics::ConstRetTyp
     return m_value;
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type) const {}
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type,
+                                                                        const LanguageOptions& options,
+                                                                        Issues* issues) const
+{
+    auto copy = type.get();
+    auto nonLvalue = Type(false, false, type.getName(), std::move(copy));
+    return match(
+        m_value, [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&nonLvalue, issues, this, &options](VoidStar address) -> ConstRetType {
+            return match(
+                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                [issues, address, &nonLvalue, this, &options](const PrimitiveType& primitiveType) -> ConstRetType {
+                    if (primitiveType.isFloatingPoint())
+                    {
+                        OPENCL_UNREACHABLE;
+                    }
+                    if (primitiveType.getBitCount() == 1)
+                    {
+                        auto result = toBool(options);
+                        if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
+                        {
+                            OPENCL_UNREACHABLE;
+                        }
+                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                                PrimitiveType::createUnderlineBool(false, false)};
+                    }
+                    if (issues
+                        && (primitiveType.isSigned() ? llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
+                                                       llvm::APInt::getMaxValue(primitiveType.getBitCount()))
+                               .ugt(address.address))
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
+                    return {llvm::APSInt(llvm::APInt(primitiveType.getBitCount(), address.address),
+                                         !primitiveType.isSigned()),
+                            nonLvalue};
+                },
+                [issues, &nonLvalue, address, &options](const EnumType&) -> ConstRetType {
+                    if (issues && llvm::APInt::getSignedMaxValue(options.getSizeOfInt() * 8).ugt(address.address))
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
+                    return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address), false), nonLvalue};
+                },
+                [&nonLvalue, address](const PointerType&) -> ConstRetType {
+                    return {address, nonLvalue};
+                });
+        },
+        [&nonLvalue, &options, this](llvm::APFloat floating) -> ConstRetType {
+            return match(
+                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                [&nonLvalue, &floating, this, &options](const PrimitiveType& primitiveType) mutable -> ConstRetType {
+                    bool response;
+                    llvm::APFloat::opStatus op;
+                    if (primitiveType.isFloatingPoint())
+                    {
+                        switch (primitiveType.getBitCount())
+                        {
+                            case 32:
+                                op = floating.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven,
+                                                      &response);
+                                break;
+                            case 64:
+                                op = floating.convert(llvm::APFloat::IEEEdouble(), llvm::APFloat::rmNearestTiesToEven,
+                                                      &response);
+                                break;
+                            case 80:
+                                op = floating.convert(llvm::APFloat::x87DoubleExtended(),
+                                                      llvm::APFloat::rmNearestTiesToEven, &response);
+                                break;
+                            case 128:
+                                op = floating.convert(llvm::APFloat::IEEEquad(), llvm::APFloat::rmNearestTiesToEven,
+                                                      &response);
+                                break;
+                            default: OPENCL_UNREACHABLE;
+                        }
+                        // TODO: Warnings dependant on op
+                        return {floating, nonLvalue};
+                    }
+                    if (primitiveType.getBitCount() == 1)
+                    {
+                        auto result = toBool(options);
+                        if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
+                        {
+                            OPENCL_UNREACHABLE;
+                        }
+                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                                PrimitiveType::createUnderlineBool(false, false)};
+                    }
+
+                    llvm::APSInt result(primitiveType.getBitCount(), !primitiveType.isSigned());
+                    op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
+                    // TODO: Warnings dependant on op
+                    return {result, nonLvalue};
+                },
+                [&options, &nonLvalue, &floating](const EnumType&) -> ConstRetType {
+                    bool response;
+                    llvm::APSInt result(options.getSizeOfInt() * 8, false);
+                    auto op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
+                    // TODO: Warnings dependant on op
+                    return {result, nonLvalue};
+                });
+        },
+        [&nonLvalue, issues, this, &options](const llvm::APSInt& integer) -> ConstRetType {
+            return match(
+                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                [issues, &nonLvalue, this, &integer, &options](const PrimitiveType& primitiveType) -> ConstRetType {
+                    if (primitiveType.isFloatingPoint())
+                    {
+                        decltype(auto) semantics = [&primitiveType]() -> decltype(auto) {
+                            switch (primitiveType.getBitCount())
+                            {
+                                case 32: return llvm::APFloat::IEEEsingle();
+                                case 64: return llvm::APFloat::IEEEdouble();
+                                case 80: return llvm::APFloat::x87DoubleExtended();
+                                case 128: return llvm::APFloat::IEEEquad();
+                                default: OPENCL_UNREACHABLE;
+                            }
+                        }();
+                        // A 64 bit integer can always be correctly represented in 32 bit float
+                        // Unless we add 16 bit floats we don't need to check for conversion errors
+                        llvm::APFloat result(semantics);
+                        result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
+                        return {result, nonLvalue};
+                    }
+                    if (primitiveType.getBitCount() == 1)
+                    {
+                        auto result = toBool(options);
+                        if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
+                        {
+                            OPENCL_UNREACHABLE;
+                        }
+                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                                PrimitiveType::createUnderlineBool(false, false)};
+                    }
+                    if (issues
+                        && (primitiveType.isSigned() ? llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
+                                                       llvm::APInt::getMaxValue(primitiveType.getBitCount()))
+                               .ugt(integer))
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
+
+                    auto apsInt = integer.extOrTrunc(primitiveType.getBitCount());
+                    apsInt.setIsSigned(primitiveType.isSigned());
+                    return {apsInt, nonLvalue};
+                },
+                [issues, &nonLvalue, &options, &integer](const EnumType&) -> ConstRetType {
+                    if (issues && llvm::APInt::getSignedMaxValue(options.getSizeOfInt() * 8).ugt(integer))
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
+
+                    auto apsInt = integer.extOrTrunc(options.getSizeOfInt() * 8);
+                    apsInt.setIsSigned(true);
+                    return {apsInt, nonLvalue};
+                },
+                [&nonLvalue, &integer](const PointerType&) -> ConstRetType {
+                    return {VoidStar{integer.getZExtValue()}, nonLvalue};
+                });
+        });
+}
+
+std::pair<OpenCL::Semantics::ConstRetType, OpenCL::Semantics::ConstRetType>
+    OpenCL::Semantics::ConstRetType::arithmeticConversions(ConstRetType lhs, ConstRetType rhs,
+                                                           const LanguageOptions& options)
+{
+    if (std::holds_alternative<std::monostate>(lhs.getValue()) || std::holds_alternative<VoidStar>(lhs.getValue())
+        || std::holds_alternative<std::monostate>(rhs.getValue()) || std::holds_alternative<VoidStar>(rhs.getValue()))
+    {
+        return {std::move(lhs), std::move(rhs)};
+    }
+    lhs = lhs.integerPromotion(options);
+    rhs = rhs.integerPromotion(options);
+    if (rhs.getType() == lhs.getType())
+    {
+        return {std::move(lhs), std::move(rhs)};
+    }
+    if (std::holds_alternative<llvm::APFloat>(lhs.getValue()) || std::holds_alternative<llvm::APFloat>(rhs.getValue()))
+    {
+        if (std::holds_alternative<llvm::APFloat>(lhs.getValue())
+            && std::holds_alternative<llvm::APFloat>(rhs.getValue()))
+        {
+            bool useless;
+            auto lhsFloat = std::get<llvm::APFloat>(lhs.getValue());
+            auto rhsFloat = std::get<llvm::APFloat>(rhs.getValue());
+
+            auto leftBigger = llvm::APFloat::getSizeInBits(lhsFloat.getSemantics())
+                              > llvm::APFloat::getSizeInBits(rhsFloat.getSemantics());
+            const auto& biggerSemantics = leftBigger ? lhsFloat.getSemantics() : rhsFloat.getSemantics();
+            lhsFloat.convert(biggerSemantics, llvm::APFloat::rmNearestTiesToEven, &useless);
+            rhsFloat.convert(biggerSemantics, llvm::APFloat::rmNearestTiesToEven, &useless);
+            auto biggerType = leftBigger ? lhs.getType() : rhs.getType();
+            return {{lhsFloat, biggerType}, {rhsFloat, biggerType}};
+        }
+        auto& floating = std::holds_alternative<llvm::APFloat>(lhs.getValue()) ? lhs : rhs;
+        const auto& semantics = std::get<llvm::APFloat>(floating.getValue()).getSemantics();
+        if (std::holds_alternative<llvm::APSInt>(lhs.getValue()))
+        {
+            auto& integer = std::get<llvm::APSInt>(lhs.getValue());
+            auto result = llvm::APFloat(semantics);
+            result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
+            lhs = {std::move(result), floating.getType()};
+        }
+        if (std::holds_alternative<llvm::APSInt>(rhs.getValue()))
+        {
+            auto& integer = std::get<llvm::APSInt>(rhs.getValue());
+            auto result = llvm::APFloat(semantics);
+            result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
+            rhs = {std::move(result), floating.getType()};
+        }
+        return {std::move(lhs), std::move(rhs)};
+    }
+    auto lhsInteger = std::get<llvm::APSInt>(lhs.getValue());
+    auto rhsInteger = std::get<llvm::APSInt>(rhs.getValue());
+    if (lhsInteger.isSigned() == rhsInteger.isSigned() || lhsInteger.getBitWidth() != rhsInteger.getBitWidth())
+    {
+        auto lhsBigger = lhsInteger.getBitWidth() > rhsInteger.getBitWidth();
+        auto biggerBits = lhsBigger ? lhsInteger.getBitWidth() : rhsInteger.getBitWidth();
+        auto sign = lhsBigger ? lhsInteger.isSigned() : rhsInteger.isSigned();
+        auto& type = lhsBigger ? lhs.getType() : rhs.getType();
+        lhsInteger = lhsInteger.extOrTrunc(biggerBits);
+        rhsInteger = rhsInteger.extOrTrunc(biggerBits);
+        lhsInteger.setIsSigned(sign);
+        rhsInteger.setIsSigned(sign);
+        return {{std::move(lhsInteger), type}, {std::move(rhsInteger), type}};
+    }
+    auto unsignedType = lhsInteger.isUnsigned() ? lhs.getType() : rhs.getType();
+    lhsInteger.setIsSigned(false);
+    rhsInteger.setIsSigned(false);
+    return {{std::move(lhsInteger), unsignedType}, {std::move(rhsInteger), unsignedType}};
+}
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::multiply(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                          const LanguageOptions& options) const
+                                                                          const LanguageOptions& options,
+                                                                          Issues* issues) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+        },
+        [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
+            bool overflow = false;
+            auto apsInt = integer.isSigned() ? integer.smul_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.umul_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            if (issues && integer.isSigned())
+            {
+                *issues = overflow ? NotRepresentable : NoIssues;
+            }
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::divide(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                        const LanguageOptions& options) const
+                                                                        const LanguageOptions& options,
+                                                                        Issues* issues) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating / std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+        },
+        [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
+            bool overflow = false;
+            auto apsInt = integer.isSigned() ? integer.sdiv_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.udiv(std::get<llvm::APSInt>(op2.getValue()));
+            if (issues && integer.isSigned())
+            {
+                *issues = overflow ? NotRepresentable : NoIssues;
+            }
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::modulo(const OpenCL::Semantics::ConstRetType& rhs,
                                                                         const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+        },
+        [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
+            auto apsInt = integer.isSigned() ? integer.srem(std::get<llvm::APSInt>(op2.getValue())) :
+                                               integer.urem(std::get<llvm::APSInt>(op2.getValue()));
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
     OpenCL::Semantics::ConstRetType::multiplyAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                    const LanguageOptions& options)
+                                                    const LanguageOptions& options, Issues* issues)
 {
-    return *this = multiply(rhs, options);
+    return *this = multiply(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType&
     OpenCL::Semantics::ConstRetType::divideAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                  const LanguageOptions& options)
+                                                  const LanguageOptions& options, Issues* issues)
 {
-    return *this = divide(rhs, options);
+    return *this = divide(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType&
@@ -1086,55 +1456,198 @@ OpenCL::Semantics::ConstRetType&
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::plus(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                      const LanguageOptions& options) const
+                                                                      const LanguageOptions& options,
+                                                                      Issues* issues) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2, &op1 = op1, &options](VoidStar address) -> ConstRetType {
+            if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
+            {
+                OPENCL_UNREACHABLE;
+            }
+            auto& integer = std::get<llvm::APSInt>(op2.getValue());
+            auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
+            if (!size)
+            {
+                OPENCL_UNREACHABLE;
+            }
+            if (integer.isUnsigned())
+            {
+                address.address += *size * integer.getZExtValue();
+            }
+            else
+            {
+                address.address += static_cast<std::int64_t>(*size) * integer.getSExtValue();
+            }
+            return {address, op1.getType()};
+        },
+        [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating + std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+        },
+        [&op2 = op2, issues, &options](const llvm::APSInt& integer) -> ConstRetType {
+            if (std::holds_alternative<VoidStar>(op2.getValue()))
+            {
+                auto address = std::get<VoidStar>(op2.getValue());
+                auto size = sizeOf(std::get<PointerType>(op2.getType().get()).getElementType(), options);
+                if (!size)
+                {
+                    OPENCL_UNREACHABLE;
+                }
+                if (integer.isUnsigned())
+                {
+                    address.address += *size * integer.getZExtValue();
+                }
+                else
+                {
+                    address.address += static_cast<std::int64_t>(*size) * integer.getSExtValue();
+                }
+                return {address, op2.getType()};
+            }
+            bool overflow = false;
+            auto apsInt = integer.isSigned() ? integer.sadd_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.uadd_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            if (issues && integer.isSigned())
+            {
+                *issues = overflow ? NotRepresentable : NoIssues;
+            }
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::plusAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                             const LanguageOptions& options)
+                                                                             const LanguageOptions& options,
+                                                                             Issues* issues)
 {
-    return *this = plus(rhs, options);
+    return *this = plus(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::minus(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                       const LanguageOptions& options) const
+                                                                       const LanguageOptions& options,
+                                                                       Issues* issues) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2, &op1 = op1, &options](VoidStar address) -> ConstRetType {
+            auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
+            if (!size)
+            {
+                OPENCL_UNREACHABLE;
+            }
+            if (std::holds_alternative<VoidStar>(op2.getValue()))
+            {
+                return {llvm::APSInt(llvm::APInt(options.getSizeOfVoidStar() * 8,
+                                                 (address.address - std::get<VoidStar>(op2.getValue()).address) / *size,
+                                                 true),
+                                     false),
+                        getPtrdiff_t(options)};
+            }
+            if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
+            {
+                OPENCL_UNREACHABLE;
+            }
+            auto& integer = std::get<llvm::APSInt>(op2.getValue());
+            if (integer.isUnsigned())
+            {
+                address.address -= *size * integer.getZExtValue();
+            }
+            else
+            {
+                address.address -= static_cast<std::int64_t>(*size) * integer.getSExtValue();
+            }
+            return {address, op1.getType()};
+        },
+        [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
+            return {floating - std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+        },
+        [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
+            bool overflow = false;
+            auto apsInt = integer.isSigned() ? integer.ssub_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.usub_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            if (issues && integer.isSigned())
+            {
+                *issues = overflow ? NotRepresentable : NoIssues;
+            }
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
     OpenCL::Semantics::ConstRetType::minusAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                 const LanguageOptions& options)
+                                                 const LanguageOptions& options, Issues* issues)
 {
-    return *this = minus(rhs, options);
+    return *this = minus(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftLeft(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                           const LanguageOptions& options) const
+                                                                           const LanguageOptions& options,
+                                                                           Issues* issues) const
 {
+    auto op1 = integerPromotion(options);
+    auto op2 = rhs.integerPromotion(options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
+            bool overflow = false;
+            auto apsInt = integer.isSigned() ? integer.sshl_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.ushl_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            if (issues && integer.isSigned())
+            {
+                *issues = overflow ? NotRepresentable : NoIssues;
+            }
+            return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
     OpenCL::Semantics::ConstRetType::shiftLeftAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                     const LanguageOptions& options)
+                                                     const LanguageOptions& options, Issues* issues)
 {
-    return *this = shiftLeft(rhs, options);
+    return *this = shiftLeft(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftRight(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                            const LanguageOptions& options) const
+                                                                            const LanguageOptions& options,
+                                                                            Issues* issues) const
 {
+    auto op1 = integerPromotion(options);
+    auto op2 = rhs.integerPromotion(options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
+            auto op2Integer = std::get<llvm::APSInt>(op2.getValue());
+            if (issues && (op2Integer.isSignBitSet() || op2Integer.getZExtValue() >= integer.getBitWidth()))
+            {
+                *issues = NotRepresentable;
+            }
+            return {integer >> static_cast<unsigned>(op2Integer.getZExtValue()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
     OpenCL::Semantics::ConstRetType::shiftRightAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                      const LanguageOptions& options)
+                                                      const LanguageOptions& options, Issues* issues)
 {
-    return *this = shiftRight(rhs, options);
+    return *this = shiftRight(rhs, options, issues);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitAnd(const OpenCL::Semantics::ConstRetType& rhs,
                                                                         const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
+            return {integer & std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
@@ -1147,6 +1660,14 @@ OpenCL::Semantics::ConstRetType&
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitXor(const OpenCL::Semantics::ConstRetType& rhs,
                                                                         const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
+            return {integer ^ std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
@@ -1159,6 +1680,14 @@ OpenCL::Semantics::ConstRetType&
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitOr(const OpenCL::Semantics::ConstRetType& rhs,
                                                                        const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
+            return {integer | std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+        });
 }
 
 OpenCL::Semantics::ConstRetType&
@@ -1168,23 +1697,34 @@ OpenCL::Semantics::ConstRetType&
     return *this = bitOr(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType::operator bool() const {}
+OpenCL::Semantics::ConstRetType::operator bool() const
+{
+    return match(
+        m_value, [](VoidStar address) -> bool { return address.address != 0; },
+        [](const llvm::APFloat& floating) -> bool { return floating.isNonZero(); },
+        [](const llvm::APSInt& integer) -> bool { return !integer.isNullValue(); },
+        [](std::monostate) -> bool { OPENCL_UNREACHABLE; });
+}
 
 bool OpenCL::Semantics::ConstRetType::isUndefined() const
 {
     return std::holds_alternative<std::monostate>(m_value);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::toBool() const
+OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::toBool(const LanguageOptions& options) const
 {
-    return {llvm::APSInt(llvm::APInt(8, *this ? 1 : 0), false), PrimitiveType::createUnderlineBool(false, false)};
+    return notEqual({llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, 0), false),
+                     PrimitiveType::createInt(false, false, options)},
+                    options);
 }
 
 std::int64_t OpenCL::Semantics::ConstRetType::toInt() const
 {
     return match(
         m_value, [](VoidStar pointer) -> std::int64_t { return pointer.address; },
-        [](const llvm::APFloat& floating) -> std::int64_t { return floating.convertToDouble(); },
+        [](const llvm::APFloat& floating) -> std::int64_t {
+            return static_cast<std::int64_t>(floating.convertToDouble());
+        },
         [](const llvm::APSInt& integer) -> std::int64_t { return integer.getSExtValue(); },
         [](std::monostate) -> std::int64_t { OPENCL_UNREACHABLE; });
 }
@@ -1193,7 +1733,9 @@ std::uint64_t OpenCL::Semantics::ConstRetType::toUInt() const
 {
     return match(
         m_value, [](VoidStar pointer) -> std::uint64_t { return pointer.address; },
-        [](const llvm::APFloat& floating) -> std::uint64_t { return floating.convertToDouble(); },
+        [](const llvm::APFloat& floating) -> std::uint64_t {
+            return static_cast<std::uint64_t>(floating.convertToDouble());
+        },
         [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
         [](std::monostate) -> std::uint64_t { OPENCL_UNREACHABLE; });
 }
@@ -1201,30 +1743,87 @@ std::uint64_t OpenCL::Semantics::ConstRetType::toUInt() const
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessThan(const OpenCL::Semantics::ConstRetType& rhs,
                                                                           const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2, &options](VoidStar address) -> ConstRetType {
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
+                                             address.address < std::get<VoidStar>(op2.getValue()).address),
+                                 false),
+                    PrimitiveType::createInt(false, false, options)};
+        },
+        [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
+            auto cmp = floating.compare(std::get<llvm::APFloat>(op2.getValue()));
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, cmp == llvm::APFloat::cmpLessThan), false),
+                    PrimitiveType::createInt(false, false, options)};
+        },
+        [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
+            auto apsInt = integer < std::get<llvm::APSInt>(op2.getValue());
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, apsInt), false),
+                    PrimitiveType::createInt(false, false, options)};
+        });
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::greaterThan(const OpenCL::Semantics::ConstRetType& rhs,
                                                                              const LanguageOptions& options) const
 {
+    return rhs.lessThan(*this, options);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
                                                                              const LanguageOptions& options) const
 {
+    return rhs.lessThan(*this, options).logicalNegate(options);
 }
 
 OpenCL::Semantics::ConstRetType
     OpenCL::Semantics::ConstRetType::greaterOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
                                                     const LanguageOptions& options) const
 {
+    return lessThan(rhs, options).logicalNegate(options);
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::equal(const OpenCL::Semantics::ConstRetType& rhs,
                                                                        const LanguageOptions& options) const
 {
+    auto [op1, op2] = arithmeticConversions(*this, rhs, options);
+    return match(
+        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [&op2 = op2, &options](VoidStar address) -> ConstRetType {
+            if (std::holds_alternative<llvm::APSInt>(op2.getValue()))
+            {
+                assert(std::get<llvm::APSInt>(op2.getValue()) == 0);
+                return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
+                        PrimitiveType::createInt(false, false, options)};
+            }
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
+                                             address.address == std::get<VoidStar>(op2.getValue()).address, true),
+                                 false),
+                    PrimitiveType::createInt(false, false, options)};
+        },
+        [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
+            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
+                                             floating.compare(std::get<llvm::APFloat>(op2.getValue()))
+                                                 == llvm::APFloat::cmpEqual),
+                                 false),
+                    PrimitiveType::createInt(false, false, options)};
+        },
+        [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
+            if (auto* address = std::get_if<VoidStar>(&op2.getValue()))
+            {
+                assert(integer == 0);
+                return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address->address == 0), false),
+                        PrimitiveType::createInt(false, false, options)};
+            }
+            return {
+                llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == std::get<llvm::APSInt>(op2.getValue())),
+                             false),
+                PrimitiveType::createInt(false, false, options)};
+        });
 }
 
 OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::notEqual(const OpenCL::Semantics::ConstRetType& rhs,
                                                                           const LanguageOptions& options) const
 {
+    return equal(rhs, options).logicalNegate(options);
 }

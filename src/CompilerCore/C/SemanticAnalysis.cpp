@@ -1,5 +1,6 @@
 #include "SemanticAnalysis.hpp"
 
+#include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
@@ -600,17 +601,24 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
     {
         std::size_t i = 0;
         if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool {
-                if (i++ == Double)
+                if (i == Double || i == Long)
                 {
+                    i++;
                     return false;
                 }
+                i++;
                 return count;
             }))
         {
             auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::DoubleKeyword});
-            logError({Message::error(
-                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'double'", " any other primitives"),
-                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                                         "'double'", " any other primitives but long"),
+                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+        }
+        if (primitivesCount[Long])
+        {
+            return OpenCL::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile,
+                                                                      m_sourceObject.getLanguageOptions());
         }
         return OpenCL::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
     }
@@ -638,9 +646,14 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         {
             return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile);
         }
+        else if (hasSigned)
+        {
+            return OpenCL::Semantics::PrimitiveType::createSignedChar(isConst, isVolatile);
+        }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createChar(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createChar(isConst, isVolatile,
+                                                                m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Short])
@@ -665,11 +678,13 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile,
+                                                                         m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createShort(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createShort(isConst, isVolatile,
+                                                                 m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Long] == 1)
@@ -694,11 +709,13 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile,
+                                                                        m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createLong(isConst, isVolatile,
+                                                                m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Long] == 2)
@@ -752,22 +769,25 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
+                                                                       m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile,
+                                                               m_sourceObject.getLanguageOptions());
         }
     }
     if (hasSigned)
     {
-        return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile);
+        return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile, m_sourceObject.getLanguageOptions());
     }
     else if (hasUnsigned)
     {
-        return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile);
+        return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
+                                                                   m_sourceObject.getLanguageOptions());
     }
-    throw std::runtime_error("Internal compiler error in " + std::string(__func__) + ":" + std::to_string(__LINE__));
+    OPENCL_UNREACHABLE;
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
@@ -1417,9 +1437,10 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                     }
                     else if (primitive->getBitCount() < 32)
                     {
-                        arguments[i] = {
-                            PrimitiveType::createInt(result->second.type.isConst(), result->second.type.isVolatile()),
-                            result->first};
+                        arguments[i] = {PrimitiveType::createInt(result->second.type.isConst(),
+                                                                 result->second.type.isVolatile(),
+                                                                 m_sourceObject.getLanguageOptions()),
+                                        result->first};
                     }
                     else
                     {

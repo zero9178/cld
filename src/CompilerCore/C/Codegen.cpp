@@ -205,8 +205,8 @@
 //                                                       &pointerType.getElementType().get());
 //                                                   auto* otherPrimitive = std::get_if<Semantics::PrimitiveType>(
 //                                                       &otherPointer.getElementType().get());
-//                                                   if ((!primitive || primitive->getBitCount() == 0)
-//                                                       && (!otherPrimitive || otherPrimitive->getBitCount() == 0))
+//                                                   if ((!primitive || primitive->getByteCount() == 0)
+//                                                       && (!otherPrimitive || otherPrimitive->getByteCount() == 0))
 //                                                   {
 //                                                       return nullptr;
 //                                                   }
@@ -1088,7 +1088,7 @@
 //        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
 //    {
 //        leftType = Semantics::PrimitiveType::create(
-//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
+//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getByteCount());
 //    }
 //    return std::pair{left, leftType};
 //}
@@ -1115,7 +1115,7 @@
 //        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
 //    {
 //        leftType = Semantics::PrimitiveType::create(
-//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
+//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getByteCount());
 //    }
 //    return std::pair{left, leftType};
 //}
@@ -1334,7 +1334,7 @@
 //        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
 //    {
 //        leftType = Semantics::PrimitiveType::create(
-//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
+//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getByteCount());
 //    }
 //    return std::pair{left, leftType};
 //}
@@ -1386,7 +1386,7 @@
 //        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
 //    {
 //        leftType = Semantics::PrimitiveType::create(
-//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
+//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getByteCount());
 //    }
 //    return std::pair{left, leftType};
 //}
@@ -1440,7 +1440,7 @@
 //        && std::get<Semantics::PrimitiveType>(rightType.get()).isSigned())
 //    {
 //        leftType = Semantics::PrimitiveType::create(
-//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getBitCount());
+//            false, false, false, true, std::get<Semantics::PrimitiveType>(leftType.get()).getByteCount());
 //    }
 //    return std::pair{left, leftType};
 //}
@@ -2629,18 +2629,18 @@
 //{
 //    if (node.isFloatingPoint())
 //    {
-//        if (node.getBitCount() == 32)
+//        if (node.getByteCount() == 32)
 //        {
 //            return builder.getFloatTy();
 //        }
-//        else if (node.getBitCount() == 64)
+//        else if (node.getByteCount() == 64)
 //        {
 //            return builder.getDoubleTy();
 //        }
 //    }
 //    else
 //    {
-//        switch (node.getBitCount())
+//        switch (node.getByteCount())
 //        {
 //        case 0: return builder.getVoidTy();
 //        case 8: return builder.getInt8Ty();
@@ -2752,7 +2752,7 @@
 //{
 //    if (auto* primitive = std::get_if<Semantics::PrimitiveType>(&type.get()))
 //    {
-//        if (!primitive->isFloatingPoint() && primitive->getBitCount() < 32)
+//        if (!primitive->isFloatingPoint() && primitive->getByteCount() < 32)
 //        {
 //            if (optionalValue)
 //            {
@@ -2778,7 +2778,7 @@
 //        primitiveType && otherPrimitive)
 //    {
 //        if (otherPrimitive->isFloatingPoint()
-//            && (!primitiveType->isFloatingPoint() || primitiveType->getBitCount() < otherPrimitive->getBitCount()))
+//            && (!primitiveType->isFloatingPoint() || primitiveType->getBitCount() < otherPrimitive->getByteCount()))
 //        {
 //            if (primitiveType->isFloatingPoint())
 //            {
@@ -2800,13 +2800,13 @@
 //        {
 //            if (otherPrimitive->isSigned() == primitiveType->isSigned())
 //            {
-//                if (otherPrimitive->getBitCount() > primitiveType->getBitCount())
+//                if (otherPrimitive->getByteCount() > primitiveType->getBitCount())
 //                {
 //                    value = builder.CreateIntCast(value, visit(copy), primitiveType->isSigned());
 //                    type = copy;
 //                }
 //            }
-//            else if (otherPrimitive->getBitCount() >= primitiveType->getBitCount())
+//            else if (otherPrimitive->getBitCount() >= primitiveType->getByteCount())
 //            {
 //                value = builder.CreateIntCast(value, visit(copy), primitiveType->isSigned());
 //                type = copy;

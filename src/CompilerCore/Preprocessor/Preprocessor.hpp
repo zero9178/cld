@@ -1,7 +1,9 @@
 #ifndef OPENCLPARSER_PREPROCESSOR_HPP
 #define OPENCLPARSER_PREPROCESSOR_HPP
 
+#pragma warning(push, 0)
 #include <llvm/Support/raw_ostream.h>
+#pragma warning(pop)
 
 namespace OpenCL
 {

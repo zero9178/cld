@@ -6,8 +6,6 @@
 #include <CompilerCore/C/SemanticAnalysis.hpp>
 #include <CompilerCore/C/SourceObject.hpp>
 
-#include <array>
-
 #include "TestConfig.hpp"
 
 using namespace OpenCL::ErrorMessages;
@@ -80,7 +78,8 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "int");
     }
     SECTION("unsigned int")
@@ -93,32 +92,60 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "unsigned int");
     }
-    SECTION("long long")
+    SECTION("long")
     {
-        auto [value, error] = evaluateConstantExpression("0ll");
+        auto [value, error] = evaluateConstantExpression("0l", OpenCL::Tests::x86linux);
         REQUIRE(error.empty());
         REQUIRE(!value.isUndefined());
         REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
         auto result = std::get<llvm::APSInt>(value.getValue());
         CHECK(result == 0);
         CHECK(result.isSigned());
-        CHECK(result.getBitWidth() == sizeof(long long) * 8);
+        CHECK(result.getBitWidth() == 32);
+        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLong(false, false, OpenCL::Tests::x86linux));
+        CHECK(value.getType().getName() == "int");
+    }
+    SECTION("unsigned long")
+    {
+        auto [value, error] = evaluateConstantExpression("0ul", OpenCL::Tests::x86linux);
+        REQUIRE(error.empty());
+        REQUIRE(!value.isUndefined());
+        REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
+        auto result = std::get<llvm::APSInt>(value.getValue());
+        CHECK(result == 0);
+        CHECK(result.isUnsigned());
+        CHECK(result.getBitWidth() == 32);
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createUnsignedLong(false, false, OpenCL::Tests::x86linux));
+        CHECK(value.getType().getName() == "unsigned int");
+    }
+    SECTION("long long")
+    {
+        auto [value, error] = evaluateConstantExpression("0ll", OpenCL::Tests::x86linux);
+        REQUIRE(error.empty());
+        REQUIRE(!value.isUndefined());
+        REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
+        auto result = std::get<llvm::APSInt>(value.getValue());
+        CHECK(result == 0);
+        CHECK(result.isSigned());
+        CHECK(result.getBitWidth() == 64);
         CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
         CHECK(value.getType().getName() == "long long");
     }
     SECTION("unsigned long long")
     {
-        auto [value, error] = evaluateConstantExpression("0ull");
+        auto [value, error] = evaluateConstantExpression("0ull", OpenCL::Tests::x86linux);
         REQUIRE(error.empty());
         REQUIRE(!value.isUndefined());
         REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
         auto result = std::get<llvm::APSInt>(value.getValue());
         CHECK(result == 0);
-        CHECK(result.isSigned());
-        CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
+        CHECK(result.isUnsigned());
+        CHECK(result.getBitWidth() == 64);
         CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(value.getType().getName() == "unsigned long long");
     }
@@ -158,18 +185,19 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
             CHECK(result.convertToDouble() == 0.0);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
-            CHECK(value.getType().getName() == "long double");
+            CHECK(value.getType().getName() == "double");
         }
         SECTION("Gnu")
         {
-            auto [value, error] = evaluateConstantExpression(".0l", OpenCL::Tests::x64windowsMsvc);
+            auto [value, error] = evaluateConstantExpression(".0l", OpenCL::Tests::x64windowsGnu);
             REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
             REQUIRE(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_x87DoubleExtended);
             CHECK(result.compare(llvm::APFloat(llvm::APFloat::x87DoubleExtended(), "0.0")));
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createDouble(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createLongDouble(false, false, OpenCL::Tests::x64windowsGnu));
             CHECK(value.getType().getName() == "long double");
         }
     }
@@ -179,7 +207,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals")));
         CHECK(value.isUndefined());
     }
-    SECTION("Parenthese")
+    SECTION("Parentheses")
     {
         auto [value, error] = evaluateConstantExpression("(((((0)))))");
         REQUIRE(error.empty());
@@ -189,7 +217,8 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "int");
     }
     SECTION("Identifier")
@@ -255,11 +284,12 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
-                auto [value, error] = evaluateConstantExpression("+(char)0");
+                auto [value, error] = evaluateConstantExpression("+(signed char)0");
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -267,7 +297,21 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
+                CHECK(value.getType().getName() == "int");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("+(unsigned char)0");
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
+                auto result = std::get<llvm::APSInt>(value.getValue());
+                CHECK(result == 0);
+                CHECK(result.isSigned());
+                CHECK(result.getBitWidth() == sizeof(int) * 8);
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -313,7 +357,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == -1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Floating point")
@@ -358,7 +403,9 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == ~1u);
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createUnsignedInt(false, false,
+                                                                         OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "unsigned int");
         }
         SECTION("Floating point")
@@ -398,7 +445,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Floating point")
@@ -420,7 +468,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -436,7 +485,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -449,7 +499,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -471,36 +522,39 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                     float r[5];
                     char c[24];
                 };
-                std::array sizes = {std::pair{"char", 1ull},
-                                    std::pair{"unsigned char", 1ull},
-                                    std::pair{"short", 2ull},
-                                    std::pair{"unsigned short", 2ull},
-                                    std::pair{"int", 4ull},
-                                    std::pair{"long", 4ull},
-                                    std::pair{"unsigned int", 4ull},
-                                    std::pair{"unsigned long", 4ull},
-                                    std::pair{"long long", 8ull},
-                                    std::pair{"unsigned long long", 8ull},
-                                    std::pair{"float", 4ull},
-                                    std::pair{"double", 8ull},
-                                    std::pair{"float[0]", 0ull},
-                                    std::pair{"int[5]", 20ull},
+#define SIZEPAIR(type) std::pair{#type, sizeof(type)}
+                std::array sizes = {SIZEPAIR(char),
+                                    SIZEPAIR(unsigned char),
+                                    SIZEPAIR(short),
+                                    SIZEPAIR(unsigned short),
+                                    SIZEPAIR(int),
+                                    SIZEPAIR(long),
+                                    SIZEPAIR(unsigned int),
+                                    SIZEPAIR(unsigned long),
+                                    SIZEPAIR(long long),
+                                    SIZEPAIR(unsigned long long),
+                                    SIZEPAIR(float),
+                                    SIZEPAIR(double),
+                                    SIZEPAIR(long double),
+                                    std::pair{"float[0]", static_cast<std::size_t>(0ull)},
+                                    SIZEPAIR(int[5]),
                                     std::pair{"struct Test"
                                               "{"
                                               "int f;"
                                               "float r[5];"
                                               "char c[24];"
                                               "}",
-                                              static_cast<unsigned long long>(sizeof(Test))},
+                                              sizeof(Test)},
                                     std::pair{"union Test"
                                               "{"
                                               "int f;"
                                               "float r[5];"
                                               "char c[24];"
                                               "}",
-                                              static_cast<unsigned long long>(sizeof(TestU))},
-                                    std::pair{"void*", 8ull},
-                                    std::pair{"struct u*", 8ull}};
+                                              sizeof(TestU)},
+                                    SIZEPAIR(void*),
+                                    SIZEPAIR(struct u*)};
+#undef SIZEPAIR
                 for (auto& [name, size] : sizes)
                 {
                     DYNAMIC_SECTION(name)
@@ -669,7 +723,8 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 20);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Divide")
@@ -682,7 +737,8 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Modulo")
@@ -695,7 +751,8 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -816,7 +873,8 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result == 9);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Minus")
@@ -830,7 +888,8 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result == 3);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -903,7 +962,8 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 17);
                 CHECK(value.getType()
                       == OpenCL::Semantics::PointerType::create(
-                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                          false, false, false,
+                          OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x64linux)));
                 CHECK(value.getType().getName() == "int*");
             }
             {
@@ -916,7 +976,8 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == 17);
                 CHECK(value.getType()
                       == OpenCL::Semantics::PointerType::create(
-                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                          false, false, false,
+                          OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x64linux)));
                 CHECK(value.getType().getName() == "int*");
             }
             {
@@ -963,8 +1024,9 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result == 4);
                     CHECK(result.isSigned());
                     CHECK(result.getBitWidth() == 64);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
-                    CHECK(value.getType().getName() == "long long");
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createLong(false, false, OpenCL::Tests::x64linux));
+                    CHECK(value.getType().getName() == "long");
                 }
                 {
                     auto [value, error] =
@@ -978,8 +1040,9 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result == 4);
                     CHECK(result.isSigned());
                     CHECK(result.getBitWidth() == 64);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
-                    CHECK(value.getType().getName() == "long long");
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createLong(false, false, OpenCL::Tests::x64linux));
+                    CHECK(value.getType().getName() == "long");
                 }
                 {
                     auto [value, error] =
@@ -993,15 +1056,16 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result == 4);
                     CHECK(result.isSigned());
                     CHECK(result.getBitWidth() == 64);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
-                    CHECK(value.getType().getName() == "long long");
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createLong(false, false, OpenCL::Tests::x64linux));
+                    CHECK(value.getType().getName() == "long");
                 }
             }
             SECTION("32 bit")
             {
                 [] {
                     auto [value, error] =
-                        evaluateConstantExpression("(int*)20 - (int*)4", OpenCL::Tests::x64linux,
+                        evaluateConstantExpression("(int*)20 - (int*)4", OpenCL::Tests::x86linux,
                                                    OpenCL::Semantics::ConstantEvaluator::Initialization);
                     UNSCOPED_INFO(error);
                     REQUIRE(error.empty());
@@ -1011,12 +1075,13 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result == 4);
                     CHECK(result.isSigned());
                     CHECK(result.getBitWidth() == 32);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x86linux));
                     CHECK(value.getType().getName() == "int");
                 }();
                 {
                     auto [value, error] =
-                        evaluateConstantExpression("(int* const)20 - (int*)4", OpenCL::Tests::x64linux,
+                        evaluateConstantExpression("(int* const)20 - (int*)4", OpenCL::Tests::x86linux,
                                                    OpenCL::Semantics::ConstantEvaluator::Initialization);
                     UNSCOPED_INFO(error);
                     REQUIRE(error.empty());
@@ -1025,13 +1090,14 @@ TEST_CASE("Const eval additive", "[constEval]")
                     auto result = std::get<llvm::APSInt>(value.getValue());
                     CHECK(result == 4);
                     CHECK(result.isSigned());
-                    CHECK(result.getBitWidth() == 64);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
-                    CHECK(value.getType().getName() == "long long");
+                    CHECK(result.getBitWidth() == 32);
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x86linux));
+                    CHECK(value.getType().getName() == "int");
                 }
                 {
                     auto [value, error] =
-                        evaluateConstantExpression("(int*)20 - (const int*)4", OpenCL::Tests::x64linux,
+                        evaluateConstantExpression("(int*)20 - (const int*)4", OpenCL::Tests::x86linux,
                                                    OpenCL::Semantics::ConstantEvaluator::Initialization);
                     UNSCOPED_INFO(error);
                     REQUIRE(error.empty());
@@ -1040,9 +1106,10 @@ TEST_CASE("Const eval additive", "[constEval]")
                     auto result = std::get<llvm::APSInt>(value.getValue());
                     CHECK(result == 4);
                     CHECK(result.isSigned());
-                    CHECK(result.getBitWidth() == 64);
-                    CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createLongLong(false, false));
-                    CHECK(value.getType().getName() == "long long");
+                    CHECK(result.getBitWidth() == 32);
+                    CHECK(value.getType()
+                          == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x86linux));
+                    CHECK(value.getType().getName() == "int");
                 }
             }
             {
@@ -1062,7 +1129,8 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(std::get<OpenCL::Semantics::VoidStar>(value.getValue()).address == std::uint64_t(-7));
                 CHECK(value.getType()
                       == OpenCL::Semantics::PointerType::create(
-                          false, false, false, OpenCL::Semantics::PrimitiveType::createInt(false, false)));
+                          false, false, false,
+                          OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::Tests::x64linux)));
                 CHECK(value.getType().getName() == "int*");
             }
             {
@@ -1110,7 +1178,8 @@ TEST_CASE("Const eval shift", "[constEval]")
             CHECK(result == 5 << 4);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Right")
@@ -1123,7 +1192,8 @@ TEST_CASE("Const eval shift", "[constEval]")
             CHECK(result == 5 >> 2);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1203,7 +1273,8 @@ TEST_CASE("Const eval bitand", "[constEval]")
         CHECK(result == (5 & 4));
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
@@ -1248,7 +1319,8 @@ TEST_CASE("Const eval bitxor", "[constEval]")
         CHECK(result == (5 ^ 4));
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
@@ -1293,7 +1365,8 @@ TEST_CASE("Const eval bitor", "[constEval]")
         CHECK(result == (5 | 4));
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+        CHECK(value.getType()
+              == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
         CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
@@ -1339,7 +1412,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1351,7 +1425,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1377,7 +1452,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1390,7 +1466,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1403,10 +1480,11 @@ TEST_CASE("Const eval and", "[constEval]")
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
             auto result = std::get<llvm::APSInt>(value.getValue());
-            CHECK(result == 0);
+            CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1419,7 +1497,8 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1438,7 +1517,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1450,7 +1530,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1476,7 +1557,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1489,7 +1571,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1505,7 +1588,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         {
@@ -1518,7 +1602,8 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1538,7 +1623,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than")
@@ -1551,7 +1637,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Less than or equal")
@@ -1564,7 +1651,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than or equal")
@@ -1577,7 +1665,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1605,7 +1694,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1631,7 +1721,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1657,7 +1748,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1683,7 +1775,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1698,10 +1791,11 @@ TEST_CASE("Const eval comparison", "[constEval]")
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
             auto result = std::get<llvm::APSInt>(value.getValue());
-            CHECK(result == 0);
+            CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than")
@@ -1716,7 +1810,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Less than or equal")
@@ -1731,7 +1826,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than or equal")
@@ -1746,7 +1842,8 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+            CHECK(value.getType()
+                  == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
             CHECK(value.getType().getName() == "int");
         }
     }
@@ -1767,7 +1864,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1779,7 +1877,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1794,7 +1893,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1806,7 +1906,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1835,7 +1936,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1848,7 +1950,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1874,7 +1977,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1887,7 +1991,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
         }
@@ -1907,7 +2012,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1921,7 +2027,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1935,7 +2042,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1949,7 +2057,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1963,7 +2072,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1986,7 +2096,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -1999,7 +2110,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2030,7 +2142,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2044,7 +2157,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2058,7 +2172,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2072,7 +2187,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2086,7 +2202,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2109,7 +2226,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {
@@ -2122,7 +2240,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType() == OpenCL::Semantics::PrimitiveType::createInt(false, false));
+                CHECK(value.getType()
+                      == OpenCL::Semantics::PrimitiveType::createInt(false, false, OpenCL::LanguageOptions::native()));
                 CHECK(value.getType().getName() == "int");
             }
             {

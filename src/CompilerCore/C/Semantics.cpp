@@ -229,6 +229,16 @@ bool OpenCL::Semantics::PrimitiveType::isSigned() const
     return m_isSigned;
 }
 
+std::uint8_t OpenCL::Semantics::PrimitiveType::getByteCount() const
+{
+    // Round up to the next highest power 2
+    std::uint8_t temp = m_bitCount - 1;
+    temp |= temp >> 1;
+    temp |= temp >> 2;
+    temp |= temp >> 4;
+    return (temp + 1) / 8;
+}
+
 std::uint8_t OpenCL::Semantics::PrimitiveType::getBitCount() const
 {
     return m_bitCount;
@@ -274,43 +284,43 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedChar(boo
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 8, "_Bool");
+    return create(isConst, isVolatile, false, false, 1, "_Bool");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
                                                                       const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfShort(), "short");
+    return create(isConst, isVolatile, false, true, options.getSizeOfShort() * 8, "short");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
                                                                               const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfShort(), "unsigned short");
+    return create(isConst, isVolatile, false, false, options.getSizeOfShort() * 8, "unsigned short");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
                                                                     const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfInt(), "int");
+    return create(isConst, isVolatile, false, true, options.getSizeOfInt() * 8, "int");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
                                                                             const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfInt(), "unsigned int");
+    return create(isConst, isVolatile, false, false, options.getSizeOfInt() * 8, "unsigned int");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfLong(), "long");
+    return create(isConst, isVolatile, false, true, options.getSizeOfLong() * 8, "long");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
                                                                              const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfLong(), "unsigned long");
+    return create(isConst, isVolatile, false, false, options.getSizeOfLong() * 8, "unsigned long");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
@@ -336,7 +346,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createDouble(bool isCo
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
                                                                            const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits() == 64 ? 64 : 128, "long double");
+    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits(), "long double");
 }
 
 OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
@@ -556,26 +566,27 @@ const std::string& OpenCL::Semantics::RecordType::getName() const
     return m_name;
 }
 
-OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type)
+OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type,
+                                                                          const LanguageOptions& options)
 {
     return match(
         type.get(),
         [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
-            return primitiveType.getBitCount() / static_cast<std::size_t>(8);
+            return primitiveType.getByteCount();
         },
-        [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
-            return alignmentOf(arrayType.getType());
+        [&options](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
+            return alignmentOf(arrayType.getType(), options);
         },
         [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
             return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
         },
-        [](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
-            return alignmentOf(valArrayType.getType());
+        [&options](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
+            return alignmentOf(valArrayType.getType(), options);
         },
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
             return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
         },
-        [&type](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+        [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
                 return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(
@@ -588,7 +599,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
                 {
                     (void)name;
                     (void)bits;
-                    auto result = alignmentOf(subtype);
+                    auto result = alignmentOf(subtype, options);
                     if (!result)
                     {
                         return result;
@@ -601,13 +612,13 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
             {
                 std::optional<std::string> failure;
                 auto result = std::max_element(recordType.getMembers().begin(), recordType.getMembers().end(),
-                                               [&failure](const auto& lhs, const auto& rhs) {
-                                                   auto lhsSize = sizeOf(std::get<0>(lhs));
+                                               [&failure, &options](const auto& lhs, const auto& rhs) {
+                                                   auto lhsSize = sizeOf(std::get<0>(lhs), options);
                                                    if (!lhsSize)
                                                    {
                                                        failure = lhsSize.error();
                                                    }
-                                                   auto rhsSize = sizeOf(std::get<0>(rhs));
+                                                   auto rhsSize = sizeOf(std::get<0>(rhs), options);
                                                    if (!rhsSize)
                                                    {
                                                        failure = rhsSize.error();
@@ -618,12 +629,16 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
                 {
                     return *failure;
                 }
-                return alignmentOf(std::get<0>(*result));
+                return alignmentOf(std::get<0>(*result), options);
             }
         },
-        [](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{4}; },
-        [](const PointerType&) -> Expected<std::size_t, std::string> { return std::size_t{8}; },
-        [](std::monostate) -> Expected<std::size_t, std::string> { return std::size_t{0}; });
+        [&options](const EnumType&) -> Expected<std::size_t, std::string> {
+            return std::size_t{options.getSizeOfInt()};
+        },
+        [&options](const PointerType&) -> Expected<std::size_t, std::string> {
+            return std::size_t{options.getSizeOfVoidStar()};
+        },
+        [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
 }
 
 bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
@@ -636,15 +651,16 @@ bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type)
+OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type,
+                                                                     const LanguageOptions& options)
 {
     return match(
         type.get(),
         [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
-            return primitiveType.getBitCount() / std::size_t{8};
+            return primitiveType.getByteCount();
         },
-        [](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
-            auto result = sizeOf(arrayType.getType());
+        [&options](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
+            auto result = sizeOf(arrayType.getType(), options);
             if (!result)
             {
                 return result;
@@ -660,7 +676,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
             return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
         },
-        [&type](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+        [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
                 return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
@@ -672,7 +688,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
                 {
                     (void)name;
                     (void)bits;
-                    auto alignment = alignmentOf(subtype);
+                    auto alignment = alignmentOf(subtype, options);
                     if (!alignment)
                     {
                         return alignment;
@@ -682,7 +698,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
                     {
                         currentSize += *alignment - rest;
                     }
-                    auto subSize = sizeOf(subtype);
+                    auto subSize = sizeOf(subtype, options);
                     if (!subSize)
                     {
                         return subSize;
@@ -698,7 +714,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
                 {
                     (void)name;
                     (void)bits;
-                    auto subSize = sizeOf(subtype);
+                    auto subSize = sizeOf(subtype, options);
                     if (!subSize)
                     {
                         return subSize;
@@ -708,9 +724,13 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
                 return maxSize;
             }
         },
-        [](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{4}; },
-        [](const PointerType&) -> Expected<std::size_t, std::string> { return std::size_t{8}; },
-        [](std::monostate) -> Expected<std::size_t, std::string> { return std::size_t{0}; });
+        [&options](const EnumType&) -> Expected<std::size_t, std::string> {
+            return std::size_t{options.getSizeOfInt()};
+        },
+        [&options](const PointerType&) -> Expected<std::size_t, std::string> {
+            return std::size_t{options.getSizeOfVoidStar()};
+        },
+        [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
 }
 
 OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,

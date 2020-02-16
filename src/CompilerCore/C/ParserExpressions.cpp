@@ -1018,7 +1018,7 @@ std::optional<OpenCL::Syntax::PostFixExpression>
                                             OPENCL_UNREACHABLE;
                                         }
                                         std::transform(utf32.data(), targetStart, std::back_inserter(lhs.characters),
-                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch; });
                                         return lhs;
                                     }
                                     default: OPENCL_UNREACHABLE;

@@ -1,9 +1,12 @@
 #ifndef OPENCLPARSER_UTIL_HPP
 #define OPENCLPARSER_UTIL_HPP
 
+#pragma warning(push, 0)
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Unicode.h>
+#pragma warning(pop)
 
+#include <cstdlib>
 #include <string>
 #include <variant>
 
@@ -48,7 +51,7 @@ auto matchWithSelf(Variant&& variant, Matchers&&... matchers)
 }
 
 template <typename T, typename... Ts>
-constexpr size_t getIndex(std::variant<Ts...> const&)
+constexpr size_t getIndex(const std::variant<Ts...>&)
 {
     size_t r = 0;
     auto test = [&](bool b) {
@@ -86,8 +89,6 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
     #endif
 
 #else
-
-    #include <cstdlib>
 
     #define OPENCL_UNREACHABLE \
         do                     \
