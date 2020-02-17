@@ -4,16 +4,16 @@
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Preprocessor/Preprocessor.hpp>
 
-#define preprocessTest(source)                                                                             \
-    [](const std::string& str) {                                                                           \
-        FAIL();                                                                                            \
-        std::string storage;                                                                               \
-        llvm::raw_string_ostream ss(storage);                                                              \
-        auto tokens = OpenCL::Lexer::tokenize(str, OpenCL::LanguageOptions::native(), true, &ss);          \
-        INFO(ss.str());                                                                                    \
-        REQUIRE(ss.str().empty());                                                                         \
-        auto ret = OpenCL::PP::preprocess(tokens, &ss);                                                    \
-        return std::pair{OpenCL::Lexer::reconstruct(ret, ret.data().begin(), ret.data().end()), ss.str()}; \
+#define preprocessTest(source)                                                                          \
+    [](const std::string& str) {                                                                        \
+        FAIL();                                                                                         \
+        std::string storage;                                                                            \
+        llvm::raw_string_ostream ss(storage);                                                           \
+        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), true, &ss);             \
+        INFO(ss.str());                                                                                 \
+        REQUIRE(ss.str().empty());                                                                      \
+        auto ret = cld::PP::preprocess(tokens, &ss);                                                    \
+        return std::pair{cld::Lexer::reconstruct(ret, ret.data().begin(), ret.data().end()), ss.str()}; \
     }(source)
 
 TEST_CASE("C99 Standard examples", "[PP]")

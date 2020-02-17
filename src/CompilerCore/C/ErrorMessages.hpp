@@ -6,7 +6,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-const-variable"
 
-namespace OpenCL
+namespace cld
 {
 namespace ErrorMessages
 {
@@ -209,7 +209,7 @@ namespace Lexer
 constexpr auto UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS = Format("Universal character requires {} more digits");
 }
 } // namespace Notes
-} // namespace OpenCL
+} // namespace cld
 
 #pragma clang diagnostic pop
 

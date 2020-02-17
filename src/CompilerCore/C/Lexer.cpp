@@ -23,7 +23,7 @@
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
 
-using namespace OpenCL::Lexer;
+using namespace cld::Lexer;
 
 namespace
 {
@@ -42,7 +42,7 @@ bool isKeyword(const std::string& characters)
 
 TokenType charactersToKeyword(const std::string& characters)
 {
-    using namespace OpenCL::Lexer;
+    using namespace cld::Lexer;
     if (characters == "auto")
     {
         return TokenType::AutoKeyword;
@@ -616,7 +616,7 @@ using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, 
 
 class Context
 {
-    OpenCL::LanguageOptions m_languageOptions;
+    cld::LanguageOptions m_languageOptions;
     bool m_inPreprocessor;
     llvm::raw_ostream* m_reporter;
     std::vector<Token> m_result;
@@ -887,7 +887,7 @@ class Context
             {
                 // The token spans multiple lines and we are neither at the first nor last line. Therefore
                 // this line consist only of the token
-                auto underline = OpenCL::stringOfSameWidth(string, '~');
+                auto underline = cld::stringOfSameWidth(string, '~');
                 for (auto iter : arrowsForLine)
                 {
                     assert(iter < underline.size());
@@ -899,9 +899,9 @@ class Context
             {
                 // The token does not span lines and starts as well as ends here
                 auto column = underlineStart - getLineStartOffset(i);
-                auto space = OpenCL::stringOfSameWidth(string.substr(0, column), ' ');
+                auto space = cld::stringOfSameWidth(string.substr(0, column), ' ');
                 *m_reporter << space;
-                auto underline = OpenCL::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~');
+                auto underline = cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~');
                 for (auto iter : arrowsForLine)
                 {
                     assert(iter - space.size() < underline.size());
@@ -913,9 +913,9 @@ class Context
             {
                 // The token starts here and does not end here
                 auto column = underlineStart - getLineStartOffset(i);
-                auto space = OpenCL::stringOfSameWidth(string.substr(0, column), ' ');
+                auto space = cld::stringOfSameWidth(string.substr(0, column), ' ');
                 *m_reporter << space;
-                auto underline = OpenCL::stringOfSameWidth(string.substr(column), '~');
+                auto underline = cld::stringOfSameWidth(string.substr(column), '~');
                 for (auto iter : arrowsForLine)
                 {
                     assert(iter - space.size() < underline.size());
@@ -927,7 +927,7 @@ class Context
             {
                 // The token ends here and did not start here
                 auto endColumn = underlineEnd - getLineStartOffset(i);
-                auto underline = OpenCL::stringOfSameWidth(string.substr(0, endColumn), '~');
+                auto underline = cld::stringOfSameWidth(string.substr(0, endColumn), '~');
                 for (auto iter : arrowsForLine)
                 {
                     assert(iter < underline.size());
@@ -940,14 +940,14 @@ class Context
         m_reporter->flush();
     }
 
-    friend OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, OpenCL::LanguageOptions languageOptions,
-                                                        bool inPreprocessor, llvm::raw_ostream* reporter);
+    friend cld::SourceObject cld::Lexer::tokenize(std::string source, cld::LanguageOptions languageOptions,
+                                                  bool inPreprocessor, llvm::raw_ostream* reporter);
 
 public:
     std::uint64_t tokenStartOffset;
 
     Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
-            OpenCL::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
+            cld::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
         : m_languageOptions(languageOptions),
           m_inPreprocessor(inPreprocessor),
           m_reporter(reporter),
@@ -1003,17 +1003,17 @@ public:
         std::forward<F>(f)();
     }
 
-    [[nodiscard]] OpenCL::LanguageOptions getLanguageOptions() const
+    [[nodiscard]] cld::LanguageOptions getLanguageOptions() const
     {
         return m_languageOptions;
     }
 
-    [[nodiscard]] const std::vector<OpenCL::Lexer::Token>& getResult() const& noexcept
+    [[nodiscard]] const std::vector<cld::Lexer::Token>& getResult() const& noexcept
     {
         return m_result;
     }
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token> getResult() && noexcept
+    [[nodiscard]] std::vector<cld::Lexer::Token> getResult() && noexcept
     {
         return m_result;
     }
@@ -1080,8 +1080,8 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
         {
             std::vector<std::uint64_t> arrows(value.size());
             std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
-            context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
+            context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                    value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
                                 endOffset - value.size(), startOffset, endOffset, std::move(arrows));
             return {};
         }
@@ -1090,8 +1090,8 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     {
         std::vector<std::uint64_t> arrows(value.size());
         std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
-        context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                value, OpenCL::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+        context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                             endOffset - value.size(), startOffset, endOffset, std::move(arrows));
         return {};
     }
@@ -1125,15 +1125,14 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
         case 'r': return '\r';
         case ' ':
         {
-            context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
+            context.reportError(cld::ErrorMessages::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
                                 {backslash, backslash + 1});
             return {};
         }
         default:
         {
-            context.reportError(
-                OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape), backslash + 1,
-                {backslash, backslash + 1});
+            context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
+                                backslash + 1, {backslash, backslash + 1});
             return {};
         }
     }
@@ -1157,7 +1156,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         auto offset = context.mapStream(context.tokenStartOffset + (wide ? 2 : 1)) + (iter - characters.data());
         if (*iter == '\n')
         {
-            context.reportError(OpenCL::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
+            context.reportError(cld::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
                                 context.tokenStartOffset, {offset});
             iter++;
             errorOccured = true;
@@ -1173,7 +1172,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                                                 llvm::strictConversion);
             if (res != llvm::conversionOK)
             {
-                context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
+                context.reportError(cld::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
                                     {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
                 errorOccured = true;
             }
@@ -1193,7 +1192,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // First character followed after \u or \U is not a hex digit or its the end of string
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"),
+                context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"),
                                     start, {start, start + 1});
                 errorOccured = true;
                 continue;
@@ -1212,7 +1211,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                     arrows.resize(2 + std::distance(hexStart, hexEnd));
                     std::iota(arrows.begin() + 2, arrows.end(), start + 2);
                     context.reportError(
-                        OpenCL::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                        cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
                             std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
                         start, std::move(arrows));
                     errorOccured = true;
@@ -1243,7 +1242,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (lastHex == iter)
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(OpenCL::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
+                context.reportError(cld::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
                                     {start, start + 1});
                 errorOccured = true;
                 continue;
@@ -1266,9 +1265,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                 // Also since there must be at least one character after \, lastOctal is definitely not end
                 // here.
-                context.reportError(
-                    OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)), offset,
-                    {offset, offset + 1});
+                context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
+                                    offset, {offset, offset + 1});
                 errorOccured = true;
                 continue;
             }
@@ -1300,7 +1298,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
     {
         if (*iter > largestCharacter)
         {
-            context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+            context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
                                 context.tokenStartOffset);
             errorOccured = true;
         }
@@ -1414,7 +1412,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
-            context.reportError(OpenCL::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+            context.reportError(cld::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
                                 context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
                                 context.tokenStartOffset, context.getOffset() - 1);
             errorsOccurred = true;
@@ -1422,7 +1420,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
     }
     else if (isHex && isFloat)
     {
-        context.reportError(OpenCL::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+        context.reportError(cld::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
                             context.getOffset() - 1, context.tokenStartOffset, context.getOffset() - 1);
         errorsOccurred = true;
     }
@@ -1435,7 +1433,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
         while (result != suffixBegin)
         {
             errorsOccurred = true;
-            context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
+            context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
                                 context.mapStream(beginLocation + std::distance(begin, result)),
                                 context.tokenStartOffset, context.getOffset() - 1,
                                 {context.mapStream(beginLocation + std::distance(begin, result))});
@@ -1446,7 +1444,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
     auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
     if (!isFloat)
     {
-        std::optional<OpenCL::Lexer::Token::ValueType> result;
+        std::optional<cld::Lexer::Token::ValueType> result;
         if (suffix.empty())
         {
             if (errorsOccurred)
@@ -1604,7 +1602,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
             std::vector<std::uint64_t> arrows(suffix.size());
             std::iota(arrows.begin(), arrows.end(),
                       context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
-            context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+            context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
                                 context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
                                 context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
             return {};
@@ -1613,7 +1611,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
         {
             return result;
         }
-        context.reportError(OpenCL::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
+        context.reportError(cld::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
                             context.tokenStartOffset, context.getOffset() - 1);
         return {};
     }
@@ -1653,7 +1651,7 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
     }
     std::vector<std::uint64_t> arrows(suffix.size());
     std::iota(arrows.begin(), arrows.end(), context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
-    context.reportError(OpenCL::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+    context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
                         context.mapStream(beginLocation + std::distance(begin, suffixBegin)), context.tokenStartOffset,
                         context.getOffset() - 1, std::move(arrows));
     return {};
@@ -1875,7 +1873,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     auto size = getNumUTF8ForUTF32(c);
                     std::vector<std::uint64_t> arrows(size);
                     std::iota(arrows.begin(), arrows.end(), context.getOffset() - size);
-                    context.reportError(OpenCL::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
+                    context.reportError(cld::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
                                         context.getOffset() - size, context.getOffset() - size, context.getOffset(),
                                         std::move(arrows));
                 }
@@ -1887,7 +1885,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     buffer.resize(std::distance(buffer.data(), start));
                     std::vector<std::uint64_t> arrows(buffer.size());
                     std::iota(arrows.begin(), arrows.end(), context.getOffset() - buffer.size());
-                    context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
+                    context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
                                         context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
                                         context.getOffset(), std::move(arrows));
                 }
@@ -1902,14 +1900,14 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
     if (c == '\'' && (characters.empty() || characters.back() != '\\'))
     {
         auto [result, errorOccured] =
-            processCharacters(characters, context, wide, OpenCL::ErrorMessages::Lexer::CHARACTER_LITERAL);
+            processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::CHARACTER_LITERAL);
         if (result.empty())
         {
             if (!errorOccured)
             {
                 std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
                 std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(OpenCL::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
+                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
                                     context.tokenStartOffset, std::move(arrows));
             }
             return {};
@@ -1918,7 +1916,7 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
         {
             std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
             std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-            context.reportWarning(OpenCL::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
+            context.reportWarning(cld::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
                                   context.tokenStartOffset, std::move(arrows));
         }
 
@@ -1951,7 +1949,7 @@ StateMachine StringLiteral::advance(char c, Context& context)
     if (c == '"' && (characters.empty() || characters.back() != '\\'))
     {
         auto [result, errorOccured] =
-            processCharacters(characters, context, wide, OpenCL::ErrorMessages::Lexer::STRING_LITERAL);
+            processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::STRING_LITERAL);
         if (!errorOccured)
         {
             if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
@@ -2128,8 +2126,8 @@ std::pair<StateMachine, bool> BackSlash::advance(std::uint32_t c, Context& conte
             result += context.tokenStartOffset;
             std::vector<std::uint64_t> arrows(context.getOffset() - result);
             std::iota(arrows.begin(), arrows.end(), result);
-            context.reportError(OpenCL::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE,
-                                result, result, context.getOffset() - 1, std::move(arrows));
+            context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
+                                result, context.getOffset() - 1, std::move(arrows));
         }
         if (prevState)
         {
@@ -2163,8 +2161,7 @@ std::pair<StateMachine, bool> BackSlash::advance(std::uint32_t c, Context& conte
     auto result = view.rfind('\\');
     assert(result != std::string_view::npos);
     result += context.tokenStartOffset;
-    context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
-                        {result});
+    context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1, {result});
     return {Start{}, false};
 }
 
@@ -2180,10 +2177,10 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
             assert(result != std::string_view::npos);
         } while (result + 1 >= view.size() || view[result + 1] == '\n');
         result += context.tokenStartOffset;
-        context.reportError(OpenCL::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
+        context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
                             {result});
         context.reportNote(
-            OpenCL::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
+            cld::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
             result, result, context.getOffset() - codePointToUtf8ByteCount(c));
         return {Start{}, false};
     }
@@ -2216,7 +2213,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
     {
         std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart));
         std::iota(arrows.begin(), arrows.end(), ucStart);
-        context.reportError(OpenCL::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
+        context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
                                 (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
                             ucStart, ucStart, context.getOffset(), std::move(arrows));
         return {Start{}, true};
@@ -2493,8 +2490,8 @@ struct FirstArgOfMethod<R (*)(U, Args...) noexcept>
 };
 } // namespace
 
-OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
-                                             llvm::raw_ostream* reporter)
+cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
+                                       llvm::raw_ostream* reporter)
 {
     source += '\n';
     source.erase(std::remove(source.begin(), source.end(), '\r'), source.end());
@@ -2595,7 +2592,7 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
         offset = prevOffset + step;
         iter += step;
     }
-    OpenCL::match(
+    cld::match(
         stateMachine, [](auto&&) {},
         [&context](CharacterLiteral&) {
             std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
@@ -2632,12 +2629,12 @@ OpenCL::SourceObject OpenCL::Lexer::tokenize(std::string source, LanguageOptions
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }
 
-std::string OpenCL::Lexer::Token::getRepresentation() const
+std::string cld::Lexer::Token::getRepresentation() const
 {
     return m_representation;
 }
 
-std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
+std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
 {
     switch (tokenType)
     {
@@ -2734,7 +2731,7 @@ std::string OpenCL::Lexer::tokenName(OpenCL::Lexer::TokenType tokenType)
     OPENCL_UNREACHABLE;
 }
 
-std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
+std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
 {
     switch (tokenType)
     {
@@ -2831,22 +2828,22 @@ std::string OpenCL::Lexer::tokenValue(OpenCL::Lexer::TokenType tokenType)
     OPENCL_UNREACHABLE;
 }
 
-bool OpenCL::Lexer::Token::macroInserted() const noexcept
+bool cld::Lexer::Token::macroInserted() const noexcept
 {
     return m_macroId;
 }
 
-const OpenCL::Lexer::Token::variant& OpenCL::Lexer::Token::getValue() const noexcept
+const cld::Lexer::Token::variant& cld::Lexer::Token::getValue() const noexcept
 {
     return m_value;
 }
 
-OpenCL::Lexer::TokenType OpenCL::Lexer::Token::getTokenType() const noexcept
+cld::Lexer::TokenType cld::Lexer::Token::getTokenType() const noexcept
 {
     return m_tokenType;
 }
 
-OpenCL::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value)
+cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value)
     : m_value(std::move(value)),
       m_representation(std::move(representation)),
       m_offset(offset),
@@ -2856,12 +2853,12 @@ OpenCL::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::stri
     assert(!m_representation.empty());
 }
 
-std::uint64_t OpenCL::Lexer::Token::getMacroId() const noexcept
+std::uint64_t cld::Lexer::Token::getMacroId() const noexcept
 {
     return m_macroId;
 }
 
-void OpenCL::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
+void cld::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
 {
     m_macroId = macroId;
 }
@@ -2881,30 +2878,30 @@ std::uint64_t Token::getSourceOffset() const noexcept
     return m_sourceOffset;
 }
 
-std::uint64_t Token::getLine(const OpenCL::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexcept
 {
     return sourceObject.getLineNumber(getOffset());
 }
 
-std::uint64_t Token::getSourceLine(const OpenCL::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getSourceLine(const cld::SourceObject& sourceObject) const noexcept
 {
     return sourceObject.getLineNumber(getSourceOffset());
 }
 
-std::uint64_t Token::getColumn(const OpenCL::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getColumn(const cld::SourceObject& sourceObject) const noexcept
 {
     auto line = sourceObject.getLineNumber(getOffset());
     return getOffset() - sourceObject.getLineStartOffset(line);
 }
 
-std::uint64_t Token::getSourceColumn(const OpenCL::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getSourceColumn(const cld::SourceObject& sourceObject) const noexcept
 {
     auto line = sourceObject.getLineNumber(getOffset());
     return getOffset() - sourceObject.getLineStartOffset(line);
 }
 
-std::string OpenCL::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
-                                       std::vector<Token>::const_iterator end)
+std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
+                                    std::vector<Token>::const_iterator end)
 {
     if (begin == end)
     {
@@ -2917,9 +2914,9 @@ std::string OpenCL::Lexer::reconstruct(const SourceObject& sourceObject, std::ve
     return "";
 }
 
-std::string OpenCL::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
-                                              std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                              std::vector<OpenCL::Lexer::Token>::const_iterator end)
+std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
+                                           std::vector<cld::Lexer::Token>::const_iterator begin,
+                                           std::vector<cld::Lexer::Token>::const_iterator end)
 {
     std::string result;
     for (auto curr = begin; curr != end; curr++)

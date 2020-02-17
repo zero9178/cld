@@ -10,21 +10,21 @@
 
 namespace
 {
-OpenCL::Semantics::Type getPtrdiff_t(const OpenCL::LanguageOptions& options)
+cld::Semantics::Type getPtrdiff_t(const cld::LanguageOptions& options)
 {
     if (options.getSizeOfVoidStar() == 4)
     {
         if (options.getSizeOfInt() == 4)
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(false, false, options);
+            return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
         else if (options.getSizeOfLong() == 4)
         {
-            return OpenCL::Semantics::PrimitiveType::createLong(false, false, options);
+            return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
         else if (options.getSizeOfShort() == 4)
         {
-            return OpenCL::Semantics::PrimitiveType::createShort(false, false, options);
+            return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
         else
         {
@@ -35,19 +35,19 @@ OpenCL::Semantics::Type getPtrdiff_t(const OpenCL::LanguageOptions& options)
     {
         if (options.getSizeOfInt() == 8)
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(false, false, options);
+            return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
         else if (options.getSizeOfLong() == 8)
         {
-            return OpenCL::Semantics::PrimitiveType::createLong(false, false, options);
+            return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
         else if (options.getSizeOfShort() == 8)
         {
-            return OpenCL::Semantics::PrimitiveType::createShort(false, false, options);
+            return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createLongLong(false, false);
+            return cld::Semantics::PrimitiveType::createLongLong(false, false);
         }
     }
     else
@@ -57,8 +57,8 @@ OpenCL::Semantics::Type getPtrdiff_t(const OpenCL::LanguageOptions& options)
 }
 } // namespace
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionConstant& node)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PrimaryExpressionConstant& node)
 {
     return match(
         node.getValue(),
@@ -158,26 +158,26 @@ OpenCL::Semantics::ConstRetType
         });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpressionParenthese& node)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PrimaryExpressionParenthese& node)
 {
     return visit(node.getExpression());
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionPrimaryExpression& node)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionPostFixExpression& node)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionUnaryOperator& node)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionUnaryOperator& node)
 {
     auto value = visit(node.getCastExpression());
     if (value.isUndefined())
@@ -242,12 +242,11 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionSizeOf& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionSizeOf& node)
 {
     return match(
         node.getVariant(),
-        [this](const std::unique_ptr<Syntax::TypeName>& typeName) -> OpenCL::Semantics::ConstRetType {
+        [this](const std::unique_ptr<Syntax::TypeName>& typeName) -> cld::Semantics::ConstRetType {
             auto type = m_typeCallback ? m_typeCallback(*typeName) : Type();
             if (type.isUndefined())
             {
@@ -262,10 +261,10 @@ OpenCL::Semantics::ConstRetType
             }
             return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createUnsignedLongLong(false, false)};
         },
-        [](auto &&) -> OpenCL::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
+        [](auto &&) -> cld::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::CastExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::CastExpression& node)
 {
     return match(
         node.getVariant(),
@@ -325,7 +324,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Term& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::Term& node)
 {
     auto value = visit(node.getCastExpression());
     for (auto& [op, exp] : node.getOptionalCastExpressions())
@@ -396,8 +395,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AdditiveExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::AdditiveExpression& node)
 {
     auto value = visit(node.getTerm());
     for (auto& [op, exp] : node.getOptionalTerms())
@@ -496,7 +494,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ShiftExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::ShiftExpression& node)
 {
     auto value = visit(node.getAdditiveExpression());
     for (auto& [op, exp] : node.getOptionalAdditiveExpressions())
@@ -551,8 +549,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitAndExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitAndExpression& node)
 {
     auto value = visit(node.getEqualityExpressions()[0]);
     for (auto iter = node.getEqualityExpressions().cbegin() + 1; iter != node.getEqualityExpressions().cend(); iter++)
@@ -586,8 +583,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitXorExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitXorExpression& node)
 {
     auto value = visit(node.getBitAndExpressions()[0]);
     for (auto iter = node.getBitAndExpressions().begin() + 1; iter != node.getBitAndExpressions().end(); iter++)
@@ -622,7 +618,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::BitOrExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitOrExpression& node)
 {
     auto value = visit(node.getBitXorExpressions()[0]);
     for (auto iter = node.getBitXorExpressions().begin() + 1; iter != node.getBitXorExpressions().end(); iter++)
@@ -656,8 +652,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalAndExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::LogicalAndExpression& node)
 {
     auto value = visit(node.getBitOrExpressions()[0]);
     for (auto iter = node.getBitOrExpressions().begin() + 1; iter != node.getBitOrExpressions().end(); iter++)
@@ -689,8 +684,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::LogicalOrExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::LogicalOrExpression& node)
 {
     auto value = visit(node.getAndExpressions()[0]);
     for (auto iter = node.getAndExpressions().begin() + 1; iter != node.getAndExpressions().end(); iter++)
@@ -722,8 +716,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::ConditionalExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::ConditionalExpression& node)
 {
     if (node.getOptionalExpression() && node.getOptionalConditionalExpression())
     {
@@ -755,8 +748,7 @@ OpenCL::Semantics::ConstRetType
     }
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::RelationalExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::RelationalExpression& node)
 {
     auto value = visit(node.getShiftExpression());
     for (auto& [op, exp] : node.getOptionalShiftExpressions())
@@ -818,8 +810,7 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::EqualityExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::EqualityExpression& node)
 {
     auto value = visit(node.getRelationalExpression());
     for (auto& [op, exp] : node.getOptionalRelationalExpressions())
@@ -897,25 +888,22 @@ OpenCL::Semantics::ConstRetType
     return value;
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionSubscript&)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionSubscript&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionArrow&)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionArrow&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpressionDot&)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionDot&)
 {
     throw std::runtime_error("Not implemented yet");
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PrimaryExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PrimaryExpression& node)
 {
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
@@ -940,8 +928,7 @@ OpenCL::Semantics::ConstRetType
         });
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::PostFixExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpression& node)
 {
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
@@ -969,12 +956,12 @@ OpenCL::Semantics::ConstRetType
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value) -> OpenCL::Semantics::ConstRetType { return visit(value); }, node);
+    return std::visit([this](auto&& value) -> cld::Semantics::ConstRetType { return visit(value); }, node);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::Expression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::Expression& node)
 {
     if (node.getAssignmentExpressions().size() > 1)
     {
@@ -985,8 +972,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstantEvaluator::visit(cons
     return visit(node.getAssignmentExpressions()[0]);
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::AssignmentExpression& node)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::AssignmentExpression& node)
 {
     for (auto& [op, cond] : node.getAssignments())
     {
@@ -1016,7 +1002,7 @@ OpenCL::Semantics::ConstRetType
     return visit(node.getConditionalExpression());
 }
 
-OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(
+cld::Semantics::ConstantEvaluator::ConstantEvaluator(
     const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
     std::function<void(std::string, std::optional<Modifier>)> loggerCallback, Mode mode)
@@ -1028,7 +1014,7 @@ OpenCL::Semantics::ConstantEvaluator::ConstantEvaluator(
 {
 }
 
-void OpenCL::Semantics::ConstantEvaluator::logError(std::string message, std::optional<Modifier> modifier)
+void cld::Semantics::ConstantEvaluator::logError(std::string message, std::optional<Modifier> modifier)
 {
     if (m_loggerCallback)
     {
@@ -1036,29 +1022,28 @@ void OpenCL::Semantics::ConstantEvaluator::logError(std::string message, std::op
     }
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstantEvaluator::visit(const OpenCL::Syntax::UnaryExpressionDefined&)
+cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionDefined&)
 {
-    return OpenCL::Semantics::ConstRetType();
+    return cld::Semantics::ConstRetType();
 }
 
-OpenCL::Semantics::ConstRetType::ConstRetType(const OpenCL::Semantics::ConstRetType::ValueType& value,
-                                              const OpenCL::Semantics::Type& type)
+cld::Semantics::ConstRetType::ConstRetType(const cld::Semantics::ConstRetType::ValueType& value,
+                                           const cld::Semantics::Type& type)
     : m_value(value), m_type(type)
 {
 }
 
-bool OpenCL::Semantics::ConstRetType::isInteger() const
+bool cld::Semantics::ConstRetType::isInteger() const
 {
     return std::holds_alternative<std::monostate>(m_value) || std::holds_alternative<llvm::APSInt>(m_value);
 }
 
-bool OpenCL::Semantics::ConstRetType::isArithmetic() const
+bool cld::Semantics::ConstRetType::isArithmetic() const
 {
     return !std::holds_alternative<VoidStar>(m_value);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::integerPromotion(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::integerPromotion(const LanguageOptions& options) const
 {
     return match(
         m_value, [this](VoidStar) -> ConstRetType { return *this; },
@@ -1075,12 +1060,12 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::integerPromotio
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::unaryPlus(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::unaryPlus(const LanguageOptions& options) const
 {
     return integerPromotion(options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::negate(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::negate(const LanguageOptions& options) const
 {
     auto temp = integerPromotion(options);
     return match(
@@ -1096,7 +1081,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::negate(const La
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::logicalNegate(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::logicalNegate(const LanguageOptions& options) const
 {
     return match(
         m_value,
@@ -1115,7 +1100,7 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::logicalNegate(c
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitwiseNegate(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitwiseNegate(const LanguageOptions& options) const
 {
     auto temp = integerPromotion(options);
     return match(
@@ -1128,19 +1113,18 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitwiseNegate(c
         });
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::ConstRetType::getType() const
+const cld::Semantics::Type& cld::Semantics::ConstRetType::getType() const
 {
     return m_type;
 }
 
-const OpenCL::Semantics::ConstRetType::ValueType& OpenCL::Semantics::ConstRetType::getValue() const
+const cld::Semantics::ConstRetType::ValueType& cld::Semantics::ConstRetType::getValue() const
 {
     return m_value;
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const OpenCL::Semantics::Type& type,
-                                                                        const LanguageOptions& options,
-                                                                        Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Semantics::Type& type,
+                                                                  const LanguageOptions& options, Issues* issues) const
 {
     auto copy = type.get();
     auto nonLvalue = Type(false, false, type.getName(), std::move(copy));
@@ -1301,9 +1285,9 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::castTo(const Op
         });
 }
 
-std::pair<OpenCL::Semantics::ConstRetType, OpenCL::Semantics::ConstRetType>
-    OpenCL::Semantics::ConstRetType::arithmeticConversions(ConstRetType lhs, ConstRetType rhs,
-                                                           const LanguageOptions& options)
+std::pair<cld::Semantics::ConstRetType, cld::Semantics::ConstRetType>
+    cld::Semantics::ConstRetType::arithmeticConversions(ConstRetType lhs, ConstRetType rhs,
+                                                        const LanguageOptions& options)
 {
     if (std::holds_alternative<std::monostate>(lhs.getValue()) || std::holds_alternative<VoidStar>(lhs.getValue())
         || std::holds_alternative<std::monostate>(rhs.getValue()) || std::holds_alternative<VoidStar>(rhs.getValue()))
@@ -1371,9 +1355,9 @@ std::pair<OpenCL::Semantics::ConstRetType, OpenCL::Semantics::ConstRetType>
     return {{std::move(lhsInteger), unsignedType}, {std::move(rhsInteger), unsignedType}};
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::multiply(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                          const LanguageOptions& options,
-                                                                          Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::multiply(const cld::Semantics::ConstRetType& rhs,
+                                                                    const LanguageOptions& options,
+                                                                    Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1394,9 +1378,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::multiply(const 
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::divide(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                        const LanguageOptions& options,
-                                                                        Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::divide(const cld::Semantics::ConstRetType& rhs,
+                                                                  const LanguageOptions& options, Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1417,8 +1400,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::divide(const Op
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::modulo(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                        const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::modulo(const cld::Semantics::ConstRetType& rhs,
+                                                                  const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1434,30 +1417,27 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::modulo(const Op
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::multiplyAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                    const LanguageOptions& options, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::multiplyAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                           const LanguageOptions& options,
+                                                                           Issues* issues)
 {
     return *this = multiply(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::divideAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                  const LanguageOptions& options, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::divideAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                         const LanguageOptions& options, Issues* issues)
 {
     return *this = divide(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::moduloAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                  const LanguageOptions& options)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::moduloAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                         const LanguageOptions& options)
 {
     return *this = modulo(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::plus(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                      const LanguageOptions& options,
-                                                                      Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Semantics::ConstRetType& rhs,
+                                                                const LanguageOptions& options, Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1516,16 +1496,14 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::plus(const Open
         });
 }
 
-OpenCL::Semantics::ConstRetType& OpenCL::Semantics::ConstRetType::plusAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                             const LanguageOptions& options,
-                                                                             Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::plusAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options, Issues* issues)
 {
     return *this = plus(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::minus(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                       const LanguageOptions& options,
-                                                                       Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Semantics::ConstRetType& rhs,
+                                                                 const LanguageOptions& options, Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1574,16 +1552,15 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::minus(const Ope
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::minusAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                 const LanguageOptions& options, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::minusAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options, Issues* issues)
 {
     return *this = minus(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftLeft(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                           const LanguageOptions& options,
-                                                                           Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftLeft(const cld::Semantics::ConstRetType& rhs,
+                                                                     const LanguageOptions& options,
+                                                                     Issues* issues) const
 {
     auto op1 = integerPromotion(options);
     auto op2 = rhs.integerPromotion(options);
@@ -1603,16 +1580,16 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftLeft(const
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::shiftLeftAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                     const LanguageOptions& options, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::shiftLeftAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                            const LanguageOptions& options,
+                                                                            Issues* issues)
 {
     return *this = shiftLeft(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftRight(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                            const LanguageOptions& options,
-                                                                            Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftRight(const cld::Semantics::ConstRetType& rhs,
+                                                                      const LanguageOptions& options,
+                                                                      Issues* issues) const
 {
     auto op1 = integerPromotion(options);
     auto op2 = rhs.integerPromotion(options);
@@ -1630,15 +1607,15 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::shiftRight(cons
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::shiftRightAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                      const LanguageOptions& options, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::shiftRightAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                             const LanguageOptions& options,
+                                                                             Issues* issues)
 {
     return *this = shiftRight(rhs, options, issues);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitAnd(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                        const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitAnd(const cld::Semantics::ConstRetType& rhs,
+                                                                  const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1650,15 +1627,14 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitAnd(const Op
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::bitAndAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                  const LanguageOptions& options)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::bitAndAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                         const LanguageOptions& options)
 {
     return *this = bitAnd(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitXor(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                        const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitXor(const cld::Semantics::ConstRetType& rhs,
+                                                                  const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1670,15 +1646,14 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitXor(const Op
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::bitXorAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                  const LanguageOptions& options)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::bitXorAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                         const LanguageOptions& options)
 {
     return *this = bitXor(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitOr(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                       const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitOr(const cld::Semantics::ConstRetType& rhs,
+                                                                 const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1690,14 +1665,13 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::bitOr(const Ope
         });
 }
 
-OpenCL::Semantics::ConstRetType&
-    OpenCL::Semantics::ConstRetType::bitOrAssign(const OpenCL::Semantics::ConstRetType& rhs,
-                                                 const LanguageOptions& options)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::bitOrAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options)
 {
     return *this = bitOr(rhs, options);
 }
 
-OpenCL::Semantics::ConstRetType::operator bool() const
+cld::Semantics::ConstRetType::operator bool() const
 {
     return match(
         m_value, [](VoidStar address) -> bool { return address.address != 0; },
@@ -1706,19 +1680,19 @@ OpenCL::Semantics::ConstRetType::operator bool() const
         [](std::monostate) -> bool { OPENCL_UNREACHABLE; });
 }
 
-bool OpenCL::Semantics::ConstRetType::isUndefined() const
+bool cld::Semantics::ConstRetType::isUndefined() const
 {
     return std::holds_alternative<std::monostate>(m_value);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::toBool(const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::toBool(const LanguageOptions& options) const
 {
     return notEqual({llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, 0), false),
                      PrimitiveType::createInt(false, false, options)},
                     options);
 }
 
-std::int64_t OpenCL::Semantics::ConstRetType::toInt() const
+std::int64_t cld::Semantics::ConstRetType::toInt() const
 {
     return match(
         m_value, [](VoidStar pointer) -> std::int64_t { return pointer.address; },
@@ -1729,7 +1703,7 @@ std::int64_t OpenCL::Semantics::ConstRetType::toInt() const
         [](std::monostate) -> std::int64_t { OPENCL_UNREACHABLE; });
 }
 
-std::uint64_t OpenCL::Semantics::ConstRetType::toUInt() const
+std::uint64_t cld::Semantics::ConstRetType::toUInt() const
 {
     return match(
         m_value, [](VoidStar pointer) -> std::uint64_t { return pointer.address; },
@@ -1740,8 +1714,8 @@ std::uint64_t OpenCL::Semantics::ConstRetType::toUInt() const
         [](std::monostate) -> std::uint64_t { OPENCL_UNREACHABLE; });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessThan(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                          const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::Semantics::ConstRetType& rhs,
+                                                                    const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1764,27 +1738,26 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessThan(const 
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::greaterThan(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                             const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::greaterThan(const cld::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options) const
 {
     return rhs.lessThan(*this, options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::lessOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                             const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessOrEqual(const cld::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options) const
 {
     return rhs.lessThan(*this, options).logicalNegate(options);
 }
 
-OpenCL::Semantics::ConstRetType
-    OpenCL::Semantics::ConstRetType::greaterOrEqual(const OpenCL::Semantics::ConstRetType& rhs,
-                                                    const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::greaterOrEqual(const cld::Semantics::ConstRetType& rhs,
+                                                                          const LanguageOptions& options) const
 {
     return lessThan(rhs, options).logicalNegate(options);
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::equal(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                       const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::equal(const cld::Semantics::ConstRetType& rhs,
+                                                                 const LanguageOptions& options) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
@@ -1822,8 +1795,8 @@ OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::equal(const Ope
         });
 }
 
-OpenCL::Semantics::ConstRetType OpenCL::Semantics::ConstRetType::notEqual(const OpenCL::Semantics::ConstRetType& rhs,
-                                                                          const LanguageOptions& options) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::notEqual(const cld::Semantics::ConstRetType& rhs,
+                                                                    const LanguageOptions& options) const
 {
     return equal(rhs, options).logicalNegate(options);
 }

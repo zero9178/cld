@@ -3,7 +3,7 @@
 
 #include <variant>
 
-namespace OpenCL::Semantics
+namespace cld::Semantics
 {
 template <class T, class F, template <class...> class Variant, class... Args>
 const T* findRecursively(const Variant<Args...>& variant, F&& getNextFunc)
@@ -50,6 +50,6 @@ std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args..
                   });
     return {result, resultDepth};
 }
-} // namespace OpenCL::Semantics
+} // namespace cld::Semantics
 
 #endif // OPENCLPARSER_SEMANTICUTIL_HPP

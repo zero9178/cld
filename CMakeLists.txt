@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.15.0")
     cmake_policy(SET CMP0092 NEW)
 endif ()
-project(OpenCLParser CXX)
+project(cld CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(LLVM REQUIRED)
@@ -74,9 +74,9 @@ llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object O
 
 add_subdirectory(src/CompilerCore)
 
-add_executable(OpenCLParser src/main.cpp)
-target_link_libraries(OpenCLParser CompilerCore Frontend)
-target_compile_definitions(OpenCLParser PUBLIC __STDC_FORMAT_MACROS)
+add_executable(cld src/main.cpp)
+target_link_libraries(cld CompilerCore Frontend)
+target_compile_definitions(cld PUBLIC __STDC_FORMAT_MACROS)
 
 if (${BUILD_TESTS})
     if (FUZZER AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT MINGW)

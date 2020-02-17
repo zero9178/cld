@@ -5,14 +5,14 @@
 #include <llvm/Support/raw_ostream.h>
 #pragma warning(pop)
 
-namespace OpenCL
+namespace cld
 {
 class SourceObject;
 
 namespace PP
 {
-OpenCL::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+cld::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
 }
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_PREPROCESSOR_HPP

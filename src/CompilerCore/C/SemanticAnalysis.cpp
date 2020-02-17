@@ -12,7 +12,7 @@
 #include "ErrorMessages.hpp"
 #include "SemanticUtil.hpp"
 
-void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages)
+void cld::Semantics::SemanticAnalysis::logError(std::vector<Message> messages)
 {
     if (m_reporter)
     {
@@ -23,7 +23,7 @@ void OpenCL::Semantics::SemanticAnalysis::logError(std::vector<Message> messages
     }
 }
 
-OpenCL::Semantics::TranslationUnit OpenCL::Semantics::SemanticAnalysis::visit(const Syntax::TranslationUnit& node)
+cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Syntax::TranslationUnit& node)
 {
     std::vector<TranslationUnit::Variant> globals;
     for (auto& iter : node.getGlobals())
@@ -58,7 +58,7 @@ namespace
 template <class T, class InputIterator>
 bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T& value)
 {
-    return std::any_of(begin, end, [&value](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+    return std::any_of(begin, end, [&value](const cld::Syntax::DeclarationSpecifier& declarationSpecifier) {
         auto* t = std::get_if<T>(&declarationSpecifier);
         if (!t)
         {
@@ -71,7 +71,7 @@ bool declarationSpecifierHas(InputIterator&& begin, InputIterator&& end, const T
 template <class T, class InputIterator, class Predicate>
 bool declarationSpecifierHasIf(InputIterator&& begin, InputIterator&& end, Predicate&& predicate)
 {
-    return std::any_of(begin, end, [&predicate](const OpenCL::Syntax::DeclarationSpecifier& declarationSpecifier) {
+    return std::any_of(begin, end, [&predicate](const cld::Syntax::DeclarationSpecifier& declarationSpecifier) {
         auto* t = std::get_if<T>(&declarationSpecifier);
         if (!t)
         {
@@ -82,8 +82,8 @@ bool declarationSpecifierHasIf(InputIterator&& begin, InputIterator&& end, Predi
 }
 } // namespace
 
-std::optional<OpenCL::Semantics::FunctionDefinition>
-    OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::FunctionDefinition& node)
+std::optional<cld::Semantics::FunctionDefinition>
+    cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::FunctionDefinition& node)
 {
     auto name = declaratorToName(node.getDeclarator());
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
@@ -293,10 +293,9 @@ std::optional<OpenCL::Semantics::FunctionDefinition>
         CompoundStatement({}));
 }
 
-std::vector<OpenCL::Semantics::Declaration>
-    OpenCL::Semantics::SemanticAnalysis::visit(const OpenCL::Syntax::Declaration& node)
+std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::Declaration& node)
 {
-    std::vector<OpenCL::Semantics::Declaration> decls;
+    std::vector<cld::Semantics::Declaration> decls;
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
@@ -437,33 +436,32 @@ std::vector<OpenCL::Semantics::Declaration>
     return decls;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
-    std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-    std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-    const std::vector<OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives, bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
+    std::vector<cld::Lexer::Token>::const_iterator declStart, std::vector<cld::Lexer::Token>::const_iterator declEnd,
+    const std::vector<cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives, bool isConst, bool isVolatile)
 {
     enum
     {
-        Void = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void),
-        Char = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char),
-        Short = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short),
-        Int = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int),
-        Long = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long),
-        Float = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float),
-        Double = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double),
-        Signed = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
-        Unsigned = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
-        UnderlineBool = static_cast<std::size_t>(OpenCL::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool),
+        Void = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void),
+        Char = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char),
+        Short = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short),
+        Int = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int),
+        Long = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long),
+        Float = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float),
+        Double = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double),
+        Signed = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed),
+        Unsigned = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned),
+        UnderlineBool = static_cast<std::size_t>(cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool),
     };
-    auto logMoreThanN = [&](OpenCL::Lexer::TokenType tokenType, const char* amountString) -> void {
+    auto logMoreThanN = [&](cld::Lexer::TokenType tokenType, const char* amountString) -> void {
         auto result = std::find_if(
             std::find_if(declStart, declEnd,
-                         [tokenType](const OpenCL::Lexer::Token& token) { return token.getTokenType() == tokenType; })
+                         [tokenType](const cld::Lexer::Token& token) { return token.getTokenType() == tokenType; })
                 + 1,
-            declEnd, [tokenType](const OpenCL::Lexer::Token& token) { return token.getTokenType() == tokenType; });
-        logError({Message::error(OpenCL::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N.args(
-                                     OpenCL::Lexer::tokenName(tokenType), amountString),
-                                 declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+            declEnd, [tokenType](const cld::Lexer::Token& token) { return token.getTokenType() == tokenType; });
+        logError({Message::error(
+            cld::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N.args(cld::Lexer::tokenName(tokenType), amountString),
+            declStart, declEnd, cld::Modifier(result, result + 1))});
     };
 
     std::array<std::size_t, 10> primitivesCount = {0};
@@ -472,52 +470,52 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
         primitivesCount[static_cast<std::size_t>(iter)]++;
         if (primitivesCount[Void] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::VoidKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::VoidKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Char] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::CharKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::CharKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Short] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::ShortKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::ShortKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Int] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::IntKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::IntKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Float] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::FloatKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::FloatKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Double] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::DoubleKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::DoubleKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Signed] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::SignedKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::SignedKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Unsigned] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::UnsignedKeyword, "once");
+            logMoreThanN(cld::Lexer::TokenType::UnsignedKeyword, "once");
             return Type{};
         }
         if (primitivesCount[Long] > 2)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::LongKeyword, "twice");
+            logMoreThanN(cld::Lexer::TokenType::LongKeyword, "twice");
             return Type{};
         }
         if (primitivesCount[UnderlineBool] > 1)
         {
-            logMoreThanN(OpenCL::Lexer::TokenType::UnderlineBool, "once");
+            logMoreThanN(cld::Lexer::TokenType::UnderlineBool, "once");
             return Type{};
         }
     }
@@ -528,27 +526,25 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
     {
         auto result =
             std::find_if(std::find_if(declStart, declEnd,
-                                      [](const OpenCL::Lexer::Token& token) {
-                                          return token.getTokenType() == OpenCL::Lexer::TokenType::SignedKeyword
-                                                 || token.getTokenType() == OpenCL::Lexer::TokenType::UnsignedKeyword;
+                                      [](const cld::Lexer::Token& token) {
+                                          return token.getTokenType() == cld::Lexer::TokenType::SignedKeyword
+                                                 || token.getTokenType() == cld::Lexer::TokenType::UnsignedKeyword;
                                       })
                              + 1,
-                         declEnd, [](const OpenCL::Lexer::Token& token) {
-                             return token.getTokenType() == OpenCL::Lexer::TokenType::SignedKeyword
-                                    || token.getTokenType() == OpenCL::Lexer::TokenType::UnsignedKeyword;
+                         declEnd, [](const cld::Lexer::Token& token) {
+                             return token.getTokenType() == cld::Lexer::TokenType::SignedKeyword
+                                    || token.getTokenType() == cld::Lexer::TokenType::UnsignedKeyword;
                          });
-        logError(
-            {Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"),
-                            declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+        logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"),
+                                 declStart, declEnd, cld::Modifier(result, result + 1))});
         return Type{};
     }
 
-    auto firstPrimitiveNotOf = [&](const std::vector<OpenCL::Lexer::TokenType>& tokenTypes) {
-        return std::find_if(declStart, declEnd, [&tokenTypes](const OpenCL::Lexer::Token& token) {
-            using namespace OpenCL::Lexer;
-            return std::none_of(
-                       tokenTypes.begin(), tokenTypes.end(),
-                       [&token](OpenCL::Lexer::TokenType tokenType) { return token.getTokenType() == tokenType; })
+    auto firstPrimitiveNotOf = [&](const std::vector<cld::Lexer::TokenType>& tokenTypes) {
+        return std::find_if(declStart, declEnd, [&tokenTypes](const cld::Lexer::Token& token) {
+            using namespace cld::Lexer;
+            return std::none_of(tokenTypes.begin(), tokenTypes.end(),
+                                [&token](cld::Lexer::TokenType tokenType) { return token.getTokenType() == tokenType; })
                    && (token.getTokenType() == TokenType::CharKeyword || token.getTokenType() == TokenType::VoidKeyword
                        || token.getTokenType() == TokenType::ShortKeyword
                        || token.getTokenType() == TokenType::IntKeyword
@@ -572,12 +568,12 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::VoidKeyword});
+            auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::VoidKeyword});
             logError({Message::error(
-                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
-                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
+                declStart, declEnd, cld::Modifier(result, result + 1))});
         }
-        return OpenCL::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
+        return cld::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
     }
     if (primitivesCount[Float])
     {
@@ -590,12 +586,12 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::FloatKeyword});
+            auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::FloatKeyword});
             logError({Message::error(
-                OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"),
-                declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"),
+                declStart, declEnd, cld::Modifier(result, result + 1))});
         }
-        return OpenCL::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
+        return cld::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
     }
     if (primitivesCount[Double])
     {
@@ -610,17 +606,17 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result = firstPrimitiveNotOf({OpenCL::Lexer::TokenType::DoubleKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::DoubleKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'double'", " any other primitives but long"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (primitivesCount[Long])
         {
-            return OpenCL::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile,
-                                                                      m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile,
+                                                                   m_sourceObject.getLanguageOptions());
         }
-        return OpenCL::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
+        return cld::Semantics::PrimitiveType::createDouble(isConst, isVolatile);
     }
     if (primitivesCount[Char])
     {
@@ -635,25 +631,23 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result =
-                firstPrimitiveNotOf({OpenCL::Lexer::TokenType::CharKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
-                                     OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::CharKeyword, cld::Lexer::TokenType::SignedKeyword,
+                                               cld::Lexer::TokenType::UnsignedKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'char'", " any other primitives but signed and unsigned"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile);
+            return cld::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile);
         }
         else if (hasSigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createSignedChar(isConst, isVolatile);
+            return cld::Semantics::PrimitiveType::createSignedChar(isConst, isVolatile);
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createChar(isConst, isVolatile,
-                                                                m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createChar(isConst, isVolatile, m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Short])
@@ -670,21 +664,20 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result =
-                firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
-                                     OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                firstPrimitiveNotOf({cld::Lexer::TokenType::ShortKeyword, cld::Lexer::TokenType::SignedKeyword,
+                                     cld::Lexer::TokenType::UnsignedKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'short'", " any other primitives but signed and unsigned"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile,
-                                                                         m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile,
+                                                                      m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createShort(isConst, isVolatile,
-                                                                 m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createShort(isConst, isVolatile, m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Long] == 1)
@@ -700,22 +693,21 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result = firstPrimitiveNotOf(
-                {OpenCL::Lexer::TokenType::LongKeyword, OpenCL::Lexer::TokenType::IntKeyword,
-                 OpenCL::Lexer::TokenType::SignedKeyword, OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            auto result =
+                firstPrimitiveNotOf({cld::Lexer::TokenType::LongKeyword, cld::Lexer::TokenType::IntKeyword,
+                                     cld::Lexer::TokenType::SignedKeyword, cld::Lexer::TokenType::UnsignedKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'long'", " any other primitives but signed, unsigned, long and int"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile,
-                                                                        m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile,
+                                                                     m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createLong(isConst, isVolatile,
-                                                                m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, m_sourceObject.getLanguageOptions());
         }
     }
     if (primitivesCount[Long] == 2)
@@ -731,20 +723,20 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
                 return count;
             }))
         {
-            auto result = firstPrimitiveNotOf(
-                {OpenCL::Lexer::TokenType::LongKeyword, OpenCL::Lexer::TokenType::IntKeyword,
-                 OpenCL::Lexer::TokenType::SignedKeyword, OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            auto result =
+                firstPrimitiveNotOf({cld::Lexer::TokenType::LongKeyword, cld::Lexer::TokenType::IntKeyword,
+                                     cld::Lexer::TokenType::SignedKeyword, cld::Lexer::TokenType::UnsignedKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'long'", " any other primitives but signed, unsigned, long and int"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
+            return cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createLongLong(isConst, isVolatile);
+            return cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile);
         }
     }
     if (primitivesCount[Int])
@@ -761,38 +753,37 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result =
-                firstPrimitiveNotOf({OpenCL::Lexer::TokenType::ShortKeyword, OpenCL::Lexer::TokenType::SignedKeyword,
-                                     OpenCL::Lexer::TokenType::UnsignedKeyword});
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+                firstPrimitiveNotOf({cld::Lexer::TokenType::ShortKeyword, cld::Lexer::TokenType::SignedKeyword,
+                                     cld::Lexer::TokenType::UnsignedKeyword});
+            logError({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                          "'int'", " any other primitives but signed and unsigned"),
-                                     declStart, declEnd, OpenCL::Modifier(result, result + 1))});
+                                     declStart, declEnd, cld::Modifier(result, result + 1))});
         }
         if (hasUnsigned)
         {
-            return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
-                                                                       m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
+                                                                    m_sourceObject.getLanguageOptions());
         }
         else
         {
-            return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile,
-                                                               m_sourceObject.getLanguageOptions());
+            return cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, m_sourceObject.getLanguageOptions());
         }
     }
     if (hasSigned)
     {
-        return OpenCL::Semantics::PrimitiveType::createInt(isConst, isVolatile, m_sourceObject.getLanguageOptions());
+        return cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, m_sourceObject.getLanguageOptions());
     }
     else if (hasUnsigned)
     {
-        return OpenCL::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
-                                                                   m_sourceObject.getLanguageOptions());
+        return cld::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
+                                                                m_sourceObject.getLanguageOptions());
     }
     OPENCL_UNREACHABLE;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToType(
     const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
-    const OpenCL::Semantics::PossiblyAbstractQualifierRef& declarator,
+    const cld::Semantics::PossiblyAbstractQualifierRef& declarator,
     const std::vector<Syntax::Declaration>& declarations)
 {
     auto declStart = Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.front()).begin();
@@ -886,10 +877,9 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::declaratorsToType(
     return apply(declStart, declEnd, declarator, std::move(baseType), declarations);
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToType(
-    std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-    std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-    const std::vector<const OpenCL::Syntax::TypeSpecifier*>& typeSpecifiers, bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
+    std::vector<cld::Lexer::Token>::const_iterator declStart, std::vector<cld::Lexer::Token>::const_iterator declEnd,
+    const std::vector<const cld::Syntax::TypeSpecifier*>& typeSpecifiers, bool isConst, bool isVolatile)
 {
     return match(
         typeSpecifiers[0]->getVariant(),
@@ -1023,7 +1013,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::typeSpecifiersToTyp
         });
 }
 
-bool OpenCL::Semantics::SemanticAnalysis::isTypedef(const std::string& name) const
+bool cld::Semantics::SemanticAnalysis::isTypedef(const std::string& name) const
 {
     for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
     {
@@ -1035,7 +1025,7 @@ bool OpenCL::Semantics::SemanticAnalysis::isTypedef(const std::string& name) con
     return false;
 }
 
-bool OpenCL::Semantics::SemanticAnalysis::isTypedefInScope(const std::string& name) const
+bool cld::Semantics::SemanticAnalysis::isTypedefInScope(const std::string& name) const
 {
     for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
     {
@@ -1047,7 +1037,7 @@ bool OpenCL::Semantics::SemanticAnalysis::isTypedefInScope(const std::string& na
     return false;
 }
 
-const OpenCL::Semantics::Type* OpenCL::Semantics::SemanticAnalysis::getTypedef(const std::string& name) const
+const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getTypedef(const std::string& name) const
 {
     for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
     {
@@ -1059,11 +1049,10 @@ const OpenCL::Semantics::Type* OpenCL::Semantics::SemanticAnalysis::getTypedef(c
     return nullptr;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<Lexer::Token>::const_iterator declStart,
-                                                                   std::vector<Lexer::Token>::const_iterator declEnd,
-                                                                   PossiblyAbstractQualifierRef declarator,
-                                                                   Type&& baseType,
-                                                                   const std::vector<Syntax::Declaration>& declarations)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<Lexer::Token>::const_iterator declStart,
+                                                             std::vector<Lexer::Token>::const_iterator declEnd,
+                                                             PossiblyAbstractQualifierRef declarator, Type&& baseType,
+                                                             const std::vector<Syntax::Declaration>& declarations)
 {
     return match(
         declarator,
@@ -1097,44 +1086,42 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(std::vector<L
         });
 }
 
-std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
-    OpenCL::Semantics::SemanticAnalysis::parameterListToArguments(
-        std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-        std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-        const std::vector<OpenCL::Syntax::ParameterDeclaration>& parameterDeclarations,
-        const std::vector<OpenCL::Syntax::Declaration>& declarations)
+std::vector<std::pair<cld::Semantics::Type, std::string>> cld::Semantics::SemanticAnalysis::parameterListToArguments(
+    std::vector<cld::Lexer::Token>::const_iterator declStart, std::vector<cld::Lexer::Token>::const_iterator declEnd,
+    const std::vector<cld::Syntax::ParameterDeclaration>& parameterDeclarations,
+    const std::vector<cld::Syntax::Declaration>& declarations)
 {
-    std::vector<std::pair<OpenCL::Semantics::Type, std::string>> arguments;
+    std::vector<std::pair<cld::Semantics::Type, std::string>> arguments;
     for (auto& pair : parameterDeclarations)
     {
         for (auto& iter : pair.first)
         {
-            OpenCL::match(
+            cld::match(
                 iter, [](auto&&) {},
-                [this, declStart, declEnd](const OpenCL::Syntax::StorageClassSpecifier& storageClassSpecifier) {
-                    if (storageClassSpecifier.getSpecifier() != OpenCL::Syntax::StorageClassSpecifier::Register)
+                [this, declStart, declEnd](const cld::Syntax::StorageClassSpecifier& storageClassSpecifier) {
+                    if (storageClassSpecifier.getSpecifier() != cld::Syntax::StorageClassSpecifier::Register)
                     {
                         logError({Message::error(
-                            OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT, declStart,
-                            declEnd, OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
+                            cld::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT, declStart,
+                            declEnd, cld::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
                     }
                 },
-                [this, declStart, declEnd](const OpenCL::Syntax::FunctionSpecifier& functionSpecifier) {
-                    logError({Message::error(OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
+                [this, declStart, declEnd](const cld::Syntax::FunctionSpecifier& functionSpecifier) {
+                    logError({Message::error(cld::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
                                              declStart, declEnd,
-                                             OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
+                                             cld::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
                 });
         }
         auto result = declaratorsToType(
             {pair.first.begin(), pair.first.end()},
-            OpenCL::match(
+            cld::match(
                 pair.second,
-                [](const std::unique_ptr<OpenCL::Syntax::Declarator>& directDeclarator)
-                    -> OpenCL::Semantics::PossiblyAbstractQualifierRef { return std::cref(*directDeclarator); },
-                [](const std::unique_ptr<OpenCL::Syntax::AbstractDeclarator>& abstractDeclarator)
-                    -> OpenCL::Semantics::PossiblyAbstractQualifierRef { return abstractDeclarator.get(); }),
+                [](const std::unique_ptr<cld::Syntax::Declarator>& directDeclarator)
+                    -> cld::Semantics::PossiblyAbstractQualifierRef { return std::cref(*directDeclarator); },
+                [](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& abstractDeclarator)
+                    -> cld::Semantics::PossiblyAbstractQualifierRef { return abstractDeclarator.get(); }),
             declarations);
-        if (parameterDeclarations.size() == 1 && result == OpenCL::Semantics::PrimitiveType::createVoid(false, false)
+        if (parameterDeclarations.size() == 1 && result == cld::Semantics::PrimitiveType::createVoid(false, false)
             && !std::visit([](const auto& uniquePtr) -> bool { return uniquePtr.get(); }, pair.second))
         {
             break;
@@ -1145,24 +1132,24 @@ std::vector<std::pair<OpenCL::Semantics::Type, std::string>>
                 Syntax::nodeFromNodeDerivedVariant(pair.first.front()).begin(),
                 Syntax::nodeFromNodeDerivedVariant(pair.first.back()).end(),
                 [](const Lexer::Token& token) { return token.getTokenType() == Lexer::TokenType::VoidKeyword; });
-            logError({Message::error(OpenCL::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart,
-                                     declEnd, OpenCL::Modifier(voidBegin, voidBegin + 1))});
+            logError({Message::error(cld::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart,
+                                     declEnd, cld::Modifier(voidBegin, voidBegin + 1))});
         }
         else
         {
-            arguments.emplace_back(std::move(result),
-                                   std::holds_alternative<std::unique_ptr<OpenCL::Syntax::Declarator>>(pair.second) ?
-                                       OpenCL::Semantics::declaratorToName(
-                                           *std::get<std::unique_ptr<OpenCL::Syntax::Declarator>>(pair.second)) :
-                                       "");
+            arguments.emplace_back(
+                std::move(result),
+                std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(pair.second) ?
+                    cld::Semantics::declaratorToName(*std::get<std::unique_ptr<cld::Syntax::Declarator>>(pair.second)) :
+                    "");
         }
     }
     return arguments;
 }
 
-OpenCL::Semantics::ConstantEvaluator
-    OpenCL::Semantics::SemanticAnalysis::makeEvaluator(std::vector<OpenCL::Lexer::Token>::const_iterator exprBegin,
-                                                       std::vector<OpenCL::Lexer::Token>::const_iterator exprEnd)
+cld::Semantics::ConstantEvaluator
+    cld::Semantics::SemanticAnalysis::makeEvaluator(std::vector<cld::Lexer::Token>::const_iterator exprBegin,
+                                                    std::vector<cld::Lexer::Token>::const_iterator exprEnd)
 {
     return Semantics::ConstantEvaluator(
         /*TODO:*/ LanguageOptions::native(),
@@ -1186,12 +1173,10 @@ OpenCL::Semantics::ConstantEvaluator
         });
 }
 
-OpenCL::Semantics::Type
-    OpenCL::Semantics::SemanticAnalysis::apply(std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-                                               std::vector<OpenCL::Lexer::Token>::const_iterator declEnd,
-                                               const OpenCL::Syntax::DirectAbstractDeclarator& abstractDeclarator,
-                                               OpenCL::Semantics::Type&& baseType,
-                                               const std::vector<Syntax::Declaration>& declarations)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(
+    std::vector<cld::Lexer::Token>::const_iterator declStart, std::vector<cld::Lexer::Token>::const_iterator declEnd,
+    const cld::Syntax::DirectAbstractDeclarator& abstractDeclarator, cld::Semantics::Type&& baseType,
+    const std::vector<Syntax::Declaration>& declarations)
 {
     matchWithSelf(
         abstractDeclarator,
@@ -1272,10 +1257,11 @@ OpenCL::Semantics::Type
     return std::move(baseType);
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
-    std::vector<OpenCL::Lexer::Token>::const_iterator declStart,
-    std::vector<OpenCL::Lexer::Token>::const_iterator declEnd, const OpenCL::Syntax::DirectDeclarator& directDeclarator,
-    OpenCL::Semantics::Type&& baseType, const std::vector<Syntax::Declaration>& declarations)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Lexer::Token>::const_iterator declStart,
+                                                             std::vector<cld::Lexer::Token>::const_iterator declEnd,
+                                                             const cld::Syntax::DirectDeclarator& directDeclarator,
+                                                             cld::Semantics::Type&& baseType,
+                                                             const std::vector<Syntax::Declaration>& declarations)
 {
     matchWithSelf(
         directDeclarator, [&](auto&&, const Syntax::DirectDeclaratorIdentifier&) -> void {},
@@ -1388,15 +1374,15 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                             if (storageClassSpecifier.getSpecifier() != Syntax::StorageClassSpecifier::Register)
                             {
                                 logError({Message::error(
-                                    OpenCL::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
+                                    cld::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
                                     declStart, declEnd,
-                                    OpenCL::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
+                                    cld::Modifier(storageClassSpecifier.begin(), storageClassSpecifier.end()))});
                             }
                         },
                         [this, declStart, declEnd](const Syntax::FunctionSpecifier& functionSpecifier) {
                             logError({Message::error(
-                                OpenCL::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, declStart,
-                                declEnd, OpenCL::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
+                                cld::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, declStart,
+                                declEnd, cld::Modifier(functionSpecifier.begin(), functionSpecifier.end()))});
                         });
                 }
                 for (auto& pair : iter.getInitDeclarators())
@@ -1404,7 +1390,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
                     if (pair.second)
                     {
                         logError({Message::error(
-                            OpenCL::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
+                            cld::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
                             declStart, declEnd, Modifier(pair.second->begin(), pair.second->end()))});
                     }
                     auto name = Semantics::declaratorToName(*pair.first);
@@ -1467,7 +1453,7 @@ OpenCL::Semantics::Type OpenCL::Semantics::SemanticAnalysis::apply(
 }
 
 std::tuple<bool, bool, bool>
-    OpenCL::Semantics::SemanticAnalysis::getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
+    cld::Semantics::SemanticAnalysis::getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers)
 {
     bool isConst = false;
     bool isVolatile = false;

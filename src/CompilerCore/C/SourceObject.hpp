@@ -6,7 +6,7 @@
 #include "LanguageOptions.hpp"
 #include "Lexer.hpp"
 
-namespace OpenCL
+namespace cld
 {
 class SourceObject final
 {
@@ -41,6 +41,6 @@ public:
 
     LanguageOptions getLanguageOptions() const;
 };
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_SOURCEOBJECT_HPP

@@ -10,7 +10,7 @@
 #include <string>
 #include <variant>
 
-namespace OpenCL
+namespace cld
 {
 namespace detail
 {
@@ -68,7 +68,7 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
     auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
     return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
 }
-} // namespace OpenCL
+} // namespace cld
 
 #ifdef NDEBUG
 

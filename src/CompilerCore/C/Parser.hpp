@@ -8,7 +8,7 @@
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-namespace OpenCL::Parser
+namespace cld::Parser
 {
 class FatalParserError : public std::exception
 {
@@ -132,11 +132,11 @@ public:
     void braceLeft();
 };
 
-std::pair<OpenCL::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
-                                                           llvm::raw_ostream* reporter = &llvm::errs());
+std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
+                                                        llvm::raw_ostream* reporter = &llvm::errs());
 
-OpenCL::Syntax::TranslationUnit parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,
-                                                     std::vector<Lexer::Token>::const_iterator end, Context& context);
+cld::Syntax::TranslationUnit parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,
+                                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
 std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
                                                                     std::vector<Lexer::Token>::const_iterator end,
@@ -190,8 +190,7 @@ std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(std::vector<Lexer::Token
 
 std::optional<Syntax::CompoundStatement> parseCompoundStatement(std::vector<Lexer::Token>::const_iterator& begin,
                                                                 std::vector<Lexer::Token>::const_iterator end,
-                                                                OpenCL::Parser::Context& context,
-                                                                bool pushScope = true);
+                                                                cld::Parser::Context& context, bool pushScope = true);
 
 std::optional<Syntax::CompoundItem> parseCompoundItem(std::vector<Lexer::Token>::const_iterator& begin,
                                                       std::vector<Lexer::Token>::const_iterator end, Context& context);
@@ -234,26 +233,26 @@ std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(std::vecto
                                                                       std::vector<Lexer::Token>::const_iterator end,
                                                                       Context& context);
 
-OpenCL::Syntax::ConditionalExpression parseConditionalExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                                 std::vector<Lexer::Token>::const_iterator end,
-                                                                 Context& context);
+cld::Syntax::ConditionalExpression parseConditionalExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                              std::vector<Lexer::Token>::const_iterator end,
+                                                              Context& context);
 
-OpenCL::Syntax::LogicalOrExpression parseLogicalOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                             std::vector<Lexer::Token>::const_iterator end,
-                                                             Context& context);
+cld::Syntax::LogicalOrExpression parseLogicalOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                          std::vector<Lexer::Token>::const_iterator end,
+                                                          Context& context);
 
-OpenCL::Syntax::LogicalAndExpression parseLogicalAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                               std::vector<Lexer::Token>::const_iterator end,
-                                                               Context& context);
+cld::Syntax::LogicalAndExpression parseLogicalAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                            std::vector<Lexer::Token>::const_iterator end,
+                                                            Context& context);
 
-OpenCL::Syntax::BitOrExpression parseBitOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                     std::vector<Lexer::Token>::const_iterator end, Context& context);
+cld::Syntax::BitOrExpression parseBitOrExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                  std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-OpenCL::Syntax::BitXorExpression parseBitXorExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                       std::vector<Lexer::Token>::const_iterator end, Context& context);
+cld::Syntax::BitXorExpression parseBitXorExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                    std::vector<Lexer::Token>::const_iterator end, Context& context);
 
-OpenCL::Syntax::BitAndExpression parseBitAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
-                                                       std::vector<Lexer::Token>::const_iterator end, Context& context);
+cld::Syntax::BitAndExpression parseBitAndExpression(std::vector<Lexer::Token>::const_iterator& begin,
+                                                    std::vector<Lexer::Token>::const_iterator end, Context& context);
 
 std::optional<Syntax::EqualityExpression> parseEqualityExpression(std::vector<Lexer::Token>::const_iterator& begin,
                                                                   std::vector<Lexer::Token>::const_iterator end,
@@ -288,10 +287,10 @@ std::optional<Syntax::UnaryExpression> parseUnaryExpression(std::vector<Lexer::T
 std::optional<Syntax::PostFixExpression> parsePostFixExpression(std::vector<Lexer::Token>::const_iterator& begin,
                                                                 std::vector<Lexer::Token>::const_iterator end,
                                                                 Context& context);
-} // namespace OpenCL::Parser
+} // namespace cld::Parser
 
 template <class... Args>
-constexpr OpenCL::Parser::Context::TokenBitSet OpenCL::Parser::Context::fromTokenTypes(Args&&... tokenTypes)
+constexpr cld::Parser::Context::TokenBitSet cld::Parser::Context::fromTokenTypes(Args&&... tokenTypes)
 {
     static_assert((std::is_same_v<std::decay_t<Args>, Lexer::TokenType> && ...));
     return (TokenBitSet() | ...

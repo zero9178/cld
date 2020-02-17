@@ -9,21 +9,20 @@
 #include "ParserUtil.hpp"
 #include "SemanticUtil.hpp"
 
-using namespace OpenCL::Syntax;
+using namespace cld::Syntax;
 
 namespace
 {
-std::vector<DeclarationSpecifier>
-    parseDeclarationSpecifierList(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                                  std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                  OpenCL::Parser::Context& context)
+std::vector<DeclarationSpecifier> parseDeclarationSpecifierList(std::vector<cld::Lexer::Token>::const_iterator& begin,
+                                                                std::vector<cld::Lexer::Token>::const_iterator end,
+                                                                cld::Parser::Context& context)
 {
     bool seenTypeSpecifier = false;
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     do
     {
-        auto result = parseDeclarationSpecifier(
-            begin, end, context.withRecoveryTokens(OpenCL::Parser::firstDeclarationSpecifierSet));
+        auto result = parseDeclarationSpecifier(begin, end,
+                                                context.withRecoveryTokens(cld::Parser::firstDeclarationSpecifierSet));
         if (result)
         {
             if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
@@ -32,22 +31,22 @@ std::vector<DeclarationSpecifier>
             }
             declarationSpecifiers.push_back(std::move(*result));
         }
-    } while (begin < end && OpenCL::Parser::firstIsInDeclarationSpecifier(*begin, context)
-             && (begin->getTokenType() != OpenCL::Lexer::TokenType::Identifier || !seenTypeSpecifier));
+    } while (begin < end && cld::Parser::firstIsInDeclarationSpecifier(*begin, context)
+             && (begin->getTokenType() != cld::Lexer::TokenType::Identifier || !seenTypeSpecifier));
     return declarationSpecifiers;
 }
 } // namespace
 
-std::vector<OpenCL::Syntax::SpecifierQualifier>
-    OpenCL::Parser::parseSpecifierQualifierList(std::vector<Lexer::Token>::const_iterator& begin,
-                                                std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::vector<cld::Syntax::SpecifierQualifier>
+    cld::Parser::parseSpecifierQualifierList(std::vector<Lexer::Token>::const_iterator& begin,
+                                             std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     bool seenTypeSpecifier = false;
     std::vector<SpecifierQualifier> specifierQualifiers;
     do
     {
         auto result =
-            parseSpecifierQualifier(begin, end, context.withRecoveryTokens(OpenCL::Parser::firstSpecifierQualifierSet));
+            parseSpecifierQualifier(begin, end, context.withRecoveryTokens(cld::Parser::firstSpecifierQualifierSet));
         if (result)
         {
             if (!seenTypeSpecifier && std::holds_alternative<TypeSpecifier>(*result))
@@ -61,8 +60,8 @@ std::vector<OpenCL::Syntax::SpecifierQualifier>
     return specifierQualifiers;
 }
 
-TranslationUnit OpenCL::Parser::parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,
-                                                     std::vector<Lexer::Token>::const_iterator end, Context& context)
+TranslationUnit cld::Parser::parseTranslationUnit(std::vector<Lexer::Token>::const_iterator& begin,
+                                                  std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     std::vector<Syntax::ExternalDeclaration> global;
     try
@@ -82,9 +81,9 @@ TranslationUnit OpenCL::Parser::parseTranslationUnit(std::vector<Lexer::Token>::
     return Syntax::TranslationUnit(std::move(global));
 }
 
-std::optional<OpenCL::Syntax::ExternalDeclaration>
-    OpenCL::Parser::parseExternalDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
-                                             std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::ExternalDeclaration>
+    cld::Parser::parseExternalDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
+                                          std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
 
@@ -361,9 +360,9 @@ std::optional<OpenCL::Syntax::ExternalDeclaration>
     }
 }
 
-std::optional<OpenCL::Syntax::Declaration>
-    OpenCL::Parser::parseDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
-                                     std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
+                                                                      Context& context)
 {
     auto start = begin;
 
@@ -483,9 +482,9 @@ std::optional<OpenCL::Syntax::Declaration>
     return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
-std::optional<OpenCL::Syntax::DeclarationSpecifier>
-    OpenCL::Parser::parseDeclarationSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
-                                              std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::DeclarationSpecifier>
+    cld::Parser::parseDeclarationSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                           std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (begin < end)
@@ -612,9 +611,9 @@ std::optional<OpenCL::Syntax::DeclarationSpecifier>
     return {};
 }
 
-std::optional<OpenCL::Syntax::StructOrUnionSpecifier>
-    OpenCL::Parser::parseStructOrUnionSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
-                                                std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::StructOrUnionSpecifier>
+    cld::Parser::parseStructOrUnionSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                             std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     bool isUnion;
@@ -739,9 +738,9 @@ std::optional<OpenCL::Syntax::StructOrUnionSpecifier>
     return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations));
 }
 
-std::optional<OpenCL::Syntax::SpecifierQualifier>
-    OpenCL::Parser::parseSpecifierQualifier(std::vector<Lexer::Token>::const_iterator& begin,
-                                            std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::SpecifierQualifier>
+    cld::Parser::parseSpecifierQualifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                         std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (begin < end)
@@ -860,9 +859,9 @@ std::optional<OpenCL::Syntax::SpecifierQualifier>
     return {};
 }
 
-std::optional<OpenCL::Syntax::Declarator>
-    OpenCL::Parser::parseDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
-                                    std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::Declarator> cld::Parser::parseDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                    std::vector<Lexer::Token>::const_iterator end,
+                                                                    Context& context)
 {
     auto start = begin;
     std::vector<Syntax::Pointer> pointers;
@@ -879,9 +878,9 @@ std::optional<OpenCL::Syntax::Declarator>
     return Declarator(start, begin, std::move(pointers), std::move(*directDeclarator));
 }
 
-std::optional<OpenCL::Syntax::DirectDeclarator>
-    OpenCL::Parser::parseDirectDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
-                                          std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::DirectDeclarator>
+    cld::Parser::parseDirectDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                       std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     std::unique_ptr<DirectDeclarator> directDeclarator;
 
@@ -920,14 +919,14 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
         if (begin == end)
         {
             context.log({Message::error(
-                ErrorMessages::Parser::EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "'('", "identifier")), start,
+                ErrorMessages::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "identifier")), start,
                 Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
         }
         else
         {
             context.log({Message::error(
                 ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                    OpenCL::Format::List(", ", " or ", "'('", "identifier"), '\'' + begin->getRepresentation() + '\''),
+                    cld::Format::List(", ", " or ", "'('", "identifier"), '\'' + begin->getRepresentation() + '\''),
                 start, begin, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
         context.skipUntil(
@@ -1058,7 +1057,7 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
                         }
                         begin++;
                     }
-                    auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(
+                    auto assignmentExpression = cld::Parser::parseAssignmentExpression(
                         begin, end,
                         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
                     if (assignmentExpression && directDeclarator)
@@ -1096,7 +1095,7 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
                         if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
                         {
                             begin++;
-                            auto assignmentExpression = OpenCL::Parser::parseAssignmentExpression(
+                            auto assignmentExpression = cld::Parser::parseAssignmentExpression(
                                 begin, end,
                                 context.withRecoveryTokens(
                                     Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
@@ -1118,7 +1117,7 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
                         }
                         else if (firstIsInAssignmentExpression(*begin, context))
                         {
-                            auto assignment = OpenCL::Parser::parseAssignmentExpression(
+                            auto assignment = cld::Parser::parseAssignmentExpression(
                                 begin, end,
                                 context.withRecoveryTokens(
                                     Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
@@ -1166,9 +1165,9 @@ std::optional<OpenCL::Syntax::DirectDeclarator>
     return std::move(*directDeclarator);
 }
 
-OpenCL::Syntax::ParameterTypeList
-    OpenCL::Parser::parseParameterTypeList(std::vector<Lexer::Token>::const_iterator& begin,
-                                           std::vector<Lexer::Token>::const_iterator end, Context& context)
+cld::Syntax::ParameterTypeList cld::Parser::parseParameterTypeList(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                   std::vector<Lexer::Token>::const_iterator end,
+                                                                   Context& context)
 {
     auto start = begin;
     auto parameterList =
@@ -1191,9 +1190,9 @@ OpenCL::Syntax::ParameterTypeList
     return ParameterTypeList(start, begin, std::move(parameterList), hasEllipse);
 }
 
-OpenCL::Syntax::ParameterList OpenCL::Parser::parseParameterList(std::vector<Lexer::Token>::const_iterator& begin,
-                                                                 std::vector<Lexer::Token>::const_iterator end,
-                                                                 Context& context)
+cld::Syntax::ParameterList cld::Parser::parseParameterList(std::vector<Lexer::Token>::const_iterator& begin,
+                                                           std::vector<Lexer::Token>::const_iterator end,
+                                                           Context& context)
 {
     auto start = begin;
     std::vector<ParameterDeclaration> parameterDeclarations;
@@ -1307,8 +1306,8 @@ OpenCL::Syntax::ParameterList OpenCL::Parser::parseParameterList(std::vector<Lex
     return ParameterList(start, begin, std::move(parameterDeclarations));
 }
 
-OpenCL::Syntax::Pointer OpenCL::Parser::parsePointer(std::vector<Lexer::Token>::const_iterator& begin,
-                                                     std::vector<Lexer::Token>::const_iterator end, Context& context)
+cld::Syntax::Pointer cld::Parser::parsePointer(std::vector<Lexer::Token>::const_iterator& begin,
+                                               std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::Asterisk, start, begin, end, context))
@@ -1341,9 +1340,9 @@ OpenCL::Syntax::Pointer OpenCL::Parser::parsePointer(std::vector<Lexer::Token>::
     return Pointer(start, begin, std::move(typeQualifier));
 }
 
-OpenCL::Syntax::AbstractDeclarator
-    OpenCL::Parser::parseAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
-                                            std::vector<Lexer::Token>::const_iterator end, Context& context)
+cld::Syntax::AbstractDeclarator cld::Parser::parseAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                     std::vector<Lexer::Token>::const_iterator end,
+                                                                     Context& context)
 {
     auto start = begin;
     std::vector<Syntax::Pointer> pointers;
@@ -1361,9 +1360,9 @@ OpenCL::Syntax::AbstractDeclarator
                               result ? std::move(*result) : std::optional<DirectAbstractDeclarator>{});
 }
 
-std::optional<OpenCL::Syntax::DirectAbstractDeclarator>
-    OpenCL::Parser::parseDirectAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
-                                                  std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::DirectAbstractDeclarator>
+    cld::Parser::parseDirectAbstractDeclarator(std::vector<Lexer::Token>::const_iterator& begin,
+                                               std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
     bool first = true;
@@ -1466,14 +1465,13 @@ std::optional<OpenCL::Syntax::DirectAbstractDeclarator>
     {
         if (begin == end)
         {
-            context.log({Message::error(
-                ErrorMessages::Parser::EXPECTED_N.args(OpenCL::Format::List(", ", " or ", "'('", "'['")), begin,
-                Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
+            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "'['")),
+                                begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
         }
         else
         {
             context.log({Message::error(
-                ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(OpenCL::Format::List(", ", " or ", "'('", "'['"),
+                ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(cld::Format::List(", ", " or ", "'('", "'['"),
                                                                     '\'' + begin->getRepresentation() + '\''),
                 start, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
         }
@@ -1487,9 +1485,9 @@ std::optional<OpenCL::Syntax::DirectAbstractDeclarator>
     return std::move(*directAbstractDeclarator);
 }
 
-std::optional<OpenCL::Syntax::EnumSpecifier>
-    OpenCL::Parser::parseEnumSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
-                                       std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::EnumSpecifier>
+    cld::Parser::parseEnumSpecifier(std::vector<Lexer::Token>::const_iterator& begin,
+                                    std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::EnumKeyword, start, begin, end, context))
@@ -1603,10 +1601,10 @@ std::optional<OpenCL::Syntax::EnumSpecifier>
     return EnumSpecifier(start, begin, EnumDeclaration(start, begin, std::move(name), std::move(values)));
 }
 
-std::optional<OpenCL::Syntax::CompoundStatement>
-    OpenCL::Parser::parseCompoundStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                           std::vector<Lexer::Token>::const_iterator end,
-                                           OpenCL::Parser::Context& context, bool pushScope)
+std::optional<cld::Syntax::CompoundStatement>
+    cld::Parser::parseCompoundStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                        std::vector<Lexer::Token>::const_iterator end, cld::Parser::Context& context,
+                                        bool pushScope)
 {
     auto start = begin;
     context.braceEntered(begin);
@@ -1650,9 +1648,9 @@ std::optional<OpenCL::Syntax::CompoundStatement>
     return CompoundStatement(start, begin, std::move(items));
 }
 
-std::optional<OpenCL::Syntax::CompoundItem>
-    OpenCL::Parser::parseCompoundItem(std::vector<Lexer::Token>::const_iterator& begin,
-                                      std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::CompoundItem>
+    cld::Parser::parseCompoundItem(std::vector<Lexer::Token>::const_iterator& begin,
+                                   std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     if (firstIsInDeclarationSpecifier(*begin, context)
         && !(begin < end && begin->getTokenType() == Lexer::TokenType::Identifier && begin + 1 < end
@@ -1676,9 +1674,9 @@ std::optional<OpenCL::Syntax::CompoundItem>
     }
 }
 
-std::optional<OpenCL::Syntax::Initializer>
-    OpenCL::Parser::parseInitializer(std::vector<Lexer::Token>::const_iterator& begin,
-                                     std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::Initializer> cld::Parser::parseInitializer(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
+                                                                      Context& context)
 {
     auto start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
@@ -1714,9 +1712,9 @@ std::optional<OpenCL::Syntax::Initializer>
     }
 }
 
-std::optional<OpenCL::Syntax::InitializerList>
-    OpenCL::Parser::parseInitializerList(std::vector<Lexer::Token>::const_iterator& begin,
-                                         std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::InitializerList>
+    cld::Parser::parseInitializerList(std::vector<Lexer::Token>::const_iterator& begin,
+                                      std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     typename InitializerList::vector vector;
@@ -1793,9 +1791,9 @@ std::optional<OpenCL::Syntax::InitializerList>
     return InitializerList{start, begin, std::move(vector)};
 }
 
-std::optional<OpenCL::Syntax::Statement>
-    OpenCL::Parser::parseStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                   std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                  std::vector<Lexer::Token>::const_iterator end,
+                                                                  Context& context)
 {
     auto start = begin;
     if (begin != end)
@@ -1987,9 +1985,9 @@ std::optional<OpenCL::Syntax::Statement>
     }
 }
 
-std::optional<OpenCL::Syntax::HeadWhileStatement>
-    OpenCL::Parser::parseHeadWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                            std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::HeadWhileStatement>
+    cld::Parser::parseHeadWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                         std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::WhileKeyword, start, begin, end, context))
@@ -2025,9 +2023,9 @@ std::optional<OpenCL::Syntax::HeadWhileStatement>
     return HeadWhileStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
 }
 
-std::optional<OpenCL::Syntax::FootWhileStatement>
-    OpenCL::Parser::parseFootWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                            std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::FootWhileStatement>
+    cld::Parser::parseFootWhileStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                         std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     auto doPos = begin;
@@ -2076,9 +2074,9 @@ std::optional<OpenCL::Syntax::FootWhileStatement>
     return FootWhileStatement(start, begin, std::make_unique<Statement>(std::move(*statement)), std::move(expression));
 }
 
-OpenCL::Syntax::ReturnStatement OpenCL::Parser::parseReturnStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                                                     std::vector<Lexer::Token>::const_iterator end,
-                                                                     Context& context)
+cld::Syntax::ReturnStatement cld::Parser::parseReturnStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                               std::vector<Lexer::Token>::const_iterator end,
+                                                               Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::ReturnKeyword, start, begin, end, context))
@@ -2105,9 +2103,9 @@ OpenCL::Syntax::ReturnStatement OpenCL::Parser::parseReturnStatement(std::vector
     return ReturnStatement(start, begin, std::make_unique<Expression>(std::move(expression)));
 }
 
-std::optional<OpenCL::Syntax::IfStatement>
-    OpenCL::Parser::parseIfStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                     std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                                                      std::vector<Lexer::Token>::const_iterator end,
+                                                                      Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::IfKeyword, start, begin, end, context))
@@ -2159,9 +2157,9 @@ std::optional<OpenCL::Syntax::IfStatement>
     }
 }
 
-std::optional<OpenCL::Syntax::SwitchStatement>
-    OpenCL::Parser::parseSwitchStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                         std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::SwitchStatement>
+    cld::Parser::parseSwitchStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                      std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::SwitchKeyword, start, begin, end, context))
@@ -2197,9 +2195,9 @@ std::optional<OpenCL::Syntax::SwitchStatement>
     return SwitchStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
 }
 
-std::optional<OpenCL::Syntax::ForStatement>
-    OpenCL::Parser::parseForStatement(std::vector<Lexer::Token>::const_iterator& begin,
-                                      std::vector<Lexer::Token>::const_iterator end, Context& context)
+std::optional<cld::Syntax::ForStatement>
+    cld::Parser::parseForStatement(std::vector<Lexer::Token>::const_iterator& begin,
+                                   std::vector<Lexer::Token>::const_iterator end, Context& context)
 {
     auto start = begin;
     if (!expect(Lexer::TokenType::ForKeyword, start, begin, end, context))

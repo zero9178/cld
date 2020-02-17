@@ -11,9 +11,9 @@
 #include <regex>
 #include <utility>
 
-OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
-                         std::optional<std::vector<OpenCL::Lexer::Token>::const_iterator> rangeEnd,
-                         std::optional<Modifier> modifier)
+cld::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
+                      std::optional<std::vector<cld::Lexer::Token>::const_iterator> rangeEnd,
+                      std::optional<Modifier> modifier)
     : m_modifier(std::move(modifier)),
       m_message(std::move(message)),
       m_begin(begin),
@@ -22,29 +22,28 @@ OpenCL::Message::Message(Severity severity, std::string message, std::vector<Lex
 {
 }
 
-OpenCL::Message::Severity OpenCL::Message::getSeverity() const
+cld::Message::Severity cld::Message::getSeverity() const
 {
     return m_severity;
 }
 
-OpenCL::Message OpenCL::Message::error(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator token,
-                                       std::optional<Modifier> modifier)
+cld::Message cld::Message::error(std::string message, std::vector<cld::Lexer::Token>::const_iterator token,
+                                 std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Error, std::move(message), token, {}, std::move(modifier));
+    return cld::Message(Error, std::move(message), token, {}, std::move(modifier));
 }
 
-OpenCL::Message
-    OpenCL::Message::note(std::string message,
-                          std::vector<OpenCL::Lexer::Token, std::allocator<OpenCL::Lexer::Token>>::const_iterator token,
-                          std::optional<Modifier> modifier)
+cld::Message cld::Message::note(std::string message,
+                                std::vector<cld::Lexer::Token, std::allocator<cld::Lexer::Token>>::const_iterator token,
+                                std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Note, std::move(message), token, {}, std::move(modifier));
+    return cld::Message(Note, std::move(message), token, {}, std::move(modifier));
 }
 
-OpenCL::Message OpenCL::Message::warning(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator token,
-                                         std::optional<Modifier> modifier)
+cld::Message cld::Message::warning(std::string message, std::vector<cld::Lexer::Token>::const_iterator token,
+                                   std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Warning, std::move(message), token, {}, std::move(modifier));
+    return cld::Message(Warning, std::move(message), token, {}, std::move(modifier));
 }
 
 namespace
@@ -56,7 +55,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
 }
 } // namespace
 
-llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::SourceObject& sourceObject) const
+llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceObject& sourceObject) const
 {
     assert(!m_rangeEnd || m_begin != sourceObject.data().end());
     auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string> {
@@ -90,7 +89,7 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
                             [end](const Lexer::Token& token) { return token.getOffset() > end; });
     }();
 
-    auto text = OpenCL::Lexer::reconstructTrimmed(sourceObject, begin, end);
+    auto text = cld::Lexer::reconstructTrimmed(sourceObject, begin, end);
     if (begin != iterator
         && sourceObject.getLineNumber(begin->getOffset())
                != sourceObject.getLineNumber(begin->getOffset() + begin->getLength()))
@@ -212,55 +211,52 @@ llvm::raw_ostream& OpenCL::Message::print(llvm::raw_ostream& os, const OpenCL::S
     return os;
 }
 
-OpenCL::Message OpenCL::Message::error(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                       std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                       std::optional<Modifier> modifier)
+cld::Message cld::Message::error(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
+                                 std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Error, std::move(message), begin, end, modifier);
+    return cld::Message(Error, std::move(message), begin, end, modifier);
 }
 
-OpenCL::Message OpenCL::Message::warning(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                         std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                         std::optional<Modifier> modifier)
+cld::Message cld::Message::warning(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
+                                   std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Warning, std::move(message), begin, end, modifier);
+    return cld::Message(Warning, std::move(message), begin, end, modifier);
 }
 
-OpenCL::Message OpenCL::Message::note(std::string message, std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                      std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                      std::optional<Modifier> modifier)
+cld::Message cld::Message::note(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
+                                std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
 {
-    return OpenCL::Message(Note, std::move(message), begin, end, modifier);
+    return cld::Message(Note, std::move(message), begin, end, modifier);
 }
 
-OpenCL::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
-                           std::vector<Lexer::Token>::const_iterator anEnd, OpenCL::Modifier::Action action,
-                           std::string actionArgument)
+cld::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
+                        std::vector<Lexer::Token>::const_iterator anEnd, cld::Modifier::Action action,
+                        std::string actionArgument)
     : m_actionArgument(std::move(actionArgument)), m_begin(begin), m_end(anEnd), m_action(action)
 {
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Modifier::begin() const
+std::vector<cld::Lexer::Token>::const_iterator cld::Modifier::begin() const
 {
     return m_begin;
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator OpenCL::Modifier::end() const
+std::vector<cld::Lexer::Token>::const_iterator cld::Modifier::end() const
 {
     return m_end;
 }
 
-OpenCL::Modifier::Action OpenCL::Modifier::getAction() const
+cld::Modifier::Action cld::Modifier::getAction() const
 {
     return m_action;
 }
 
-const std::string& OpenCL::Modifier::getActionArgument() const
+const std::string& cld::Modifier::getActionArgument() const
 {
     return m_actionArgument;
 }
 
-std::string OpenCL::Format::format(std::vector<std::string> args) const
+std::string cld::Format::format(std::vector<std::string> args) const
 {
     static std::regex brackets(R"(\\*\{\})");
     std::reverse(args.begin(), args.end());

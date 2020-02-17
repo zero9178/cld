@@ -10,7 +10,7 @@
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-namespace OpenCL::Codegen
+namespace cld::Codegen
 {
 // using NodeRetType = Expected<std::pair<llvm::Value*, Semantics::Type>, FailureReason>;
 
@@ -28,6 +28,6 @@ class Context final
     std::vector<llvm::DIScope*> debugScope;
     const Semantics::FunctionType* currentFunction;
 };
-} // namespace OpenCL::Codegen
+} // namespace cld::Codegen
 
 #endif // OPENCLPARSER_CODEGEN_HPP

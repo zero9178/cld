@@ -23,6 +23,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
     std::string output;
     llvm::raw_string_ostream ss(output);
-    OpenCL::Lexer::tokenize(input, OpenCL::LanguageOptions::native(), false, &ss);
+    cld::Lexer::tokenize(input, cld::LanguageOptions::native(), false, &ss);
     return 0;
 }

@@ -6,15 +6,15 @@
 #include "ParserUtil.hpp"
 #include "SourceObject.hpp"
 
-std::pair<OpenCL::Syntax::TranslationUnit, bool> OpenCL::Parser::buildTree(const SourceObject& sourceObject,
-                                                                           llvm::raw_ostream* reporter)
+std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const SourceObject& sourceObject,
+                                                                     llvm::raw_ostream* reporter)
 {
     Context context(sourceObject, reporter);
     auto begin = sourceObject.data().cbegin();
     return {parseTranslationUnit(begin, sourceObject.data().cend(), context), context.getCurrentErrorCount() == 0};
 }
 
-void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
+void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
@@ -26,7 +26,7 @@ void OpenCL::Parser::Context::addTypedef(const std::string& name, DeclarationLoc
     }
 }
 
-bool OpenCL::Parser::Context::isTypedef(const std::string& name) const
+bool cld::Parser::Context::isTypedef(const std::string& name) const
 {
     for (auto& iter : m_currentScope)
     {
@@ -38,7 +38,7 @@ bool OpenCL::Parser::Context::isTypedef(const std::string& name) const
     return false;
 }
 
-void OpenCL::Parser::Context::log(std::vector<Message> messages)
+void cld::Parser::Context::log(std::vector<Message> messages)
 {
     for (auto& iter : messages)
     {
@@ -53,7 +53,7 @@ void OpenCL::Parser::Context::log(std::vector<Message> messages)
     }
 }
 
-void OpenCL::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
+void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
 {
     assert(!name.empty());
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
@@ -66,23 +66,22 @@ void OpenCL::Parser::Context::addToScope(const std::string& name, DeclarationLoc
     }
 }
 
-void OpenCL::Parser::Context::pushScope()
+void cld::Parser::Context::pushScope()
 {
     m_currentScope.emplace_back();
 }
 
-void OpenCL::Parser::Context::popScope()
+void cld::Parser::Context::popScope()
 {
     m_currentScope.pop_back();
 }
 
-std::size_t OpenCL::Parser::Context::getCurrentErrorCount() const
+std::size_t cld::Parser::Context::getCurrentErrorCount() const
 {
     return m_errorCount;
 }
 
-const OpenCL::Parser::Context::DeclarationLocation*
-    OpenCL::Parser::Context::getLocationOf(const std::string& name) const
+const cld::Parser::Context::DeclarationLocation* cld::Parser::Context::getLocationOf(const std::string& name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -94,7 +93,7 @@ const OpenCL::Parser::Context::DeclarationLocation*
     return nullptr;
 }
 
-bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
+bool cld::Parser::Context::isTypedefInScope(const std::string& name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -106,39 +105,39 @@ bool OpenCL::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-OpenCL::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
+cld::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
     : m_sourceObject(sourceObject), m_reporter(reporter), m_inPreprocessor(inPreprocessor)
 {
 }
 
-OpenCL::Parser::Context::TokenBitReseter
-    OpenCL::Parser::Context::withRecoveryTokens(const OpenCL::Parser::Context::TokenBitSet& tokenBitSet)
+cld::Parser::Context::TokenBitReseter
+    cld::Parser::Context::withRecoveryTokens(const cld::Parser::Context::TokenBitSet& tokenBitSet)
 {
     auto oldSet = m_recoverySet;
     m_recoverySet |= tokenBitSet;
-    return OpenCL::Parser::Context::TokenBitReseter(oldSet, *this);
+    return cld::Parser::Context::TokenBitReseter(oldSet, *this);
 }
 
-OpenCL::Parser::Context::TokenBitReseter::TokenBitReseter(TokenBitSet original, Context& context)
+cld::Parser::Context::TokenBitReseter::TokenBitReseter(TokenBitSet original, Context& context)
     : m_original(original), m_context(context)
 {
 }
 
-OpenCL::Parser::Context::TokenBitReseter::~TokenBitReseter()
+cld::Parser::Context::TokenBitReseter::~TokenBitReseter()
 {
     m_context.m_recoverySet = m_original;
 }
 
-void OpenCL::Parser::Context::skipUntil(std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                                        std::vector<OpenCL::Lexer::Token>::const_iterator end,
-                                        OpenCL::Parser::Context::TokenBitSet additional)
+void cld::Parser::Context::skipUntil(std::vector<cld::Lexer::Token>::const_iterator& begin,
+                                     std::vector<cld::Lexer::Token>::const_iterator end,
+                                     cld::Parser::Context::TokenBitSet additional)
 {
     begin = std::find_if(begin, end, [bitset = m_recoverySet | additional](const Lexer::Token& token) {
         return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
     });
 }
 
-void OpenCL::Parser::Context::parenthesesEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::parenthesesEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
 {
     if (++m_parenthesesDepth <= m_bracketMax)
     {
@@ -150,12 +149,12 @@ void OpenCL::Parser::Context::parenthesesEntered(std::vector<OpenCL::Lexer::Toke
     throw FatalParserError();
 }
 
-void OpenCL::Parser::Context::parenthesesLeft()
+void cld::Parser::Context::parenthesesLeft()
 {
     m_parenthesesDepth--;
 }
 
-void OpenCL::Parser::Context::squareBracketEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::squareBracketEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
 {
     if (++m_squareBracketDepth <= m_bracketMax)
     {
@@ -167,12 +166,12 @@ void OpenCL::Parser::Context::squareBracketEntered(std::vector<OpenCL::Lexer::To
     throw FatalParserError();
 }
 
-void OpenCL::Parser::Context::squareBracketLeft()
+void cld::Parser::Context::squareBracketLeft()
 {
     m_squareBracketDepth--;
 }
 
-void OpenCL::Parser::Context::braceEntered(std::vector<OpenCL::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::braceEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
 {
     if (++m_braceDepth <= m_bracketMax)
     {
@@ -184,17 +183,17 @@ void OpenCL::Parser::Context::braceEntered(std::vector<OpenCL::Lexer::Token>::co
     throw FatalParserError();
 }
 
-void OpenCL::Parser::Context::braceLeft()
+void cld::Parser::Context::braceLeft()
 {
     m_braceDepth--;
 }
 
-const OpenCL::SourceObject& OpenCL::Parser::Context::getSourceObject() const
+const cld::SourceObject& cld::Parser::Context::getSourceObject() const
 {
     return m_sourceObject;
 }
 
-bool OpenCL::Parser::Context::isInPreprocessor() const
+bool cld::Parser::Context::isInPreprocessor() const
 {
     return m_inPreprocessor;
 }

@@ -12,7 +12,7 @@
  * This uses EBNF syntax meaning that: { <A> } means 0 to infinite amount of times and [ <A> ] 0 or 1 times
  */
 
-namespace OpenCL::Syntax
+namespace cld::Syntax
 {
 class Expression;
 
@@ -172,9 +172,9 @@ public:
 
     Node& operator=(Node&&) noexcept = default;
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator begin() const;
+    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator begin() const;
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator end() const;
+    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator end() const;
 };
 
 /**
@@ -492,8 +492,8 @@ class UnaryExpressionDefined final : public Node
     std::string m_identifier;
 
 public:
-    UnaryExpressionDefined(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                           std::vector<OpenCL::Lexer::Token>::const_iterator end, std::string identifier);
+    UnaryExpressionDefined(std::vector<cld::Lexer::Token>::const_iterator begin,
+                           std::vector<cld::Lexer::Token>::const_iterator end, std::string identifier);
 
     [[nodiscard]] const std::string& getIdentifier() const;
 };
@@ -1047,8 +1047,8 @@ public:
 class FunctionSpecifier final : public Node
 {
 public:
-    FunctionSpecifier(const std::vector<OpenCL::Lexer::Token>::const_iterator& begin,
-                      const std::vector<OpenCL::Lexer::Token>::const_iterator& end);
+    FunctionSpecifier(const std::vector<cld::Lexer::Token>::const_iterator& begin,
+                      const std::vector<cld::Lexer::Token>::const_iterator& end);
 };
 
 /**
@@ -1193,8 +1193,8 @@ class DirectAbstractDeclaratorParenthese final : public Node
     std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
 public:
-    DirectAbstractDeclaratorParenthese(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                       std::vector<OpenCL::Lexer::Token>::const_iterator end,
+    DirectAbstractDeclaratorParenthese(std::vector<cld::Lexer::Token>::const_iterator begin,
+                                       std::vector<cld::Lexer::Token>::const_iterator end,
                                        std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
     [[nodiscard]] const AbstractDeclarator& getAbstractDeclarator() const;
@@ -1229,8 +1229,8 @@ class DirectAbstractDeclaratorAsterisk final : public Node
     std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
 
 public:
-    DirectAbstractDeclaratorAsterisk(std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                                     std::vector<OpenCL::Lexer::Token>::const_iterator end,
+    DirectAbstractDeclaratorAsterisk(std::vector<cld::Lexer::Token>::const_iterator begin,
+                                     std::vector<cld::Lexer::Token>::const_iterator end,
                                      std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator);
 
     [[nodiscard]] const std::unique_ptr<DirectAbstractDeclarator>& getDirectAbstractDeclarator() const;
@@ -1343,7 +1343,7 @@ public:
 
     [[nodiscard]] const std::string& getIdentifier() const;
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator getIdentifierLoc() const;
+    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator getIdentifierLoc() const;
 };
 
 /**
@@ -1772,6 +1772,6 @@ template <class... T>
         },
         variant);
 }
-} // namespace OpenCL::Syntax
+} // namespace cld::Syntax
 
 #endif // OPENCLPARSER_SYNTAX_HPP

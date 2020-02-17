@@ -9,71 +9,70 @@
 #include "ErrorMessages.hpp"
 #include "Syntax.hpp"
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::ArrayType::getType() const
+const cld::Semantics::Type& cld::Semantics::ArrayType::getType() const
 {
     return *m_type;
 }
 
-std::size_t OpenCL::Semantics::ArrayType::getSize() const
+std::size_t cld::Semantics::ArrayType::getSize() const
 {
     return m_size;
 }
 
-OpenCL::Semantics::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type,
-                                        std::size_t size)
+cld::Semantics::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type, std::size_t size)
     : m_restricted(isRestricted), m_type(std::move(type)), m_size(size)
 {
 }
 
-bool OpenCL::Semantics::ArrayType::isRestricted() const
+bool cld::Semantics::ArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                             OpenCL::Semantics::Type&& type, std::size_t size)
+cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
+                                                       cld::Semantics::Type&& type, std::size_t size)
 {
     auto name = type.getName() + "[" + std::to_string(size) + "]";
-    return OpenCL::Semantics::Type(isConst, isVolatile, name,
-                                   ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
+    return cld::Semantics::Type(isConst, isVolatile, name,
+                                ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }
 
-bool OpenCL::Semantics::ArrayType::operator==(const OpenCL::Semantics::ArrayType& rhs) const
+bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type, m_size) == std::tie(rhs.m_restricted, *rhs.m_type, rhs.m_size);
 }
 
-bool OpenCL::Semantics::ArrayType::operator!=(const OpenCL::Semantics::ArrayType& rhs) const
+bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs) const
 {
     return !(rhs == *this);
 }
 
-bool OpenCL::Semantics::Type::isConst() const
+bool cld::Semantics::Type::isConst() const
 {
     return m_isConst;
 }
 
-bool OpenCL::Semantics::Type::isVolatile() const
+bool cld::Semantics::Type::isVolatile() const
 {
     return m_isVolatile;
 }
 
-const std::string& OpenCL::Semantics::Type::getName() const
+const std::string& cld::Semantics::Type::getName() const
 {
     return m_name;
 }
 
-void OpenCL::Semantics::Type::setName(const std::string& name)
+void cld::Semantics::Type::setName(const std::string& name)
 {
     m_name = name;
 }
 
-const OpenCL::Semantics::Type::variant& OpenCL::Semantics::Type::get() const
+const cld::Semantics::Type::variant& cld::Semantics::Type::get() const
 {
     return m_type;
 }
 
-OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, OpenCL::Semantics::Type::variant&& type)
+cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::variant&& type)
     : m_isConst(isConst),
       m_isVolatile(isVolatile),
       m_name([name = std::move(name), isConst, isVolatile]() mutable {
@@ -92,51 +91,51 @@ OpenCL::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, O
 {
 }
 
-bool OpenCL::Semantics::Type::operator==(const OpenCL::Semantics::Type& rhs) const
+bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
 {
     return std::tie(m_isConst, m_isVolatile, m_type) == std::tie(rhs.m_isConst, rhs.m_isVolatile, rhs.m_type);
 }
 
-bool OpenCL::Semantics::Type::operator!=(const OpenCL::Semantics::Type& rhs) const
+bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
 {
     return !(rhs == *this);
 }
 
-bool OpenCL::Semantics::Type::isUndefined() const
+bool cld::Semantics::Type::isUndefined() const
 {
     return std::holds_alternative<std::monostate>(m_type);
 }
-const std::string& OpenCL::Semantics::Type::getTypeName() const
+const std::string& cld::Semantics::Type::getTypeName() const
 {
     return m_typeName;
 }
 
-bool OpenCL::Semantics::Type::isTypedef() const
+bool cld::Semantics::Type::isTypedef() const
 {
     return m_typeName != m_name;
 }
-std::string OpenCL::Semantics::Type::getFullFormattedTypeName() const
+std::string cld::Semantics::Type::getFullFormattedTypeName() const
 {
     return '\'' + m_name + '\'' + (isTypedef() ? "(aka '" + m_typeName + "')" : "");
 }
 
-OpenCL::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& elementType)
+cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& elementType)
     : m_restricted(isRestricted), m_elementType(std::move(elementType))
 {
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::PointerType::getElementType() const
+const cld::Semantics::Type& cld::Semantics::PointerType::getElementType() const
 {
     return *m_elementType;
 }
 
-bool OpenCL::Semantics::PointerType::isRestricted() const
+bool cld::Semantics::PointerType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                               OpenCL::Semantics::Type&& elementType)
+cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
+                                                         cld::Semantics::Type&& elementType)
 {
     std::string name;
     if (std::holds_alternative<FunctionType>(elementType.get()))
@@ -159,77 +158,77 @@ OpenCL::Semantics::Type OpenCL::Semantics::PointerType::create(bool isConst, boo
     {
         name += " restricted";
     }
-    return OpenCL::Semantics::Type(isConst, isVolatile, name,
-                                   PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
+    return cld::Semantics::Type(isConst, isVolatile, name,
+                                PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
 }
 
-bool OpenCL::Semantics::PointerType::operator==(const OpenCL::Semantics::PointerType& rhs) const
+bool cld::Semantics::PointerType::operator==(const cld::Semantics::PointerType& rhs) const
 {
     return std::tie(m_restricted, *m_elementType) == std::tie(rhs.m_restricted, *rhs.m_elementType);
 }
 
-bool OpenCL::Semantics::PointerType::operator!=(const OpenCL::Semantics::PointerType& rhs) const
+bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::EnumType::EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values)
+cld::Semantics::EnumType::EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values)
     : m_name(std::move(name)), m_values(std::move(values))
 {
 }
 
-const std::vector<std::pair<std::string, int32_t>>& OpenCL::Semantics::EnumType::getValues() const
+const std::vector<std::pair<std::string, int32_t>>& cld::Semantics::EnumType::getValues() const
 {
     return m_values;
 }
 
-bool OpenCL::Semantics::EnumType::isDefinition() const
+bool cld::Semantics::EnumType::isDefinition() const
 {
     return !m_values.empty();
 }
 
-bool OpenCL::Semantics::EnumType::isAnonymous() const
+bool cld::Semantics::EnumType::isAnonymous() const
 {
     return m_name.empty();
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
-                                                            std::vector<std::pair<std::string, std::int32_t>> values)
+cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
+                                                      std::vector<std::pair<std::string, std::int32_t>> values)
 {
-    return OpenCL::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
+    return cld::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
 }
 
-bool OpenCL::Semantics::EnumType::operator==(const OpenCL::Semantics::EnumType& rhs) const
+bool cld::Semantics::EnumType::operator==(const cld::Semantics::EnumType& rhs) const
 {
     return m_name == rhs.m_name;
 }
 
-bool OpenCL::Semantics::EnumType::operator!=(const OpenCL::Semantics::EnumType& rhs) const
+bool cld::Semantics::EnumType::operator!=(const cld::Semantics::EnumType& rhs) const
 {
     return !(rhs == *this);
 }
 
-const std::string& OpenCL::Semantics::EnumType::getName() const
+const std::string& cld::Semantics::EnumType::getName() const
 {
     return m_name;
 }
 
-OpenCL::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
+cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
     : m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_bitCount(bitCount)
 {
 }
 
-bool OpenCL::Semantics::PrimitiveType::isFloatingPoint() const
+bool cld::Semantics::PrimitiveType::isFloatingPoint() const
 {
     return m_isFloatingPoint;
 }
 
-bool OpenCL::Semantics::PrimitiveType::isSigned() const
+bool cld::Semantics::PrimitiveType::isSigned() const
 {
     return m_isSigned;
 }
 
-std::uint8_t OpenCL::Semantics::PrimitiveType::getByteCount() const
+std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
 {
     // Round up to the next highest power 2
     std::uint8_t temp = m_bitCount - 1;
@@ -239,19 +238,19 @@ std::uint8_t OpenCL::Semantics::PrimitiveType::getByteCount() const
     return (temp + 1) / 8;
 }
 
-std::uint8_t OpenCL::Semantics::PrimitiveType::getBitCount() const
+std::uint8_t cld::Semantics::PrimitiveType::getBitCount() const
 {
     return m_bitCount;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                                 bool isSigned, std::uint8_t bitCount, std::string name)
+cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
+                                                           bool isSigned, std::uint8_t bitCount, std::string name)
 {
-    return OpenCL::Semantics::Type(isConst, isVolatile, std::move(name),
-                                   PrimitiveType(isFloatingPoint, isSigned, bitCount));
+    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
+                                PrimitiveType(isFloatingPoint, isSigned, bitCount));
 }
 
-bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::PrimitiveType& rhs) const
+bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
 {
     if (m_bitCount == 0 && rhs.m_bitCount == 0)
     {
@@ -261,135 +260,135 @@ bool OpenCL::Semantics::PrimitiveType::operator==(const OpenCL::Semantics::Primi
            == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
 }
 
-bool OpenCL::Semantics::PrimitiveType::operator!=(const OpenCL::Semantics::PrimitiveType& rhs) const
+bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
-                                                                     const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
+                                                               const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, options.isCharSigned(), 8, "char");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, true, 8, "signed char");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, false, 8, "unsigned char");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, false, 1, "_Bool");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
-                                                                      const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
+                                                                const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, true, options.getSizeOfShort() * 8, "short");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
-                                                                              const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
+                                                                        const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, false, options.getSizeOfShort() * 8, "unsigned short");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
-                                                                    const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
+                                                              const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, true, options.getSizeOfInt() * 8, "int");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
-                                                                            const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
+                                                                      const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, false, options.getSizeOfInt() * 8, "unsigned int");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
-                                                                     const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
+                                                               const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, true, options.getSizeOfLong() * 8, "long");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
-                                                                             const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
+                                                                       const LanguageOptions& options)
 {
     return create(isConst, isVolatile, false, false, options.getSizeOfLong() * 8, "unsigned long");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, true, 64, "long long");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, false, 64, "unsigned long long");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, true, true, 32, "float");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, true, true, 64, "double");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
-                                                                           const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
+                                                                     const LanguageOptions& options)
 {
     return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits(), "long double");
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
 {
     return create(isConst, isVolatile, false, true, 0, "void");
 }
 
-OpenCL::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type)
+cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::ValArrayType::getType() const
+const cld::Semantics::Type& cld::Semantics::ValArrayType::getType() const
 {
     return *m_type;
 }
 
-bool OpenCL::Semantics::ValArrayType::isRestricted() const
+bool cld::Semantics::ValArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                                OpenCL::Semantics::Type&& type)
+cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
+                                                          cld::Semantics::Type&& type)
 {
     auto name = type.getName() + "[*]";
-    return OpenCL::Semantics::Type(isConst, isVolatile, name,
-                                   ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
+    return cld::Semantics::Type(isConst, isVolatile, name,
+                                ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
-bool OpenCL::Semantics::ValArrayType::operator==(const OpenCL::Semantics::ValArrayType& rhs) const
+bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
 }
 
-bool OpenCL::Semantics::ValArrayType::operator!=(const OpenCL::Semantics::ValArrayType& rhs) const
+bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType& rhs) const
 {
     return !(rhs == *this);
 }
 
-OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
-                                              std::vector<std::pair<Type, std::string>> arguments, bool lastIsVararg,
-                                              bool hasPrototype)
+cld::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
+                                           std::vector<std::pair<Type, std::string>> arguments, bool lastIsVararg,
+                                           bool hasPrototype)
     : m_returnType(std::move(returnType)),
       m_arguments(std::move(arguments)),
       m_lastIsVararg(lastIsVararg),
@@ -397,25 +396,24 @@ OpenCL::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType
 {
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::FunctionType::getReturnType() const
+const cld::Semantics::Type& cld::Semantics::FunctionType::getReturnType() const
 {
     return *m_returnType;
 }
 
-const std::vector<std::pair<OpenCL::Semantics::Type, std::string>>&
-    OpenCL::Semantics::FunctionType::getArguments() const
+const std::vector<std::pair<cld::Semantics::Type, std::string>>& cld::Semantics::FunctionType::getArguments() const
 {
     return m_arguments;
 }
 
-bool OpenCL::Semantics::FunctionType::isLastVararg() const
+bool cld::Semantics::FunctionType::isLastVararg() const
 {
     return m_lastIsVararg;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::FunctionType::create(OpenCL::Semantics::Type&& returnType,
-                                                                std::vector<std::pair<Type, std::string>>&& arguments,
-                                                                bool lastIsVararg, bool hasPrototype)
+cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&& returnType,
+                                                          std::vector<std::pair<Type, std::string>>&& arguments,
+                                                          bool lastIsVararg, bool hasPrototype)
 {
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
@@ -427,12 +425,12 @@ OpenCL::Semantics::Type OpenCL::Semantics::FunctionType::create(OpenCL::Semantic
         }
     }
     argumentsNames = returnType.getName() + "(" + argumentsNames + ")";
-    return OpenCL::Semantics::Type(
+    return cld::Semantics::Type(
         false, false, argumentsNames,
         FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, hasPrototype));
 }
 
-bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::FunctionType& rhs) const
+bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
 {
     std::vector<Type> thisTypes, rhsTypes;
     auto pairFirst = [](const auto& pair) { return pair.first; };
@@ -442,51 +440,50 @@ bool OpenCL::Semantics::FunctionType::operator==(const OpenCL::Semantics::Functi
            == std::tie(*rhs.m_returnType, rhsTypes, rhs.m_lastIsVararg);
 }
 
-bool OpenCL::Semantics::FunctionType::operator!=(const OpenCL::Semantics::FunctionType& rhs) const
+bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType& rhs) const
 {
     return !(rhs == *this);
 }
 
-bool OpenCL::Semantics::FunctionType::hasPrototype() const
+bool cld::Semantics::FunctionType::hasPrototype() const
 {
     return m_hasPrototype;
 }
 
-OpenCL::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted,
-                                                        std::shared_ptr<OpenCL::Semantics::Type>&& type)
+cld::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_type(std::move(type))
 {
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::AbstractArrayType::getType() const
+const cld::Semantics::Type& cld::Semantics::AbstractArrayType::getType() const
 {
     return *m_type;
 }
 
-bool OpenCL::Semantics::AbstractArrayType::isRestricted() const
+bool cld::Semantics::AbstractArrayType::isRestricted() const
 {
     return m_restricted;
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                                     OpenCL::Semantics::Type&& type)
+cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
+                                                               cld::Semantics::Type&& type)
 {
     auto name = type.getName() + "[]";
-    return OpenCL::Semantics::Type(isConst, isVolatile, name,
-                                   AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
+    return cld::Semantics::Type(isConst, isVolatile, name,
+                                AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
-bool OpenCL::Semantics::AbstractArrayType::operator==(const OpenCL::Semantics::AbstractArrayType& rhs) const
+bool cld::Semantics::AbstractArrayType::operator==(const cld::Semantics::AbstractArrayType& rhs) const
 {
     return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
 }
 
-bool OpenCL::Semantics::AbstractArrayType::operator!=(const OpenCL::Semantics::AbstractArrayType& rhs) const
+bool cld::Semantics::AbstractArrayType::operator!=(const cld::Semantics::AbstractArrayType& rhs) const
 {
     return !(rhs == *this);
 }
 
-std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator& declarator)
+std::string cld::Semantics::declaratorToName(const cld::Syntax::Declarator& declarator)
 {
     return matchWithSelf(
         declarator.getDirectDeclarator(),
@@ -501,73 +498,74 @@ std::string OpenCL::Semantics::declaratorToName(const OpenCL::Syntax::Declarator
         });
 }
 
-std::vector<OpenCL::Lexer::Token>::const_iterator
-    OpenCL::Semantics::declaratorToLoc(const OpenCL::Syntax::Declarator& declarator)
+std::vector<cld::Lexer::Token>::const_iterator
+    cld::Semantics::declaratorToLoc(const cld::Syntax::Declarator& declarator)
 {
     return matchWithSelf(
         declarator.getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name)
-            -> std::vector<OpenCL::Lexer::Token>::const_iterator { return name.getIdentifierLoc(); },
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::vector<cld::Lexer::Token>::const_iterator {
+            return name.getIdentifierLoc();
+        },
         [](auto&& self,
-           const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<OpenCL::Lexer::Token>::const_iterator {
+           const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<cld::Lexer::Token>::const_iterator {
             return std::visit(
-                [&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator { return self(value); },
+                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); },
                 declarator.getDeclarator().getDirectDeclarator());
         },
-        [](auto&& self, auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator {
+        [](auto&& self, auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator {
             return std::visit(
-                [&self](auto&& value) -> std::vector<OpenCL::Lexer::Token>::const_iterator { return self(value); },
+                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); },
                 value.getDirectDeclarator());
         });
 }
 
-OpenCL::Semantics::RecordType::RecordType(std::string name, bool isUnion,
-                                          std::vector<std::tuple<Type, std::string, std::int64_t>>&& names)
+cld::Semantics::RecordType::RecordType(std::string name, bool isUnion,
+                                       std::vector<std::tuple<Type, std::string, std::int64_t>>&& names)
     : m_name(std::move(name)), m_isUnion(isUnion), m_members(std::move(names))
 {
 }
 
-bool OpenCL::Semantics::RecordType::isUnion() const
+bool cld::Semantics::RecordType::isUnion() const
 {
     return m_isUnion;
 }
 
-const std::vector<std::tuple<OpenCL::Semantics::Type, std::string, std::int64_t>>&
-    OpenCL::Semantics::RecordType::getMembers() const
+const std::vector<std::tuple<cld::Semantics::Type, std::string, std::int64_t>>&
+    cld::Semantics::RecordType::getMembers() const
 {
     return m_members;
 }
 
-bool OpenCL::Semantics::RecordType::isDefinition() const
+bool cld::Semantics::RecordType::isDefinition() const
 {
     return !m_members.empty();
 }
 
-OpenCL::Semantics::Type OpenCL::Semantics::RecordType::create(
-    bool isConst, bool isVolatile, bool isUnion, const std::string& name,
-    std::vector<std::tuple<OpenCL::Semantics::Type, std::string, int64_t>>&& members)
+cld::Semantics::Type
+    cld::Semantics::RecordType::create(bool isConst, bool isVolatile, bool isUnion, const std::string& name,
+                                       std::vector<std::tuple<cld::Semantics::Type, std::string, int64_t>>&& members)
 {
-    return OpenCL::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
-                                   RecordType(name, isUnion, std::move(members)));
+    return cld::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
+                                RecordType(name, isUnion, std::move(members)));
 }
 
-bool OpenCL::Semantics::RecordType::operator==(const OpenCL::Semantics::RecordType& rhs) const
+bool cld::Semantics::RecordType::operator==(const cld::Semantics::RecordType& rhs) const
 {
     return std::tie(m_isUnion, m_name) == std::tie(rhs.m_isUnion, rhs.m_name);
 }
 
-bool OpenCL::Semantics::RecordType::operator!=(const OpenCL::Semantics::RecordType& rhs) const
+bool cld::Semantics::RecordType::operator!=(const cld::Semantics::RecordType& rhs) const
 {
     return !(rhs == *this);
 }
 
-const std::string& OpenCL::Semantics::RecordType::getName() const
+const std::string& cld::Semantics::RecordType::getName() const
 {
     return m_name;
 }
 
-OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const OpenCL::Semantics::Type& type,
-                                                                          const LanguageOptions& options)
+cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::Semantics::Type& type,
+                                                                    const LanguageOptions& options)
 {
     return match(
         type.get(),
@@ -641,7 +639,7 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::alignmentOf(const 
         [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
 }
 
-bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
+bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
     auto* primitive = std::get_if<PrimitiveType>(&type.get());
     if (!primitive)
@@ -651,8 +649,8 @@ bool OpenCL::Semantics::isVoid(const OpenCL::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenCL::Semantics::Type& type,
-                                                                     const LanguageOptions& options)
+cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semantics::Type& type,
+                                                               const LanguageOptions& options)
 {
     return match(
         type.get(),
@@ -733,9 +731,9 @@ OpenCL::Expected<std::size_t, std::string> OpenCL::Semantics::sizeOf(const OpenC
         [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
 }
 
-OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,
-                                                          std::vector<Declaration> parameterDeclarations,
-                                                          Linkage linkage, CompoundStatement&& compoundStatement)
+cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,
+                                                       std::vector<Declaration> parameterDeclarations, Linkage linkage,
+                                                       CompoundStatement&& compoundStatement)
     : m_type(std::move(type)),
       m_name(std::move(name)),
       m_parameterDeclarations(std::move(parameterDeclarations)),
@@ -744,75 +742,74 @@ OpenCL::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std
 {
 }
 
-const OpenCL::Semantics::FunctionType& OpenCL::Semantics::FunctionDefinition::getType() const
+const cld::Semantics::FunctionType& cld::Semantics::FunctionDefinition::getType() const
 {
     return m_type;
 }
 
-bool OpenCL::Semantics::FunctionDefinition::hasPrototype() const
+bool cld::Semantics::FunctionDefinition::hasPrototype() const
 {
     return m_type.hasPrototype();
 }
 
-const std::string& OpenCL::Semantics::FunctionDefinition::getName() const
+const std::string& cld::Semantics::FunctionDefinition::getName() const
 {
     return m_name;
 }
 
-OpenCL::Semantics::Linkage OpenCL::Semantics::FunctionDefinition::getLinkage() const
+cld::Semantics::Linkage cld::Semantics::FunctionDefinition::getLinkage() const
 {
     return m_linkage;
 }
 
-const std::vector<OpenCL::Semantics::Declaration>&
-    OpenCL::Semantics::FunctionDefinition::getParameterDeclarations() const
+const std::vector<cld::Semantics::Declaration>& cld::Semantics::FunctionDefinition::getParameterDeclarations() const
 {
     return m_parameterDeclarations;
 }
 
-OpenCL::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
+cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
 }
 
-const std::vector<OpenCL::Semantics::TranslationUnit::Variant>& OpenCL::Semantics::TranslationUnit::getGlobals() const
+const std::vector<cld::Semantics::TranslationUnit::Variant>& cld::Semantics::TranslationUnit::getGlobals() const
 {
     return m_globals;
 }
 
-OpenCL::Semantics::Declaration::Declaration(OpenCL::Semantics::Type type, OpenCL::Semantics::Linkage linkage,
-                                            OpenCL::Semantics::Lifetime lifetime, std::string name)
+cld::Semantics::Declaration::Declaration(cld::Semantics::Type type, cld::Semantics::Linkage linkage,
+                                         cld::Semantics::Lifetime lifetime, std::string name)
     : m_type(std::move(type)), m_linkage(linkage), m_lifetime(lifetime), m_name(std::move(name))
 {
 }
 
-const OpenCL::Semantics::Type& OpenCL::Semantics::Declaration::getType() const
+const cld::Semantics::Type& cld::Semantics::Declaration::getType() const
 {
     return m_type;
 }
 
-OpenCL::Semantics::Linkage OpenCL::Semantics::Declaration::getLinkage() const
+cld::Semantics::Linkage cld::Semantics::Declaration::getLinkage() const
 {
     return m_linkage;
 }
 
-OpenCL::Semantics::Lifetime OpenCL::Semantics::Declaration::getLifetime() const
+cld::Semantics::Lifetime cld::Semantics::Declaration::getLifetime() const
 {
     return m_lifetime;
 }
 
-const std::string& OpenCL::Semantics::Declaration::getName() const
+const std::string& cld::Semantics::Declaration::getName() const
 {
     return m_name;
 }
 
-OpenCL::Semantics::CompoundStatement::CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems)
+cld::Semantics::CompoundStatement::CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems)
     : m_compoundItems(std::move(compoundItems))
 {
 }
 
-const std::vector<std::variant<OpenCL::Semantics::Statement, OpenCL::Semantics::Declaration>>&
-    OpenCL::Semantics::CompoundStatement::getCompoundItems() const
+const std::vector<std::variant<cld::Semantics::Statement, cld::Semantics::Declaration>>&
+    cld::Semantics::CompoundStatement::getCompoundItems() const
 {
     return m_compoundItems;
 }

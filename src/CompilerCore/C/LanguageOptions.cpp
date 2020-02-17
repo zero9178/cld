@@ -5,10 +5,10 @@
 #include <cassert>
 #include <limits>
 
-OpenCL::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned,
-                                         std::uint8_t sizeOfWChar, bool wcharIsSigned, std::uint8_t sizeOfShort,
-                                         std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
-                                         std::uint8_t sizeOfLongDoubleBits, std::uint8_t sizeOfVoidStar)
+cld::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfUnderlineBool, bool charIsSigned,
+                                      std::uint8_t sizeOfWChar, bool wcharIsSigned, std::uint8_t sizeOfShort,
+                                      std::uint8_t sizeOfInt, std::uint8_t sizeOfLong,
+                                      std::uint8_t sizeOfLongDoubleBits, std::uint8_t sizeOfVoidStar)
     : m_language(language),
       m_sizeOfUnderlineBool(sizeOfUnderlineBool),
       m_charIsSigned(charIsSigned),
@@ -37,49 +37,49 @@ OpenCL::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfU
     assert(m_sizeOfLongDoubleBits == 64 || m_sizeOfLongDoubleBits == 80 || m_sizeOfLongDoubleBits == 128);
 }
 
-OpenCL::LanguageOptions::Language OpenCL::LanguageOptions::getLanguage() const
+cld::LanguageOptions::Language cld::LanguageOptions::getLanguage() const
 {
     return m_language;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfUnderlineBool() const
+std::uint8_t cld::LanguageOptions::getSizeOfUnderlineBool() const
 {
     return m_sizeOfUnderlineBool;
 }
 
-bool OpenCL::LanguageOptions::isCharSigned() const
+bool cld::LanguageOptions::isCharSigned() const
 {
     return m_charIsSigned;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfWChar() const
+std::uint8_t cld::LanguageOptions::getSizeOfWChar() const
 {
     return m_sizeOfWChar;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfShort() const
+std::uint8_t cld::LanguageOptions::getSizeOfShort() const
 {
     return m_sizeOfShort;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfInt() const
+std::uint8_t cld::LanguageOptions::getSizeOfInt() const
 {
     return m_sizeOfInt;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfLong() const
+std::uint8_t cld::LanguageOptions::getSizeOfLong() const
 {
     return m_sizeOfLong;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfLongLong() const
+std::uint8_t cld::LanguageOptions::getSizeOfLongLong() const
 {
     return 64;
 }
 
-OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
+cld::LanguageOptions cld::LanguageOptions::native(Language language)
 {
-    return OpenCL::LanguageOptions(
+    return cld::LanguageOptions(
         language, sizeof(bool), std::is_signed_v<char>, sizeof(wchar_t), std::is_signed_v<wchar_t>, sizeof(short),
         sizeof(int), sizeof(long),
         []() -> std::uint8_t {
@@ -95,17 +95,17 @@ OpenCL::LanguageOptions OpenCL::LanguageOptions::native(Language language)
 #pragma clang diagnostic pop
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfLongDoubleBits() const
+std::uint8_t cld::LanguageOptions::getSizeOfLongDoubleBits() const
 {
     return m_sizeOfLongDoubleBits;
 }
 
-std::uint8_t OpenCL::LanguageOptions::getSizeOfVoidStar() const
+std::uint8_t cld::LanguageOptions::getSizeOfVoidStar() const
 {
     return m_sizeOfVoidStar;
 }
 
-bool OpenCL::LanguageOptions::isWCharSigned() const
+bool cld::LanguageOptions::isWCharSigned() const
 {
     return m_wcharIsSigned;
 }

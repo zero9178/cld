@@ -20,13 +20,13 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
     std::string output;
     llvm::raw_string_ostream ss(output);
-    auto tokens = OpenCL::Lexer::tokenize(input, OpenCL::LanguageOptions::native(), false, &ss);
+    auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), false, &ss);
     if (!output.empty() || tokens.data().empty())
     {
         return 0;
     }
 
-    OpenCL::Parser::buildTree(tokens, &ss);
+    cld::Parser::buildTree(tokens, &ss);
 
     return 0;
 }

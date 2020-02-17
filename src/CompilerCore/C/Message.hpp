@@ -7,7 +7,7 @@
 
 #include "Lexer.hpp"
 
-namespace OpenCL
+namespace cld
 {
 class Format
 {
@@ -116,9 +116,9 @@ public:
     Modifier(std::vector<Lexer::Token>::const_iterator begin, std::vector<Lexer::Token>::const_iterator anEnd,
              Action action = Underline, std::string actionArgument = {});
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator begin() const;
+    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator begin() const;
 
-    [[nodiscard]] std::vector<OpenCL::Lexer::Token>::const_iterator end() const;
+    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator end() const;
 
     [[nodiscard]] Action getAction() const;
 
@@ -148,12 +148,12 @@ public:
 private:
     std::optional<Modifier> m_modifier;
     std::string m_message;
-    std::vector<OpenCL::Lexer::Token>::const_iterator m_begin;
-    std::optional<std::vector<OpenCL::Lexer::Token>::const_iterator> m_rangeEnd;
+    std::vector<cld::Lexer::Token>::const_iterator m_begin;
+    std::optional<std::vector<cld::Lexer::Token>::const_iterator> m_rangeEnd;
     Severity m_severity;
 
     Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
-            std::optional<std::vector<OpenCL::Lexer::Token>::const_iterator> rangeEnd = {},
+            std::optional<std::vector<cld::Lexer::Token>::const_iterator> rangeEnd = {},
             std::optional<Modifier> modifier = {});
 
 public:
@@ -230,6 +230,6 @@ public:
 
     llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceObject& sourceObject) const;
 };
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_MESSAGE_HPP

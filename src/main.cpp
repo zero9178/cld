@@ -45,9 +45,9 @@ int main()
     //    }
     //    auto targetMachine = target->createTargetMachine(llvm::sys::getProcessTriple(), "generic", "", {}, {});
     //
-    //    OpenCL::Codegen::Context context;
-    //    auto result = OpenCL::Lexer::tokenize("int i ft"); // OpenCL::PP::preprocess(std::move(source))
-    //    OpenCL::Parser::buildTree(result, &std::cerr);
+    //    cld::Codegen::Context context;
+    //    auto result = cld::Lexer::tokenize("int i ft"); // cld::PP::preprocess(std::move(source))
+    //    cld::Parser::buildTree(result, &std::cerr);
     //    return 0;
     //
     //    context.module->print(llvm::outs(), nullptr);

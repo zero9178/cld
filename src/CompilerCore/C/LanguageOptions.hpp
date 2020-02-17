@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-namespace OpenCL
+namespace cld
 {
 class LanguageOptions
 {
@@ -55,6 +55,6 @@ public:
 
     std::uint8_t getSizeOfVoidStar() const;
 };
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_LANGUAGEOPTIONS_HPP

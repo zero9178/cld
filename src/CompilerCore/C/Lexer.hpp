@@ -14,7 +14,7 @@
 
 #include "LanguageOptions.hpp"
 
-namespace OpenCL
+namespace cld
 {
 class SourceObject;
 
@@ -203,10 +203,9 @@ std::string tokenValue(TokenType tokenType);
 std::string reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
                         std::vector<Token>::const_iterator end);
 
-std::string reconstructTrimmed(const SourceObject& sourceObject,
-                               std::vector<OpenCL::Lexer::Token>::const_iterator begin,
-                               std::vector<OpenCL::Lexer::Token>::const_iterator end);
+std::string reconstructTrimmed(const SourceObject& sourceObject, std::vector<cld::Lexer::Token>::const_iterator begin,
+                               std::vector<cld::Lexer::Token>::const_iterator end);
 } // namespace Lexer
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_LEXER_HPP

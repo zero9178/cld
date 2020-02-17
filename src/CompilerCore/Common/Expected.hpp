@@ -3,7 +3,7 @@
 
 #include <variant>
 
-namespace OpenCL
+namespace cld
 {
 /**
  * Type which can either contain T or E. T is the expected and normal value type. If this does not contain T it
@@ -269,6 +269,6 @@ template <class U>
 constexpr Expected<T, E>::Expected(const Expected<U, E>& expected) : m_value(expected.error())
 {
 }
-} // namespace OpenCL
+} // namespace cld
 
 #endif // OPENCLPARSER_EXPECTED_HPP

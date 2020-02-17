@@ -6,7 +6,7 @@
 #include "ErrorMessages.hpp"
 #include "Parser.hpp"
 
-namespace OpenCL::Parser
+namespace cld::Parser
 {
 bool isAssignment(Lexer::TokenType type);
 
@@ -20,13 +20,12 @@ bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator
     {
         if (curr == end)
         {
-            context.log(
-                {Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
-                                Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)})});
+            context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
+                                        Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)})});
         }
         else
         {
-            context.log({Message::error(OpenCL::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+            context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                             Lexer::tokenName(expected), '\'' + curr->getRepresentation() + '\''),
                                         begin, Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
         }
@@ -64,10 +63,9 @@ struct Y
 template <typename G>
 Y(G)->Y<G>;
 
-constexpr Context::TokenBitSet firstPostfixSet =
-    Context::fromTokenTypes(OpenCL::Lexer::TokenType::Arrow, OpenCL::Lexer::TokenType::Dot,
-                            OpenCL::Lexer::TokenType::OpenSquareBracket, OpenCL::Lexer::TokenType::OpenParentheses,
-                            OpenCL::Lexer::TokenType::Increment, OpenCL::Lexer::TokenType::Decrement);
+constexpr Context::TokenBitSet firstPostfixSet = Context::fromTokenTypes(
+    cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::Dot, cld::Lexer::TokenType::OpenSquareBracket,
+    cld::Lexer::TokenType::OpenParentheses, cld::Lexer::TokenType::Increment, cld::Lexer::TokenType::Decrement);
 
 constexpr Context::TokenBitSet assignmentSet = Context::fromTokenTypes(
     Lexer::TokenType::Assignment, Lexer::TokenType::PlusAssign, Lexer::TokenType::MinusAssign,
@@ -138,73 +136,73 @@ constexpr Context::TokenBitSet firstFunctionDefinitionSet = firstDeclarationSpec
 
 constexpr Context::TokenBitSet firstExternalDeclarationSet = firstDeclarationSet | firstFunctionDefinitionSet;
 
-bool firstIsInExternalDeclaration(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInExternalDeclaration(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInFunctionDefinition(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInFunctionDefinition(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInDeclaration(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInDeclaration(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInDeclarationSpecifier(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInDeclarationSpecifier(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInSpecifierQualifier(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInSpecifierQualifier(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInDeclarator(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInDirectDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInDirectDeclarator(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInParameterTypeList(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInParameterTypeList(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInAbstractDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInAbstractDeclarator(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInDirectAbstractDeclarator(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInDirectAbstractDeclarator(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInParameterList(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInParameterList(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInPointer(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInPointer(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInCompoundItem(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInCompoundItem(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInInitializer(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInInitializer(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInInitializerList(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInInitializerList(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInStatement(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInStatement(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInAssignmentExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInAssignmentExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInConditionalExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInConditionalExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInLogicalOrExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInLogicalOrExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInLogicalAndExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInLogicalAndExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInBitOrExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInBitOrExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInBitXorExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInBitXorExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInBitAndExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInBitAndExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInEqualityExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInEqualityExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInRelationalExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInRelationalExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInShiftExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInShiftExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInAdditiveExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInAdditiveExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInTerm(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInTerm(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInTypeName(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInTypeName(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInCastExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInCastExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInUnaryExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInUnaryExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInPostFixExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
+bool firstIsInPostFixExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 
-bool firstIsInPrimaryExpression(const Lexer::Token& token, const OpenCL::Parser::Context& context);
-} // namespace OpenCL::Parser
+bool firstIsInPrimaryExpression(const Lexer::Token& token, const cld::Parser::Context& context);
+} // namespace cld::Parser
 
 #endif // OPENCLPARSER_PARSERUTIL_HPP

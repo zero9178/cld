@@ -7,7 +7,7 @@
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
-namespace OpenCL::Semantics
+namespace cld::Semantics
 {
 struct VoidStar final
 {
@@ -201,6 +201,6 @@ public:
     ConstRetType visit(const Syntax::ConditionalExpression& node);
 };
 
-} // namespace OpenCL::Semantics
+} // namespace cld::Semantics
 
 #endif // OPENCLPARSER_CONSTANTEVALUATOR_HPP

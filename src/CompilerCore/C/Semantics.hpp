@@ -11,7 +11,7 @@
 #include "Message.hpp"
 #include "Syntax.hpp"
 
-namespace OpenCL::Semantics
+namespace cld::Semantics
 {
 class Type;
 
@@ -56,8 +56,8 @@ class PrimitiveType final
     PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
 
 public:
-    static OpenCL::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                          std::uint8_t bitCount, std::string name);
+    static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                       std::uint8_t bitCount, std::string name);
 
     static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 
@@ -150,7 +150,7 @@ class ValArrayType final
     bool m_restricted;
     std::shared_ptr<const Type> m_type;
 
-    ValArrayType(bool isRestricted, std::shared_ptr<OpenCL::Semantics::Type>&& type);
+    ValArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type);
 
 public:
     static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
@@ -175,7 +175,7 @@ class FunctionType final
                  bool lastIsVararg, bool hasPrototype);
 
 public:
-    static Type create(OpenCL::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
+    static Type create(cld::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
                        bool lastIsVararg, bool hasPrototype);
 
     [[nodiscard]] const Type& getReturnType() const;
@@ -433,15 +433,15 @@ public:
 
 using DeclarationTypedefEnums = std::variant<Semantics::Declaration, Semantics::Type, std::int32_t>;
 
-std::string declaratorToName(const OpenCL::Syntax::Declarator& declarator);
+std::string declaratorToName(const cld::Syntax::Declarator& declarator);
 
-std::vector<Lexer::Token>::const_iterator declaratorToLoc(const OpenCL::Syntax::Declarator& declarator);
+std::vector<Lexer::Token>::const_iterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
-OpenCL::Expected<std::size_t, std::string> sizeOf(const Type& type, const LanguageOptions& options);
+cld::Expected<std::size_t, std::string> sizeOf(const Type& type, const LanguageOptions& options);
 
-OpenCL::Expected<std::size_t, std::string> alignmentOf(const Type& type, const LanguageOptions& options);
+cld::Expected<std::size_t, std::string> alignmentOf(const Type& type, const LanguageOptions& options);
 
 bool isVoid(const Type& type);
-} // namespace OpenCL::Semantics
+} // namespace cld::Semantics
 
 #endif // OPENCLPARSER_SEMANTICS_HPP
