@@ -6,6 +6,8 @@
 
 #include <array>
 
+#include "TestConfig.hpp"
+
 static std::pair<cld::Semantics::TranslationUnit, std::string>
     generateSemantics(const std::string& source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
@@ -401,9 +403,9 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
             std::pair{"signed long i;",
                       cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native())},
             std::pair{"long int i;",
-                      cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native())},
+                      cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native())},
             std::pair{"signed long int i;",
-                      cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native())},
+                      cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native())},
             std::pair{"unsigned long i;",
                       cld::Semantics::PrimitiveType::createUnsignedLong(false, false, cld::LanguageOptions::native())},
             std::pair{"unsigned long int i;",
@@ -417,7 +419,7 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
             std::pair{"long unsigned int long i;", cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false)},
             std::pair{"float i;", cld::Semantics::PrimitiveType::createFloat(false, false)},
             std::pair{"double i;", cld::Semantics::PrimitiveType::createDouble(false, false)},
-            std::pair{"double i;",
+            std::pair{"long double i;",
                       cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native())}};
         for (auto& [source, type] : results)
         {
@@ -443,8 +445,7 @@ TEST_CASE("Invalid primitive declarations semantics", "[semantics]")
     std::array sources = {
         "void i;",         "const void i;",       "static extern int i;", "auto register int i;", "short int long i;",
         "char char i;",    "long short i;",       "long long long i;",    "float int i;",         "signed unsigned i;",
-        "restrict int i;", "long double long i;", "long long double i;",
-    };
+        "restrict int i;", "long double long i;", "long long double i;",  "float float i;"};
     for (auto& source : sources)
     {
         DYNAMIC_SECTION(source)

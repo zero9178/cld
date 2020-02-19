@@ -11,9 +11,9 @@ namespace cld::Parser
 bool isAssignment(Lexer::TokenType type);
 
 template <class T = void>
-bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator begin,
-            std::vector<Lexer::Token>::const_iterator& curr, std::vector<Lexer::Token>::const_iterator end,
-            Context& context, std::vector<Message> additional = {}, T* value = nullptr)
+bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator& curr,
+            std::vector<Lexer::Token>::const_iterator end, Context& context, std::vector<Message> additional = {},
+            T* value = nullptr)
 {
     (void)value;
     if (curr == end || curr->getTokenType() != expected)
@@ -27,7 +27,7 @@ bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator
         {
             context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                             Lexer::tokenName(expected), '\'' + curr->getRepresentation() + '\''),
-                                        begin, Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
+                                        curr, Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
         }
         context.log(std::move(additional));
         return false;
@@ -45,23 +45,6 @@ bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator
         return true;
     }
 }
-
-// void skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet);
-
-template <typename G>
-struct Y
-{
-    template <typename... X>
-    decltype(auto) operator()(X&&... x) const&
-    {
-        return g(*this, std::forward<X>(x)...);
-    }
-
-    G g;
-};
-
-template <typename G>
-Y(G)->Y<G>;
 
 constexpr Context::TokenBitSet firstPostfixSet = Context::fromTokenTypes(
     cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::Dot, cld::Lexer::TokenType::OpenSquareBracket,

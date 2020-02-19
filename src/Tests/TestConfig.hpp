@@ -1,10 +1,13 @@
 #ifndef OPENCLPARSER_TESTCONFIG_HPP
 #define OPENCLPARSER_TESTCONFIG_HPP
 
+#pragma warning(push, 0)
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
+#pragma warning(pop)
 
 #include <CompilerCore/C/LanguageOptions.hpp>
+#include <CompilerCore/C/Semantics.hpp>
 
 namespace cld::Tests
 {
@@ -33,6 +36,15 @@ struct StringMaker<llvm::APInt>
     static std::string convert(const llvm::APSInt& value)
     {
         return "APInt{" + std::to_string(value.getBitWidth()) + " bits, " + value.toString(10) + "}";
+    }
+};
+
+template <>
+struct StringMaker<cld::Semantics::Type>
+{
+    static std::string convert(const cld::Semantics::Type& type)
+    {
+        return "'" + type.getFullFormattedTypeName() + "'";
     }
 };
 } // namespace Catch

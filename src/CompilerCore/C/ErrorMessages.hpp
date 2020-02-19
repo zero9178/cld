@@ -117,6 +117,8 @@ constexpr auto INVALID_CAST_FROM_TYPE_N_TO_TYPE_N = Format("Invalid cast from ty
 
 constexpr auto INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER =
     "Integer must evaluate to null to be compared with pointer";
+
+constexpr auto UNKNOWN_TYPE_N = Format("Unknown type '{}'");
 } // namespace Semantics
 
 namespace Lexer

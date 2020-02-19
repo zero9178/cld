@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <optional>
 #include <utility>
 
@@ -520,8 +521,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         }
     }
 
-    bool hasSigned = primitivesCount[Signed];
-    bool hasUnsigned = primitivesCount[Unsigned];
+    bool hasSigned = primitivesCount[Signed] == 1;
+    bool hasUnsigned = primitivesCount[Unsigned] == 1;
     if (hasSigned && hasUnsigned)
     {
         auto result =
@@ -563,7 +564,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool {
                 if (i++ == Void)
                 {
-                    return false;
+                    return count > 1;
                 }
                 return count;
             }))
@@ -581,7 +582,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool {
                 if (i++ == Float)
                 {
-                    return false;
+                    return count > 1;
                 }
                 return count;
             }))
@@ -600,7 +601,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 if (i == Double || i == Long)
                 {
                     i++;
-                    return false;
+                    return count > 1;
                 }
                 i++;
                 return count;
@@ -625,7 +626,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 if (i == Char || i == Signed || i == Unsigned)
                 {
                     i++;
-                    return false;
+                    return count > 1;
                 }
                 i++;
                 return count;
@@ -657,7 +658,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 if (i == Short || i == Signed || i == Unsigned || i == Int)
                 {
                     i++;
-                    return false;
+                    return count > 1;
                 }
                 i++;
                 return count;
@@ -687,7 +688,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 if (i == Signed || i == Unsigned || i == Int || i == Long)
                 {
                     i++;
-                    return false;
+                    return count > 1;
                 }
                 i++;
                 return count;
@@ -716,8 +717,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         if (std::any_of(primitivesCount.begin(), primitivesCount.end(), [&i](std::size_t count) -> bool {
                 if (i == Signed || i == Unsigned || i == Int || i == Long)
                 {
-                    i++;
-                    return false;
+                    return count > (i++ == Long ? 2 : 1);
                 }
                 i++;
                 return count;
@@ -746,7 +746,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 if (i == Signed || i == Unsigned || i == Int)
                 {
                     i++;
-                    return false;
+                    return count > 1;
                 }
                 i++;
                 return count;
@@ -777,6 +777,31 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
     {
         return cld::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile,
                                                                 m_sourceObject.getLanguageOptions());
+    }
+    else
+    {
+        auto text =
+            std::accumulate(primitives.begin(), primitives.end(), std::string(),
+                            [](const std::string& result, Syntax::TypeSpecifier::PrimitiveTypeSpecifier specifier) {
+                                switch (specifier)
+                                {
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Void: return result + " void";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Char: return result + " char";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Short: return result + " short";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Int: return result + " int";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Long: return result + " long";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Float: return result + " float";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Double:
+                                        return result + " double";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Signed:
+                                        return result + " signed";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Unsigned:
+                                        return result + " unsigned";
+                                    case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool: return result + " _Bool";
+                                }
+                            });
+        logError({Message::error(cld::ErrorMessages::Semantics::UNKNOWN_TYPE_N.args(text), declStart, declEnd,
+                                 cld::Modifier(declStart, declEnd))});
     }
     OPENCL_UNREACHABLE;
 }

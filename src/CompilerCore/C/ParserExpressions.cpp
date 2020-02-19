@@ -477,7 +477,7 @@ cld::Syntax::ConditionalExpression
         begin++;
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
-        if (!expect(Lexer::TokenType::Colon, start, begin, end, context,
+        if (!expect(Lexer::TokenType::Colon, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), questionMarkpos,
                                    Modifier(questionMarkpos, questionMarkpos + 1, Modifier::PointAtBeginning))}))
         {
@@ -634,7 +634,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
                 }
                 else if (firstIsInAssignmentExpression(*begin, context))
                 {
-                    expect(cld::Lexer::TokenType::Comma, start, begin, end, context);
+                    expect(cld::Lexer::TokenType::Comma, begin, end, context);
                 }
                 else
                 {
@@ -651,7 +651,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
                 }
             }
 
-            if (!expect(cld::Lexer::TokenType::CloseParentheses, start, begin, end, context,
+            if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context,
                         {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                             cld::Modifier(openPpos, openPpos + 1, cld::Modifier::PointAtBeginning))}))
             {
@@ -673,7 +673,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
                                               context.withRecoveryTokens(cld::Parser::Context::fromTokenTypes(
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
 
-            if (!expect(cld::Lexer::TokenType::CloseSquareBracket, start, begin, end, context,
+            if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context,
                         {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'['"), start, openPpos,
                                             cld::Modifier(openPpos, openPpos + 1, cld::Modifier::PointAtBeginning))}))
             {
@@ -708,7 +708,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
         {
             begin++;
             std::string name;
-            if (!expect(cld::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
+            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context, {}, &name))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -722,7 +722,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
         {
             begin++;
             std::string name;
-            if (!expect(cld::Lexer::TokenType::Identifier, start, begin, end, context, {}, &name))
+            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context, {}, &name))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -754,7 +754,7 @@ std::optional<cld::Syntax::CastExpression>
     begin++;
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                 {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start,
                                Modifier(start, start + 1, Modifier::PointAtBeginning))}))
     {
@@ -772,7 +772,7 @@ std::optional<cld::Syntax::CastExpression>
     }
 
     std::optional<std::vector<Lexer::Token>::const_iterator> openBrace;
-    if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
+    if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
     {
         context.skipUntil(begin, end, firstInitializerListSet);
     }
@@ -790,7 +790,7 @@ std::optional<cld::Syntax::CastExpression>
     }
     if (openBrace)
     {
-        if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
                                    Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
         {
@@ -799,7 +799,7 @@ std::optional<cld::Syntax::CastExpression>
     }
     else
     {
-        if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
         {
             context.skipUntil(begin, end, firstPostfixSet);
         }
@@ -833,7 +833,7 @@ std::optional<cld::Syntax::UnaryExpression>
             begin++;
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-            if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
@@ -866,7 +866,7 @@ std::optional<cld::Syntax::UnaryExpression>
             begin++;
         }
         std::string identifier;
-        if (!expect(Lexer::TokenType::Identifier, start, begin, end, context, {}, &identifier))
+        if (!expect(Lexer::TokenType::Identifier, begin, end, context, {}, &identifier))
         {
             context.skipUntil(begin, end,
                               openP ? Context::fromTokenTypes(Lexer::TokenType::CloseParentheses) :
@@ -874,7 +874,7 @@ std::optional<cld::Syntax::UnaryExpression>
         }
         if (openP)
         {
-            if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, *openP,
                                        Modifier(*openP, *openP + 1, Modifier::PointAtBeginning))}))
             {
@@ -1086,7 +1086,7 @@ std::optional<cld::Syntax::PostFixExpression>
             auto openPpos = begin++;
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-            if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
                                        Modifier(openPpos, openPpos + 1, Modifier::PointAtBeginning))}))
             {
@@ -1123,7 +1123,7 @@ std::optional<cld::Syntax::PostFixExpression>
     {
         begin++;
         auto type = parseTypeName(begin, end, context);
-        if (!expect(Lexer::TokenType::CloseParentheses, start, begin, end, context,
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                     {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start,
                                    Modifier(start, start + 1, Modifier::PointAtBeginning))}))
         {
@@ -1131,7 +1131,7 @@ std::optional<cld::Syntax::PostFixExpression>
         }
 
         std::optional<std::vector<Lexer::Token>::const_iterator> openBrace;
-        if (!expect(Lexer::TokenType::OpenBrace, start, begin, end, context))
+        if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
         {
             context.skipUntil(begin, end, firstInitializerListSet);
         }
@@ -1147,7 +1147,7 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         if (openBrace)
         {
-            if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context,
+            if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
                         {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
                                        Modifier(*openBrace, *openBrace + 1, Modifier::PointAtBeginning))}))
             {
@@ -1156,7 +1156,7 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         else
         {
-            if (!expect(Lexer::TokenType::CloseBrace, start, begin, end, context))
+            if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
             {
                 context.skipUntil(begin, end, firstPostfixSet);
             }

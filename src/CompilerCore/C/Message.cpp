@@ -89,7 +89,8 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
                             [end](const Lexer::Token& token) { return token.getOffset() > end; });
     }();
 
-    auto text = cld::Lexer::reconstructTrimmed(sourceObject, begin, end);
+    auto text =
+        std::string(begin->getColumn(sourceObject), ' ') + cld::Lexer::reconstructTrimmed(sourceObject, begin, end);
     if (begin != iterator
         && sourceObject.getLineNumber(begin->getOffset())
                != sourceObject.getLineNumber(begin->getOffset() + begin->getLength()))
