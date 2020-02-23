@@ -21,6 +21,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     llvm::raw_string_ostream ss(storage);
     cld::SourceObject tokens;
     REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(expression, options));
+    REQUIRE(!tokens.data().empty());
     cld::Parser::Context context(tokens, &ss);
     auto ref = tokens.data().cbegin();
     auto parsing = cld::Parser::parseConditionalExpression(ref, tokens.data().cend(), context);
@@ -106,7 +107,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == 32);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x86linux));
-        CHECK(value.getType().getName() == "int");
+        CHECK(value.getType().getName() == "long");
     }
     SECTION("unsigned long")
     {
@@ -119,7 +120,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == 32);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLong(false, false, cld::Tests::x86linux));
-        CHECK(value.getType().getName() == "unsigned int");
+        CHECK(value.getType().getName() == "unsigned long");
     }
     SECTION("long long")
     {
@@ -182,8 +183,9 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToDouble() == 0.0);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-            CHECK(value.getType().getName() == "double");
+            CHECK(value.getType()
+                  == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::Tests::x64windowsMsvc));
+            CHECK(value.getType().getName() == "long double");
         }
         SECTION("Gnu")
         {

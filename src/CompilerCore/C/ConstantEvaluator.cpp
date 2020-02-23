@@ -72,87 +72,30 @@ cld::Semantics::ConstRetType
                      Modifier(node.begin(), node.end()));
             return {};
         },
-        [this](const llvm::APFloat& floating) -> Semantics::ConstRetType {
-            switch (llvm::APFloat::SemanticsToEnum(floating.getSemantics()))
+        [this, &node](const llvm::APFloat& floating) -> Semantics::ConstRetType {
+            switch (node.getType())
             {
-                case llvm::APFloat::S_IEEEsingle: return {floating, PrimitiveType::createFloat(false, false)};
-                case llvm::APFloat::S_IEEEdouble: return {floating, PrimitiveType::createDouble(false, false)};
-                case llvm::APFloat::S_IEEEquad:
-                case llvm::APFloat::S_x87DoubleExtended:
+                case Lexer::Token::Type::Float: return {floating, PrimitiveType::createFloat(false, false)};
+                case Lexer::Token::Type::Double: return {floating, PrimitiveType::createDouble(false, false)};
+                case Lexer::Token::Type::LongDouble:
                     return {floating, PrimitiveType::createLongDouble(false, false, m_languageOptions)};
                 default: OPENCL_UNREACHABLE;
             }
         },
-        [this](const llvm::APSInt& integer) -> Semantics::ConstRetType {
-            switch (integer.getBitWidth())
+        [this, &node](const llvm::APSInt& integer) -> Semantics::ConstRetType {
+            switch (node.getType())
             {
-                case 8:
-                    return {integer, integer.isUnsigned() ? PrimitiveType::createUnsignedChar(false, false) :
-                                                            PrimitiveType::createSignedChar(false, false)};
-                case 16:
-                    if (m_languageOptions.getSizeOfInt() == 2)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
-                                             PrimitiveType::createInt(false, false, m_languageOptions)};
-                    }
-                    else if (m_languageOptions.getSizeOfShort() == 2)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
-                                             PrimitiveType::createShort(false, false, m_languageOptions)};
-                    }
-                    else
-                    {
-                        OPENCL_UNREACHABLE;
-                    }
-                case 32:
-                    if (m_languageOptions.getSizeOfInt() == 4)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
-                                             PrimitiveType::createInt(false, false, m_languageOptions)};
-                    }
-                    else if (m_languageOptions.getSizeOfLong() == 4)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedLong(false, false, m_languageOptions) :
-                                             PrimitiveType::createLong(false, false, m_languageOptions)};
-                    }
-                    else if (m_languageOptions.getSizeOfShort() == 4)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
-                                             PrimitiveType::createShort(false, false, m_languageOptions)};
-                    }
-                    else
-                    {
-                        OPENCL_UNREACHABLE;
-                    }
-                case 64:
-                    if (m_languageOptions.getSizeOfInt() == 8)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedInt(false, false, m_languageOptions) :
-                                             PrimitiveType::createInt(false, false, m_languageOptions)};
-                    }
-                    else if (m_languageOptions.getSizeOfLong() == 8)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedLong(false, false, m_languageOptions) :
-                                             PrimitiveType::createLong(false, false, m_languageOptions)};
-                    }
-                    else if (m_languageOptions.getSizeOfShort() == 8)
-                    {
-                        return {integer, integer.isUnsigned() ?
-                                             PrimitiveType::createUnsignedShort(false, false, m_languageOptions) :
-                                             PrimitiveType::createShort(false, false, m_languageOptions)};
-                    }
-                    else
-                    {
-                        return {integer, integer.isUnsigned() ? PrimitiveType::createUnsignedLongLong(false, false) :
-                                                                PrimitiveType::createLongLong(false, false)};
-                    }
+                case Lexer::Token::Type::Int:
+                    return {integer, PrimitiveType::createInt(false, false, m_languageOptions)};
+                case Lexer::Token::Type::UnsignedInt:
+                    return {integer, PrimitiveType::createUnsignedInt(false, false, m_languageOptions)};
+                case Lexer::Token::Type::Long:
+                    return {integer, PrimitiveType::createLong(false, false, m_languageOptions)};
+                case Lexer::Token::Type::UnsignedLong:
+                    return {integer, PrimitiveType::createUnsignedLong(false, false, m_languageOptions)};
+                case Lexer::Token::Type::LongLong: return {integer, PrimitiveType::createLongLong(false, false)};
+                case Lexer::Token::Type::UnsignedLongLong:
+                    return {integer, PrimitiveType::createUnsignedLongLong(false, false)};
                 default: OPENCL_UNREACHABLE;
             }
         });

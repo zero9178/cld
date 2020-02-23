@@ -958,8 +958,9 @@ std::optional<cld::Syntax::PostFixExpression>
                     }
                 },
                 begin->getValue());
+            auto type = begin->getType();
             begin++;
-            newPrimary = PrimaryExpression(PrimaryExpressionConstant(start, begin, std::move(value)));
+            newPrimary = PrimaryExpression(PrimaryExpressionConstant(start, begin, std::move(value), type));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
         {
@@ -1057,7 +1058,7 @@ std::optional<cld::Syntax::PostFixExpression>
                                             OPENCL_UNREACHABLE;
                                         }
                                         std::transform(utf32.data(), targetStart, std::back_inserter(str.characters),
-                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
+                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch; });
                                         return lhs;
                                     }
                                     default: OPENCL_UNREACHABLE;
@@ -1078,7 +1079,8 @@ std::optional<cld::Syntax::PostFixExpression>
                 match(
                     literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return str; },
                     [](const Lexer::NonCharString& str) -> PrimaryExpressionConstant::variant { return str; },
-                    [](const auto&) -> PrimaryExpressionConstant::variant { OPENCL_UNREACHABLE; })));
+                    [](const auto&) -> PrimaryExpressionConstant::variant { OPENCL_UNREACHABLE; }),
+                Lexer::Token::Type::None));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {

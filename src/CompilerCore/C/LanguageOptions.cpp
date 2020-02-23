@@ -92,7 +92,6 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
             }
         }(),
         sizeof(void*));
-#pragma clang diagnostic pop
 }
 
 std::uint8_t cld::LanguageOptions::getSizeOfLongDoubleBits() const

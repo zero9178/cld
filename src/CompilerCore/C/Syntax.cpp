@@ -30,14 +30,20 @@ const std::string& cld::Syntax::PrimaryExpressionIdentifier::getIdentifier() con
 
 cld::Syntax::PrimaryExpressionConstant::PrimaryExpressionConstant(std::vector<Lexer::Token>::const_iterator begin,
                                                                   std::vector<Lexer::Token>::const_iterator end,
-                                                                  cld::Syntax::PrimaryExpressionConstant::variant value)
-    : Node(begin, end), m_value(std::move(value))
+                                                                  cld::Syntax::PrimaryExpressionConstant::variant value,
+                                                                  Lexer::Token::Type type)
+    : Node(begin, end), m_value(std::move(value)), m_type(type)
 {
 }
 
 const cld::Syntax::PrimaryExpressionConstant::variant& cld::Syntax::PrimaryExpressionConstant::getValue() const
 {
     return m_value;
+}
+
+cld::Lexer::Token::Type cld::Syntax::PrimaryExpressionConstant::getType() const
+{
+    return m_type;
 }
 
 cld::Syntax::PrimaryExpressionParenthese::PrimaryExpressionParenthese(std::vector<Lexer::Token>::const_iterator begin,

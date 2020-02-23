@@ -799,6 +799,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                                         return result + " unsigned";
                                     case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool: return result + " _Bool";
                                 }
+                                OPENCL_UNREACHABLE;
                             });
         logError({Message::error(cld::ErrorMessages::Semantics::UNKNOWN_TYPE_N.args(text), declStart, declEnd,
                                  cld::Modifier(declStart, declEnd))});
@@ -1379,7 +1380,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
         [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers) -> void {
             std::vector<std::pair<Type, std::string>> arguments(
                 identifiers.getIdentifiers().size(),
-                {PrimitiveType::create(false, false, false, true, 32, std::string()), ""});
+                {PrimitiveType::createInt(false, false, m_sourceObject.getLanguageOptions()), ""});
             using Iterator = std::vector<Lexer::Token>::const_iterator;
             struct TypeBinding
             {

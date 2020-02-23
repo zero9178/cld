@@ -19,6 +19,7 @@
 #include <optional>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
@@ -847,7 +848,7 @@ class Context
         for (auto i = startLine; i <= endLine; i++)
         {
             // Text
-            *m_reporter << llvm::format_decimal(i, numSize) << " | ";
+            *m_reporter << llvm::format_decimal(i, static_cast<unsigned>(numSize)) << " | ";
 
             auto string = lines[i - startLine];
             const auto& arrowsForLine = columnsOfArrowsForLine[i - startLine];
@@ -882,7 +883,7 @@ class Context
             *m_reporter << '\n';
 
             // Underline + Arrows
-            m_reporter->indent(numSize) << " | ";
+            m_reporter->indent(static_cast<unsigned>(numSize)) << " | ";
             if (i != startLine && i != endLine)
             {
                 // The token spans multiple lines and we are neither at the first nor last line. Therefore
@@ -1023,20 +1024,22 @@ public:
         return m_inPreprocessor;
     }
 
-    void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {})
+    void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {},
+              Token::Type type = Token::Type::None)
     {
         auto view = m_source.substr(start, end - start);
-        m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value));
+        m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value), type);
     }
 
-    void push(TokenType tokenType, Token::ValueType value = {})
+    void push(TokenType tokenType, Token::ValueType value = {}, Token::Type type = Token::Type::None)
     {
-        push(tokenStartOffset, m_offset, tokenType, std::move(value));
+        push(tokenStartOffset, m_offset, tokenType, std::move(value), type);
     }
 
-    void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {})
+    void push(std::uint64_t diff, TokenType tokenType, Token::ValueType value = {},
+              Token::Type type = Token::Type::None)
     {
-        push(tokenStartOffset, m_offset - diff, tokenType, std::move(value));
+        push(tokenStartOffset, m_offset - diff, tokenType, std::move(value), type);
     }
 
     [[nodiscard]] std::uint64_t mapStream(std::uint64_t offset) const
@@ -1308,7 +1311,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
 }
 
 template <class T, class... Args>
-Token::ValueType castInteger(std::uint64_t integer)
+std::pair<Token::ValueType, Token::Type> castInteger(std::uint64_t integer,
+                                                     std::array<Token::Type, sizeof...(Args) + 1> types)
 {
     // Clang
 #pragma clang diagnostic push
@@ -1324,19 +1328,21 @@ Token::ValueType castInteger(std::uint64_t integer)
     {
         if (llvm::APInt::getSignedMaxValue(sizeof(T) * 8).uge(integer))
         {
-            return {llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)};
+            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
         }
     }
     else
     {
         if (llvm::APInt::getMaxValue(sizeof(T) * 8).uge(integer))
         {
-            return {llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)};
+            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
         }
     }
     if constexpr (sizeof...(Args) != 0)
     {
-        return castInteger<Args...>(integer);
+        std::array<Token::Type, sizeof...(Args)> second;
+        std::copy(types.begin(), types.end() - 1, second.begin());
+        return castInteger<Args...>(integer, second);
     }
     else
     {
@@ -1347,33 +1353,8 @@ Token::ValueType castInteger(std::uint64_t integer)
 #pragma warning(pop)
 }
 
-/**
- * @tparam Integers Integer types allowed to be cast to
- * @param begin First character in string
- * @param end First character not part of the string anymore
- * @return Integer value or Empty optional if integer value is too large
- */
-template <class... Integers>
-std::optional<Token::ValueType> parseInteger(const char* begin, const char* end)
-{
-    static_assert((std::is_integral_v<Integers> && ...));
-    static_assert(sizeof...(Integers) >= 1);
-    // *end is not NULL. strtoull requires a null terminated string as input
-    std::string input(begin, end);
-    llvm::APInt test;
-    llvm::StringRef(input).getAsInteger(0, test);
-    if (test.getBitWidth() > 64)
-    {
-        return {};
-    }
-    char* endPtr;
-    auto result = std::strtoull(input.data(), &endPtr, 0);
-    assert(*endPtr == '\0');
-    return castInteger<Integers...>(result);
-}
-
-std::optional<Token::ValueType> processNumber(const char* begin, const char* end, std::uint64_t beginLocation,
-                                              Context& context)
+std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char* begin, const char* end,
+                                                                      std::uint64_t beginLocation, Context& context)
 {
     assert(std::distance(begin, end) >= 1);
     bool isHex = std::distance(begin, end) >= 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X');
@@ -1441,16 +1422,46 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
         }
     }
 
-    auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
+    auto suffix = std::string(suffixBegin, std::distance(suffixBegin, end));
+    std::unordered_set<std::string_view> set;
     if (!isFloat)
     {
-        std::optional<cld::Lexer::Token::ValueType> result;
+        set = {"u", "U", "ul", "Ul", "uL", "UL", "uLL", "ULL", "ull", "Ull", "l", "L", "ll", "LL", ""};
+    }
+    else
+    {
+        set = {"f", "l", "F", "L", ""};
+    }
+    if (set.count(suffix) == 0)
+    {
+        std::vector<std::uint64_t> arrows(suffix.size());
+        std::iota(arrows.begin(), arrows.end(), context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
+        context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+                            context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
+                            context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
+        return {};
+    }
+
+    if (errorsOccurred)
+    {
+        return {};
+    }
+    if (!isFloat)
+    {
+        std::string number(begin, suffixBegin);
+        llvm::APInt test;
+        llvm::StringRef(number).getAsInteger(0, test);
+        if (test.getBitWidth() > 64)
+        {
+            context.reportError(cld::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
+                                context.tokenStartOffset, context.getOffset() - 1);
+            return {};
+        }
+        char* endPtr;
+        auto integer = std::strtoull(number.data(), &endPtr, 0);
+        assert(*endPtr == '\0');
         if (suffix.empty())
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             switch (context.getLanguageOptions().getSizeOfInt())
             {
                 case 2:
@@ -1458,144 +1469,120 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
                     {
                         if (context.getLanguageOptions().getSizeOfLong() == 4)
                         {
-                            result = parseInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t,
-                                                  std::int64_t, std::uint64_t>(begin, suffixBegin);
+                            return castInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
+                                               std::uint64_t>(integer,
+                                                              {Token::Type::Int, Token::Type::UnsignedInt,
+                                                               Token::Type::Long, Token::Type::UnsignedLong,
+                                                               Token::Type::LongLong, Token::Type::UnsignedLongLong});
                         }
-                        else
-                        {
-                            result = parseInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
-                                begin, suffixBegin);
-                        }
+                        return castInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
+                            integer,
+                            {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::Long, Token::Type::UnsignedLong});
                     }
-                    else
+                    if (context.getLanguageOptions().getSizeOfLong() == 4)
                     {
-                        if (context.getLanguageOptions().getSizeOfLong() == 4)
-                        {
-                            result = parseInteger<std::int16_t, std::int32_t, std::int64_t>(begin, suffixBegin);
-                        }
-                        else
-                        {
-                            result = parseInteger<std::int16_t, std::int64_t>(begin, suffixBegin);
-                        }
+                        return castInteger<std::int16_t, std::int32_t, std::int64_t>(
+                            integer, {Token::Type::Int, Token::Type::Long, Token::Type::LongLong});
                     }
-                    break;
+                    return castInteger<std::int16_t, std::int64_t>(integer, {Token::Type::Int, Token::Type::Long});
                 case 4:
                     if (isHexOrOctal)
                     {
-                        result =
-                            parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin, suffixBegin);
+                        if (context.getLanguageOptions().getSizeOfLong() == 4)
+                        {
+                            return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                                integer, {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::LongLong,
+                                          Token::Type::UnsignedLongLong});
+                        }
+                        return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                            integer,
+                            {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::Long, Token::Type::UnsignedLong});
                     }
-                    else
+                    if (context.getLanguageOptions().getSizeOfLong() == 4)
                     {
-                        result = parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
+                        return castInteger<std::int32_t, std::int64_t>(integer,
+                                                                       {Token::Type::Int, Token::Type::LongLong});
                     }
-                    break;
+                    return castInteger<std::int32_t, std::int64_t>(integer, {Token::Type::Int, Token::Type::Long});
                 case 8:
                     if (isHexOrOctal)
                     {
-                        result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                        return castInteger<std::int64_t, std::uint64_t>(integer,
+                                                                        {Token::Type::Int, Token::Type::UnsignedInt});
                     }
-                    else
-                    {
-                        result = parseInteger<std::int64_t>(begin, suffixBegin);
-                    }
-                    break;
+                    return castInteger<std::int64_t>(integer, {Token::Type::Int});
                 default: OPENCL_UNREACHABLE;
             }
         }
         else if (suffix == "u" || suffix == "U")
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             switch (context.getLanguageOptions().getSizeOfInt())
             {
                 case 2:
                     if (context.getLanguageOptions().getSizeOfLong() == 4)
                     {
-                        result = parseInteger<std::uint16_t, std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                        return castInteger<std::uint16_t, std::uint32_t, std::uint64_t>(
+                            integer,
+                            {Token::Type::UnsignedInt, Token::Type::UnsignedLong, Token::Type::UnsignedLongLong});
                     }
-                    else
+                    return castInteger<std::uint16_t, std::uint64_t>(
+                        integer, {Token::Type::UnsignedInt, Token::Type::UnsignedLong});
+                case 4:
+                    if (context.getLanguageOptions().getSizeOfLong() == 4)
                     {
-                        result = parseInteger<std::uint16_t, std::uint64_t>(begin, suffixBegin);
+                        return castInteger<std::uint32_t, std::uint64_t>(
+                            integer, {Token::Type::UnsignedInt, Token::Type::UnsignedLongLong});
                     }
-                    break;
-                case 4: result = parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin); break;
-                case 8: result = parseInteger<std::uint64_t>(begin, suffixBegin); break;
+                    return castInteger<std::uint32_t, std::uint64_t>(
+                        integer, {Token::Type::UnsignedInt, Token::Type::UnsignedLong});
+                case 8: return castInteger<std::uint64_t>(integer, {Token::Type::UnsignedInt});
                 default: OPENCL_UNREACHABLE;
             }
         }
         else if (suffix == "L" || suffix == "l")
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             if (isHexOrOctal)
             {
                 if (context.getLanguageOptions().getSizeOfLong() == 4)
                 {
-                    result = parseInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(begin, suffixBegin);
+                    return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                        integer, {Token::Type::Long, Token::Type::UnsignedLong, Token::Type::LongLong,
+                                  Token::Type::UnsignedLongLong});
                 }
-                else
-                {
-                    result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
-                }
+                return castInteger<std::int64_t, std::uint64_t>(integer,
+                                                                {Token::Type::Long, Token::Type::UnsignedLong});
             }
-            else
+            if (context.getLanguageOptions().getSizeOfLong() == 4)
             {
-                if (context.getLanguageOptions().getSizeOfLong() == 4)
-                {
-                    result = parseInteger<std::int32_t, std::int64_t>(begin, suffixBegin);
-                }
-                else
-                {
-                    result = parseInteger<std::int64_t>(begin, suffixBegin);
-                }
+                return castInteger<std::int32_t, std::int64_t>(integer, {Token::Type::Long, Token::Type::LongLong});
             }
+            return castInteger<std::int64_t>(integer, {Token::Type::Long});
         }
         else if (suffix.size() == 2
                  && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
                  && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             if (context.getLanguageOptions().getSizeOfLong() == 4)
             {
-                result = parseInteger<std::uint32_t, std::uint64_t>(begin, suffixBegin);
+                return castInteger<std::uint32_t, std::uint64_t>(
+                    integer, {Token::Type::UnsignedLong, Token::Type::UnsignedLongLong});
             }
-            else
-            {
-                result = parseInteger<std::uint64_t>(begin, suffixBegin);
-            }
+            return castInteger<std::uint64_t>(integer, {Token::Type::UnsignedLong});
         }
         else if (suffix == "ll" || suffix == "LL")
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             if (isHexOrOctal)
             {
-                result = parseInteger<std::int64_t, std::uint64_t>(begin, suffixBegin);
+                return castInteger<std::int64_t, std::uint64_t>(integer,
+                                                                {Token::Type::LongLong, Token::Type::UnsignedLongLong});
             }
-            else
-            {
-                result = parseInteger<std::int64_t>(begin, suffixBegin);
-            }
+            return castInteger<std::int64_t>(integer, {Token::Type::LongLong});
         }
         else if (suffix.size() == 3
                  && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
                  && (suffix.find("LL") != std::string_view::npos || suffix.find("ll") != std::string_view::npos))
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
-            result = parseInteger<std::uint64_t>(begin, suffixBegin);
+            return castInteger<std::uint64_t>(integer, {Token::Type::UnsignedLongLong});
         }
         else
         {
@@ -1607,54 +1594,30 @@ std::optional<Token::ValueType> processNumber(const char* begin, const char* end
                                 context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
             return {};
         }
-        if (result)
-        {
-            return result;
-        }
-        context.reportError(cld::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
-                            context.tokenStartOffset, context.getOffset() - 1);
-        return {};
     }
     else
     {
         auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
-        if (suffix.empty()
-            || (context.getLanguageOptions().getSizeOfLongDoubleBits() == 64 && (suffix == "l" || suffix == "L")))
+        if (suffix.empty())
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
-            return llvm::APFloat(llvm::APFloat::IEEEdouble(), input);
+            return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), Token::Type::Double}};
         }
         else if (suffix == "f" || suffix == "F")
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
-            return llvm::APFloat(llvm::APFloat::IEEEsingle(), input);
+            return {{llvm::APFloat(llvm::APFloat::IEEEsingle(), input), Token::Type::Float}};
         }
         else if (suffix == "l" || suffix == "L")
         {
-            if (errorsOccurred)
-            {
-                return {};
-            }
             switch (context.getLanguageOptions().getSizeOfLongDoubleBits())
             {
-                case 80: return llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input);
-                case 128: return llvm::APFloat(llvm::APFloat::IEEEquad(), input);
+                case 64: return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), Token::Type::LongDouble}};
+                case 80: return {{llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input), Token::Type::LongDouble}};
+                case 128: return {{llvm::APFloat(llvm::APFloat::IEEEquad(), input), Token::Type::LongDouble}};
                 default: OPENCL_UNREACHABLE;
             }
         }
     }
-    std::vector<std::uint64_t> arrows(suffix.size());
-    std::iota(arrows.begin(), arrows.end(), context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
-    context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-                        context.mapStream(beginLocation + std::distance(begin, suffixBegin)), context.tokenStartOffset,
-                        context.getOffset() - 1, std::move(arrows));
-    return {};
+    OPENCL_UNREACHABLE;
 }
 
 std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint)
@@ -2250,7 +2213,7 @@ std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
         processNumber(numberChars.data(), numberChars.data() + numberChars.size(), context.tokenStartOffset, context);
     if (result)
     {
-        context.push(1, TokenType::Literal, std::move(*result));
+        context.push(1, TokenType::Literal, std::move(result->first), result->second);
     }
     return {Start{}, false};
 }
@@ -2843,12 +2806,14 @@ cld::Lexer::TokenType cld::Lexer::Token::getTokenType() const noexcept
     return m_tokenType;
 }
 
-cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value)
+cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value,
+                         Type type)
     : m_value(std::move(value)),
       m_representation(std::move(representation)),
       m_offset(offset),
       m_sourceOffset(offset),
-      m_tokenType(tokenType)
+      m_tokenType(tokenType),
+      m_type(type)
 {
     assert(!m_representation.empty());
 }
@@ -2900,6 +2865,11 @@ std::uint64_t Token::getSourceColumn(const cld::SourceObject& sourceObject) cons
     return getOffset() - sourceObject.getLineStartOffset(line);
 }
 
+Token::Type Token::getType() const
+{
+    return m_type;
+}
+
 std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
                                     std::vector<Token>::const_iterator end)
 {
@@ -2911,7 +2881,6 @@ std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, std::vecto
     return std::string(lineNumber - 1, '\n')
            + std::string(begin->getOffset() - sourceObject.getLineStartOffset(lineNumber), ' ')
            + reconstructTrimmed(sourceObject, begin, end);
-    return "";
 }
 
 std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,

@@ -157,13 +157,34 @@ class Token
     TokenType m_tokenType;        ///< Type of the token
 
 public:
+    enum class Type
+    {
+        None,
+        Int,
+        UnsignedInt,
+        Long,
+        UnsignedLong,
+        LongLong,
+        UnsignedLongLong,
+        Float,
+        Double,
+        LongDouble
+    };
+
+private:
+    Type m_type;
+
+public:
     using ValueType = variant;
 
-    Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value = std::monostate{});
+    Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value = std::monostate{},
+          Type type = Type::None);
 
     [[nodiscard]] TokenType getTokenType() const noexcept;
 
     [[nodiscard]] const variant& getValue() const noexcept;
+
+    [[nodiscard]] Type getType() const;
 
     [[nodiscard]] bool macroInserted() const noexcept;
 

@@ -216,12 +216,15 @@ public:
 
 private:
     variant m_value;
+    Lexer::Token::Type m_type;
 
 public:
     PrimaryExpressionConstant(std::vector<Lexer::Token>::const_iterator begin,
-                              std::vector<Lexer::Token>::const_iterator end, variant value);
+                              std::vector<Lexer::Token>::const_iterator end, variant value, Lexer::Token::Type type);
 
     [[nodiscard]] const variant& getValue() const;
+
+    [[nodiscard]] Lexer::Token::Type getType() const;
 };
 
 /**

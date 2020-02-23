@@ -1,12 +1,12 @@
 #ifndef OPENCLPARSER_SEMANTICS_HPP
 #define OPENCLPARSER_SEMANTICS_HPP
 
+#include <CompilerCore/Common/Expected.hpp>
+
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "CompilerCore/Common/Expected.hpp"
 
 #include "Message.hpp"
 #include "Syntax.hpp"
@@ -53,11 +53,35 @@ class PrimitiveType final
     bool m_isSigned;
     std::uint8_t m_bitCount;
 
-    PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount);
+public:
+    enum class Kind
+    {
+        Char,
+        SignedChar,
+        UnsignedChar,
+        Bool,
+        Short,
+        UnsignedShort,
+        Int,
+        UnsignedInt,
+        Long,
+        UnsignedLong,
+        LongLong,
+        UnsignedLongLong,
+        Float,
+        Double,
+        LongDouble,
+        Void
+    };
+
+private:
+    Kind m_kind;
+
+    PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind);
 
 public:
-    static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                       std::uint8_t bitCount, std::string name);
+    static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
+                       std::string name, Kind kind);
 
     static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 

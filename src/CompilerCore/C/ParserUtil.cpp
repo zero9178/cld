@@ -1,7 +1,5 @@
 #include "ParserUtil.hpp"
 
-#include <algorithm>
-
 bool cld::Parser::isAssignment(Lexer::TokenType type)
 {
     return type == Lexer::TokenType::Assignment || type == Lexer::TokenType::PlusAssign
@@ -249,8 +247,3 @@ bool cld::Parser::firstIsInPrimaryExpression(const Lexer::Token& token, const cl
            || token.getTokenType() == Lexer::TokenType::Identifier || token.getTokenType() == Lexer::TokenType::Literal
            || token.getTokenType() == Lexer::TokenType::StringLiteral;
 }
-
-// void cld::Parser::skipUntil(Tokens::const_iterator& begin, Tokens::const_iterator end, InRecoverySet recoverySet)
-//{
-//    begin = std::find_if(begin, end, recoverySet);
-//}

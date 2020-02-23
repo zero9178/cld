@@ -367,8 +367,8 @@ TEST_CASE("Primitive Declaration semantics", "[semantics]")
         std::array results = {
             std::pair{"char i;",
                       cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native())},
-            std::pair{"signed char i;",
-                      cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native())},
+            std::pair{"signed char i;", cld::Semantics::PrimitiveType::createSignedChar(false, false)},
+            std::pair{"unsigned char i;", cld::Semantics::PrimitiveType::createUnsignedChar(false, false)},
             std::pair{"unsigned i;",
                       cld::Semantics::PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native())},
             std::pair{"short i;",

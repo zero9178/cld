@@ -146,7 +146,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
     }
     for (std::size_t i = 0; i < lines.size(); i++)
     {
-        os << llvm::format_decimal(beginLine + i, numSize) << " | ";
+        os << llvm::format_decimal(beginLine + i, static_cast<unsigned>(numSize)) << " | ";
         if (!underlined[i])
         {
             os << lines[i] << '\n';
@@ -166,7 +166,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         }
         os << '\n';
 
-        os.indent(numSize) << " | ";
+        os.indent(static_cast<unsigned>(numSize)) << " | ";
         const auto whitespace = stringOfSameWidth(lines[i].substr(0, underlined[i]->first - lineStart), ' ');
         auto string = stringOfSameWidth(
             lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first), '~');
@@ -200,7 +200,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
             }
             case Modifier::InsertAtEnd:
             {
-                llvm::WithColor(os.indent(whitespace.size() + string.size()), colour) << '^';
+                llvm::WithColor(os.indent(static_cast<unsigned>(whitespace.size() + string.size())), colour) << '^';
                 break;
             }
             default: OPENCL_UNREACHABLE;

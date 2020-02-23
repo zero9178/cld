@@ -213,8 +213,8 @@ const std::string& cld::Semantics::EnumType::getName() const
     return m_name;
 }
 
-cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount)
-    : m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_bitCount(bitCount)
+cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
+    : m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_bitCount(bitCount), m_kind(kind)
 {
 }
 
@@ -244,10 +244,11 @@ std::uint8_t cld::Semantics::PrimitiveType::getBitCount() const
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                           bool isSigned, std::uint8_t bitCount, std::string name)
+                                                           bool isSigned, std::uint8_t bitCount, std::string name,
+                                                           Kind kind)
 {
     return cld::Semantics::Type(isConst, isVolatile, std::move(name),
-                                PrimitiveType(isFloatingPoint, isSigned, bitCount));
+                                PrimitiveType(isFloatingPoint, isSigned, bitCount, kind));
 }
 
 bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
@@ -256,8 +257,8 @@ bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveTy
     {
         return true;
     }
-    return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount)
-           == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount);
+    return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount, m_kind)
+           == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount, rhs.m_kind);
 }
 
 bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveType& rhs) const
@@ -268,89 +269,90 @@ bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveTy
 cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, options.isCharSigned(), 8, "char");
+    return create(isConst, isVolatile, false, options.isCharSigned(), 8, "char", Kind::Char);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 8, "signed char");
+    return create(isConst, isVolatile, false, true, 8, "signed char", Kind::SignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 8, "unsigned char");
+    return create(isConst, isVolatile, false, false, 8, "unsigned char", Kind::UnsignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 1, "_Bool");
+    return create(isConst, isVolatile, false, false, 1, "_Bool", Kind::Bool);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
                                                                 const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfShort() * 8, "short");
+    return create(isConst, isVolatile, false, true, options.getSizeOfShort() * 8, "short", Kind::Short);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
                                                                         const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfShort() * 8, "unsigned short");
+    return create(isConst, isVolatile, false, false, options.getSizeOfShort() * 8, "unsigned short",
+                  Kind::UnsignedShort);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
                                                               const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfInt() * 8, "int");
+    return create(isConst, isVolatile, false, true, options.getSizeOfInt() * 8, "int", Kind::Int);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
                                                                       const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfInt() * 8, "unsigned int");
+    return create(isConst, isVolatile, false, false, options.getSizeOfInt() * 8, "unsigned int", Kind::UnsignedInt);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfLong() * 8, "long");
+    return create(isConst, isVolatile, false, true, options.getSizeOfLong() * 8, "long", Kind::Long);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
                                                                        const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfLong() * 8, "unsigned long");
+    return create(isConst, isVolatile, false, false, options.getSizeOfLong() * 8, "unsigned long", Kind::UnsignedLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 64, "long long");
+    return create(isConst, isVolatile, false, true, 64, "long long", Kind::LongLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 64, "unsigned long long");
+    return create(isConst, isVolatile, false, false, 64, "unsigned long long", Kind::UnsignedLongLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 32, "float");
+    return create(isConst, isVolatile, true, true, 32, "float", Kind::Float);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 64, "double");
+    return create(isConst, isVolatile, true, true, 64, "double", Kind::Double);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits(), "long double");
+    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits(), "long double", Kind::LongDouble);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 0, "void");
+    return create(isConst, isVolatile, false, true, 0, "void", Kind::Void);
 }
 
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)

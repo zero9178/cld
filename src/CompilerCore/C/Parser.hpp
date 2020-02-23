@@ -51,13 +51,10 @@ private:
     public:
         explicit TokenBitReseter(TokenBitSet original, Context& context);
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "hicpp-explicit-conversions"
         operator Context&()
         {
             return m_context;
         }
-#pragma clang diagnostic pop
 
         ~TokenBitReseter();
 
