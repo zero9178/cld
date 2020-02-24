@@ -1586,13 +1586,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         }
         else
         {
-            std::vector<std::uint64_t> arrows(suffix.size());
-            std::iota(arrows.begin(), arrows.end(),
-                      context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
-            context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-                                context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
-                                context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
-            return {};
+            OPENCL_UNREACHABLE;
         }
     }
     else
