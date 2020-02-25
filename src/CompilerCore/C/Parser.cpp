@@ -143,9 +143,8 @@ void cld::Parser::Context::parenthesesEntered(std::vector<cld::Lexer::Token>::co
     {
         return;
     }
-    log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
-        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 
@@ -160,9 +159,8 @@ void cld::Parser::Context::squareBracketEntered(std::vector<cld::Lexer::Token>::
     {
         return;
     }
-    log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
-        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 
@@ -177,9 +175,8 @@ void cld::Parser::Context::braceEntered(std::vector<cld::Lexer::Token>::const_it
     {
         return;
     }
-    log({Message::error(
-        ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", std::to_string(m_bracketMax)), bracket,
-        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+    log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
     throw FatalParserError();
 }
 

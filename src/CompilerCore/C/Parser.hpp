@@ -4,6 +4,7 @@
 #include <bitset2.hpp>
 #include <tl/function_ref.hpp>
 
+#include "Limits.hpp"
 #include "Message.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
@@ -67,7 +68,7 @@ private:
         TokenBitReseter& operator=(TokenBitReseter&&) noexcept = delete;
     };
 
-    std::uint64_t m_bracketMax = 256;
+    std::uint64_t m_bracketMax = Limits::Parser::MAX_BRACKET_DEPTH;
     std::uint64_t m_parenthesesDepth = 0;
     std::uint64_t m_squareBracketDepth = 0;
     std::uint64_t m_braceDepth = 0;

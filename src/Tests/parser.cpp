@@ -796,8 +796,7 @@ TEST_CASE("Parse Expressions", "[parser]")
                      Catch::Contains(EXPECTED_N_INSTEAD_OF_N.args(
                          cld::Format::List(", ", " or ", "literal", "identifier", "'('"), "';'"))
                          && ProducesNErrors(1) && ProducesNoNotes());
-        treeProduces(
-            "int i =",
+        treeProduces("int i =",
                      Catch::Contains(EXPECTED_N.args(cld::Format::List(", ", " or ", "literal", "identifier", "'('")))
                          && Catch::Contains(EXPECTED_N.args("';'")) && ProducesNErrors(2) && ProducesNoNotes());
     }
@@ -1180,6 +1179,28 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
 }
 
+#if defined(NDEBUG) || !defined(_WIN32)
+    #ifndef __has_feature
+        #define UNRESTRICTED_STACK
+    #else
+        #if !__has_feature(address_sanitizer)
+            #define UNRESTRICTED_STACK
+        #endif
+    #endif
+#endif
+
+#ifdef UNRESTRICTED_STACK
+TEST_CASE("Parser limits", "[parser]")
+{
+    SECTION("Parenthese expression")
+    {
+        auto source = "int main(void){" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
+        treeProduces(source, Catch::Contains(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+    }
+}
+#endif
+
 namespace
 {
 void parse(const std::string& source)
@@ -1257,14 +1278,8 @@ I=')");
     // Causes stack overflow when using address sanitizer due to address sanitizer possibly using 3x as much stack space
     // according to documentations
     // Also causes __chckstk to throw on windows when compiling in debug mode
-#if defined(NDEBUG) || !defined(_WIN32)
-    #if !defined(__has_feature)
+#ifdef UNRESTRICTED_STACK
     excludeFromAddressSanitizer();
-    #else
-        #if !__has_feature(address_sanitizer)
-    excludeFromAddressSanitizer();
-        #endif
-    #endif
 #endif
     parse("V=V==L+E");
 }
