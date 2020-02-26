@@ -1198,6 +1198,18 @@ TEST_CASE("Parser limits", "[parser]")
         treeProduces(source, Catch::Contains(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
                                  "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
     }
+    SECTION("Direct Declarator")
+    {
+        auto source = "int" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
+        treeProduces(source, Catch::Contains(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+    }
+    SECTION("Compound statement")
+    {
+        auto source = "int main(void)" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '{');
+        treeProduces(source, Catch::Contains(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+    }
 }
 #endif
 

@@ -2888,14 +2888,15 @@ std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
         {
             auto prev = curr - 1;
             auto currLineNumber = sourceObject.getLineNumber(curr->getOffset());
-            if (currLineNumber == sourceObject.getLineNumber(prev->getOffset()))
+            auto prevLineNumber = sourceObject.getLineNumber(prev->getOffset());
+            if (currLineNumber == prevLineNumber)
             {
-                result += std::string(curr->getOffset() - (prev->getOffset() + prev->getLength()), ' ');
+                result.resize(result.size() + curr->getOffset() - (prev->getOffset() + prev->getLength()), ' ');
             }
             else
             {
-                result += std::string(currLineNumber - sourceObject.getLineNumber(prev->getOffset()), '\n')
-                          + std::string(curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
+                result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
+                result.resize(result.size() + curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
             }
         }
         result += curr->getRepresentation();
