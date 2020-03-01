@@ -128,6 +128,10 @@ public:
     void braceEntered(std::vector<Lexer::Token>::const_iterator bracket);
 
     void braceLeft();
+
+    std::uint64_t getBracketMax() const;
+
+    void setBracketMax(uint64_t bracketMax);
 };
 
 std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,

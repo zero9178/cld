@@ -194,3 +194,13 @@ bool cld::Parser::Context::isInPreprocessor() const
 {
     return m_inPreprocessor;
 }
+
+std::uint64_t cld::Parser::Context::getBracketMax() const
+{
+    return m_bracketMax;
+}
+
+void cld::Parser::Context::setBracketMax(std::uint64_t bracketMax)
+{
+    m_bracketMax = bracketMax;
+}

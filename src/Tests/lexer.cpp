@@ -281,6 +281,13 @@ TEST_CASE("Lexing backslashes", "[lexer]")
     {
         cld::Lexer::tokenize("\\-");
         cld::Lexer::tokenize("&\\\x1d.");
+        auto result = cld::Lexer::tokenize("N\\\n;");
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::SemiColon);
+        CHECK(result.data()[0].getRepresentation() == "N");
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "N");
     }
 }
 
