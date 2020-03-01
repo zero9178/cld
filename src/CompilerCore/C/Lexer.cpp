@@ -1,8 +1,8 @@
 #include "Lexer.hpp"
 
 #pragma warning(push, 0)
+#include <llvm/ADT/IntervalMap.h>
 #include <llvm/ADT/ScopeExit.h>
-#include <llvm/ADT/SparseSet.h>
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
@@ -17,6 +17,7 @@
 #include <cassert>
 #include <numeric>
 #include <optional>
+#include <regex>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -602,7 +603,6 @@ struct CharacterLiteral;
 struct StringLiteral;
 struct Text;
 struct MaybeUC;
-struct BackSlash;
 struct UniversalCharacter;
 struct Number;
 struct Dot;
@@ -612,7 +612,7 @@ struct BlockComment;
 struct AfterInclude;
 struct L;
 
-using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, BackSlash, UniversalCharacter,
+using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, UniversalCharacter,
                                   LineComment, BlockComment, Number, Dot, Punctuation, AfterInclude, L>;
 
 class Context
@@ -1670,15 +1670,6 @@ struct MaybeUC final
     std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
 };
 
-struct BackSlash final
-{
-    std::unique_ptr<StateMachine> prevState{};
-    bool first = true;
-    bool error = false;
-
-    std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
-};
-
 struct UniversalCharacter final
 {
     bool big;
@@ -2056,61 +2047,6 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         }
         return {UniversalCharacter{c == 'U'}, true};
     }
-    else if (c == '\\')
-    {
-        // Another backslash. Therefore we do not know yet if this might still turn into a universal character!
-        return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
-    }
-    else if (prevState)
-    {
-        return {BackSlash{std::move(prevState)}, false};
-    }
-    else
-    {
-        return {BackSlash{}, false};
-    }
-}
-
-std::pair<StateMachine, bool> BackSlash::advance(std::uint32_t c, Context& context) noexcept
-{
-    if (c == '\n')
-    {
-        if (error)
-        {
-            // We get here only if all character between the initial \ and the newline have been whitespace
-            auto result = context.currentView().rfind('\\');
-            assert(result != std::string_view::npos);
-            result += context.tokenStartOffset;
-            std::vector<std::uint64_t> arrows(context.getOffset() - result);
-            std::iota(arrows.begin(), arrows.end(), result);
-            context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
-                                result, context.getOffset() - 1, std::move(arrows));
-        }
-        if (prevState)
-        {
-            return {std::move(*prevState), true};
-        }
-        else
-        {
-            return {Start{}, true};
-        }
-    }
-    else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
-             || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
-    {
-        if (prevState
-            && (std::holds_alternative<LineComment>(*prevState) || std::holds_alternative<BlockComment>(*prevState)))
-        {
-            return {std::move(*prevState), false};
-        }
-        error = true;
-        return {std::move(*this), true};
-    }
-    else if (prevState
-             && (std::holds_alternative<LineComment>(*prevState) || std::holds_alternative<BlockComment>(*prevState)))
-    {
-        return {std::move(*prevState), false};
-    }
     auto view = context.currentView();
     // We could have landed here because the next character (disregarding whitespace) was a \ itself. Therefore
     // remove it from the search
@@ -2186,10 +2122,6 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
 
 std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
 {
-    if (c == '\\')
-    {
-        return {BackSlash{std::make_unique<StateMachine>(std::move(*this))}, true};
-    }
     // Consuming all characters first before then doing a proper parse
     if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
         || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -2214,10 +2146,6 @@ std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
 
 std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
 {
-    if (c == '\\')
-    {
-        return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
-    }
     if (c == '.')
     {
         if (++dotCount == 3)
@@ -2243,10 +2171,6 @@ std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
 
 std::pair<StateMachine, bool> Punctuation::advance(char c, Context& context)
 {
-    if (c == '\\')
-    {
-        return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
-    }
     switch (first)
     {
         case static_cast<int>(TokenType::Minus):
@@ -2398,10 +2322,6 @@ StateMachine LineComment::advance(char c, Context&) noexcept
     {
         return Start{};
     }
-    else if (c == '\\')
-    {
-        return BackSlash{std::make_unique<StateMachine>(std::move(*this))};
-    }
     return *this;
 }
 
@@ -2410,10 +2330,6 @@ StateMachine BlockComment::advance(char c, Context&) noexcept
     if (lastChar && *lastChar == '*' && c == '/')
     {
         return Start{};
-    }
-    else if (c == '\\')
-    {
-        return BackSlash{std::make_unique<StateMachine>(std::move(*this))};
     }
     lastChar = c;
     return *this;
@@ -2451,7 +2367,6 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                                        llvm::raw_ostream* reporter)
 {
     source += '\n';
-    source.erase(std::remove(source.begin(), source.end(), '\r'), source.end());
 
     StateMachine stateMachine;
     std::uint64_t offset = 0;
@@ -2465,6 +2380,44 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
         }
     }
     offset = 0;
+
+    std::string charactersSpace;
+    using IntervalMap = llvm::IntervalMap<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
+    IntervalMap::Allocator allocator;
+    IntervalMap characterToSourceSpace(allocator);
+    charactersSpace.reserve(source.size());
+    {
+        static std::regex toBeTransformed("(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]");
+        auto begin = std::sregex_iterator(source.begin(), source.end(), toBeTransformed);
+        auto end = std::sregex_iterator();
+
+        for (auto iter = begin; iter != end; iter++)
+        {
+            auto match = *iter;
+            std::string prefix = match.prefix();
+            auto pos = match.position();
+            if (!prefix.empty())
+            {
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.size() - 1,
+                                              {pos - prefix.size(), pos});
+            }
+            charactersSpace += prefix;
+            auto str = match.str();
+            if (!match[1].matched)
+            {
+                // If the first and only group didn't match it's a trigraph
+                // While backslashes are removed and therefore not replaced we need to now replace the trigraph
+                static const std::unordered_map<std::string_view, char> mapping = {
+                    {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
+                    {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
+                auto result = mapping.find(str);
+                assert(result != mapping.end());
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(), {pos, pos + str.size()});
+                charactersSpace += result->second;
+            }
+        }
+    }
+
     Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
     const auto* end = source.data() + source.size();
     for (const auto* iter = source.data(); iter != end;)
