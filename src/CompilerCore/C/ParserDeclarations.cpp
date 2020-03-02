@@ -848,11 +848,11 @@ std::optional<cld::Syntax::SpecifierQualifier>
     {
         context.log({Message::error(
             ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args("typename", '\'' + begin->getRepresentation() + '\''),
-            start, begin, Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
+            begin, Modifier{begin, begin + 1, Modifier::PointAtBeginning})});
     }
     else
     {
-        context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), start,
+        context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), begin - 1,
                                     Modifier{begin - 1, begin, Modifier::PointAtBeginning})});
     }
     context.skipUntil(begin, end);

@@ -1103,15 +1103,14 @@ std::optional<cld::Syntax::PostFixExpression>
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
                                                 cld::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                            start, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
+                                            begin, Modifier(begin - 1, begin, Modifier::Action::InsertAtEnd))});
             }
             else
             {
-                context.log(
-                    {Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                        cld::Format::List(", ", " or ", "literal", "identifier", "'('"),
-                                        '\'' + begin->getRepresentation() + '\''),
-                                    start, begin, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
+                context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                                cld::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                                '\'' + begin->getRepresentation() + '\''),
+                                            begin, Modifier(begin, begin + 1, Modifier::Action::PointAtBeginning))});
             }
             context.skipUntil(begin, end);
         }

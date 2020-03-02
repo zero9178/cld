@@ -298,13 +298,21 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
         auto result = cld::Lexer::tokenize("?\?= ?\?( ?\?) ?\?' ?\?< ?\?! ?\?> ?\?-");
         REQUIRE(result.data().size() == 8);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
+        CHECK(result.data()[0].getRepresentation() == "?\?=");
         CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::OpenSquareBracket);
+        CHECK(result.data()[1].getRepresentation() == "?\?(");
         CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::CloseSquareBracket);
+        CHECK(result.data()[2].getRepresentation() == "?\?)");
         CHECK(result.data()[3].getTokenType() == cld::Lexer::TokenType::BitXor);
+        CHECK(result.data()[3].getRepresentation() == "?\?'");
         CHECK(result.data()[4].getTokenType() == cld::Lexer::TokenType::OpenBrace);
+        CHECK(result.data()[4].getRepresentation() == "?\?<");
         CHECK(result.data()[5].getTokenType() == cld::Lexer::TokenType::BitOr);
+        CHECK(result.data()[5].getRepresentation() == "?\?!");
         CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::CloseBrace);
+        CHECK(result.data()[6].getRepresentation() == "?\?>");
         CHECK(result.data()[7].getTokenType() == cld::Lexer::TokenType::BitWiseNegation);
+        CHECK(result.data()[7].getRepresentation() == "?\?-");
     }
     SECTION("Backslash")
     {
@@ -420,6 +428,17 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
             CHECK(std::get<std::string>(result.data()[0].getValue()) == "N");
         }
+    }
+    SECTION("Multi character token")
+    {
+        auto result = cld::Lexer::tokenize("%:?\?=");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::DoublePound);
+        CHECK(result.data()[0].getRepresentation() == "%:?\?=");
+        result = cld::Lexer::tokenize("#?\?=");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::DoublePound);
+        CHECK(result.data()[0].getRepresentation() == "#?\?=");
     }
 }
 

@@ -1244,6 +1244,14 @@ void excludeFromAddressSanitizer()
 
 TEST_CASE("Parser fuzzer discoveries", "[parser]")
 {
+    parse(
+        " un union u union{A^union\\\n"
+        "J  union u union{An uninion nu[ union V    ucontinuen union nu[ union V^union  un union nu[ union V^^uun union u union{An union u  ni uu[ union V^ V^^union un uou inn union{A^union u5n union u union{An uninion nu[ union V^^union  un union nu[ union V^^union uu[ uon u union{A");
+    parse(
+        "i=<o%=<o<d\u000Bi=<o%=<o<d\u000B-i=>o\u000B-i=<o<o=<o%=<o<d\u000B-i=>o\u000B-i=<o<o<d\u000B<o-i=<o\u000Bi=>o\u000B-i=<o<o=<o%=<o<-i=<i=<o<o<\\\n"
+        "<o-i=<o\u000B-i=<o<o<d\u000B<o<d-<d\u000B<->");
+    parse("struct{\n"
+          "{f   +H{U");
     parse("Y'\x0a\x0a");
     parse("(auto:");
     parse("\x8e.8..");

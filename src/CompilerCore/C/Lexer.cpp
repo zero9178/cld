@@ -760,8 +760,6 @@ class Context
                               std::vector<std::int64_t>& deltas, std::vector<std::string>& lines,
                               std::uint64_t& underlineStart, std::uint64_t& underlineEnd) const
     {
-        std::sort(arrows.begin(), arrows.end());
-        arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
 
         std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(endLine - startLine + 1);
         lines.reserve(columnsOfArrowsForLine.size());
@@ -829,15 +827,30 @@ class Context
             return;
         }
 
-        location = map(location);
-        underlineStart = map(underlineStart);
-        underlineEnd = mapToRange(underlineEnd - 1).back() + 1;
+        std::sort(arrows.begin(), arrows.end());
+        arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
+        location = map(location).first;
+        underlineStart = map(underlineStart).first;
+        underlineEnd = map(underlineEnd - 1).second;
         {
             std::vector<std::uint64_t> result;
-            for (auto& iter : arrows)
+            for (auto iter = arrows.cbegin(); iter != arrows.cend(); iter++)
             {
-                auto vector = mapToRange(iter);
-                result.insert(result.end(), vector.begin(), vector.end());
+                auto [lower, upper] = map(*iter);
+                if (iter != arrows.cbegin() && *iter - 1 == *(iter - 1) && !result.empty()
+                    && result.back() + 1 != lower)
+                {
+                    // A whole range is supposed to be under an arrow but because some characters in-between don't exist
+                    // in character space (like a backslash newline pair) we add them here so it's prettier!
+                    auto skipped = m_sourceSpace.substr(result.back() + 1, lower - result.back() - 1);
+                    if (skipped == "\\\n" || skipped == "?\?/\n")
+                    {
+                        result.resize(result.size() + skipped.size());
+                        std::iota(result.begin() + result.size() - skipped.size(), result.end(), result.back() + 1);
+                    }
+                }
+                result.resize(result.size() + upper - lower);
+                std::iota(result.begin() + result.size() - (upper - lower), result.end(), lower);
             }
             arrows = std::move(result);
         }
@@ -961,34 +974,16 @@ class Context
     friend cld::SourceObject cld::Lexer::tokenize(std::string source, cld::LanguageOptions languageOptions,
                                                   bool inPreprocessor, llvm::raw_ostream* reporter);
 
-    std::uint64_t map(std::uint64_t offset) const
+    std::pair<std::uint64_t, std::uint64_t> map(std::uint64_t offset) const
     {
         auto actualIter = m_characterToSourceSpace.find(offset);
         assert(actualIter != m_characterToSourceSpace.end());
         auto denominator = actualIter.stop() - actualIter.start() + 1;
         assert(denominator != 0);
-        auto actual =
-            (offset - actualIter.start()) * (actualIter.value().second - actualIter.value().first) / denominator
-            + actualIter.value().first;
-        return actual;
-    }
-
-    std::vector<std::uint64_t> mapToRange(std::uint64_t offset) const
-    {
-        auto actualIter = m_characterToSourceSpace.find(offset);
-        assert(actualIter != m_characterToSourceSpace.end());
-        auto denominator = actualIter.stop() - actualIter.start() + 1;
-        assert(denominator != 0);
-        if (denominator == 1)
-        {
-            std::vector<std::uint64_t> result(actualIter.value().second - actualIter.value().first);
-            std::iota(result.begin(), result.end(), actualIter.value().first);
-            return result;
-        }
-        auto actual =
-            (offset - actualIter.start()) * (actualIter.value().second - actualIter.value().first) / denominator
-            + actualIter.value().first;
-        return {actual};
+        auto nominatorRange = actualIter.value().second - actualIter.value().first;
+        auto lowBound = (offset - actualIter.start()) * nominatorRange / denominator + actualIter.value().first;
+        auto highBound = (offset + 1 - actualIter.start()) * nominatorRange / denominator + actualIter.value().first;
+        return {lowBound, highBound};
     }
 
 public:
@@ -1077,8 +1072,8 @@ public:
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {},
               Token::Type type = Token::Type::None)
     {
-        start = map(start);
-        end = map(end - 1) + 1;
+        start = map(start).first;
+        end = map(end - 1).second;
 
         auto view = m_sourceSpace.substr(start, end - start);
         m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value), type);
@@ -2867,7 +2862,7 @@ std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
         {
             auto prev = curr - 1;
             auto currLineNumber = sourceObject.getLineNumber(curr->getOffset());
-            auto prevLineNumber = sourceObject.getLineNumber(prev->getOffset());
+            auto prevLineNumber = sourceObject.getLineNumber(prev->getOffset() + prev->getLength());
             if (currLineNumber == prevLineNumber)
             {
                 result.resize(result.size() + curr->getOffset() - (prev->getOffset() + prev->getLength()), ' ');

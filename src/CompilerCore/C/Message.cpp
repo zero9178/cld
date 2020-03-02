@@ -99,7 +99,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         text = text.substr(text.find('\n') + 1);
     }
 
-    if ((!m_rangeEnd || *m_rangeEnd != end)
+    if ((!m_rangeEnd || *m_rangeEnd != end - 1) && iterator != end - 1
         && sourceObject.getLineNumber((end - 1)->getOffset())
                != sourceObject.getLineNumber((end - 1)->getOffset() + (end - 1)->getLength()))
     {
@@ -158,7 +158,10 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
             os << lines[i].substr(0, underlined[i]->first - lineStart);
             llvm::WithColor(os, colour).get()
                 << lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first);
-            os << lines[i].substr(underlined[i]->second - lineStart);
+            if (underlined[i]->second - lineStart < lines[i].size())
+            {
+                os << lines[i].substr(underlined[i]->second - lineStart);
+            }
         }
         else
         {
