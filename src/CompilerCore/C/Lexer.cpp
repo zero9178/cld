@@ -27,6 +27,8 @@
 
 using namespace cld::Lexer;
 
+using IntervalMap = llvm::IntervalMap<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
+
 namespace
 {
 bool isKeyword(const std::string& characters)
@@ -621,9 +623,11 @@ class Context
     bool m_inPreprocessor;
     llvm::raw_ostream* m_reporter;
     std::vector<Token> m_result;
-    std::string_view m_source;
+    std::string_view m_sourceSpace;
+    std::string_view m_characterSpace;
     std::uint64_t& m_offset;
     std::vector<std::uint64_t> m_lineStarts;
+    const IntervalMap& m_characterToSourceSpace;
     struct ThingsToCache
     {
         std::vector<std::int64_t> mappingAdded;
@@ -651,7 +655,7 @@ class Context
     std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept
     {
         assert(line - 1 < m_lineStarts.size());
-        return line == m_lineStarts.size() ? m_source.size() : m_lineStarts[line];
+        return line == m_lineStarts.size() ? m_sourceSpace.size() : m_lineStarts[line];
     }
 
     std::string toSafeUTF8(std::string_view inputLine, std::uint64_t lineStart, std::vector<std::int64_t>& deltas,
@@ -768,7 +772,7 @@ class Context
         {
             const auto start = getLineStartOffset(i);
             const auto end = getLineEndOffset(i);
-            const auto stringView = m_source.substr(start, end - start - 1);
+            const auto stringView = m_sourceSpace.substr(start, end - start - 1);
 
             lines.push_back(toSafeUTF8(stringView, start, deltas, arrows, mapping));
         }
@@ -823,6 +827,19 @@ class Context
         if (!m_reporter)
         {
             return;
+        }
+
+        location = map(location);
+        underlineStart = map(underlineStart);
+        underlineEnd = mapToRange(underlineEnd - 1).back() + 1;
+        {
+            std::vector<std::uint64_t> result;
+            for (auto& iter : arrows)
+            {
+                auto vector = mapToRange(iter);
+                result.insert(result.end(), vector.begin(), vector.end());
+            }
+            arrows = std::move(result);
         }
 
         const auto startLine = getLineNumber(underlineStart);
@@ -944,17 +961,50 @@ class Context
     friend cld::SourceObject cld::Lexer::tokenize(std::string source, cld::LanguageOptions languageOptions,
                                                   bool inPreprocessor, llvm::raw_ostream* reporter);
 
+    std::uint64_t map(std::uint64_t offset) const
+    {
+        auto actualIter = m_characterToSourceSpace.find(offset);
+        assert(actualIter != m_characterToSourceSpace.end());
+        auto denominator = actualIter.stop() - actualIter.start() + 1;
+        assert(denominator != 0);
+        auto actual =
+            (offset - actualIter.start()) * (actualIter.value().second - actualIter.value().first) / denominator
+            + actualIter.value().first;
+        return actual;
+    }
+
+    std::vector<std::uint64_t> mapToRange(std::uint64_t offset) const
+    {
+        auto actualIter = m_characterToSourceSpace.find(offset);
+        assert(actualIter != m_characterToSourceSpace.end());
+        auto denominator = actualIter.stop() - actualIter.start() + 1;
+        assert(denominator != 0);
+        if (denominator == 1)
+        {
+            std::vector<std::uint64_t> result(actualIter.value().second - actualIter.value().first);
+            std::iota(result.begin(), result.end(), actualIter.value().first);
+            return result;
+        }
+        auto actual =
+            (offset - actualIter.start()) * (actualIter.value().second - actualIter.value().first) / denominator
+            + actualIter.value().first;
+        return {actual};
+    }
+
 public:
     std::uint64_t tokenStartOffset;
 
-    Context(const std::string& source, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
+    Context(const std::string& sourceSpace, const IntervalMap& characterToSourceSpace,
+            const std::string& characterSpace, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
             cld::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
         : m_languageOptions(languageOptions),
           m_inPreprocessor(inPreprocessor),
           m_reporter(reporter),
-          m_source(source),
+          m_sourceSpace(sourceSpace),
+          m_characterSpace(characterSpace),
           m_offset(offset),
-          m_lineStarts(std::move(lineStarts))
+          m_lineStarts(std::move(lineStarts)),
+          m_characterToSourceSpace(characterToSourceSpace)
     {
     }
 
@@ -1027,7 +1077,10 @@ public:
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {},
               Token::Type type = Token::Type::None)
     {
-        auto view = m_source.substr(start, end - start);
+        start = map(start);
+        end = map(end - 1) + 1;
+
+        auto view = m_sourceSpace.substr(start, end - start);
         m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value), type);
     }
 
@@ -1042,23 +1095,9 @@ public:
         push(tokenStartOffset, m_offset - diff, tokenType, std::move(value), type);
     }
 
-    [[nodiscard]] std::uint64_t mapStream(std::uint64_t offset) const
-    {
-        assert(offset >= tokenStartOffset);
-        auto view = m_source.substr(tokenStartOffset, m_offset - tokenStartOffset);
-        offset -= tokenStartOffset;
-        std::size_t pos = 0;
-        while ((pos = view.find("\\\n", pos)) != std::string::npos && pos <= offset)
-        {
-            offset += 2;
-            pos += 2;
-        }
-        return offset + tokenStartOffset;
-    }
-
     [[nodiscard]] std::string_view view(std::uint64_t startOffset, std::uint64_t endOffset) const
     {
-        return m_source.substr(startOffset, endOffset - startOffset);
+        return m_characterSpace.substr(startOffset, endOffset - startOffset);
     }
 
     [[nodiscard]] std::string_view currentView() const
@@ -1156,7 +1195,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
     bool errorOccured = false;
     for (const auto* iter = characters.data(); iter != end;)
     {
-        auto offset = context.mapStream(context.tokenStartOffset + (wide ? 2 : 1)) + (iter - characters.data());
+        auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
         if (*iter == '\n')
         {
             context.reportError(cld::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
@@ -1394,8 +1433,8 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         if (prev == suffixBegin)
         {
             context.reportError(cld::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
-                                context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
-                                context.tokenStartOffset, context.getOffset() - 1);
+                                beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
+                                context.getOffset() - 1);
             errorsOccurred = true;
         }
     }
@@ -1415,9 +1454,8 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         {
             errorsOccurred = true;
             context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
-                                context.mapStream(beginLocation + std::distance(begin, result)),
-                                context.tokenStartOffset, context.getOffset() - 1,
-                                {context.mapStream(beginLocation + std::distance(begin, result))});
+                                beginLocation + std::distance(begin, result), context.tokenStartOffset,
+                                context.getOffset() - 1, {beginLocation + std::distance(begin, result)});
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
         }
     }
@@ -1435,10 +1473,10 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
     if (set.count(suffix) == 0)
     {
         std::vector<std::uint64_t> arrows(suffix.size());
-        std::iota(arrows.begin(), arrows.end(), context.mapStream(beginLocation + std::distance(begin, suffixBegin)));
+        std::iota(arrows.begin(), arrows.end(), beginLocation + std::distance(begin, suffixBegin));
         context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-                            context.mapStream(beginLocation + std::distance(begin, suffixBegin)),
-                            context.tokenStartOffset, context.getOffset() - 1, std::move(arrows));
+                            beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
+                            context.getOffset() - 1, std::move(arrows));
         return {};
     }
 
@@ -1666,6 +1704,7 @@ struct Text final
 struct MaybeUC final
 {
     std::unique_ptr<StateMachine> prevState{};
+    bool error = false;
 
     std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context) noexcept;
 };
@@ -2023,52 +2062,43 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
             }
             else
             {
-                // *prevState is now either a UniversalCharacter (that is invalid), a Dot that might need to push
-                // one or more TokenTypes::Dot or a Punctuation that 100% needs to push a token or possibly even
-                // error
-
-                auto view = context.currentView();
-                std::size_t result = std::string_view::npos;
-                do
-                {
-                    result = view.rfind('\\', result - 1);
-                    assert(result != std::string_view::npos);
-                } while (result + 1 >= view.size() || view[result + 1] == '\n');
-                result += context.tokenStartOffset;
-                context.withOffset(result + 1, [&context, this] {
-                    std::visit([&context](auto& state) { state.advance(' ', context); }, *prevState);
-                });
-
-                // We are 100% starting a new Token with the State UniversalCharacter here so we need to set the
-                // tokenStartOffset manually as we will not be returning back to Start{}. We just find the
-                // \ that caused us to go into MaybeUC in the first place
-                context.tokenStartOffset = result;
+                OPENCL_UNREACHABLE;
             }
         }
         return {UniversalCharacter{c == 'U'}, true};
     }
-    auto view = context.currentView();
-    // We could have landed here because the next character (disregarding whitespace) was a \ itself. Therefore
-    // remove it from the search
-    view.remove_suffix(1);
-    auto result = view.rfind('\\');
-    assert(result != std::string_view::npos);
-    result += context.tokenStartOffset;
-    context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1, {result});
+    else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
+             || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+    {
+        error = true;
+        return {std::move(*this), true};
+    }
+    else if (c == '\n')
+    {
+        auto result = context.currentView().rfind('\\');
+        assert(result != std::string_view::npos);
+        result += context.tokenStartOffset;
+        std::vector<std::uint64_t> arrows(context.getOffset() - result);
+        std::iota(arrows.begin(), arrows.end(), result);
+        context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
+                            result, context.getOffset() - 1, std::move(arrows));
+        return {Start{}, true};
+    }
+
+    auto location = context.currentView().rfind('\\');
+    assert(location != std::string_view::npos);
+    location += context.tokenStartOffset;
+    context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), location, location, location + 1,
+                        {location});
     return {Start{}, false};
 }
 
 std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Context& context)
 {
-    if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') && c != '\\')
+    if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
     {
-        auto view = context.currentView();
-        std::size_t result = std::string_view::npos;
-        do
-        {
-            result = view.rfind('\\', result - 1);
-            assert(result != std::string_view::npos);
-        } while (result + 1 >= view.size() || view[result + 1] == '\n');
+        std::size_t result = context.currentView().rfind('\\');
+        assert(result != std::string_view::npos);
         result += context.tokenStartOffset;
         context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
                             {result});
@@ -2077,23 +2107,15 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
             result, result, context.getOffset() - codePointToUtf8ByteCount(c));
         return {Start{}, false};
     }
-    else if (c == '\\')
-    {
-        return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
-    }
 
     characters.push_back(static_cast<char>(c));
     if (characters.size() != (big ? 8 : 4))
     {
         return {std::move(*this), true};
     }
-    auto view = context.currentView();
-    std::size_t ucStart = std::string_view::npos;
-    do
-    {
-        ucStart = view.rfind('\\', ucStart - 1);
-        assert(ucStart != std::string_view::npos);
-    } while (ucStart + 1 >= view.size() || view[ucStart + 1] == '\n');
+
+    std::size_t ucStart = context.currentView().rfind('\\');
+    assert(ucStart != std::string_view::npos);
     ucStart += context.tokenStartOffset;
     auto result =
         universalCharacterToValue({characters.data(), characters.size()}, ucStart, context.getOffset(), context);
@@ -2163,8 +2185,7 @@ std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
     context.push(context.tokenStartOffset, context.tokenStartOffset + 1, TokenType::Dot);
     if (dotCount == 2)
     {
-        auto start = context.mapStream(context.tokenStartOffset + 1);
-        context.push(start, start + 1, TokenType::Dot);
+        context.push(context.tokenStartOffset + 1, context.tokenStartOffset + 2, TokenType::Dot);
     }
     return {Start{}, false};
 }
@@ -2382,7 +2403,6 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     offset = 0;
 
     std::string charactersSpace;
-    using IntervalMap = llvm::IntervalMap<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
     IntervalMap::Allocator allocator;
     IntervalMap characterToSourceSpace(allocator);
     charactersSpace.reserve(source.size());
@@ -2391,9 +2411,10 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
         auto begin = std::sregex_iterator(source.begin(), source.end(), toBeTransformed);
         auto end = std::sregex_iterator();
 
+        std::uint64_t left = 0;
         for (auto iter = begin; iter != end; iter++)
         {
-            auto match = *iter;
+            const auto& match = *iter;
             std::string prefix = match.prefix();
             auto pos = match.position();
             if (!prefix.empty())
@@ -2415,12 +2436,17 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                 characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(), {pos, pos + str.size()});
                 charactersSpace += result->second;
             }
+            left = pos + str.size();
         }
+        characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + source.size() - left - 1,
+                                      {left, source.size()});
+        charactersSpace += source.substr(left);
     }
 
-    Context context(source, offset, starts, languageOptions, isInPreprocessor, reporter);
-    const auto* end = source.data() + source.size();
-    for (const auto* iter = source.data(); iter != end;)
+    Context context(source, characterToSourceSpace, charactersSpace, offset, starts, languageOptions, isInPreprocessor,
+                    reporter);
+    const auto* end = charactersSpace.data() + charactersSpace.size();
+    for (const auto* iter = charactersSpace.data(); iter != end;)
     {
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;

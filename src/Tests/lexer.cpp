@@ -306,6 +306,121 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
         CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::CloseBrace);
         CHECK(result.data()[7].getTokenType() == cld::Lexer::TokenType::BitWiseNegation);
     }
+    SECTION("Backslash")
+    {
+        SECTION("Newline after backslash")
+        {
+            SECTION("Normal identifier")
+            {
+                auto result = cld::Lexer::tokenize("te?\?/\nst");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+                REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+                CHECK(std::get<std::string>(result.data()[0].getValue()) == "test");
+                CHECK(result.data()[0].getRepresentation() == "te?\?/\nst");
+            }
+            SECTION("Universal character")
+            {
+                auto result = cld::Lexer::tokenize("_?\?/?\?/\nu00B5");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+                REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+                CHECK(std::get<std::string>(result.data()[0].getValue()) == "_µ");
+                CHECK(result.data()[0].getRepresentation() == "_?\?/?\?/\nu00B5");
+                WHEN("incomplete and multiline")
+                {
+                    LEXER_OUTPUTS_WITH("_?\?/?\?/\nute",
+                                       Catch::Contains(STRAY_N_IN_PROGRAM.args("\\"))
+                                           && Catch::Contains(UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args(4)));
+                }
+                std::string buffer;
+                llvm::raw_string_ostream ss(buffer);
+                result = cld::Lexer::tokenize("\x01?\?/u?\?/\n00B5", cld::LanguageOptions::native(), false, &ss);
+                ss.flush();
+                CHECK_THAT(buffer, Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000001")));
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+                REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+                CHECK(std::get<std::string>(result.data()[0].getValue()) == "µ");
+                CHECK(result.data()[0].getRepresentation() == "?\?/u?\?/\n00B5");
+            }
+            SECTION("Keywords")
+            {
+                auto result = cld::Lexer::tokenize("f?\?/\nor");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::ForKeyword);
+                CHECK(result.data()[0].getRepresentation() == "f?\?/\nor");
+            }
+            SECTION("Number")
+            {
+                auto result = cld::Lexer::tokenize("5?\?/\ne+3");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+                REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                CHECK(fp.convertToDouble() == 5e+3);
+                CHECK(result.data()[0].getRepresentation() == "5?\?/\ne+3");
+                SECTION("Floating point")
+                {
+                    result = cld::Lexer::tokenize(".?\?/\n5e+3");
+                    REQUIRE(result.data().size() == 1);
+                    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+                    REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+                    fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+                    CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                    CHECK(fp.convertToDouble() == .5e+3);
+                    CHECK(result.data()[0].getRepresentation() == ".?\?/\n5e+3");
+                }
+                SECTION("Errors")
+                {
+                    LEXER_OUTPUTS_WITH("5.?\?/\n5f5", Catch::Contains(INVALID_LITERAL_SUFFIX.args("f5")));
+                }
+            }
+            SECTION("Dots")
+            {
+                auto result = cld::Lexer::tokenize(".?\?/\n.");
+                REQUIRE(result.data().size() == 2);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
+                CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Dot);
+                CHECK(result.data()[0].getOffset() == 0);
+                CHECK(result.data()[1].getOffset() == 5);
+                CHECK(result.data()[0].getRepresentation() == ".");
+                CHECK(result.data()[1].getRepresentation() == ".");
+            }
+            SECTION("Character literals")
+            {
+                auto result = cld::Lexer::tokenize("L?\?/\n'5'");
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+                CHECK(result.data()[0].getOffset() == 0);
+                CHECK(result.data()[0].getRepresentation() == "L?\?/\n'5'");
+                LEXER_OUTPUTS_WITH("L?\?/\n'?\?/90'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
+            }
+        }
+        SECTION("Whitespace after backslash")
+        {
+            LEXER_OUTPUTS_WITH("i?\?/    \nf", Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
+            LEXER_OUTPUTS_WITH("i?\?/  5  \nf", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
+            WHEN("Chained")
+            {
+                LEXER_OUTPUTS_WITH("i?\?/ \n?\?/ \n?\?/ \n?\?/ \nf",
+                                   Catch::Contains(NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE));
+            }
+        }
+        SECTION("Fuzzer discoveries")
+        {
+            cld::Lexer::tokenize("?\?/-");
+            cld::Lexer::tokenize("&?\?/\x1d.");
+            auto result = cld::Lexer::tokenize("N?\?/\n;");
+            REQUIRE(result.data().size() == 2);
+            CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+            CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::SemiColon);
+            CHECK(result.data()[0].getRepresentation() == "N");
+            REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+            CHECK(std::get<std::string>(result.data()[0].getValue()) == "N");
+        }
+    }
 }
 
 TEST_CASE("Lexing character literals", "[lexer]")
