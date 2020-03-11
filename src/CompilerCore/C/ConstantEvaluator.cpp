@@ -263,7 +263,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 return {};
             }
 
-            return value.castTo(type, m_languageOptions);
+            ConstRetType::Issues issues = ConstRetType::Issues::NoIssues;
+            auto ret = value.castTo(type, m_languageOptions, &issues);
+
+            return ret;
         });
 }
 
@@ -948,7 +951,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstantEvaluator::ConstantEvaluator(
     const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
-    std::function<void(std::string, std::optional<Modifier>)> loggerCallback, Mode mode)
+    std::function<void(std::string, std::optional<Modifier>, Message::Severity)> loggerCallback, Mode mode)
     : m_languageOptions(languageOptions),
       m_typeCallback(std::move(typeCallback)),
       m_declarationCallback(std::move(declarationCallback)),
@@ -961,7 +964,23 @@ void cld::Semantics::ConstantEvaluator::logError(std::string message, std::optio
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifier));
+        m_loggerCallback(std::move(message), std::move(modifier), Message::Severity::Error);
+    }
+}
+
+void cld::Semantics::ConstantEvaluator::logWarning(std::string message, std::optional<Modifier> modifier)
+{
+    if (m_loggerCallback)
+    {
+        m_loggerCallback(std::move(message), std::move(modifier), Message::Severity::Warning);
+    }
+}
+
+void cld::Semantics::ConstantEvaluator::logNote(std::string message, std::optional<Modifier> modifier)
+{
+    if (m_loggerCallback)
+    {
+        m_loggerCallback(std::move(message), std::move(modifier), Message::Severity::Note);
     }
 }
 
@@ -1113,10 +1132,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                     return {address, nonLvalue};
                 });
         },
-        [&nonLvalue, &options, this](llvm::APFloat floating) -> ConstRetType {
+        [&nonLvalue, &options, this, issues](llvm::APFloat floating) -> ConstRetType {
             return match(
                 nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
-                [&nonLvalue, &floating, this, &options](const PrimitiveType& primitiveType) mutable -> ConstRetType {
+                [&nonLvalue, &floating, this, &options,
+                 issues](const PrimitiveType& primitiveType) mutable -> ConstRetType {
                     bool response;
                     llvm::APFloat::opStatus op;
                     if (primitiveType.isFloatingPoint())
@@ -1141,7 +1161,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                 break;
                             default: OPENCL_UNREACHABLE;
                         }
-                        // TODO: Warnings dependant on op
+                        if (issues && op != llvm::APFloat::opOK)
+                        {
+                            *issues = Issues::NotRepresentable;
+                        }
                         return {floating, nonLvalue};
                     }
                     if (primitiveType.getBitCount() == 1)
@@ -1157,14 +1180,20 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
 
                     llvm::APSInt result(primitiveType.getBitCount(), !primitiveType.isSigned());
                     op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
-                    // TODO: Warnings dependant on op
+                    if (issues && op == llvm::APFloat::opInvalidOp)
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
                     return {result, nonLvalue};
                 },
-                [&options, &nonLvalue, &floating](const EnumType&) -> ConstRetType {
+                [&options, &nonLvalue, &floating, issues](const EnumType&) -> ConstRetType {
                     bool response;
                     llvm::APSInt result(options.getSizeOfInt() * 8, false);
                     auto op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
-                    // TODO: Warnings dependant on op
+                    if (issues && op == llvm::APFloat::opInvalidOp)
+                    {
+                        *issues = Issues::NotRepresentable;
+                    }
                     return {result, nonLvalue};
                 });
         },

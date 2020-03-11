@@ -36,9 +36,25 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                 typeName.getAbstractDeclarator());
         },
         {},
-        [&ss, &tokens](std::string message, std::optional<cld::Modifier> modifier) {
-            cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(), std::move(modifier))
-                .print(ss, tokens);
+        [&ss, &tokens](std::string message, std::optional<cld::Modifier> modifier, cld::Message::Severity severity) {
+            switch (severity)
+            {
+                case cld::Message::Error:
+                    cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                        std::move(modifier))
+                        .print(ss, tokens);
+                    break;
+                case cld::Message::Note:
+                    cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                       std::move(modifier))
+                        .print(ss, tokens);
+                    break;
+                case cld::Message::Warning:
+                    cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                          std::move(modifier))
+                        .print(ss, tokens);
+                    break;
+            }
         },
         mode);
     auto ret = evaluator.visit(parsing);
@@ -46,18 +62,35 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     if (!string.empty())
     {
         cld::Semantics::ConstantEvaluator(
-            cld::LanguageOptions::native(),
+            options,
             [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
                 return analysis.declaratorsToType(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
             {},
-            [&tokens](std::string message, std::optional<cld::Modifier> modifier) {
-                cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                    std::move(modifier))
-                        .print(llvm::errs(), tokens)
-                    << '\n';
+            [&tokens](std::string message, std::optional<cld::Modifier> modifier, cld::Message::Severity severity) {
+                switch (severity)
+                {
+                    case cld::Message::Error:
+                        cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                            std::move(modifier))
+                                .print(llvm::errs(), tokens)
+                            << '\n';
+                        break;
+                    case cld::Message::Note:
+                        cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                           std::move(modifier))
+                                .print(llvm::errs(), tokens)
+                            << '\n';
+                        break;
+                    case cld::Message::Warning:
+                        cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                                              std::move(modifier))
+                                .print(llvm::errs(), tokens)
+                            << '\n';
+                        break;
+                }
             },
             mode)
             .visit(parsing);
@@ -516,7 +549,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                     float r[5];
                     char c[24];
                 };
-                union TestU {
+                union TestU
+                {
                     int f;
                     float r[5];
                     char c[24];
@@ -654,6 +688,28 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
             CHECK_THAT(error, Catch::Contains(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'int*'", "'float'")));
+        }
+        SECTION("To Infinity")
+        {
+            auto [value, error] = evaluateConstantExpression(
+                "(float)" + std::to_string(std::numeric_limits<double>::max()), cld::LanguageOptions::native(),
+                cld::Semantics::ConstantEvaluator::Arithmetic);
+            REQUIRE(!value.isUndefined());
+            REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
+            auto result = std::get<llvm::APFloat>(value.getValue());
+            CHECK(result.convertToFloat() == std::numeric_limits<float>::infinity());
+            CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
+            CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
+            CHECK(value.getType().getName() == "float");
+        }
+        SECTION("Warnings")
+        {
+            SECTION("To Integer")
+            {
+                auto [value, error] = evaluateConstantExpression(
+                    "(long long)" + std::to_string(std::numeric_limits<float>::max()) + "f",
+                    cld::LanguageOptions::native(), cld::Semantics::ConstantEvaluator::Arithmetic);
+            }
         }
     }
     SECTION("Pointers")

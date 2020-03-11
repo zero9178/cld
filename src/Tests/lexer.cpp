@@ -716,6 +716,15 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
             REQUIRE(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEsingle);
             CHECK(fp.convertToFloat() == 534534.f);
+            result = cld::Lexer::tokenize(std::to_string(std::numeric_limits<float>::max()) + "f");
+            REQUIRE_FALSE(result.data().empty());
+            CHECK(result.data().size() == 1);
+            CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Float);
+            REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            REQUIRE(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEsingle);
+            CHECK(fp.convertToFloat() == std::numeric_limits<float>::max());
         }
         SECTION("Long double")
         {

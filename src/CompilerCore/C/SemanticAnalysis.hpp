@@ -42,7 +42,7 @@ class SemanticAnalysis final
 
     [[nodiscard]] const Semantics::Type* getTypedef(const std::string& name) const;
 
-    void logError(std::vector<Message> messages);
+    void log(std::vector<Message> messages);
 
     cld::Semantics::Type
         primitivesToType(std::vector<cld::Lexer::Token>::const_iterator declStart,
