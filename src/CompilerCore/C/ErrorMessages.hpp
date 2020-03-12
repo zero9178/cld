@@ -191,6 +191,14 @@ constexpr auto WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION = "Whitespace r
 } // namespace PP
 } // namespace ErrorMessages
 
+namespace Warnings
+{
+namespace Semantics
+{
+constexpr auto VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N = Format("Value of {} is too large for integer type {}");
+}
+} // namespace Warnings
+
 namespace Notes
 {
 constexpr auto TYPEDEF_OVERSHADOWED_BY_DECLARATION = Format("{} is a typedef but overshadowed by declaration here:");

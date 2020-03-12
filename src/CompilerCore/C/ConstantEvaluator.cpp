@@ -1,5 +1,9 @@
 #include "ConstantEvaluator.hpp"
 
+#pragma warning(push, 0)
+#include <llvm/ADT/StringExtras.h>
+#pragma warning(pop)
+
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
@@ -265,7 +269,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 
             ConstRetType::Issues issues = ConstRetType::Issues::NoIssues;
             auto ret = value.castTo(type, m_languageOptions, &issues);
-
+            if (issues != ConstRetType::Issues::NoIssues)
+            {
+                logWarning(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                    value.toString(), type.getFullFormattedTypeName()));
+            }
             return ret;
         });
 }
@@ -1161,10 +1169,6 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                 break;
                             default: OPENCL_UNREACHABLE;
                         }
-                        if (issues && op != llvm::APFloat::opOK)
-                        {
-                            *issues = Issues::NotRepresentable;
-                        }
                         return {floating, nonLvalue};
                     }
                     if (primitiveType.getBitCount() == 1)
@@ -1232,7 +1236,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                     if (issues
                         && (primitiveType.isSigned() ? llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
                                                        llvm::APInt::getMaxValue(primitiveType.getBitCount()))
-                               .ugt(integer))
+                               .ult(integer))
                     {
                         *issues = Issues::NotRepresentable;
                     }
@@ -1684,6 +1688,23 @@ std::uint64_t cld::Semantics::ConstRetType::toUInt() const
         },
         [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
         [](std::monostate) -> std::uint64_t { OPENCL_UNREACHABLE; });
+}
+
+std::string cld::Semantics::ConstRetType::toString() const
+{
+    return match(
+        m_value, [](VoidStar pointer) -> std::string { return "0x" + llvm::utohexstr(pointer.address); },
+        [](const llvm::APFloat& floating) -> std::string {
+            llvm::SmallString<20> result;
+            floating.toString(result);
+            return result.str();
+        },
+        [](const llvm::APSInt& integer) -> std::string {
+            llvm::SmallString<20> result;
+            integer.toString(result);
+            return result.str();
+        },
+        [](std::monostate) -> std::string { OPENCL_UNREACHABLE; });
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::Semantics::ConstRetType& rhs,

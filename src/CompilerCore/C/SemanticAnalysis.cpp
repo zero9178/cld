@@ -1189,8 +1189,19 @@ cld::Semantics::ConstantEvaluator
             }
             return nullptr;
         },
-        [this, exprBegin, exprEnd](std::string message, std::optional<Modifier> modifier, Message::Severity) {
-            log({/*TODO*/ Message::error(std::move(message), exprBegin, exprEnd, std::move(modifier))});
+        [this, exprBegin, exprEnd](std::string message, std::optional<Modifier> modifier, Message::Severity severity) {
+            switch (severity)
+            {
+                case Message::Error:
+                    log({Message::error(std::move(message), exprBegin, exprEnd, std::move(modifier))});
+                    break;
+                case Message::Note:
+                    log({Message::note(std::move(message), exprBegin, exprEnd, std::move(modifier))});
+                    break;
+                case Message::Warning:
+                    log({Message::warning(std::move(message), exprBegin, exprEnd, std::move(modifier))});
+                    break;
+            }
         });
 }
 

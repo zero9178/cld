@@ -118,6 +118,8 @@ public:
     std::int64_t toInt() const;
 
     std::uint64_t toUInt() const;
+
+    std::string toString() const;
 };
 
 class ConstantEvaluator final

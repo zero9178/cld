@@ -10,6 +10,7 @@
 
 using namespace cld::ErrorMessages;
 using namespace cld::ErrorMessages::Semantics;
+using namespace cld::Warnings::Semantics;
 
 namespace
 {
@@ -237,7 +238,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
     SECTION("String literal")
     {
         auto [value, error] = evaluateConstantExpression("\"test\"");
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals")));
         CHECK(value.isUndefined());
     }
     SECTION("Parentheses")
@@ -257,7 +258,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
     SECTION("Identifier")
     {
         auto [value, error] = evaluateConstantExpression("i");
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access")));
         CHECK(value.isUndefined());
     }
 }
@@ -268,25 +269,25 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
     {
         auto [value, error] = evaluateConstantExpression("i()");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call")));
     }
     SECTION("Increment")
     {
         auto [value, error] = evaluateConstantExpression("i++");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'")));
     }
     SECTION("Decrement")
     {
         auto [value, error] = evaluateConstantExpression("i--");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'")));
     }
     SECTION("Initializer")
     {
         auto [value, error] = evaluateConstantExpression("(int){0}");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer")));
     }
 }
 
@@ -296,13 +297,13 @@ TEST_CASE("Const eval unary expression", "[constEval]")
     {
         auto [value, error] = evaluateConstantExpression("++0");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'")));
     }
     SECTION("Decrement")
     {
         auto [value, error] = evaluateConstantExpression("--0");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'")));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'")));
     }
     SECTION("Plus")
     {
@@ -354,7 +355,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression("+0.0");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             SECTION("Arithmetic constant expression")
             {
@@ -375,7 +376,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("+(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("+", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("+", "'void*'")));
         }
     }
     SECTION("Minus")
@@ -400,7 +401,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression("-0.0");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             SECTION("Arithmetic constant expression")
             {
@@ -421,7 +422,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("-(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("-", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("-", "'void*'")));
         }
     }
     SECTION("Bitnot")
@@ -446,7 +447,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression("~0.0");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             SECTION("Arithmetic constant expression")
             {
@@ -454,7 +455,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error,
-                           Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'double'")));
+                           ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'double'")));
             }
         }
         SECTION("Pointer")
@@ -462,7 +463,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("~(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args("~", "'void*'")));
         }
     }
     SECTION("Logical not")
@@ -487,7 +488,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression("!0.0");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             SECTION("Arithmetic constant expression")
             {
@@ -610,22 +611,22 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(float[])");
                     CHECK(value.isUndefined());
-                    CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_IN_SIZE_OF.args("'float[]'")));
+                    CHECK_THAT(error, ProducesError(INCOMPLETE_TYPE_N_IN_SIZE_OF.args("'float[]'")));
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(int())");
                     CHECK(value.isUndefined());
-                    CHECK_THAT(error, Catch::Contains(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF));
+                    CHECK_THAT(error, ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF));
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(int[*])");
                     CHECK(value.isUndefined());
-                    CHECK_THAT(error, Catch::Contains(SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION));
+                    CHECK_THAT(error, ProducesError(SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION));
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(struct i)");
                     CHECK(value.isUndefined());
-                    CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_IN_SIZE_OF.args("'struct i'")));
+                    CHECK_THAT(error, ProducesError(INCOMPLETE_TYPE_N_IN_SIZE_OF.args("'struct i'")));
                 }
             }
         }
@@ -667,7 +668,7 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression("(float)0");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
+            CHECK_THAT(error, ProducesError(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
         }
         SECTION("Arithmetic constant expressions")
         {
@@ -687,13 +688,14 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("(float)(int*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'int*'", "'float'")));
+            CHECK_THAT(error, ProducesError(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'int*'", "'float'")));
         }
         SECTION("To Infinity")
         {
             auto [value, error] = evaluateConstantExpression(
                 "(float)" + std::to_string(std::numeric_limits<double>::max()), cld::LanguageOptions::native(),
                 cld::Semantics::ConstantEvaluator::Arithmetic);
+            REQUIRE(error.empty());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
@@ -706,9 +708,11 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         {
             SECTION("To Integer")
             {
-                auto [value, error] = evaluateConstantExpression(
-                    "(long long)" + std::to_string(std::numeric_limits<float>::max()) + "f",
-                    cld::LanguageOptions::native(), cld::Semantics::ConstantEvaluator::Arithmetic);
+                auto [value, error] =
+                    evaluateConstantExpression("(long long)3.40282347E+38f", cld::LanguageOptions::native(),
+                                               cld::Semantics::ConstantEvaluator::Arithmetic);
+                CHECK_THAT(error, ProducesWarning(
+                                      VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args("3.40282347E+38", "'long long'")));
             }
         }
     }
@@ -718,14 +722,14 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression("(void*)0");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
+            CHECK_THAT(error, ProducesError(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
         }
         SECTION("Arithmetic constant expressions")
         {
             auto [value, error] = evaluateConstantExpression("(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
+            CHECK_THAT(error, ProducesError(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION));
         }
         SECTION("Initializer constant expressions")
         {
@@ -757,7 +761,7 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("(void*)0.0", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'double'", "'void*'")));
+                CHECK_THAT(error, ProducesError(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args("'double'", "'void*'")));
             }
         }
     }
@@ -817,12 +821,12 @@ TEST_CASE("Const eval term", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 * 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 * .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 * .55", cld::LanguageOptions::native(),
@@ -842,12 +846,12 @@ TEST_CASE("Const eval term", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 / 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 / .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 / .55", cld::LanguageOptions::native(),
@@ -867,18 +871,18 @@ TEST_CASE("Const eval term", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 % 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 % .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 % .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "%", "'int'", "'double'")));
             }
         }
@@ -890,24 +894,24 @@ TEST_CASE("Const eval term", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 * (void*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "*", "'int'", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("*", "'int'",
+                                                                                                          "'void*'")));
         }
         SECTION("Divide")
         {
             auto [value, error] = evaluateConstantExpression("3 / (void*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "/", "'int'", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("/", "'int'",
+                                                                                                          "'void*'")));
         }
         SECTION("Rest")
         {
             auto [value, error] = evaluateConstantExpression("3 % (void*)6", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "%", "'int'", "'void*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("%", "'int'",
+                                                                                                          "'void*'")));
         }
     }
 }
@@ -954,12 +958,12 @@ TEST_CASE("Const eval additive", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 + 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 + .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 + .55", cld::LanguageOptions::native(),
@@ -980,12 +984,12 @@ TEST_CASE("Const eval additive", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 - 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 - .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 - .55", cld::LanguageOptions::native(),
@@ -1038,28 +1042,28 @@ TEST_CASE("Const eval additive", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3.0 + (int*)5", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "+", "'double'", "'int*'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + (int*)3", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "+", "'int*'", "'int*'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + 3.0", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "+", "'int*'", "'double'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(struct i*)5 + 3", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+                CHECK_THAT(error, ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
             }
         }
         SECTION("Minus")
@@ -1164,7 +1168,7 @@ TEST_CASE("Const eval additive", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3 - (int*)5", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "-", "'int'", "'int*'")));
             }
             {
@@ -1186,27 +1190,27 @@ TEST_CASE("Const eval additive", "[constEval]")
                     evaluateConstantExpression("(struct i*)3 - (struct i*)5", cld::LanguageOptions::native(),
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+                CHECK_THAT(error, ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3.0 - (int*)5", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "-", "'double'", "'int*'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 - 3.0", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "-", "'int*'", "'double'")));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(struct i*)5 - 3", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
+                CHECK_THAT(error, ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args("'struct i'")));
             }
         }
     }
@@ -1252,18 +1256,18 @@ TEST_CASE("Const eval shift", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 << 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 << .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 << .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       "<<", "'int'", "'double'")));
             }
         }
@@ -1272,18 +1276,18 @@ TEST_CASE("Const eval shift", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 >> 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 >> .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 >> .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                       ">>", "'int'", "'double'")));
             }
         }
@@ -1295,16 +1299,16 @@ TEST_CASE("Const eval shift", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 << (int*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "<<", "'int'", "'int*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("<<", "'int'",
+                                                                                                          "'int*'")));
         }
         SECTION("Right")
         {
             auto [value, error] = evaluateConstantExpression("3 >> (int*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  ">>", "'int'", "'int*'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(">>", "'int'",
+                                                                                                          "'int*'")));
         }
     }
 }
@@ -1330,19 +1334,19 @@ TEST_CASE("Const eval bitand", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression(".55 & 3");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 & .55");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 & .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "&", "'int'", "'double'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("&", "'int'",
+                                                                                                          "'double'")));
         }
     }
     SECTION("Pointers")
@@ -1350,7 +1354,7 @@ TEST_CASE("Const eval bitand", "[constEval]")
         auto [value, error] = evaluateConstantExpression("3 & (int*)5", cld::LanguageOptions::native(),
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(
+        CHECK_THAT(error, ProducesError(
                               CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("&", "'int'", "'int*'")));
     }
 }
@@ -1376,19 +1380,19 @@ TEST_CASE("Const eval bitxor", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression(".55 ^ 3");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 ^ .55");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 ^ .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "^", "'int'", "'double'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("^", "'int'",
+                                                                                                          "'double'")));
         }
     }
     SECTION("Pointers")
@@ -1396,7 +1400,7 @@ TEST_CASE("Const eval bitxor", "[constEval]")
         auto [value, error] = evaluateConstantExpression("3 ^ (int*)5", cld::LanguageOptions::native(),
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(
+        CHECK_THAT(error, ProducesError(
                               CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("^", "'int'", "'int*'")));
     }
 }
@@ -1422,19 +1426,19 @@ TEST_CASE("Const eval bitor", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression(".55 | 3");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 | .55");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 | .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                                  "|", "'int'", "'double'")));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("|", "'int'",
+                                                                                                          "'double'")));
         }
     }
     SECTION("Pointers")
@@ -1442,7 +1446,7 @@ TEST_CASE("Const eval bitor", "[constEval]")
         auto [value, error] = evaluateConstantExpression("3 | (int*)5", cld::LanguageOptions::native(),
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(
+        CHECK_THAT(error, ProducesError(
                               CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args("|", "'int'", "'int*'")));
     }
 }
@@ -1483,12 +1487,12 @@ TEST_CASE("Const eval and", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression(".55 && 3");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 && .55");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 && .55", cld::LanguageOptions::native(),
@@ -1588,12 +1592,12 @@ TEST_CASE("Const eval or", "[constEval]")
         {
             auto [value, error] = evaluateConstantExpression(".55 || 3");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 || .55");
             CHECK(value.isUndefined());
-            CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+            CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         {
             auto [value, error] = evaluateConstantExpression("3 || .55", cld::LanguageOptions::native(),
@@ -1725,12 +1729,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 < 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 < .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 < .55", cld::LanguageOptions::native(),
@@ -1752,12 +1756,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 > 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 > .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 > .55", cld::LanguageOptions::native(),
@@ -1779,12 +1783,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 <= 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 <= .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 <= .55", cld::LanguageOptions::native(),
@@ -1806,12 +1810,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 >= 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 >= .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 >= .55", cld::LanguageOptions::native(),
@@ -1966,12 +1970,12 @@ TEST_CASE("Const eval equal", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 == 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 == .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 == .55", cld::LanguageOptions::native(),
@@ -2007,12 +2011,12 @@ TEST_CASE("Const eval equal", "[constEval]")
             {
                 auto [value, error] = evaluateConstantExpression(".55 != 3");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 != .55");
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+                CHECK_THAT(error, ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 != .55", cld::LanguageOptions::native(),
@@ -2129,7 +2133,7 @@ TEST_CASE("Const eval equal", "[constEval]")
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error,
-                           Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                           ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
                                "==", "'float*'", "'int const*'")));
             }
             {
@@ -2164,13 +2168,13 @@ TEST_CASE("Const eval equal", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("5 == (const int*)4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(const int*)5 == 4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
             }
         }
         SECTION("Not equal")
@@ -2256,7 +2260,7 @@ TEST_CASE("Const eval equal", "[constEval]")
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error,
-                           Catch::Contains(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                           ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
                                "!=", "'float*'", "'int const*'")));
             }
             {
@@ -2291,13 +2295,13 @@ TEST_CASE("Const eval equal", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("5 != (const int*)4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(const int*)5 != 4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, Catch::Contains(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
             }
         }
     }
@@ -2307,7 +2311,7 @@ TEST_CASE("Const eval expression", "[constEval]")
 {
     auto [value, error] = evaluateConstantExpression("(.55 , 3)");
     CHECK(value.isUndefined());
-    CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','")));
+    CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','")));
 }
 
 TEST_CASE("Const eval assignments", "[constEval]")
@@ -2317,6 +2321,6 @@ TEST_CASE("Const eval assignments", "[constEval]")
     {
         auto [value, error] = evaluateConstantExpression("(.55 " + std::string(iter) + " 3)");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, Catch::Contains(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + std::string(iter) + '\'')));
+        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + std::string(iter) + '\'')));
     }
 }
