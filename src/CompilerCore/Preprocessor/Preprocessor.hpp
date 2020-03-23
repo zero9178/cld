@@ -7,11 +7,12 @@
 
 namespace cld
 {
+class PPSourceObject;
 class SourceObject;
 
 namespace PP
 {
-cld::SourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+cld::PPSourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
 }
 } // namespace cld
 

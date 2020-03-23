@@ -6,19 +6,17 @@
 
 #define preprocessTest(source)                                                                          \
     [](const std::string& str) {                                                                        \
-        FAIL();                                                                                         \
         std::string storage;                                                                            \
         llvm::raw_string_ostream ss(storage);                                                           \
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), true, &ss);             \
         INFO(ss.str());                                                                                 \
         REQUIRE(ss.str().empty());                                                                      \
         auto ret = cld::PP::preprocess(tokens, &ss);                                                    \
-        return std::pair{cld::Lexer::reconstruct(ret, ret.data().begin(), ret.data().end()), ss.str()}; \
+        return std::pair{cld::Lexer::constructPP(ret, ret.data().begin(), ret.data().end()), ss.str()}; \
     }(source)
 
 TEST_CASE("C99 Standard examples", "[PP]")
 {
-    FAIL();
     SECTION("6.10.3.5 'Scope of macro definitions'")
     {
         SECTION("Example 1")

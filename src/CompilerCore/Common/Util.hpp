@@ -39,7 +39,7 @@ Y(G)->Y<G>;
 } // namespace detail
 
 template <typename Variant, typename... Matchers>
-auto match(Variant&& variant, Matchers&&... matchers)
+decltype(auto) match(Variant&& variant, Matchers&&... matchers)
 {
     return std::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
@@ -90,10 +90,12 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
 
 #else
 
-    #define OPENCL_UNREACHABLE \
-        do                     \
-            std::abort();      \
-        while (0)
+    #define OPENCL_UNREACHABLE                                                           \
+        do                                                                               \
+        {                                                                                \
+            assert(false);                                                               \
+            std::abort(); /* So that the compiler sees code afterwards is unreachable */ \
+        } while (0)
 
 #endif
 

@@ -1233,12 +1233,20 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
                     }
-                    if (issues
-                        && (primitiveType.isSigned() ? llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
-                                                       llvm::APInt::getMaxValue(primitiveType.getBitCount()))
-                               .ult(integer))
+
+                    if (issues)
                     {
-                        *issues = Issues::NotRepresentable;
+                        auto apInt = primitiveType.isSigned() ?
+                                         llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
+                                         llvm::APInt::getMaxValue(primitiveType.getBitCount());
+                        auto other = integer.extOrTrunc(
+                            std::max<std::size_t>(primitiveType.getBitCount(), integer.getBitWidth()));
+                        apInt = apInt.zextOrTrunc(
+                            std::max<std::size_t>(primitiveType.getBitCount(), integer.getBitWidth()));
+                        if (apInt.ult(other))
+                        {
+                            *issues = Issues::NotRepresentable;
+                        }
                     }
 
                     auto apsInt = integer.extOrTrunc(primitiveType.getBitCount());

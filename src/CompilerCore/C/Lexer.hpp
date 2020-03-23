@@ -17,6 +17,7 @@
 namespace cld
 {
 class SourceObject;
+class PPSourceObject;
 
 namespace Lexer
 {
@@ -27,7 +28,7 @@ enum class TokenType : std::uint8_t
     CloseParentheses,
     OpenBrace,
     CloseBrace,
-    Literal,
+    Literal, ///<[C,OpenCL]
     StringLiteral,
     SemiColon,
     Comma,
@@ -108,6 +109,8 @@ enum class TokenType : std::uint8_t
     GotoKeyword,    ///<[C,OpenCL]
     UnderlineBool,  ///<[C,OpenCL]
     Ellipse,
+    PPNumber,      ///<[PP]
+    Backslash,     ///<[PP]
     Pound,         ///<[PP]
     DoublePound,   ///<[PP]
     Miscellaneous, ///<[PP]
@@ -149,12 +152,13 @@ class Token
     std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro
                                      substitution. ID of 0 means the the token originated from the Lexer*/
     std::uint64_t m_offset;       /**< Offset of the token. That is bytes offset to the first character of the
-                                       token from the beginning of the file*/
-    std::uint64_t m_sourceOffset; /**< Original offset of the token in the source code. For a token originating
-                                   from the replacement list of a macro declaration it will points to it's
-                                   original location in the replacement list. Therefore many tokens inside of a
-                                   source file can have the same offset*/
-    TokenType m_tokenType;        ///< Type of the token
+                                       token from the beginning of the file of the very original source code passed
+                                       from the user. This value is not unique as after preprocessing all inserted
+                                       tokens have the offset of the original position in the replacement list*/
+    std::uint64_t
+        m_afterPPOffset;   /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
+                              m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
+    TokenType m_tokenType; ///< Type of the token
 
 public:
     enum class Type
@@ -190,7 +194,9 @@ public:
 
     [[nodiscard]] std::uint64_t getOffset() const noexcept;
 
-    [[nodiscard]] std::uint64_t getSourceOffset() const noexcept;
+    [[nodiscard]] std::uint64_t getPPOffset() const noexcept;
+
+    void setPPOffset(std::uint64_t ppOffset) noexcept;
 
     [[nodiscard]] std::size_t getLength() const noexcept;
 
@@ -198,15 +204,15 @@ public:
 
     void setMacroId(std::uint64_t macroId) noexcept;
 
-    [[nodiscard]] std::string getRepresentation() const;
+    [[nodiscard]] const std::string& getRepresentation() const;
 
     [[nodiscard]] std::uint64_t getLine(const SourceObject& sourceObject) const noexcept;
 
-    [[nodiscard]] std::uint64_t getSourceLine(const SourceObject& sourceObject) const noexcept;
+    [[nodiscard]] std::uint64_t getPPLine(const PPSourceObject& sourceObject) const noexcept;
 
     [[nodiscard]] std::uint64_t getColumn(const SourceObject& sourceObject) const noexcept;
 
-    [[nodiscard]] std::uint64_t getSourceColumn(const SourceObject& sourceObject) const noexcept;
+    [[nodiscard]] std::uint64_t getPPColumn(const PPSourceObject& sourceObject) const noexcept;
 };
 
 /**
@@ -225,6 +231,12 @@ std::string reconstruct(const SourceObject& sourceObject, std::vector<Token>::co
                         std::vector<Token>::const_iterator end);
 
 std::string reconstructTrimmed(const SourceObject& sourceObject, std::vector<cld::Lexer::Token>::const_iterator begin,
+                               std::vector<cld::Lexer::Token>::const_iterator end);
+
+std::string constructPP(const PPSourceObject& sourceObject, std::vector<Token>::const_iterator begin,
+                        std::vector<Token>::const_iterator end);
+
+std::string constructPPTrimmed(const PPSourceObject& sourceObject, std::vector<cld::Lexer::Token>::const_iterator begin,
                                std::vector<cld::Lexer::Token>::const_iterator end);
 } // namespace Lexer
 } // namespace cld

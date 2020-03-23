@@ -3,7 +3,6 @@
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/Parser.hpp>
 #include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/C/Syntax.hpp>
 #include <CompilerCore/Common/Util.hpp>
 
 #include <cassert>
@@ -15,17 +14,15 @@ namespace
 {
 struct Group;
 
-struct State;
+class State;
 
 std::vector<cld::Lexer::Token> processGroup(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                             std::vector<cld::Lexer::Token>::const_iterator end,
                                             const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                            State* state);
+                                            State& state);
 
 std::vector<cld::Lexer::Token> macroSubstitute(std::vector<cld::Lexer::Token>::const_iterator begin,
-                                               std::vector<cld::Lexer::Token>::const_iterator end,
-                                               const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                               State* state);
+                                               std::vector<cld::Lexer::Token>::const_iterator end, State& state);
 
 std::vector<cld::Lexer::Token>::const_iterator findNewline(std::vector<cld::Lexer::Token>::const_iterator begin,
                                                            std::vector<cld::Lexer::Token>::const_iterator end)
@@ -221,12 +218,48 @@ bool expect(cld::Lexer::TokenType tokenType, std::vector<cld::Lexer::Token>::con
     return true;
 }
 
-struct State
+class State final
 {
+    std::vector<std::uint64_t> m_starts = {0};
+    std::vector<cld::Lexer::Token> m_result;
+
+public:
     std::unordered_map<std::string, ControlLine::DefineDirective> defines;
-    std::map<std::pair<std::uint64_t, std::uint64_t>, cld::SourceObject::Substitution> substitutions;
+    std::map<std::uint64_t, cld::PPSourceObject::Substitution> substitutions;
     std::uint64_t currentID = 1;
     std::vector<std::unordered_set<std::string>> disabledMacros;
+    std::int64_t offsetDelta = 0;
+
+    State() = default;
+
+    State(const State&) = delete;
+
+    State& operator=(const State&) = delete;
+
+    State(State&&) = default;
+
+    State& operator=(State&&) = default;
+
+    const std::vector<std::uint64_t>& getStarts() const
+    {
+        return m_starts;
+    }
+
+    const std::vector<cld::Lexer::Token>& getResult() const
+    {
+        return m_result;
+    }
+
+    void push(std::vector<cld::Lexer::Token>&& newTokens)
+    {
+        m_result.reserve(m_result.size() + newTokens.size());
+        std::move(newTokens.begin(), newTokens.end(), std::back_inserter(m_result));
+    }
+
+    void insertNewline()
+    {
+        m_starts.push_back(m_result.empty() ? m_starts.back() + 1 : m_result.back().getPPOffset() + 1);
+    }
 };
 
 template <class InputIterator>
@@ -234,7 +267,7 @@ void assignMacroID(InputIterator begin, InputIterator end, State& state)
 {
     static_assert(std::is_same_v<typename InputIterator::value_type, cld::Lexer::Token>);
     bool setOne = false;
-    std::for_each(begin, end, [state, &setOne](cld::Lexer::Token& token) {
+    std::for_each(begin, end, [&state, &setOne](cld::Lexer::Token& token) {
         if (!token.macroInserted())
         {
             token.setMacroId(state.currentID);
@@ -252,7 +285,7 @@ std::unordered_map<std::string, std::vector<cld::Lexer::Token>>
                  std::vector<cld::Lexer::Token>::const_iterator end,
                  std::vector<cld::Lexer::Token>::const_iterator namePos,
                  std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
-                 const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter, State* state)
+                 const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter, State& state)
 {
     std::unordered_map<std::string, std::vector<cld::Lexer::Token>> arguments;
     auto argsStart = begin;
@@ -280,7 +313,7 @@ std::unordered_map<std::string, std::vector<cld::Lexer::Token>>
         });
         auto temp = filterNewline(begin, argEnd);
         arguments.emplace((*define->second.identifierList)[arguments.size()],
-                          macroSubstitute(temp.begin(), temp.end(), cld::SourceObject(/*TODO:*/), reporter, state));
+                          macroSubstitute(temp.begin(), temp.end(), state));
         begin = argEnd;
         if (begin != end && begin->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
         {
@@ -319,7 +352,7 @@ std::unordered_map<std::string, std::vector<cld::Lexer::Token>>
 
 std::vector<cld::Lexer::Token>
     argumentSubstitution(std::unordered_map<std::string, ControlLine::DefineDirective>::iterator define,
-                         std::unordered_map<std::string, std::vector<cld::Lexer::Token>>& arguments, State* state)
+                         std::unordered_map<std::string, std::vector<cld::Lexer::Token>>& arguments, State& state)
 {
     std::vector<cld::Lexer::Token> replacementSubstituted;
     auto argStart = define->second.replacementList.begin();
@@ -364,7 +397,7 @@ std::vector<cld::Lexer::Token>
                                           argument->second.end());
             assignMacroID(replacementSubstituted.end()
                               - std::distance(argument->second.begin(), argument->second.end()),
-                          replacementSubstituted.end(), *state);
+                          replacementSubstituted.end(), state);
         }
         argStart = tokenIter + 1;
     }
@@ -373,151 +406,123 @@ std::vector<cld::Lexer::Token>
 }
 
 std::vector<cld::Lexer::Token> macroSubstitute(std::vector<cld::Lexer::Token>::const_iterator begin,
-                                               std::vector<cld::Lexer::Token>::const_iterator end,
-                                               const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                               State* state)
+                                               std::vector<cld::Lexer::Token>::const_iterator end, State& state)
 {
-    if (!state)
-    {
-        return {begin, end};
-    }
-
     std::vector<cld::Lexer::Token> result;
+    result.reserve(end - begin);
     auto start = begin;
-    std::int64_t columnOffset = 0;
     for (auto iter = begin; iter != end; iter++)
     {
-        if (iter != begin && iter->getTokenType() == cld::Lexer::TokenType::Newline)
-        {
-            columnOffset = 0;
-        }
         if (iter->getTokenType() != cld::Lexer::TokenType::Identifier)
         {
             continue;
         }
-        //            const auto& name = std::get<std::string>(iter->getValue());
-        //            auto namePos = iter;
-        //            auto define = state->defines.find(name);
-        //            if (define == state->defines.end()
-        //                || (iter->getMacroId() < state->disabledMacros.size()
-        //                    && state->disabledMacros[iter->getMacroId()].count(name)))
-        //            {
-        //                continue;
-        //            }
-        //            if (!define->second.identifierList)
-        //            {
-        //                result.reserve(result.size() + std::distance(start, iter));
-        //                std::transform(start, iter, std::back_inserter(result),
-        //                [columnOffset](cld::Lexer::Token token) {
-        //                    token.setColumn(token.getColumn() + columnOffset);
-        //                    return token;
-        //                });
-        //                start = iter + 1;
-        //                // Creating a temporary here to create proper context in case of errors in the later
-        //                macroSubstitute
-        //                // call
-        //                auto temp = result;
-        //                temp.insert(temp.end(), define->second.replacementList.begin(),
-        //                define->second.replacementList.end()); columnOffset +=
-        //                define->second.replacementList.empty() ?
-        //                                    -static_cast<std::int64_t>(iter->getLength()) :
-        //                                    static_cast<std::int64_t>(define->second.replacementList.back().getColumn()
-        //                                                              +
-        //                                                              define->second.replacementList.back().getLength())
-        //                                        - define->second.replacementList.front().getColumn() -
-        //                                        iter->getLength();
-        //                std::for_each(temp.begin() + result.size(), temp.end(),
-        //                              [iter, begin = define->second.replacementList.begin()](cld::Lexer::Token&
-        //                              token) {
-        //                                  token.setLine(iter->getLine());
-        //                                  token.setColumn(iter->getColumn() + token.getColumn() -
-        //                                  begin->getColumn());
-        //                              });
+        const auto& name = std::get<std::string>(iter->getValue());
+        auto define = state.defines.find(name);
+        if (define == state.defines.end()
+            || (iter->getMacroId() < state.disabledMacros.size()
+                && state.disabledMacros[iter->getMacroId()].count(name)))
+        {
+            continue;
+        }
+        if (!define->second.identifierList)
+        {
+            result.reserve(result.size() + std::distance(start, iter));
+            std::transform(start, iter, std::back_inserter(result), [&state](cld::Lexer::Token token) {
+                token.setPPOffset(token.getPPOffset() + state.offsetDelta);
+                return token;
+            });
+            start = iter + 1;
+            // Creating a temporary here to create proper context in case of errors in the later macroSubstitute
+            // call
+            auto temp = result;
+            temp.insert(temp.end(), define->second.replacementList.begin(), define->second.replacementList.end());
+            state.offsetDelta += define->second.replacementList.empty() ?
+                                     -static_cast<std::int64_t>(iter->getLength()) :
+                                     static_cast<std::int64_t>(define->second.replacementList.back().getOffset()
+                                                               + define->second.replacementList.back().getLength())
+                                         - define->second.replacementList.front().getOffset() - iter->getLength();
+            std::for_each(temp.begin() + result.size(), temp.end(),
+                          [iter, begin = define->second.replacementList.begin()](cld::Lexer::Token& token) {
+                              token.setPPOffset(iter->getPPOffset() + token.getPPOffset() - begin->getPPOffset());
+                          });
+
+            assignMacroID(temp.begin() + result.size(), temp.end(), state);
+            state.disabledMacros.resize(std::max(state.disabledMacros.size(), state.currentID));
+            {
+                std::unordered_set<std::uint64_t> uniqueSet;
+                std::transform(temp.begin() + result.size(), temp.end(), std::inserter(uniqueSet, uniqueSet.begin()),
+                               [](const cld::Lexer::Token& token) { return token.getMacroId(); });
+                for (auto id : uniqueSet)
+                {
+                    state.disabledMacros[id].insert(name);
+                    state.disabledMacros[id].insert(state.disabledMacros[iter->getMacroId()].begin(),
+                                                    state.disabledMacros[iter->getMacroId()].end());
+                }
+            }
+
+            auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(), state);
+            result.reserve(result.size() + vector.size());
+            std::move(vector.begin(), vector.end(), std::back_inserter(result));
+        }
+        //        else if (iter + 1 != end && (iter + 1)->getTokenType() == cld::Lexer::TokenType::OpenParentheses
+        //                 && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
+        //        {
+        //            result.reserve(result.size() + std::distance(start, iter));
+        //            std::transform(start, iter, std::back_inserter(result), [columnOffset](cld::Lexer::Token token) {
+        //                token.setColumn(token.getColumn() + columnOffset);
+        //                return token;
+        //            });
+        //            //( must immediately follow the function like macro identifier
+        //            iter += 2;
+        //            auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
+        //            start = iter + 1;
         //
-        //                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
-        //                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
+        //            auto replacementSubstituted = argumentSubstitution(define, arguments, state);
+        //
+        //            auto temp = result;
+        //            temp.reserve(temp.size() + replacementSubstituted.size());
+        //            std::move(replacementSubstituted.begin(), replacementSubstituted.end(), std::back_inserter(temp));
+        //
+        //            assignMacroID(temp.begin() + result.size(), temp.end(), state);
+        //            state.disabledMacros.resize(std::max(state.disabledMacros.size(), state.currentID));
+        //            {
+        //                std::unordered_set<std::uint64_t> uniqueSet;
+        //                std::transform(temp.begin() + result.size(), temp.end(), std::inserter(uniqueSet,
+        //                uniqueSet.begin()),
+        //                               [](const cld::Lexer::Token& token) { return token.getMacroId(); });
+        //                for (auto& id : uniqueSet)
         //                {
-        //                    std::unordered_set<std::uint64_t> uniqueSet;
-        //                    std::transform(temp.begin() + result.size(), temp.end(),
-        //                                   std::inserter(uniqueSet, uniqueSet.begin()),
-        //                                   [](const cld::Lexer::Token& token) { return token.getMacroId(); });
-        //                    for (auto& id : uniqueSet)
-        //                    {
-        //                        state->disabledMacros[id].insert(name);
-        //                        state->disabledMacros[id].insert(state->disabledMacros[iter->getMacroId()].begin(),
-        //                                                         state->disabledMacros[iter->getMacroId()].end());
-        //                    }
+        //                    state.disabledMacros[id].insert(name);
+        //                    state.disabledMacros[id].insert(state.disabledMacros[namePos->getMacroId()].begin(),
+        //                                                    state.disabledMacros[namePos->getMacroId()].end());
         //                }
-        //
-        //                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(),
-        //                cld::SourceObject(temp),
-        //                                              reporter, state);
-        //                result.reserve(result.size() + vector.size());
-        //                std::move(vector.begin(), vector.end(), std::back_inserter(result));
         //            }
-        //            else if (iter + 1 != end && (iter + 1)->getTokenType() ==
-        //            cld::Lexer::TokenType::OpenParentheses
-        //                     && iter->getColumn() + iter->getLength() == (iter + 1)->getColumn())
-        //            {
-        //                result.reserve(result.size() + std::distance(start, iter));
-        //                std::transform(start, iter, std::back_inserter(result),
-        //                [columnOffset](cld::Lexer::Token token) {
-        //                    token.setColumn(token.getColumn() + columnOffset);
-        //                    return token;
-        //                });
-        //                //( must immediately follow the function like macro identifier
-        //                iter += 2;
-        //                auto arguments = getArguments(iter, end, namePos, define, sourceObject, reporter, state);
-        //                start = iter + 1;
         //
-        //                auto replacementSubstituted = argumentSubstitution(define, arguments, state);
-        //
-        //                auto temp = result;
-        //                temp.reserve(temp.size() + replacementSubstituted.size());
-        //                std::move(replacementSubstituted.begin(), replacementSubstituted.end(),
-        //                std::back_inserter(temp));
-        //
-        //                assignMacroID(temp.begin() + result.size(), temp.end(), *state);
-        //                state->disabledMacros.resize(std::max(state->disabledMacros.size(), state->currentID));
-        //                {
-        //                    std::unordered_set<std::uint64_t> uniqueSet;
-        //                    std::transform(temp.begin() + result.size(), temp.end(),
-        //                                   std::inserter(uniqueSet, uniqueSet.begin()),
-        //                                   [](const cld::Lexer::Token& token) { return token.getMacroId(); });
-        //                    for (auto& id : uniqueSet)
-        //                    {
-        //                        state->disabledMacros[id].insert(name);
-        //                        state->disabledMacros[id].insert(state->disabledMacros[namePos->getMacroId()].begin(),
-        //                                                         state->disabledMacros[namePos->getMacroId()].end());
-        //                    }
-        //                }
-        //
-        //                auto vector = macroSubstitute(temp.begin() + result.size(), temp.end(),
-        //                cld::SourceObject(temp),
-        //                                              reporter, state);
-        //                result.reserve(result.size() + vector.size());
-        //                std::move(vector.begin(), vector.end(), std::back_inserter(result));
-        //            }
-        //            else
-        //            {
-        //                continue;
-        //            }
-        //            state->substitutions.insert(
-        //                {{iter->getLine(), iter->getColumn()}, {{define->second.begin, define->second.end},
-        //                {*iter}}});
+        //            auto vector =
+        //                macroSubstitute(temp.begin() + result.size(), temp.end(), cld::SourceObject(temp), reporter,
+        //                state);
+        //            result.reserve(result.size() + vector.size());
+        //            std::move(vector.begin(), vector.end(), std::back_inserter(result));
+        //        }
+        //        else
+        //        {
+        //            continue;
+        //        }
+        state.substitutions.insert({{iter->getOffset()}, {{define->second.begin, define->second.end}, {*iter}}});
     }
     result.reserve(result.size() + std::distance(start, end));
-    //        std::transform(start, end, std::back_inserter(result), [columnOffset](cld::Lexer::Token token) {
-    //            token.setColumn(token.getColumn() + columnOffset);
-    //            return token;
-    //        });
+    std::transform(start, end, std::back_inserter(result), [&state](cld::Lexer::Token token) {
+        token.setPPOffset(token.getPPOffset() + state.offsetDelta);
+        return token;
+    });
     return result;
 }
 
 std::vector<cld::Lexer::Token> processIfGroup(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                               std::vector<cld::Lexer::Token>::const_iterator end,
                                               const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                              State* state)
+                                              State& state)
 {
     IfGroup result{};
     assert(begin != end && begin->getTokenType() == cld::Lexer::TokenType::Identifier);
@@ -576,7 +581,7 @@ std::vector<cld::Lexer::Token> processIfGroup(std::vector<cld::Lexer::Token>::co
 std::vector<cld::Lexer::Token> processElIfGroup(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                                 std::vector<cld::Lexer::Token>::const_iterator end,
                                                 const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                                State* state)
+                                                State& state)
 {
     assert(begin->getTokenType() == cld::Lexer::TokenType::Identifier
            && std::get<std::string>(begin->getValue()) == "elif");
@@ -605,7 +610,7 @@ std::vector<cld::Lexer::Token> processElIfGroup(std::vector<cld::Lexer::Token>::
 std::vector<cld::Lexer::Token> processElseGroup(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                                 std::vector<cld::Lexer::Token>::const_iterator end,
                                                 const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                                State* state)
+                                                State& state)
 {
     assert(begin->getTokenType() == cld::Lexer::TokenType::Identifier
            && std::get<std::string>(begin->getValue()) == "else");
@@ -625,7 +630,7 @@ std::vector<cld::Lexer::Token> processElseGroup(std::vector<cld::Lexer::Token>::
 std::vector<cld::Lexer::Token> processIfSection(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                                 std::vector<cld::Lexer::Token>::const_iterator end,
                                                 const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                                State* state)
+                                                State& state)
 {
     assert(begin != end);
     auto ifGroup = processIfGroup(begin, end, sourceObject, reporter, state);
@@ -741,7 +746,7 @@ std::vector<cld::Lexer::Token> processIfSection(std::vector<cld::Lexer::Token>::
 std::optional<ControlLine::DefineDirective>
     processDefineDirective(std::vector<cld::Lexer::Token>::const_iterator& begin,
                            std::vector<cld::Lexer::Token>::const_iterator end, const cld::SourceObject& sourceObject,
-                           llvm::raw_ostream* reporter, State*)
+                           llvm::raw_ostream* reporter, State&)
 {
     auto start = begin - 1;
     assert(begin->getTokenType() == cld::Lexer::TokenType::Identifier
@@ -771,7 +776,7 @@ std::optional<ControlLine::DefineDirective>
         auto eol = findNewline(begin, end);
         auto tokens = std::vector<cld::Lexer::Token>(begin, eol);
         begin = eol;
-        return ControlLine::DefineDirective{start, begin, namePos, name, {}, false, std::move(tokens)};
+        return ControlLine::DefineDirective{start, begin++, namePos, name, {}, false, std::move(tokens)};
     }
     else
     {
@@ -834,37 +839,36 @@ std::optional<ControlLine::DefineDirective>
 
 void processControlLine(std::vector<cld::Lexer::Token>::const_iterator& begin,
                         std::vector<cld::Lexer::Token>::const_iterator end, const cld::SourceObject& sourceObject,
-                        llvm::raw_ostream* reporter, State* state)
+                        llvm::raw_ostream* reporter, State& state)
 {
     const auto& value = std::get<std::string>(begin->getValue());
     if (value == "define")
     {
         auto define = processDefineDirective(begin, end, sourceObject, reporter, state);
-        if (state && define)
+        if (!define)
         {
-            auto [result, success] = state->defines.emplace(define->identifier, *define);
-            if (!success && reporter)
-            {
-                if (define->identifierList.has_value() != result->second.identifierList.has_value()
-                    || !define->identifierList
-                    || define->identifierList->size() != result->second.identifierList->size()
-                    || define->hasEllipse != result->second.hasEllipse
-                    || !tokenStructureEqual(define->replacementList.begin(), define->replacementList.end(),
-                                            result->second.replacementList.begin(),
-                                            result->second.replacementList.end()))
-                {
-                    cld::Message::error(
-                        cld::ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + define->identifier + '\''),
-                        define->identifierPos, define->identifierPos,
-                        cld::Modifier(define->identifierPos, define->identifierPos + 1))
-                        .print(*reporter, sourceObject);
+            return;
+        }
+        auto [result, success] = state.defines.emplace(define->identifier, *define);
+        if (success || !reporter)
+        {
+            return;
+        }
+        if (define->identifierList.has_value() != result->second.identifierList.has_value() || !define->identifierList
+            || define->identifierList->size() != result->second.identifierList->size()
+            || define->hasEllipse != result->second.hasEllipse
+            || !tokenStructureEqual(define->replacementList.begin(), define->replacementList.end(),
+                                    result->second.replacementList.begin(), result->second.replacementList.end()))
+        {
+            cld::Message::error(cld::ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + define->identifier + '\''),
+                                define->identifierPos, define->identifierPos,
+                                cld::Modifier(define->identifierPos, define->identifierPos + 1))
+                .print(*reporter, sourceObject);
 
-                    cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
-                                       result->second.identifierPos,
-                                       cld::Modifier(result->second.identifierPos, result->second.identifierPos))
-                        .print(*reporter, sourceObject);
-                }
-            }
+            cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
+                               result->second.identifierPos,
+                               cld::Modifier(result->second.identifierPos, result->second.identifierPos))
+                .print(*reporter, sourceObject);
         }
     }
     else if (value == "undef")
@@ -874,10 +878,7 @@ void processControlLine(std::vector<cld::Lexer::Token>::const_iterator& begin,
         {
             return;
         }
-        if (state)
-        {
-            state->defines.erase(std::get<std::string>((begin - 1)->getValue()));
-        }
+        state.defines.erase(std::get<std::string>((begin - 1)->getValue()));
         if (begin != end)
         {
             expect(cld::Lexer::TokenType::Newline, begin, end, sourceObject, reporter);
@@ -933,7 +934,7 @@ void processControlLine(std::vector<cld::Lexer::Token>::const_iterator& begin,
 std::vector<cld::Lexer::Token> processGroup(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                             std::vector<cld::Lexer::Token>::const_iterator end,
                                             const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                            State* state)
+                                            State& state)
 {
     if (begin == end)
     {
@@ -952,10 +953,10 @@ std::vector<cld::Lexer::Token> processGroup(std::vector<cld::Lexer::Token>::cons
         if (begin->getTokenType() != cld::Lexer::TokenType::Pound)
         {
             auto eol = findNewline(begin, end);
-            auto vector = macroSubstitute(begin, eol, sourceObject, reporter, state);
+            auto vector = macroSubstitute(begin, eol, state);
             result.reserve(result.size() + vector.size());
             std::move(vector.begin(), vector.end(), std::back_inserter(result));
-            begin = eol;
+            begin = eol + 1;
             continue;
         }
         begin++;
@@ -985,7 +986,7 @@ std::vector<cld::Lexer::Token> processGroup(std::vector<cld::Lexer::Token>::cons
             }
         }
         auto eol = findNewline(begin, end);
-        if (reporter && state)
+        if (reporter)
         {
             cld::Message::error(cld::ErrorMessages::PP::N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args(
                                     "'#" + begin->getRepresentation() + '\''),
@@ -1000,7 +1001,7 @@ std::vector<cld::Lexer::Token> processGroup(std::vector<cld::Lexer::Token>::cons
 std::vector<cld::Lexer::Token> processFile(std::vector<cld::Lexer::Token>::const_iterator& begin,
                                            std::vector<cld::Lexer::Token>::const_iterator end,
                                            const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter,
-                                           State* state)
+                                           State& state)
 {
     std::vector<cld::Lexer::Token> result;
     while (begin != end)
@@ -1013,10 +1014,10 @@ std::vector<cld::Lexer::Token> processFile(std::vector<cld::Lexer::Token>::const
 }
 } // namespace
 
-cld::SourceObject cld::PP::preprocess(const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter)
+cld::PPSourceObject cld::PP::preprocess(const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter)
 {
     auto begin = sourceObject.data().begin();
     State state;
-    auto file = processFile(begin, sourceObject.data().end(), sourceObject, reporter, &state);
-    return SourceObject({}, std::move(file), LanguageOptions::native(), state.substitutions);
+    auto file = processFile(begin, sourceObject.data().end(), sourceObject, reporter, state);
+    return PPSourceObject(sourceObject, state.getResult(), state.substitutions, state.getStarts());
 }

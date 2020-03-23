@@ -8,7 +8,6 @@
 #include <llvm/Support/Unicode.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
-#include <llvm/Support/raw_ostream.h>
 #pragma warning(pop)
 
 #include <CompilerCore/Common/Util.hpp>
@@ -604,6 +603,7 @@ struct Start;
 struct CharacterLiteral;
 struct StringLiteral;
 struct Text;
+struct PreprocessingNumber;
 struct MaybeUC;
 struct UniversalCharacter;
 struct Number;
@@ -614,8 +614,9 @@ struct BlockComment;
 struct AfterInclude;
 struct L;
 
-using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, MaybeUC, UniversalCharacter,
-                                  LineComment, BlockComment, Number, Dot, Punctuation, AfterInclude, L>;
+using StateMachine =
+    std::variant<Start, CharacterLiteral, StringLiteral, Text, PreprocessingNumber, MaybeUC, UniversalCharacter,
+                 LineComment, BlockComment, Number, Dot, Punctuation, AfterInclude, L>;
 
 class Context
 {
@@ -821,7 +822,6 @@ class Context
                 std::uint64_t location, std::vector<std::uint64_t>&& arrows, std::uint64_t underlineStart,
                 std::uint64_t underlineEnd) const
     {
-        assert(!m_inPreprocessor);
         if (!m_reporter)
         {
             return;
@@ -845,8 +845,9 @@ class Context
                     auto skipped = m_sourceSpace.substr(result.back() + 1, lower - result.back() - 1);
                     if (skipped == "\\\n" || skipped == "?\?/\n")
                     {
+                        auto back = result.back();
                         result.resize(result.size() + skipped.size());
-                        std::iota(result.begin() + result.size() - skipped.size(), result.end(), result.back() + 1);
+                        std::iota(result.begin() + result.size() - skipped.size(), result.end(), back + 1);
                     }
                 }
                 result.resize(result.size() + upper - lower);
@@ -970,9 +971,6 @@ class Context
         }
         m_reporter->flush();
     }
-
-    friend cld::SourceObject cld::Lexer::tokenize(std::string source, cld::LanguageOptions languageOptions,
-                                                  bool inPreprocessor, llvm::raw_ostream* reporter);
 
     std::pair<std::uint64_t, std::uint64_t> map(std::uint64_t offset) const
     {
@@ -1115,21 +1113,27 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     {
         if (result != '$' && result != '@' && result != '`')
         {
-            std::vector<std::uint64_t> arrows(value.size());
-            std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
-            context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
-                                endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+            if (!context.isInPreprocessor())
+            {
+                std::vector<std::uint64_t> arrows(value.size());
+                std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
+                context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                        value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
+                                    endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+            }
             return {};
         }
     }
     else if (result >= 0xD800 && result <= 0xDFFF)
     {
-        std::vector<std::uint64_t> arrows(value.size());
-        std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
-        context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                            endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+        if (!context.isInPreprocessor())
+        {
+            std::vector<std::uint64_t> arrows(value.size());
+            std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
+            context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                    value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                                endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+        }
         return {};
     }
     return result;
@@ -1696,6 +1700,13 @@ struct Text final
     std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
 };
 
+struct PreprocessingNumber final
+{
+    std::string characters{};
+
+    std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
+};
+
 struct MaybeUC final
 {
     std::unique_ptr<StateMachine> prevState{};
@@ -1707,7 +1718,7 @@ struct MaybeUC final
 struct UniversalCharacter final
 {
     bool big;
-    std::optional<Text> suspText{};
+    std::optional<std::variant<Text, PreprocessingNumber>> suspHolder{};
     llvm::SmallVector<char, 8> characters{};
 
     std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
@@ -1761,7 +1772,7 @@ struct AfterInclude final
 
 struct L final
 {
-    static std::pair<StateMachine, bool> advance(char, Context& context) noexcept;
+    static std::pair<StateMachine, bool> advance(char c, Context& context) noexcept;
 };
 
 StateMachine Start::advance(std::uint32_t c, Context& context)
@@ -1792,7 +1803,17 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
         case '6':
         case '7':
         case '8':
-        case '9': return Number{{static_cast<char>(c)}};
+        case '9':
+        {
+            if (!context.isInPreprocessor())
+            {
+                return Number{{static_cast<char>(c)}};
+            }
+            else
+            {
+                return PreprocessingNumber{{static_cast<char>(c)}};
+            }
+        }
         case '<':
         {
             if (context.isInPreprocessor() && context.getResult().size() >= 2
@@ -1831,6 +1852,13 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
         case ';': context.push(context.getOffset() - 1, context.getOffset(), TokenType::SemiColon); return *this;
         case ',': context.push(context.getOffset() - 1, context.getOffset(), TokenType::Comma); return *this;
         case '?': context.push(context.getOffset() - 1, context.getOffset(), TokenType::QuestionMark); return *this;
+        case '\n':
+            if (context.isInPreprocessor())
+            {
+                context.push(context.getOffset() - 1, context.getOffset(), TokenType::Newline);
+                return *this;
+            }
+            [[fallthrough]];
         default:
         {
             if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
@@ -1859,7 +1887,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                                         context.getOffset() - size, context.getOffset() - size, context.getOffset(),
                                         std::move(arrows));
                 }
-                else
+                else if (!context.isInPreprocessor())
                 {
                     std::string buffer(4, ' ');
                     auto* start = buffer.data();
@@ -1871,6 +1899,10 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                                         context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
                                         context.getOffset(), std::move(arrows));
                 }
+                else
+                {
+                    context.push(context.getOffset() - 1, context.getOffset(), TokenType::Miscellaneous);
+                }
             }
             return *this;
         }
@@ -1879,8 +1911,18 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
 
 StateMachine CharacterLiteral::advance(char c, Context& context)
 {
+    if ((c == '\n' || c == '\r') && context.isInPreprocessor())
+    {
+        context.push(TokenType::Miscellaneous);
+        return Start{};
+    }
     if (c == '\'' && (characters.empty() || characters.back() != '\\'))
     {
+        if (context.isInPreprocessor())
+        {
+            context.push(TokenType::Literal, characters);
+            return Start{};
+        }
         auto [result, errorOccured] =
             processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::CHARACTER_LITERAL);
         if (result.empty())
@@ -1892,7 +1934,7 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
                 context.reportError(cld::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
                                     context.tokenStartOffset, std::move(arrows));
             }
-            return {};
+            return Start{};
         }
         else if (result.size() > 1)
         {
@@ -1902,23 +1944,16 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
                                   context.tokenStartOffset, std::move(arrows));
         }
 
-        if (!context.isInPreprocessor())
+        if (wide)
         {
-            if (wide)
-            {
-                context.push(TokenType::Literal,
-                             llvm::APSInt(llvm::APInt(context.getLanguageOptions().getSizeOfWChar() * 8, result[0]),
-                                          !context.getLanguageOptions().isWCharSigned()));
-            }
-            else
-            {
-                context.push(TokenType::Literal,
-                             llvm::APSInt(llvm::APInt(32, static_cast<std::uint8_t>(result[0]), true), false));
-            }
+            context.push(TokenType::Literal,
+                         llvm::APSInt(llvm::APInt(context.getLanguageOptions().getSizeOfWChar() * 8, result[0]),
+                                      !context.getLanguageOptions().isWCharSigned()));
         }
         else
         {
-            context.push(TokenType::Literal, llvm::APSInt::get(result[0]));
+            context.push(TokenType::Literal,
+                         llvm::APSInt(llvm::APInt(32, static_cast<std::uint8_t>(result[0]), true), false));
         }
         return Start{};
     }
@@ -1928,64 +1963,75 @@ StateMachine CharacterLiteral::advance(char c, Context& context)
 
 StateMachine StringLiteral::advance(char c, Context& context)
 {
+    if ((c == '\n' || c == '\r') && context.isInPreprocessor())
+    {
+        context.push(TokenType::Miscellaneous);
+        return Start{};
+    }
     if (c == '"' && (characters.empty() || characters.back() != '\\'))
     {
+        if (context.isInPreprocessor())
+        {
+            context.push(cld::Lexer::TokenType::StringLiteral, characters);
+            return Start{};
+        }
         auto [result, errorOccured] =
             processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::STRING_LITERAL);
-        if (!errorOccured)
+        if (errorOccured)
         {
-            if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
+            return Start{};
+        }
+        if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
+        {
+            const auto* start = result.data();
+            std::vector<llvm::UTF8> utf8(result.size() * 5);
+            auto* dest = utf8.data();
+            auto conversion = llvm::ConvertUTF32toUTF8(&start, start + result.size(), &dest, dest + utf8.size(),
+                                                       llvm::strictConversion);
+            if (conversion != llvm::conversionOK)
             {
-                const auto* start = result.data();
-                std::vector<llvm::UTF8> utf8(result.size() * 5);
-                auto* dest = utf8.data();
-                auto conversion = llvm::ConvertUTF32toUTF8(&start, start + result.size(), &dest, dest + utf8.size(),
-                                                           llvm::strictConversion);
-                if (conversion != llvm::conversionOK)
-                {
-                    // Due to error occurred being true at failed utf8 to utf 32 conversion this
-                    // code can't be reached
-                    OPENCL_UNREACHABLE;
-                }
-                else if (wide)
-                {
-                    context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, {utf8.data(), dest}});
-                }
-                else
-                {
-                    context.push(TokenType::StringLiteral, std::string{utf8.data(), dest});
-                }
+                // Due to error occurred being true at failed utf8 to utf 32 conversion this
+                // code can't be reached
+                OPENCL_UNREACHABLE;
+            }
+            else if (wide)
+            {
+                context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, {utf8.data(), dest}});
             }
             else
             {
-                switch (context.getLanguageOptions().getSizeOfWChar())
+                context.push(TokenType::StringLiteral, std::string{utf8.data(), dest});
+            }
+        }
+        else
+        {
+            switch (context.getLanguageOptions().getSizeOfWChar())
+            {
+                case 2:
                 {
-                    case 2:
+                    const auto* start = result.data();
+                    std::vector<llvm::UTF16> utf16(result.size() * 3);
+                    auto* dest = utf16.data();
+                    auto conversion = llvm::ConvertUTF32toUTF16(&start, start + result.size(), &dest,
+                                                                dest + utf16.size(), llvm::strictConversion);
+                    if (conversion != llvm::conversionOK)
                     {
-                        const auto* start = result.data();
-                        std::vector<llvm::UTF16> utf16(result.size() * 3);
-                        auto* dest = utf16.data();
-                        auto conversion = llvm::ConvertUTF32toUTF16(&start, start + result.size(), &dest,
-                                                                    dest + utf16.size(), llvm::strictConversion);
-                        if (conversion != llvm::conversionOK)
-                        {
-                            OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32
-                                                // conversion this code can't be reached
-                        }
-                        else
-                        {
-                            context.push(TokenType::StringLiteral,
-                                         NonCharString{NonCharString::Wide, {utf16.data(), dest}});
-                        }
-                        break;
+                        OPENCL_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32
+                                            // conversion this code can't be reached
                     }
-                    case 4:
+                    else
                     {
-                        context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, result});
-                        break;
+                        context.push(TokenType::StringLiteral,
+                                     NonCharString{NonCharString::Wide, {utf16.data(), dest}});
                     }
-                    default: OPENCL_UNREACHABLE;
+                    break;
                 }
+                case 4:
+                {
+                    context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, result});
+                    break;
+                }
+                default: OPENCL_UNREACHABLE;
             }
         }
         return Start{};
@@ -2027,10 +2073,37 @@ std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
         {
             context.push(1, charactersToKeyword(characters));
         }
+        else if (context.isInPreprocessor() && characters == "defined")
+        {
+            context.push(1, cld::Lexer::TokenType::DefinedKeyword);
+        }
         else
         {
             context.push(1, TokenType::Identifier, std::move(characters));
         }
+        return {Start{}, false};
+    }
+    characters.resize(characters.size() + 4);
+    auto* start = characters.data() + characters.size() - 4;
+    llvm::ConvertCodePointToUTF8(c, start);
+    characters.resize(characters.size() - std::distance(start, characters.data() + characters.size()));
+    return {std::move(*this), true};
+}
+
+std::pair<StateMachine, bool> PreprocessingNumber::advance(std::uint32_t c, Context& context)
+{
+    assert(context.isInPreprocessor());
+    constexpr std::uint8_t toLower = 32;
+    if (c == '\\')
+    {
+        return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
+    }
+    else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_' && c != '.'
+             && (((characters.back() | toLower) != 'e' && (characters.back() | toLower) != 'p')
+                 || (c != '+' && c != '-'))
+             && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+    {
+        context.push(1, TokenType::PPNumber, std::move(characters));
         return {Start{}, false};
     }
     characters.resize(characters.size() + 4);
@@ -2055,6 +2128,10 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
             {
                 return {UniversalCharacter{c == 'U', Text{"L"}}, true};
             }
+            else if (std::holds_alternative<PreprocessingNumber>(*prevState))
+            {
+                return {UniversalCharacter{c == 'U', std::move(std::get<PreprocessingNumber>(*prevState))}, true};
+            }
             else
             {
                 OPENCL_UNREACHABLE;
@@ -2065,19 +2142,34 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
     else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
              || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
     {
+        if (context.isInPreprocessor())
+        {
+            context.push(1, TokenType::Backslash);
+            return {Start{}, false};
+        }
         error = true;
         return {std::move(*this), true};
     }
     else if (c == '\n')
     {
+        if (context.isInPreprocessor())
+        {
+            context.push(1, TokenType::Backslash);
+            return {Start{}, false};
+        }
         auto result = context.currentView().rfind('\\');
         assert(result != std::string_view::npos);
         result += context.tokenStartOffset;
-        std::vector<std::uint64_t> arrows(context.getOffset() - result);
+        std::vector<std::uint64_t> arrows(context.getOffset() - result - 1);
         std::iota(arrows.begin(), arrows.end(), result);
         context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
                             result, context.getOffset() - 1, std::move(arrows));
         return {Start{}, true};
+    }
+    else if (context.isInPreprocessor())
+    {
+        context.push(1, TokenType::Backslash);
+        return {Start{}, false};
     }
 
     auto location = context.currentView().rfind('\\');
@@ -2095,12 +2187,26 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
         std::size_t result = context.currentView().rfind('\\');
         assert(result != std::string_view::npos);
         result += context.tokenStartOffset;
-        context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
-                            {result});
-        context.reportNote(
-            cld::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
-            result, result, context.getOffset() - codePointToUtf8ByteCount(c));
-        return {Start{}, false};
+        if (!context.isInPreprocessor())
+        {
+            context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
+                                {result});
+            context.reportNote(
+                cld::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
+                result, result, context.getOffset() - codePointToUtf8ByteCount(c));
+            return {Start{}, false};
+        }
+        // We are actually not a univeral character. In non PP we would error. Instead we now need to push the
+        // suspendate state if there is one and then push a backslash token followed by Text containing a u or U that
+        // will then handle whatever character we just encountered
+        if (suspHolder)
+        {
+            context.withOffset(result + 1,
+                               [&] { cld::match(*suspHolder, [&](auto&& value) { value.advance(' ', context); }); });
+        }
+        context.push(result, result + 1, TokenType::Backslash);
+        context.tokenStartOffset = result + 1;
+        return {Text{big ? "U" : "u"}, false};
     }
 
     characters.push_back(static_cast<char>(c));
@@ -2116,19 +2222,57 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
         universalCharacterToValue({characters.data(), characters.size()}, ucStart, context.getOffset(), context);
     if (!result)
     {
-        return {Start{}, true};
+        if (!context.isInPreprocessor())
+        {
+            return {Start{}, true};
+        }
+        if (suspHolder)
+        {
+            context.withOffset(ucStart + 1,
+                               [&] { cld::match(*suspHolder, [&](auto&& value) { value.advance(' ', context); }); });
+        }
+        context.push(ucStart, ucStart + 1, TokenType::Backslash);
+        context.tokenStartOffset = ucStart + 1;
+        auto view = context.currentView();
+        return {Text{{view.begin(), view.end()}}, true};
     }
-    if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(*result)
-        || !(suspText || !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(*result)))
+    if (suspHolder && std::holds_alternative<PreprocessingNumber>(*suspHolder))
     {
-        std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart));
-        std::iota(arrows.begin(), arrows.end(), ucStart);
-        context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
-                                (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
-                            ucStart, ucStart, context.getOffset(), std::move(arrows));
-        return {Start{}, true};
+        // In an PP Number we only go through the whole mechanism to check if the universal character is invalid.
+        // Otherwise different tokens need to be generated
+        auto pp = std::move(std::get<PreprocessingNumber>(*suspHolder));
+        pp.characters += context.currentView().substr(ucStart);
+        return {std::move(pp), true};
     }
-    auto newText = suspText ? std::move(*suspText) : Text{};
+    // According to 6.4.2.1 Paragraph 3 of the C99 Standard these restrictions apply only to an identifier.
+    // This means even if a identifier-nondigit element is allowed in a PP Number it doesn't have to meet those
+    // requirements per my interpretation
+    if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(*result)
+        || !(suspHolder || !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(*result)))
+    {
+        if (!context.isInPreprocessor())
+        {
+            std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart));
+            std::iota(arrows.begin(), arrows.end(), ucStart);
+            context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
+                                    (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
+                                ucStart, ucStart, context.getOffset(), std::move(arrows));
+            return {Start{}, true};
+        }
+        if (suspHolder)
+        {
+            context.withOffset(ucStart + 1,
+                               [&] { cld::match(*suspHolder, [&](auto&& value) { value.advance(' ', context); }); });
+        }
+        context.push(ucStart, ucStart + 1, TokenType::Backslash);
+        context.push(ucStart + 1, ucStart + 2, TokenType::Identifier, big ? "U" : "u");
+        context.tokenStartOffset = ucStart + 2;
+        auto view = context.currentView();
+        return {PreprocessingNumber{{view.begin(), view.end()}}, true};
+    }
+    // This line is needed because a text can start with a universal character. Luckily a Preprocessing number can't
+    // So we only reach this line if suspHolder is either empty or contains a Text
+    auto newText = suspHolder ? std::move(std::get<Text>(*suspHolder)) : Text{};
     newText.characters.resize(newText.characters.size() + 4);
     auto start = newText.characters.data() + newText.characters.size() - 4;
     llvm::ConvertCodePointToUTF8(*result, start);
@@ -2139,6 +2283,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
 
 std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
 {
+    assert(!context.isInPreprocessor());
     // Consuming all characters first before then doing a proper parse
     if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
         || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -2174,7 +2319,18 @@ std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
     }
     else if (c >= '0' && c <= '9')
     {
-        return {Number{"."}, false};
+        if (dotCount == 2)
+        {
+            context.push(context.tokenStartOffset, context.tokenStartOffset + 1, TokenType::Dot);
+        }
+        if (!context.isInPreprocessor())
+        {
+            return {Number{"."}, false};
+        }
+        else
+        {
+            return {PreprocessingNumber{"."}, false};
+        }
     }
     assert(dotCount >= 0 && dotCount < 3);
     context.push(context.tokenStartOffset, context.tokenStartOffset + 1, TokenType::Dot);
@@ -2402,23 +2558,22 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     IntervalMap characterToSourceSpace(allocator);
     charactersSpace.reserve(source.size());
     {
-        static std::regex toBeTransformed("(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]");
-        auto begin = std::sregex_iterator(source.begin(), source.end(), toBeTransformed);
-        auto end = std::sregex_iterator();
+        static const std::regex toBeTransformed("(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]");
+        auto begin = std::cregex_iterator(source.data(), source.data() + source.size(), toBeTransformed);
+        auto end = std::cregex_iterator();
 
         std::uint64_t left = 0;
         for (auto iter = begin; iter != end; iter++)
         {
             const auto& match = *iter;
-            std::string prefix = match.prefix();
+            auto& prefix = match.prefix();
             auto pos = match.position();
-            if (!prefix.empty())
+            if (prefix.length() != 0)
             {
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.size() - 1,
-                                              {pos - prefix.size(), pos});
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.length() - 1,
+                                              {pos - prefix.length(), pos});
             }
             charactersSpace += prefix;
-            auto str = match.str();
             if (!match[1].matched)
             {
                 // If the first and only group didn't match it's a trigraph
@@ -2426,12 +2581,13 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                 static const std::unordered_map<std::string_view, char> mapping = {
                     {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
                     {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
-                auto result = mapping.find(str);
+                auto result = mapping.find(std::string_view(match[0].first, match[0].length()));
                 assert(result != mapping.end());
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(), {pos, pos + str.size()});
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(),
+                                              {pos, pos + match[0].length()});
                 charactersSpace += result->second;
             }
-            left = pos + str.size();
+            left = pos + match[0].length();
         }
         characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + source.size() - left - 1,
                                       {left, source.size()});
@@ -2540,14 +2696,11 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                                 std::move(arrows));
         },
         [&context](AfterInclude&) {
-            // This is the only error the Lexer is allowed to produce if we are in the Preprocessor
-            context.m_inPreprocessor = false;
             std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
             std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 std::move(arrows));
-            context.m_inPreprocessor = true;
         },
         [&context](BlockComment&) {
             std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
@@ -2560,7 +2713,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }
 
-std::string cld::Lexer::Token::getRepresentation() const
+const std::string& cld::Lexer::Token::getRepresentation() const
 {
     return m_representation;
 }
@@ -2657,7 +2810,9 @@ std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::DefinedKeyword: return "'defined'";
         case TokenType::Newline: return "'Newline'";
         case TokenType::UnderlineBool: return "'_Bool'";
+        case TokenType::PPNumber: return "Preprocessing number";
         case TokenType::Miscellaneous: OPENCL_UNREACHABLE;
+        case TokenType::Backslash: return "Backslash";
     }
     OPENCL_UNREACHABLE;
 }
@@ -2754,7 +2909,9 @@ std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
         case TokenType::DefinedKeyword: return "defined";
         case TokenType::Newline: return "Newline";
         case TokenType::UnderlineBool: return "_Bool";
+        case TokenType::PPNumber: return "Preprocessing number";
         case TokenType::Miscellaneous: OPENCL_UNREACHABLE;
+        case TokenType::Backslash: return "Backslash";
     }
     OPENCL_UNREACHABLE;
 }
@@ -2779,7 +2936,7 @@ cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string 
     : m_value(std::move(value)),
       m_representation(std::move(representation)),
       m_offset(offset),
-      m_sourceOffset(offset),
+      m_afterPPOffset(offset),
       m_tokenType(tokenType),
       m_type(type)
 {
@@ -2806,9 +2963,9 @@ std::uint64_t Token::getOffset() const noexcept
     return m_offset;
 }
 
-std::uint64_t Token::getSourceOffset() const noexcept
+std::uint64_t Token::getPPOffset() const noexcept
 {
-    return m_sourceOffset;
+    return m_afterPPOffset;
 }
 
 std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexcept
@@ -2816,9 +2973,9 @@ std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexce
     return sourceObject.getLineNumber(getOffset());
 }
 
-std::uint64_t Token::getSourceLine(const cld::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getPPLine(const cld::PPSourceObject& sourceObject) const noexcept
 {
-    return sourceObject.getLineNumber(getSourceOffset());
+    return sourceObject.getPPLineNumber(getPPOffset());
 }
 
 std::uint64_t Token::getColumn(const cld::SourceObject& sourceObject) const noexcept
@@ -2827,15 +2984,20 @@ std::uint64_t Token::getColumn(const cld::SourceObject& sourceObject) const noex
     return getOffset() - sourceObject.getLineStartOffset(line);
 }
 
-std::uint64_t Token::getSourceColumn(const cld::SourceObject& sourceObject) const noexcept
+std::uint64_t Token::getPPColumn(const cld::PPSourceObject& sourceObject) const noexcept
 {
-    auto line = sourceObject.getLineNumber(getOffset());
-    return getOffset() - sourceObject.getLineStartOffset(line);
+    auto line = sourceObject.getPPLineNumber(getPPOffset());
+    return getPPOffset() - sourceObject.getPPLineStartOffset(line);
 }
 
 Token::Type Token::getType() const
 {
     return m_type;
+}
+
+void Token::setPPOffset(std::uint64_t ppOffset) noexcept
+{
+    m_afterPPOffset = ppOffset;
 }
 
 std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
@@ -2856,6 +3018,10 @@ std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
                                            std::vector<cld::Lexer::Token>::const_iterator end)
 {
     std::string result;
+    if (begin != end)
+    {
+        result.reserve((end - 1)->getOffset() + (end - 1)->getLength() - begin->getOffset());
+    }
     for (auto curr = begin; curr != end; curr++)
     {
         if (curr != begin)
@@ -2871,6 +3037,51 @@ std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject,
             {
                 result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
                 result.resize(result.size() + curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
+            }
+        }
+        result += curr->getRepresentation();
+    }
+    return result;
+}
+
+std::string cld::Lexer::constructPP(const PPSourceObject& sourceObject, std::vector<Token>::const_iterator begin,
+                                    std::vector<Token>::const_iterator end)
+{
+    if (begin == end)
+    {
+        return {};
+    }
+    auto lineNumber = sourceObject.getPPLineNumber(begin->getPPOffset());
+    return std::string(lineNumber - 1, '\n')
+           + std::string(begin->getPPOffset() - sourceObject.getPPLineStartOffset(lineNumber), ' ')
+           + constructPPTrimmed(sourceObject, begin, end);
+}
+
+std::string cld::Lexer::constructPPTrimmed(const PPSourceObject& sourceObject,
+                                           std::vector<cld::Lexer::Token>::const_iterator begin,
+                                           std::vector<cld::Lexer::Token>::const_iterator end)
+{
+    std::string result;
+    if (begin != end)
+    {
+        result.reserve((end - 1)->getPPOffset() + (end - 1)->getLength() - begin->getPPOffset());
+    }
+    for (auto curr = begin; curr != end; curr++)
+    {
+        if (curr != begin)
+        {
+            auto prev = curr - 1;
+            auto currLineNumber = sourceObject.getLineNumber(curr->getPPOffset());
+            auto prevLineNumber = sourceObject.getLineNumber(prev->getPPOffset() + prev->getLength());
+            if (currLineNumber == prevLineNumber)
+            {
+                result.resize(result.size() + curr->getPPOffset() - (prev->getPPOffset() + prev->getLength()), ' ');
+            }
+            else
+            {
+                result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
+                result.resize(result.size() + curr->getPPOffset() - sourceObject.getPPLineStartOffset(currLineNumber),
+                              ' ');
             }
         }
         result += curr->getRepresentation();

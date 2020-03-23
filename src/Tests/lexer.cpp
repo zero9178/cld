@@ -16,37 +16,6 @@ using namespace cld::ErrorMessages::Lexer;
 using namespace cld::Notes::Lexer;
 using namespace Catch::Matchers;
 
-CATCH_REGISTER_ENUM(
-    cld::Lexer::TokenType, cld::Lexer::TokenType::Identifier, cld::Lexer::TokenType::OpenParentheses,
-    cld::Lexer::TokenType::CloseParentheses, cld::Lexer::TokenType::OpenBrace, cld::Lexer::TokenType::CloseBrace,
-    cld::Lexer::TokenType::Literal, cld::Lexer::TokenType::StringLiteral, cld::Lexer::TokenType::SemiColon,
-    cld::Lexer::TokenType::Comma, cld::Lexer::TokenType::Minus, cld::Lexer::TokenType::BitWiseNegation,
-    cld::Lexer::TokenType::LogicalNegation, cld::Lexer::TokenType::Plus, cld::Lexer::TokenType::Asterisk,
-    cld::Lexer::TokenType::Division, cld::Lexer::TokenType::Percent, cld::Lexer::TokenType::LogicAnd,
-    cld::Lexer::TokenType::LogicOr, cld::Lexer::TokenType::Ampersand, cld::Lexer::TokenType::BitOr,
-    cld::Lexer::TokenType::BitXor, cld::Lexer::TokenType::Equal, cld::Lexer::TokenType::NotEqual,
-    cld::Lexer::TokenType::LessThan, cld::Lexer::TokenType::LessThanOrEqual, cld::Lexer::TokenType::GreaterThan,
-    cld::Lexer::TokenType::GreaterThanOrEqual, cld::Lexer::TokenType::Assignment, cld::Lexer::TokenType::PlusAssign,
-    cld::Lexer::TokenType::MinusAssign, cld::Lexer::TokenType::DivideAssign, cld::Lexer::TokenType::MultiplyAssign,
-    cld::Lexer::TokenType::ModuloAssign, cld::Lexer::TokenType::ShiftLeftAssign,
-    cld::Lexer::TokenType::ShiftRightAssign, cld::Lexer::TokenType::BitAndAssign, cld::Lexer::TokenType::BitOrAssign,
-    cld::Lexer::TokenType::BitXorAssign, cld::Lexer::TokenType::ShiftRight, cld::Lexer::TokenType::ShiftLeft,
-    cld::Lexer::TokenType::Increment, cld::Lexer::TokenType::Decrement, cld::Lexer::TokenType::Colon,
-    cld::Lexer::TokenType::QuestionMark, cld::Lexer::TokenType::VoidKeyword, cld::Lexer::TokenType::CharKeyword,
-    cld::Lexer::TokenType::ShortKeyword, cld::Lexer::TokenType::IntKeyword, cld::Lexer::TokenType::LongKeyword,
-    cld::Lexer::TokenType::FloatKeyword, cld::Lexer::TokenType::DoubleKeyword, cld::Lexer::TokenType::SignedKeyword,
-    cld::Lexer::TokenType::UnsignedKeyword, cld::Lexer::TokenType::TypedefKeyword, cld::Lexer::TokenType::ExternKeyword,
-    cld::Lexer::TokenType::StaticKeyword, cld::Lexer::TokenType::AutoKeyword, cld::Lexer::TokenType::RegisterKeyword,
-    cld::Lexer::TokenType::ConstKeyword, cld::Lexer::TokenType::RestrictKeyword, cld::Lexer::TokenType::SizeofKeyword,
-    cld::Lexer::TokenType::VolatileKeyword, cld::Lexer::TokenType::InlineKeyword, cld::Lexer::TokenType::ReturnKeyword,
-    cld::Lexer::TokenType::BreakKeyword, cld::Lexer::TokenType::ContinueKeyword, cld::Lexer::TokenType::DoKeyword,
-    cld::Lexer::TokenType::ElseKeyword, cld::Lexer::TokenType::ForKeyword, cld::Lexer::TokenType::IfKeyword,
-    cld::Lexer::TokenType::WhileKeyword, cld::Lexer::TokenType::OpenSquareBracket,
-    cld::Lexer::TokenType::CloseSquareBracket, cld::Lexer::TokenType::StructKeyword, cld::Lexer::TokenType::Dot,
-    cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::SwitchKeyword, cld::Lexer::TokenType::CaseKeyword,
-    cld::Lexer::TokenType::DefaultKeyword, cld::Lexer::TokenType::UnionKeyword, cld::Lexer::TokenType::EnumKeyword,
-    cld::Lexer::TokenType::GotoKeyword, cld::Lexer::TokenType::Ellipse)
-
 #define LEXER_OUTPUTS_WITH(input, match)                                         \
     do                                                                           \
     {                                                                            \
@@ -73,6 +42,29 @@ CATCH_REGISTER_ENUM(
         }                                                                       \
     } while (0)
 
+namespace
+{
+[[nodiscard]] cld::SourceObject lexes(std::string_view code,
+                                      const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    auto result = cld::Lexer::tokenize({code.begin(), code.end()}, options, false, &ss);
+    REQUIRE(buffer.empty());
+    return result;
+}
+
+[[nodiscard]] cld::SourceObject pplexes(std::string_view code,
+                                        const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    auto result = cld::Lexer::tokenize({code.begin(), code.end()}, options, true, &ss);
+    REQUIRE(buffer.empty());
+    return result;
+}
+} // namespace
+
 SCENARIO("Lexing Identifiers", "[lexer]")
 {
     GIVEN("Initial characters")
@@ -86,7 +78,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
         {
             THEN(c)
             {
-                auto result = cld::Lexer::tokenize(c);
+                auto result = lexes(c);
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
@@ -96,7 +88,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
         }
         AND_THEN("an universal character")
         {
-            auto result = cld::Lexer::tokenize("\\u00B5");
+            auto result = lexes("\\u00B5");
             REQUIRE_FALSE(result.data().empty());
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
@@ -117,7 +109,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
         {
             THEN(c)
             {
-                auto result = cld::Lexer::tokenize(c);
+                auto result = lexes(c);
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -127,7 +119,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
         }
         AND_THEN("an universal character")
         {
-            auto result = cld::Lexer::tokenize("_\\u00B5");
+            auto result = lexes("_\\u00B5");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -152,7 +144,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
     {
         {
             using namespace cld::Lexer;
-            auto result = cld::Lexer::tokenize(
+            auto result = lexes(
                 "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool");
             std::vector correct = {TokenType::AutoKeyword,     TokenType::EnumKeyword,     TokenType::RestrictKeyword,
                                    TokenType::UnsignedKeyword, TokenType::BreakKeyword,    TokenType::ExternKeyword,
@@ -181,7 +173,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
     {
         SECTION("Normal identifier")
         {
-            auto result = cld::Lexer::tokenize("te\\\nst");
+            auto result = lexes("te\\\nst");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -190,7 +182,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
         }
         SECTION("Universal character")
         {
-            auto result = cld::Lexer::tokenize("_\\\\\nu00B5");
+            auto result = lexes("_\\\\\nu00B5");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
             REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -215,14 +207,14 @@ TEST_CASE("Lexing backslashes", "[lexer]")
         }
         SECTION("Keywords")
         {
-            auto result = cld::Lexer::tokenize("f\\\nor");
+            auto result = lexes("f\\\nor");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::ForKeyword);
             CHECK(result.data()[0].getRepresentation() == "f\\\nor");
         }
         SECTION("Number")
         {
-            auto result = cld::Lexer::tokenize("5\\\ne+3");
+            auto result = lexes("5\\\ne+3");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
             REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
@@ -232,7 +224,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
             CHECK(result.data()[0].getRepresentation() == "5\\\ne+3");
             SECTION("Floating point")
             {
-                result = cld::Lexer::tokenize(".\\\n5e+3");
+                result = lexes(".\\\n5e+3");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
                 REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
@@ -248,7 +240,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
         }
         SECTION("Dots")
         {
-            auto result = cld::Lexer::tokenize(".\\\n.");
+            auto result = lexes(".\\\n.");
             REQUIRE(result.data().size() == 2);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
             CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Dot);
@@ -259,7 +251,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
         }
         SECTION("Character literals")
         {
-            auto result = cld::Lexer::tokenize("L\\\n'5'");
+            auto result = lexes("L\\\n'5'");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
             CHECK(result.data()[0].getOffset() == 0);
@@ -281,7 +273,7 @@ TEST_CASE("Lexing backslashes", "[lexer]")
     {
         cld::Lexer::tokenize("\\-");
         cld::Lexer::tokenize("&\\\x1d.");
-        auto result = cld::Lexer::tokenize("N\\\n;");
+        auto result = lexes("N\\\n;");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
         CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::SemiColon);
@@ -295,7 +287,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
 {
     SECTION("Normal")
     {
-        auto result = cld::Lexer::tokenize("?\?= ?\?( ?\?) ?\?' ?\?< ?\?! ?\?> ?\?-");
+        auto result = lexes("?\?= ?\?( ?\?) ?\?' ?\?< ?\?! ?\?> ?\?-");
         REQUIRE(result.data().size() == 8);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
         CHECK(result.data()[0].getRepresentation() == "?\?=");
@@ -320,7 +312,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
         {
             SECTION("Normal identifier")
             {
-                auto result = cld::Lexer::tokenize("te?\?/\nst");
+                auto result = lexes("te?\?/\nst");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -329,7 +321,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
             }
             SECTION("Universal character")
             {
-                auto result = cld::Lexer::tokenize("_?\?/?\?/\nu00B5");
+                auto result = lexes("_?\?/?\?/\nu00B5");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -354,14 +346,14 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
             }
             SECTION("Keywords")
             {
-                auto result = cld::Lexer::tokenize("f?\?/\nor");
+                auto result = lexes("f?\?/\nor");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::ForKeyword);
                 CHECK(result.data()[0].getRepresentation() == "f?\?/\nor");
             }
             SECTION("Number")
             {
-                auto result = cld::Lexer::tokenize("5?\?/\ne+3");
+                auto result = lexes("5?\?/\ne+3");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
                 REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
@@ -371,7 +363,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
                 CHECK(result.data()[0].getRepresentation() == "5?\?/\ne+3");
                 SECTION("Floating point")
                 {
-                    result = cld::Lexer::tokenize(".?\?/\n5e+3");
+                    result = lexes(".?\?/\n5e+3");
                     REQUIRE(result.data().size() == 1);
                     CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
                     REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
@@ -387,7 +379,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
             }
             SECTION("Dots")
             {
-                auto result = cld::Lexer::tokenize(".?\?/\n.");
+                auto result = lexes(".?\?/\n.");
                 REQUIRE(result.data().size() == 2);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
                 CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Dot);
@@ -398,7 +390,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
             }
             SECTION("Character literals")
             {
-                auto result = cld::Lexer::tokenize("L?\?/\n'5'");
+                auto result = lexes("L?\?/\n'5'");
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
                 CHECK(result.data()[0].getOffset() == 0);
@@ -420,7 +412,7 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
         {
             cld::Lexer::tokenize("?\?/-");
             cld::Lexer::tokenize("&?\?/\x1d.");
-            auto result = cld::Lexer::tokenize("N?\?/\n;");
+            auto result = lexes("N?\?/\n;");
             REQUIRE(result.data().size() == 2);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
             CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::SemiColon);
@@ -431,11 +423,11 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
     }
     SECTION("Multi character token")
     {
-        auto result = cld::Lexer::tokenize("%:?\?=");
+        auto result = lexes("%:?\?=");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::DoublePound);
         CHECK(result.data()[0].getRepresentation() == "%:?\?=");
-        result = cld::Lexer::tokenize("#?\?=");
+        result = lexes("#?\?=");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::DoublePound);
         CHECK(result.data()[0].getRepresentation() == "#?\?=");
@@ -446,7 +438,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
 {
     SECTION("Normal")
     {
-        auto result = cld::Lexer::tokenize("'5'");
+        auto result = lexes("'5'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         REQUIRE(std::holds_alternative<llvm::APSInt>(result.data()[0].getValue()));
@@ -467,7 +459,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
         {
             DYNAMIC_SECTION(input)
             {
-                auto result = cld::Lexer::tokenize(input);
+                auto result = lexes(input);
                 REQUIRE(result.data().size() == 1);
                 REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
                 REQUIRE(std::holds_alternative<llvm::APSInt>(result.data()[0].getValue()));
@@ -484,7 +476,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Octals")
     {
         LEXER_OUTPUTS_WITH("'\\9'", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
-        auto result = cld::Lexer::tokenize("'\\070'");
+        auto result = lexes("'\\070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -496,7 +488,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     {
         LEXER_OUTPUTS_WITH("'\\xG'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         LEXER_OUTPUTS_WITH("'\\x'", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
-        auto result = cld::Lexer::tokenize("'\\x070'");
+        auto result = lexes("'\\x070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -506,7 +498,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     }
     SECTION("Multibyte")
     {
-        auto result = cld::Lexer::tokenize("L'5'", cld::Tests::x64windowsGnu);
+        auto result = lexes("L'5'", cld::Tests::x64windowsGnu);
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -528,14 +520,14 @@ TEST_CASE("Lexing character literals", "[lexer]")
                                                 "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         LEXER_OUTPUTS_WITH("L'\\U0000D977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                                  "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
-        auto result = cld::Lexer::tokenize("L'\\u3435'");
+        auto result = lexes("L'\\u3435'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
         CHECK(value == L'\u3435');
         CHECK(value.getBitWidth() == 8 * sizeof(wchar_t));
         CHECK(value.isSigned() == std::is_signed_v<wchar_t>);
-        result = cld::Lexer::tokenize("L'\\U00003435'");
+        result = lexes("L'\\U00003435'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
         value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -553,7 +545,7 @@ TEST_CASE("Lexing unicode", "[lexer]")
     {
         SECTION("UTF-16")
         {
-            auto result = cld::Lexer::tokenize("L'貓'", cld::Tests::x64windowsGnu);
+            auto result = lexes("L'貓'", cld::Tests::x64windowsGnu);
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
             auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -565,7 +557,7 @@ TEST_CASE("Lexing unicode", "[lexer]")
         }
         SECTION("UTF-32")
         {
-            auto result = cld::Lexer::tokenize("L'🍌'", cld::Tests::x64linux);
+            auto result = lexes("L'🍌'", cld::Tests::x64linux);
             REQUIRE(result.data().size() == 1);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
             auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
@@ -580,17 +572,17 @@ TEST_CASE("Lexing string literals", "[lexer]")
 {
     SECTION("Normal")
     {
-        auto result = cld::Lexer::tokenize("\"test\"");
+        auto result = lexes("\"test\"");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "test");
-        result = cld::Lexer::tokenize("\"\"");
+        result = lexes("\"\"");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "");
-        result = cld::Lexer::tokenize("L\"\"");
+        result = lexes("L\"\"");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
@@ -598,7 +590,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
     }
     SECTION("Escapes")
     {
-        auto result = cld::Lexer::tokenize(R"("\\\b\t\'\f\v\?\n\a\r\"")");
+        auto result = lexes(R"("\\\b\t\'\f\v\?\n\a\r\"")");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -607,7 +599,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
     SECTION("Octals")
     {
         LEXER_OUTPUTS_WITH("\"\\9\"", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
-        auto result = cld::Lexer::tokenize("\"\\070\"");
+        auto result = lexes("\"\\070\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -617,7 +609,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
     {
         LEXER_OUTPUTS_WITH("\"\\xG\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         LEXER_OUTPUTS_WITH("\"\\x\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
-        auto result = cld::Lexer::tokenize("\"\\x070\"");
+        auto result = lexes("\"\\x070\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
@@ -625,8 +617,8 @@ TEST_CASE("Lexing string literals", "[lexer]")
     }
     SECTION("Multibyte")
     {
-        auto result = cld::Lexer::tokenize(
-            "L\"5\"", cld::LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8));
+        auto result =
+            lexes("L\"5\"", cld::LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8));
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
@@ -646,12 +638,12 @@ TEST_CASE("Lexing string literals", "[lexer]")
                                                   "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         LEXER_OUTPUTS_WITH("L\"\\U0000D977\"", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                                    "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
-        auto result = cld::Lexer::tokenize("L\"\\u3435\"");
+        auto result = lexes("L\"\\u3435\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
         REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()) == L"\u3435");
-        result = cld::Lexer::tokenize("L\"\\U00003435\"");
+        result = lexes("L\"\\U00003435\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
@@ -666,7 +658,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     {
         SECTION("Signed")
         {
-            auto result = cld::Lexer::tokenize("534534");
+            auto result = lexes("534534");
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Int);
@@ -678,7 +670,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         }
         SECTION("Unsigned")
         {
-            auto result = cld::Lexer::tokenize("534534u");
+            auto result = lexes("534534u");
             REQUIRE_FALSE(result.data().empty());
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::UnsignedInt);
@@ -695,7 +687,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     {
         SECTION("Double")
         {
-            auto result = cld::Lexer::tokenize("534534.0");
+            auto result = lexes("534534.0");
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
@@ -707,7 +699,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         }
         SECTION("Float")
         {
-            auto result = cld::Lexer::tokenize("534534.f");
+            auto result = lexes("534534.f");
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Float);
@@ -716,7 +708,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             auto fp = std::get<llvm::APFloat>(result.data()[0].getValue());
             REQUIRE(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEsingle);
             CHECK(fp.convertToFloat() == 534534.f);
-            result = cld::Lexer::tokenize(std::to_string(std::numeric_limits<float>::max()) + "f");
+            result = lexes(std::to_string(std::numeric_limits<float>::max()) + "f");
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Float);
@@ -730,7 +722,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         {
             SECTION("64 bit")
             {
-                auto result = cld::Lexer::tokenize("534534.0L", cld::Tests::x64windowsMsvc);
+                auto result = lexes("534534.0L", cld::Tests::x64windowsMsvc);
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::LongDouble);
@@ -742,7 +734,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             }
             SECTION("80 bit")
             {
-                auto result = cld::Lexer::tokenize("1.18e4900L", cld::Tests::x64windowsGnu);
+                auto result = lexes("1.18e4900L", cld::Tests::x64windowsGnu);
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::LongDouble);
@@ -754,7 +746,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             }
             SECTION("128 bit")
             {
-                auto result = cld::Lexer::tokenize(
+                auto result = lexes(
                     "1.18e4900L", cld::LanguageOptions(cld::LanguageOptions::C99, 1, true, 4, false, 2, 4, 8, 128, 8));
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
@@ -768,7 +760,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         }
         SECTION("Dot only")
         {
-            auto result = cld::Lexer::tokenize(".5");
+            auto result = lexes(".5");
             REQUIRE_FALSE(result.data().empty());
             CHECK(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
@@ -788,7 +780,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         {
             DYNAMIC_SECTION(input)
             {
-                auto result = cld::Lexer::tokenize(input);
+                auto result = lexes(input);
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
@@ -802,7 +794,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
     SECTION("Octal")
     {
-        auto result = cld::Lexer::tokenize("070");
+        auto result = lexes("070");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Int);
@@ -818,7 +810,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     {
         SECTION("Integer")
         {
-            auto result = cld::Lexer::tokenize("0x38");
+            auto result = lexes("0x38");
             REQUIRE_FALSE(result.data().empty());
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Int);
@@ -830,7 +822,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         }
         SECTION("Floating point")
         {
-            auto result = cld::Lexer::tokenize("0x0.DE488631p8");
+            auto result = lexes("0x0.DE488631p8");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -839,7 +831,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
-            result = cld::Lexer::tokenize("0x0.DE488631P8");
+            result = lexes("0x0.DE488631P8");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -848,7 +840,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
-            result = cld::Lexer::tokenize("0x0.DE488631P+8");
+            result = lexes("0x0.DE488631P+8");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -857,7 +849,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(fp.convertToDouble() == 0x0.DE488631p8);
 
-            result = cld::Lexer::tokenize("0x0.DE488631P-8");
+            result = lexes("0x0.DE488631P-8");
             REQUIRE(result.data().size() == 1);
             CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Double);
             REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -876,7 +868,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         auto test = [](const std::string& text, const llvm::APSInt& result) {
             {
                 INFO(text);
-                auto tokens = cld::Lexer::tokenize(text);
+                auto tokens = lexes(text);
                 REQUIRE_FALSE(tokens.data().empty());
                 CHECK(tokens.data().size() == 1);
                 REQUIRE(tokens.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -910,7 +902,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
     SECTION("Longs")
     {
-        auto result = cld::Lexer::tokenize("534534l");
+        auto result = lexes("534534l");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Long);
@@ -920,7 +912,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(long));
         CHECK(value.isSigned());
 
-        result = cld::Lexer::tokenize("534534L");
+        result = lexes("534534L");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::Long);
@@ -930,7 +922,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(long));
         CHECK(value.isSigned());
 
-        result = cld::Lexer::tokenize("534534uL");
+        result = lexes("534534uL");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::UnsignedLong);
@@ -942,7 +934,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
     SECTION("Long longs")
     {
-        auto result = cld::Lexer::tokenize("534534ll");
+        auto result = lexes("534534ll");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::LongLong);
@@ -952,7 +944,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(long long));
         CHECK(value.isSigned());
 
-        result = cld::Lexer::tokenize("534534LL");
+        result = lexes("534534LL");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::LongLong);
@@ -962,7 +954,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(long long));
         CHECK(value.isSigned());
 
-        result = cld::Lexer::tokenize("534534uLL");
+        result = lexes("534534uLL");
         REQUIRE_FALSE(result.data().empty());
         CHECK(result.data().size() == 1);
         CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::UnsignedLongLong);
@@ -985,8 +977,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
 
 TEST_CASE("Lexing Punctuation", "[lexer]")
 {
-    auto result = cld::Lexer::tokenize(
-        ". ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>= ~ ^: ^ ==");
+    auto result =
+        lexes(". ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>= ~ ^: ^ ==");
     REQUIRE(result.data().size() == 35);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Dot);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Ellipse);
@@ -1023,14 +1015,18 @@ TEST_CASE("Lexing Punctuation", "[lexer]")
     CHECK(result.data().at(32).getTokenType() == cld::Lexer::TokenType::Colon);
     CHECK(result.data().at(33).getTokenType() == cld::Lexer::TokenType::BitXor);
     CHECK(result.data().at(34).getTokenType() == cld::Lexer::TokenType::Equal);
-    result = cld::Lexer::tokenize("=>");
+    result = lexes("=>");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Assignment);
     CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::GreaterThan);
-    result = cld::Lexer::tokenize("&&=");
+    result = lexes("&&=");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::LogicAnd);
     CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Assignment);
+    result = lexes("..5");
+    REQUIRE(result.data().size() == 2);
+    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
+    CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Literal);
 }
 
 TEST_CASE("Lexing unknown characters", "[lexer]")
@@ -1046,7 +1042,7 @@ TEST_CASE("Lexing positions", "[lexer]")
     using namespace cld::Lexer;
     SECTION("Random tokens")
     {
-        auto result = cld::Lexer::tokenize(
+        auto result = lexes(
             "(){}[];,:? '5'\"text\"test 5343 0.534 .343 0x3 /*\n   */text / * . ... > -> >> < << & && | || + ++ - -- = == != >= <= += -= /= *= %= &= |= ^= <<= >>=");
         REQUIRE(result.data().size() == 50);
         std::array correct = {std::tuple{TokenType::OpenParentheses, 1u, 0u, 1u},
@@ -1114,7 +1110,7 @@ TEST_CASE("Lexing positions", "[lexer]")
     }
     SECTION("Actual program")
     {
-        auto result = cld::Lexer::tokenize(R"(void updateHeight(TreeNode* h)
+        auto result = lexes(R"(void updateHeight(TreeNode* h)
 {
     if (height(h->right) > height(h->left))
     {
@@ -1204,7 +1200,7 @@ TEST_CASE("Lexing positions", "[lexer]")
 
 TEST_CASE("Lexing digraphs", "[lexer]")
 {
-    auto result = cld::Lexer::tokenize("<: :> <% %> %: %:%:");
+    auto result = lexes("<: :> <% %> %: %:%:");
     REQUIRE(result.data().size() == 6);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::OpenSquareBracket);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::CloseSquareBracket);
@@ -1214,7 +1210,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(5).getTokenType() == cld::Lexer::TokenType::DoublePound);
     CHECK(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end()) == "<: :> <% %> %: %:%:");
 
-    result = cld::Lexer::tokenize("%: %: #%: %:# # %: %: #");
+    result = lexes("%: %: #%: %:# # %: %: #");
     REQUIRE(result.data().size() == 8);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Pound);
@@ -1227,7 +1223,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end())
           == "%: %: #%: %:# # %: %: #");
 
-    result = cld::Lexer::tokenize("#%");
+    result = lexes("#%");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
@@ -1236,28 +1232,28 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(0).getRepresentation() == "#");
     CHECK(result.data().at(1).getRepresentation() == "%");
 
-    result = cld::Lexer::tokenize("%:\\\n%");
+    result = lexes("%:\\\n%");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
     CHECK(result.data().at(0).getRepresentation() == "%:");
     CHECK(result.data().at(1).getRepresentation() == "%");
 
-    result = cld::Lexer::tokenize("#\\\n%");
+    result = lexes("#\\\n%");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
     CHECK(result.data().at(0).getRepresentation() == "#");
     CHECK(result.data().at(1).getRepresentation() == "%");
 
-    result = cld::Lexer::tokenize("%:\\\n:");
+    result = lexes("%:\\\n:");
     REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Colon);
     CHECK(result.data().at(0).getRepresentation() == "%:");
     CHECK(result.data().at(1).getRepresentation() == ":");
 
-    result = cld::Lexer::tokenize("%:\\\n%:");
+    result = lexes("%:\\\n%:");
     REQUIRE(result.data().size() == 1);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::DoublePound);
     CHECK(result.data().at(0).getRepresentation() == "%:\\\n%:");
@@ -1267,50 +1263,42 @@ TEST_CASE("Lexing input reconstruction", "[lexer]")
 {
     auto source =
         "ad(){}<% %> \"test\" 52345 ; , - ~ ! + * / % && || & | ^ == != < <= > >= = += -= /= *= %= <<= >>= &= |= ^= >> << ++ -- : ? void char short int long float double signed unsigned typedef extern static auto register const sizeof return break continue do else for if while [] struct . -> switch case default union volatile enum goto ... restrict inline # ##";
-    auto result = cld::Lexer::tokenize(source);
+    auto result = lexes(source);
     REQUIRE(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end()) == source);
 }
 
 TEST_CASE("Lexing include directives", "[lexer]")
 {
+    SECTION("< >")
     {
-        std::string storage;
-        llvm::raw_string_ostream ss(storage);
-        SECTION("< >")
-        {
-            auto result = cld::Lexer::tokenize("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>",
-                                               cld::LanguageOptions::native(), true, &ss);
-            CHECK(ss.str().empty());
-            REQUIRE(result.data().size() == 3);
-            CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
-            REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
-            CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
-            REQUIRE(result.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-            CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
-            CHECK(result.data()[2].getRepresentation() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
-        }
-        SECTION("\" \"")
-        {
-            auto result = cld::Lexer::tokenize("#include \"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"",
-                                               cld::LanguageOptions::native(), true, &ss);
-            CHECK(ss.str().empty());
-            REQUIRE(result.data().size() == 3);
-            CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
-            REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
-            CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
-            REQUIRE(result.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-            CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\nwd3rf?ß");
-            CHECK(result.data()[2].getRepresentation() == "\"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"");
-        }
+        auto result = pplexes("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
+        REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
+        REQUIRE(result.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\wd3rf?ß");
+        CHECK(result.data()[2].getRepresentation() == "<agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
+    }
+    SECTION("\" \"")
+    {
+        auto result = pplexes("#include \"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"");
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
+        REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
+        REQUIRE(result.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "agejf 4er325öüöü-3/3423354f\\nwd3rf?ß");
+        CHECK(result.data()[2].getRepresentation() == "\"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"");
     }
 }
 
 TEST_CASE("Lexing universal character as suffix", "[lexer]")
 {
-    std::string buffer;
-    llvm::raw_string_ostream ss(buffer);
     SECTION("Interrupting universal character")
     {
+        std::string buffer;
+        llvm::raw_string_ostream ss(buffer);
         auto result = cld::Lexer::tokenize("\\u\\u00B5", cld::LanguageOptions::native(), false, &ss);
         CHECK_THAT(buffer, Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
         REQUIRE(result.data().size() == 1);
@@ -1321,8 +1309,7 @@ TEST_CASE("Lexing universal character as suffix", "[lexer]")
     }
     SECTION("Punctuation")
     {
-        auto result = cld::Lexer::tokenize("=\\u00B5", cld::LanguageOptions::native(), false, &ss);
-        CHECK(buffer.empty());
+        auto result = lexes("=\\u00B5");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Assignment);
         CHECK(result.data()[0].getRepresentation() == "=");
@@ -1333,8 +1320,7 @@ TEST_CASE("Lexing universal character as suffix", "[lexer]")
     }
     SECTION("Dots")
     {
-        auto result = cld::Lexer::tokenize(".\\u00B5", cld::LanguageOptions::native(), false, &ss);
-        CHECK(buffer.empty());
+        auto result = lexes(".\\u00B5");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
         CHECK(result.data()[0].getRepresentation() == ".");
@@ -1343,9 +1329,7 @@ TEST_CASE("Lexing universal character as suffix", "[lexer]")
         CHECK(std::get<std::string>(result.data()[1].getValue()) == "µ");
         CHECK(result.data()[1].getRepresentation() == "\\u00B5");
 
-        buffer.clear();
-        result = cld::Lexer::tokenize("..\\u00B5", cld::LanguageOptions::native(), false, &ss);
-        CHECK(buffer.empty());
+        result = lexes("..\\u00B5");
         REQUIRE(result.data().size() == 3);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
         CHECK(result.data()[0].getRepresentation() == ".");
@@ -1362,7 +1346,7 @@ TEST_CASE("Lexing Comments", "[lexer]")
 {
     SECTION("Line comments")
     {
-        auto result = cld::Lexer::tokenize("test//wdwdw\ntest");
+        auto result = lexes("test//wdwdw\ntest");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
@@ -1370,7 +1354,7 @@ TEST_CASE("Lexing Comments", "[lexer]")
         CHECK(result.data()[1].getOffset() == 12);
         CHECK(result.data()[1].getLine(result) == 2);
         CHECK(result.data()[1].getColumn(result) == 0);
-        result = cld::Lexer::tokenize("test//wdwdw\\\ntest");
+        result = lexes("test//wdwdw\\\ntest");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
@@ -1378,7 +1362,7 @@ TEST_CASE("Lexing Comments", "[lexer]")
     }
     SECTION("Block comments")
     {
-        auto result = cld::Lexer::tokenize("test/*wdwdw*/test");
+        auto result = lexes("test/*wdwdw*/test");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
@@ -1386,7 +1370,7 @@ TEST_CASE("Lexing Comments", "[lexer]")
         CHECK(result.data()[1].getOffset() == 13);
         CHECK(result.data()[1].getLine(result) == 1);
         CHECK(result.data()[1].getColumn(result) == 13);
-        result = cld::Lexer::tokenize("test/*wdwdw*\\\n/test");
+        result = lexes("test/*wdwdw*\\\n/test");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
@@ -1403,8 +1387,149 @@ TEST_CASE("Lexing unterminated tokens", "[lexer]")
     LEXER_OUTPUTS_WITH("ad\n\"test", Catch::Contains(UNTERMINATED_N.args(STRING_LITERAL)));
     LEXER_OUTPUTS_WITH("ad\n'test", Catch::Contains(UNTERMINATED_N.args(CHARACTER_LITERAL)));
     LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
+}
+
+TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
+{
+    SECTION("Simple")
+    {
+        auto result = pplexes("5");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "5");
+    }
+    SECTION("Starting with dot")
+    {
+        auto result = pplexes(".5");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == ".5");
+        result = pplexes("..5");
+        REQUIRE(result.data().size() == 2);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[1].getValue()));
+        CHECK(std::get<std::string>(result.data()[1].getValue()) == ".5");
+    }
+    SECTION("Containing identifier")
+    {
+        auto result = pplexes("5Ex");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "5Ex");
+    }
+    SECTION("Sign after e,E,p or P")
+    {
+        std::vector<std::string_view> text = {"5E+", "5E-", "5e+", "5e-", "5P+", "5P-", "5p+", "5p-"};
+        for (auto iter : text)
+        {
+            DYNAMIC_SECTION(iter)
+            {
+                auto result = pplexes(iter);
+                REQUIRE(result.data().size() == 1);
+                CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+                REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+                CHECK(std::get<std::string>(result.data()[0].getValue()) == iter);
+            }
+        }
+    }
+    SECTION("Containing dot")
+    {
+        auto result = pplexes("0.5.3F");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "0.5.3F");
+    }
+}
+
+TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
+{
+    SECTION("Valid")
+    {
+        auto result = pplexes("0\\u00B5");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "0\\u00B5");
+    }
+    SECTION("Incomplete")
+    {
+        auto result = pplexes("0\\ute");
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "0");
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Backslash);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[2].getValue()));
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "ute");
+    }
+    SECTION("Disallowed Value")
+    {
+        auto result = pplexes("0\\u0099");
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "0");
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Backslash);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[2].getValue()));
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "u0099");
+    }
+    SECTION("Disallowed in identifier")
+    {
+        auto result = pplexes("a\\u0024");
+        REQUIRE(result.data().size() == 4);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
+        CHECK(std::get<std::string>(result.data()[0].getValue()) == "a");
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Backslash);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::Identifier);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[2].getValue()));
+        CHECK(std::get<std::string>(result.data()[2].getValue()) == "u");
+        CHECK(result.data()[3].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(std::holds_alternative<std::string>(result.data()[3].getValue()));
+        CHECK(std::get<std::string>(result.data()[3].getValue()) == "0024");
+    }
+    SECTION("Backslash")
+    {
+        auto result = pplexes("\\ ");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Backslash);
+    }
+}
+
+TEST_CASE("Lexing Preprocessor unterminated characters", "[lexer]")
+{
+    SECTION("String literal")
+    {
+        auto result = pplexes("\"test");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
+    }
+    SECTION("String literal")
+    {
+        auto result = pplexes("'test");
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
+    }
+    PP_LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
     PP_LEXER_OUTPUTS_WITH("ad\n#include \"test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
     PP_LEXER_OUTPUTS_WITH("ad\n#include <test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
+}
+
+TEST_CASE("Lexing Preprocessor Miscellaneous")
+{
+    auto result = pplexes("〺");
+    REQUIRE(result.data().size() == 1);
+    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
+    result = pplexes("$");
+    REQUIRE(result.data().size() == 1);
+    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
 }
 
 namespace
@@ -1471,6 +1596,7 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
 
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
 {
+    cld::Lexer::tokenize("/:**:*/\\\\\\\\\\\\\\\\\\\\\\\x0a\x0a\x1c\\\\%%)>%%%//m]m]m]0\xf5z\x00z");
     cld::Lexer::tokenize(toS({
         0x2b, 0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x56, 0x6e, 0x5b, 0x2e, 0x0,  0x0,  0x2e, 0x27, 0x2e, 0x0,
         0x0,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x66, 0xa,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x98, 0x5d, 0x5d, 0x5d, 0x5d,
