@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_SEMANTICANALYSIS_HPP
-#define OPENCLPARSER_SEMANTICANALYSIS_HPP
+#pragma once
 
 #include <map>
 
@@ -99,5 +98,3 @@ public:
     std::vector<Declaration> visit(const Syntax::Declaration& node);
 };
 } // namespace cld::Semantics
-
-#endif // OPENCLPARSER_SEMANTICANALYSIS_HPP

@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_PARSER_HPP
-#define OPENCLPARSER_PARSER_HPP
+#pragma once
 
 #include <bitset2.hpp>
 #include <tl/function_ref.hpp>
@@ -298,5 +297,3 @@ constexpr cld::Parser::Context::TokenBitSet cld::Parser::Context::fromTokenTypes
     return (TokenBitSet() | ...
             | TokenBitSet().set(static_cast<std::underlying_type_t<Lexer::TokenType>>(tokenTypes), true));
 }
-
-#endif // OPENCLPARSER_PARSER_HPP

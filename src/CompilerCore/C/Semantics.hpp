@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_SEMANTICS_HPP
-#define OPENCLPARSER_SEMANTICS_HPP
+#pragma once
 
 #include <CompilerCore/Common/Expected.hpp>
 
@@ -467,5 +466,3 @@ cld::Expected<std::size_t, std::string> alignmentOf(const Type& type, const Lang
 
 bool isVoid(const Type& type);
 } // namespace cld::Semantics
-
-#endif // OPENCLPARSER_SEMANTICS_HPP

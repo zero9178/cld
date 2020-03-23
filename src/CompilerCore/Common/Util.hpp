@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_UTIL_HPP
-#define OPENCLPARSER_UTIL_HPP
+#pragma once
 
 #pragma warning(push, 0)
 #include <llvm/ADT/StringRef.h>
@@ -98,5 +97,3 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
         } while (0)
 
 #endif
-
-#endif // OPENCLPARSER_UTIL_HPP

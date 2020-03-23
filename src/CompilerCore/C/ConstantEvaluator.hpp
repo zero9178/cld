@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_CONSTANTEVALUATOR_HPP
-#define OPENCLPARSER_CONSTANTEVALUATOR_HPP
+#pragma once
 
 #include <functional>
 
@@ -209,5 +208,3 @@ public:
 };
 
 } // namespace cld::Semantics
-
-#endif // OPENCLPARSER_CONSTANTEVALUATOR_HPP

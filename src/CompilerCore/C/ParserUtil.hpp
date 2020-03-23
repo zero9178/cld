@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_PARSERUTIL_HPP
-#define OPENCLPARSER_PARSERUTIL_HPP
+#pragma once
 
 #include <utility>
 
@@ -187,5 +186,3 @@ bool firstIsInPostFixExpression(const Lexer::Token& token, const cld::Parser::Co
 
 bool firstIsInPrimaryExpression(const Lexer::Token& token, const cld::Parser::Context& context);
 } // namespace cld::Parser
-
-#endif // OPENCLPARSER_PARSERUTIL_HPP

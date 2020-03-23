@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_TESTCONFIG_HPP
-#define OPENCLPARSER_TESTCONFIG_HPP
+#pragma once
 
 #pragma warning(push, 0)
 #include <llvm/ADT/APInt.h>
@@ -128,5 +127,3 @@ struct StringMaker<cld::Semantics::Type>
     }
 };
 } // namespace Catch
-
-#endif // OPENCLPARSER_TESTCONFIG_HPP

@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_ERRORMESSAGES_HPP
-#define OPENCLPARSER_ERRORMESSAGES_HPP
+#pragma once
 
 #include "Message.hpp"
 
@@ -222,5 +221,3 @@ constexpr auto UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS = Format("Universal ch
 } // namespace cld
 
 #pragma clang diagnostic pop
-
-#endif // OPENCLPARSER_ERRORMESSAGES_HPP

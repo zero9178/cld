@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_SOURCEOBJECT_HPP
-#define OPENCLPARSER_SOURCEOBJECT_HPP
+#pragma once
 
 #pragma warning(push, 0)
 #include <llvm/Support/Casting.h>
@@ -84,5 +83,3 @@ public:
     [[nodiscard]] std::uint64_t getPPLineEndOffset(std::uint64_t line) const noexcept;
 };
 } // namespace cld
-
-#endif // OPENCLPARSER_SOURCEOBJECT_HPP

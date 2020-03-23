@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_LANGUAGEOPTIONS_HPP
-#define OPENCLPARSER_LANGUAGEOPTIONS_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -56,5 +55,3 @@ public:
     std::uint8_t getSizeOfVoidStar() const;
 };
 } // namespace cld
-
-#endif // OPENCLPARSER_LANGUAGEOPTIONS_HPP

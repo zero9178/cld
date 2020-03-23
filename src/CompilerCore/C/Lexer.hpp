@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_LEXER_HPP
-#define OPENCLPARSER_LEXER_HPP
+#pragma once
 
 #pragma warning(push, 0)
 #include <llvm/ADT/APFloat.h>
@@ -241,4 +240,3 @@ std::string constructPPTrimmed(const PPSourceObject& sourceObject, std::vector<c
 } // namespace Lexer
 } // namespace cld
 
-#endif // OPENCLPARSER_LEXER_HPP

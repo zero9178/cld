@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_EXPECTED_HPP
-#define OPENCLPARSER_EXPECTED_HPP
+#pragma once
 
 #include <variant>
 
@@ -270,5 +269,3 @@ constexpr Expected<T, E>::Expected(const Expected<U, E>& expected) : m_value(exp
 {
 }
 } // namespace cld
-
-#endif // OPENCLPARSER_EXPECTED_HPP

@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_SYNTAX_HPP
-#define OPENCLPARSER_SYNTAX_HPP
+#pragma once
 
 #include <memory>
 #include <optional>
@@ -1776,5 +1775,3 @@ template <class... T>
         variant);
 }
 } // namespace cld::Syntax
-
-#endif // OPENCLPARSER_SYNTAX_HPP

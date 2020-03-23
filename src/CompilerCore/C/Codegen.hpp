@@ -1,5 +1,5 @@
-#ifndef OPENCLPARSER_CODEGEN_HPP
-#define OPENCLPARSER_CODEGEN_HPP
+
+#pragma once
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
@@ -29,5 +29,3 @@ class Context final
     const Semantics::FunctionType* currentFunction;
 };
 } // namespace cld::Codegen
-
-#endif // OPENCLPARSER_CODEGEN_HPP

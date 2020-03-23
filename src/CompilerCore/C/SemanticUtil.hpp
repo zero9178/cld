@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_SEMANTICUTIL_HPP
-#define OPENCLPARSER_SEMANTICUTIL_HPP
+#pragma once
 
 #include <variant>
 
@@ -52,4 +51,3 @@ std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args..
 }
 } // namespace cld::Semantics
 
-#endif // OPENCLPARSER_SEMANTICUTIL_HPP

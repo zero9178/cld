@@ -1,5 +1,4 @@
-#ifndef OPENCLPARSER_MESSAGE_HPP
-#define OPENCLPARSER_MESSAGE_HPP
+#pragma once
 
 #include <optional>
 #include <string>
@@ -231,5 +230,3 @@ public:
     llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceObject& sourceObject) const;
 };
 } // namespace cld
-
-#endif // OPENCLPARSER_MESSAGE_HPP
