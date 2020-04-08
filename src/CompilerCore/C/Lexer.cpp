@@ -13,9 +13,9 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
+#include <ctre.hpp>
 #include <numeric>
 #include <optional>
-#include <regex>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -2533,6 +2533,8 @@ struct FirstArgOfMethod<R (*)(U, Args...) noexcept>
 };
 } // namespace
 
+constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]"};
+
 cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
                                        llvm::raw_ostream* reporter)
 {
@@ -2556,43 +2558,38 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     IntervalMap characterToSourceSpace(allocator);
     charactersSpace.reserve(source.size());
     {
-        static const std::regex toBeTransformed("(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]",
-                                                std::regex::ECMAScript | std::regex::optimize);
-        auto begin = std::cregex_iterator(source.data(), source.data() + source.size(), toBeTransformed);
-        auto end = std::cregex_iterator();
-
-        std::uint64_t left = 0;
-        for (auto iter = begin; iter != end; iter++)
+        auto stringView = std::string_view(source);
+        for (auto& iter : ctre::range<pattern>(stringView))
         {
-            const auto& match = *iter;
-            auto& prefix = match.prefix();
-            auto pos = match.position();
+            auto view = iter.view();
+            auto pos = view.data() - source.data();
+            auto prefix = stringView.substr(0, view.data() - stringView.data());
             if (prefix.length() != 0)
             {
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.length() - 1,
-                                              {pos - prefix.length(), pos});
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.size() - 1,
+                                              {pos - prefix.size(), pos});
             }
             charactersSpace += prefix;
-            if (!match[1].matched)
+            if (!iter.get<1>())
             {
                 // If the first and only group didn't match it's a trigraph
-                // While backslashes are removed and therefore not replaced we need to now replace the trigraph
+                // While backslashes are removed and therefore not replaced we need to now replace the
+                // trigraph
                 static const std::unordered_map<std::string_view, char> mapping = {
                     {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
                     {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
-                auto result = mapping.find(std::string_view(match[0].first, match[0].length()));
+                auto result = mapping.find(view);
                 CLD_ASSERT(result != mapping.end());
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(),
-                                              {pos, pos + match[0].length()});
+                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(), {pos, pos + view.size()});
                 charactersSpace += result->second;
             }
-            left = pos + match[0].length();
+            stringView.remove_prefix(prefix.size() + view.size());
         }
-        if (left < source.size())
+        if (!stringView.empty())
         {
-            characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + source.size() - left - 1,
-                                          {left, source.size()});
-            charactersSpace += source.substr(left);
+            characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + stringView.size() - 1,
+                                          {source.size() - stringView.size(), source.size()});
+            charactersSpace += stringView;
         }
     }
 

@@ -8,7 +8,7 @@
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Common/Util.hpp>
 
-#include <regex>
+#include <ctre.hpp>
 #include <utility>
 
 cld::Message::Message(Severity severity, std::string message, Lexer::TokenIterator begin,
@@ -328,31 +328,26 @@ const std::string& cld::Modifier::getActionArgument() const
     return m_actionArgument;
 }
 
+constexpr static auto pattern = ctll::fixed_string{R"(\{\})"};
+
 std::string cld::Format::format(std::vector<std::string> args) const
 {
-    static std::regex brackets(R"(\\*\{\})", std::regex::ECMAScript | std::regex::optimize);
     std::reverse(args.begin(), args.end());
-    std::smatch matches;
-    std::string result = m_format;
-    auto start = result.cbegin();
-    while (start < result.cend() && std::regex_search(start, result.cend(), matches, brackets))
+    std::string result;
+    auto stringView = std::string_view(m_format);
+    for (auto& iter : ctre::range<pattern>(stringView))
     {
-        auto size = matches.suffix().first - result.cbegin() - (matches[0].second - matches[0].first) + 1;
-        auto pos = matches[0].str().find_first_not_of('\\');
-        if (pos != std::string::npos && pos % 2 == 1)
-        {
-            start = result.cbegin() + size;
-            continue;
-        }
+        auto view = iter.view();
+        result.insert(result.end(), stringView.data(), view.data());
         if (args.empty())
         {
             CLD_ASSERT(false && "Not enough arguments specified to substitute in format");
         }
-        result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
-                 + std::string(matches[0].second, result.cend());
-        start = result.cbegin() + args.back().size() + (size - 1);
+        stringView.remove_prefix(std::distance(stringView.data(), view.data() + view.size()));
+        result += args.back();
         args.pop_back();
     }
+    result += stringView;
     if (!args.empty())
     {
         CLD_ASSERT(false && "More arguments specified than needed to substitute");

@@ -92,7 +92,7 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
                 __assume(false); \
             while (0)
 
-        #define CLD_ASSERT(x) __assume(x)
+        #define CLD_ASSERT(x) __assume((bool)(x))
 
     #endif
 
