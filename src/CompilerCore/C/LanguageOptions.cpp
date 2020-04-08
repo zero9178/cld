@@ -21,20 +21,20 @@ cld::LanguageOptions::LanguageOptions(Language language, std::uint8_t sizeOfUnde
       m_sizeOfVoidStar(sizeOfVoidStar)
 {
     // C Standard requirements
-    assert(m_sizeOfShort >= 2);
-    assert(m_sizeOfInt >= 2);
-    assert(m_sizeOfShort <= m_sizeOfInt);
-    assert(m_sizeOfLong >= 4);
-    assert(m_sizeOfInt <= m_sizeOfLong);
+    CLD_ASSERT(m_sizeOfShort >= 2);
+    CLD_ASSERT(m_sizeOfInt >= 2);
+    CLD_ASSERT(m_sizeOfShort <= m_sizeOfInt);
+    CLD_ASSERT(m_sizeOfLong >= 4);
+    CLD_ASSERT(m_sizeOfInt <= m_sizeOfLong);
 
     // This implementations limits
-    assert(m_sizeOfUnderlineBool <= 8);
-    assert(m_sizeOfShort <= 8);
-    assert(m_sizeOfWChar <= 8);
-    assert(m_sizeOfInt <= 8);
-    assert(m_sizeOfLong <= 8);
+    CLD_ASSERT(m_sizeOfUnderlineBool <= 8);
+    CLD_ASSERT(m_sizeOfShort <= 8);
+    CLD_ASSERT(m_sizeOfWChar <= 8);
+    CLD_ASSERT(m_sizeOfInt <= 8);
+    CLD_ASSERT(m_sizeOfLong <= 8);
 
-    assert(m_sizeOfLongDoubleBits == 64 || m_sizeOfLongDoubleBits == 80 || m_sizeOfLongDoubleBits == 128);
+    CLD_ASSERT(m_sizeOfLongDoubleBits == 64 || m_sizeOfLongDoubleBits == 80 || m_sizeOfLongDoubleBits == 128);
 }
 
 cld::LanguageOptions::Language cld::LanguageOptions::getLanguage() const
@@ -88,7 +88,7 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
                 case 53: return 64;
                 case 64: return 80;
                 case 113: return 128;
-                default: OPENCL_UNREACHABLE;
+                default: CLD_UNREACHABLE;
             }
         }(),
         sizeof(void*));

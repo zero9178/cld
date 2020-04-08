@@ -1272,7 +1272,7 @@ TEST_CASE("Lexing include directives", "[lexer]")
     SECTION("< >")
     {
         auto result = pplexes("#include <agejf 4er325öüöü-3/3423354f\\wd3rf?ß>");
-        REQUIRE(result.data().size() == 3);
+        REQUIRE(result.data().size() == 4);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
         REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
         CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
@@ -1283,7 +1283,7 @@ TEST_CASE("Lexing include directives", "[lexer]")
     SECTION("\" \"")
     {
         auto result = pplexes("#include \"agejf 4er325öüöü-3/3423354f\\nwd3rf?ß\"");
-        REQUIRE(result.data().size() == 3);
+        REQUIRE(result.data().size() == 4);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
         REQUIRE(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
         CHECK(std::get<std::string>(result.data()[1].getValue()) == "include");
@@ -1394,7 +1394,7 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
     SECTION("Simple")
     {
         auto result = pplexes("5");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "5");
@@ -1402,12 +1402,12 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
     SECTION("Starting with dot")
     {
         auto result = pplexes(".5");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == ".5");
         result = pplexes("..5");
-        REQUIRE(result.data().size() == 2);
+        REQUIRE(result.data().size() == 3);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Dot);
         CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[1].getValue()));
@@ -1416,7 +1416,7 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
     SECTION("Containing identifier")
     {
         auto result = pplexes("5Ex");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "5Ex");
@@ -1429,7 +1429,7 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
             DYNAMIC_SECTION(iter)
             {
                 auto result = pplexes(iter);
-                REQUIRE(result.data().size() == 1);
+                REQUIRE(result.data().size() == 2);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
                 REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
                 CHECK(std::get<std::string>(result.data()[0].getValue()) == iter);
@@ -1439,7 +1439,7 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
     SECTION("Containing dot")
     {
         auto result = pplexes("0.5.3F");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "0.5.3F");
@@ -1451,7 +1451,7 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
     SECTION("Valid")
     {
         auto result = pplexes("0\\u00B5");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "0\\u00B5");
@@ -1459,7 +1459,7 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
     SECTION("Incomplete")
     {
         auto result = pplexes("0\\ute");
-        REQUIRE(result.data().size() == 3);
+        REQUIRE(result.data().size() == 4);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "0");
@@ -1471,7 +1471,7 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
     SECTION("Disallowed Value")
     {
         auto result = pplexes("0\\u0099");
-        REQUIRE(result.data().size() == 3);
+        REQUIRE(result.data().size() == 4);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "0");
@@ -1483,7 +1483,7 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
     SECTION("Disallowed in identifier")
     {
         auto result = pplexes("a\\u0024");
-        REQUIRE(result.data().size() == 4);
+        REQUIRE(result.data().size() == 5);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "a");
@@ -1498,7 +1498,7 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
     SECTION("Backslash")
     {
         auto result = pplexes("\\ ");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Backslash);
     }
 }
@@ -1508,13 +1508,13 @@ TEST_CASE("Lexing Preprocessor unterminated characters", "[lexer]")
     SECTION("String literal")
     {
         auto result = pplexes("\"test");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
     }
     SECTION("String literal")
     {
         auto result = pplexes("'test");
-        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
     }
     PP_LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
@@ -1525,11 +1525,40 @@ TEST_CASE("Lexing Preprocessor unterminated characters", "[lexer]")
 TEST_CASE("Lexing Preprocessor Miscellaneous")
 {
     auto result = pplexes("〺");
-    REQUIRE(result.data().size() == 1);
+    REQUIRE(result.data().size() == 2);
     CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
+    CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
     result = pplexes("$");
-    REQUIRE(result.data().size() == 1);
+    REQUIRE(result.data().size() == 2);
     CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Miscellaneous);
+    CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
+}
+
+TEST_CASE("Lexing Preprocessor Newlines")
+{
+    // Sanity check
+    auto result = lexes("\n");
+    CHECK(result.data().empty());
+    result = pplexes("#if 0\n50\n#endif");
+    REQUIRE(result.data().size() == 9);
+    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
+    CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
+    CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::PPNumber);
+    CHECK(result.data()[3].getTokenType() == cld::Lexer::TokenType::Newline);
+    CHECK(result.data()[4].getTokenType() == cld::Lexer::TokenType::PPNumber);
+    CHECK(result.data()[5].getTokenType() == cld::Lexer::TokenType::Newline);
+    CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::Pound);
+    CHECK(result.data()[7].getTokenType() == cld::Lexer::TokenType::Identifier);
+    CHECK(result.data()[8].getTokenType() == cld::Lexer::TokenType::Newline);
+    result = pplexes("#if 0\\\n50\n#endif");
+    REQUIRE(result.data().size() == 7);
+    CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Pound);
+    CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Identifier);
+    CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::PPNumber);
+    CHECK(result.data()[3].getTokenType() == cld::Lexer::TokenType::Newline);
+    CHECK(result.data()[4].getTokenType() == cld::Lexer::TokenType::Pound);
+    CHECK(result.data()[5].getTokenType() == cld::Lexer::TokenType::Identifier);
+    CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::Newline);
 }
 
 namespace
@@ -1596,6 +1625,22 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
 
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
 {
+    cld::Lexer::tokenize("#define   ue(efi,n\\");
+    cld::Lexer::tokenize("#if\n"
+                         "i3#if\n"
+                         "  if\n"
+                         "\n"
+                         "#if\n"
+                         "#if\n"
+                         "\n"
+                         "se\n"
+                         "#else\n"
+                         "#if\n"
+                         "#else\n"
+                         "            ef)\n"
+                         "  8\\uEEEEEEEEEEEEEEEEEEEEEse\n"
+                         "#",
+                         cld::LanguageOptions::native(), true);
     cld::Lexer::tokenize("/:**:*/\\\\\\\\\\\\\\\\\\\\\\\x0a\x0a\x1c\\\\%%)>%%%//m]m]m]0\xf5z\x00z");
     cld::Lexer::tokenize(toS({
         0x2b, 0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x56, 0x6e, 0x5b, 0x2e, 0x0,  0x0,  0x2e, 0x27, 0x2e, 0x0,

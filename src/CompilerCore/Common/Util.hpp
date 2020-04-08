@@ -5,6 +5,7 @@
 #include <llvm/Support/Unicode.h>
 #pragma warning(pop)
 
+#include <cassert>
 #include <cstdlib>
 #include <string>
 #include <variant>
@@ -19,7 +20,7 @@ struct overload : Ts...
     using Ts::operator()...;
 };
 template <class... Ts>
-overload(Ts...)->overload<Ts...>;
+overload(Ts...) -> overload<Ts...>;
 
 template <typename G>
 struct Y
@@ -34,7 +35,7 @@ struct Y
 };
 
 template <typename G>
-Y(G)->Y<G>;
+Y(G) -> Y<G>;
 } // namespace detail
 
 template <typename Variant, typename... Matchers>
@@ -73,23 +74,33 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
 
     #ifndef _MSC_VER
 
-        #define OPENCL_UNREACHABLE       \
+        #define CLD_UNREACHABLE          \
             do                           \
                 __builtin_unreachable(); \
             while (0)
 
+        #define CLD_ASSERT(x) \
+            if (x)            \
+                ;             \
+            else              \
+                __builtin_unreachable()
+
     #else
 
-        #define OPENCL_UNREACHABLE \
-            do                     \
-                __assume(false);   \
+        #define CLD_UNREACHABLE  \
+            do                   \
+                __assume(false); \
             while (0)
+
+        #define CLD_ASSERT(x) __assume(x)
 
     #endif
 
 #else
 
-    #define OPENCL_UNREACHABLE                                                           \
+    #define CLD_ASSERT(x) assert(x)
+
+    #define CLD_UNREACHABLE                                                              \
         do                                                                               \
         {                                                                                \
             assert(false);                                                               \

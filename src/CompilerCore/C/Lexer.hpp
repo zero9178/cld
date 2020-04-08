@@ -226,17 +226,14 @@ std::string tokenName(TokenType tokenType);
  */
 std::string tokenValue(TokenType tokenType);
 
-std::string reconstruct(const SourceObject& sourceObject, std::vector<Token>::const_iterator begin,
-                        std::vector<Token>::const_iterator end);
+using TokenIterator = std::vector<Token>::const_iterator;
 
-std::string reconstructTrimmed(const SourceObject& sourceObject, std::vector<cld::Lexer::Token>::const_iterator begin,
-                               std::vector<cld::Lexer::Token>::const_iterator end);
+std::string reconstruct(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end);
 
-std::string constructPP(const PPSourceObject& sourceObject, std::vector<Token>::const_iterator begin,
-                        std::vector<Token>::const_iterator end);
+std::string reconstructTrimmed(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end);
 
-std::string constructPPTrimmed(const PPSourceObject& sourceObject, std::vector<cld::Lexer::Token>::const_iterator begin,
-                               std::vector<cld::Lexer::Token>::const_iterator end);
+std::string constructPP(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end);
+
+std::string constructPPTrimmed(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end);
 } // namespace Lexer
 } // namespace cld
-

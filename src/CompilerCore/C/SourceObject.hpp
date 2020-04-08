@@ -1,9 +1,5 @@
 #pragma once
 
-#pragma warning(push, 0)
-#include <llvm/Support/Casting.h>
-#pragma warning(pop)
-
 #include <map>
 
 #include "LanguageOptions.hpp"

@@ -50,4 +50,3 @@ std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args..
     return {result, resultDepth};
 }
 } // namespace cld::Semantics
-

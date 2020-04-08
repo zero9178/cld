@@ -1,7 +1,8 @@
 #include "Parser.hpp"
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <algorithm>
-#include <cassert>
 
 #include "ParserUtil.hpp"
 #include "SourceObject.hpp"
@@ -55,7 +56,7 @@ void cld::Parser::Context::log(std::vector<Message> messages)
 
 void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
 {
-    assert(!name.empty());
+    CLD_ASSERT(!name.empty());
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
@@ -110,8 +111,7 @@ cld::Parser::Context::Context(const SourceObject& sourceObject, llvm::raw_ostrea
 {
 }
 
-cld::Parser::Context::TokenBitReseter
-    cld::Parser::Context::withRecoveryTokens(const cld::Parser::Context::TokenBitSet& tokenBitSet)
+cld::Parser::Context::TokenBitReseter cld::Parser::Context::withRecoveryTokens(const TokenBitSet& tokenBitSet)
 {
     auto oldSet = m_recoverySet;
     m_recoverySet |= tokenBitSet;
@@ -128,16 +128,14 @@ cld::Parser::Context::TokenBitReseter::~TokenBitReseter()
     m_context.m_recoverySet = m_original;
 }
 
-void cld::Parser::Context::skipUntil(std::vector<cld::Lexer::Token>::const_iterator& begin,
-                                     std::vector<cld::Lexer::Token>::const_iterator end,
-                                     cld::Parser::Context::TokenBitSet additional)
+void cld::Parser::Context::skipUntil(Lexer::TokenIterator& begin, Lexer::TokenIterator end, TokenBitSet additional)
 {
     begin = std::find_if(begin, end, [bitset = m_recoverySet | additional](const Lexer::Token& token) {
         return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
     });
 }
 
-void cld::Parser::Context::parenthesesEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::parenthesesEntered(Lexer::TokenIterator bracket)
 {
     if (++m_parenthesesDepth <= m_bracketMax)
     {
@@ -153,7 +151,7 @@ void cld::Parser::Context::parenthesesLeft()
     m_parenthesesDepth--;
 }
 
-void cld::Parser::Context::squareBracketEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::squareBracketEntered(Lexer::TokenIterator bracket)
 {
     if (++m_squareBracketDepth <= m_bracketMax)
     {
@@ -169,7 +167,7 @@ void cld::Parser::Context::squareBracketLeft()
     m_squareBracketDepth--;
 }
 
-void cld::Parser::Context::braceEntered(std::vector<cld::Lexer::Token>::const_iterator bracket)
+void cld::Parser::Context::braceEntered(Lexer::TokenIterator bracket)
 {
     if (++m_braceDepth <= m_bracketMax)
     {

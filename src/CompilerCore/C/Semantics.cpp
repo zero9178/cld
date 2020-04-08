@@ -7,7 +7,6 @@
 #include "CompilerCore/Common/Util.hpp"
 
 #include "ErrorMessages.hpp"
-#include "Syntax.hpp"
 
 const cld::Semantics::Type& cld::Semantics::ArrayType::getType() const
 {
@@ -638,7 +637,7 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
         [&options](const PointerType&) -> Expected<std::size_t, std::string> {
             return std::size_t{options.getSizeOfVoidStar()};
         },
-        [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
 }
 
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
@@ -730,7 +729,7 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
         [&options](const PointerType&) -> Expected<std::size_t, std::string> {
             return std::size_t{options.getSizeOfVoidStar()};
         },
-        [](std::monostate) -> Expected<std::size_t, std::string> { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
 }
 
 cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,

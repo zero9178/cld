@@ -91,7 +91,7 @@ struct ProducesNoWarnings : Catch::Matchers::StdString::ContainsMatcher
     }
 };
 
-#define producesNothing() ProducesNoErrors() && ProducesNoNotes() && ProducesNoWarnings()
+#define ProducesNothing() ProducesNoErrors() && ProducesNoNotes() && ProducesNoWarnings()
 
 } // namespace cld::Tests
 

@@ -182,11 +182,15 @@ namespace PP
 {
 constexpr auto N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE = Format("{} is an invalid preprocessor directive");
 
+constexpr auto REDEFINITION_OF_MACRO_PARAMETER_N = Format("Redefinition of macro parameter {}");
+
+constexpr auto WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION = "Whitespace required after object macro definition";
+
+constexpr auto DEFINED_CANNOT_BE_USED_AS_MACRO_NAME = "'defined' cannot be used as macro name";
+
 constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for Macro {}");
 
 constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for Macro {}");
-
-constexpr auto WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION = "Whitespace required after object macro definition";
 } // namespace PP
 } // namespace ErrorMessages
 
@@ -210,8 +214,6 @@ constexpr auto TO_MATCH_N_HERE = Format("To match {} here:");
 constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
 
 constexpr auto PREVIOUS_STORAGE_SPECIFIER_HERE = "Previous storage specifier encountered here:";
-
-constexpr auto MISSING_N = Format("Missing {}");
 
 namespace Lexer
 {

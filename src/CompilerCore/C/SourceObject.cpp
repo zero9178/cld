@@ -2,13 +2,11 @@
 
 #include <CompilerCore/Common/Util.hpp>
 
-#include <cassert>
-
 cld::SourceObject::SourceObject(std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
                                 LanguageOptions languageOptions)
     : m_starts(std::move(starts)), m_languageOptions(languageOptions), m_tokens(std::move(tokens))
 {
-    assert(std::is_sorted(m_starts.begin(), m_starts.end()));
+    CLD_ASSERT(std::is_sorted(m_starts.begin(), m_starts.end()));
 }
 
 cld::LanguageOptions cld::SourceObject::getLanguageOptions() const
@@ -24,13 +22,13 @@ std::uint64_t cld::SourceObject::getLineNumber(std::uint64_t offset) const noexc
 
 std::uint64_t cld::SourceObject::getLineStartOffset(std::uint64_t line) const noexcept
 {
-    assert(line - 1 < m_starts.size());
+    CLD_ASSERT(line - 1 < m_starts.size());
     return m_starts[line - 1];
 }
 
 std::uint64_t cld::SourceObject::getLineEndOffset(std::uint64_t line) const noexcept
 {
-    assert(line - 1 < m_starts.size());
+    CLD_ASSERT(line - 1 < m_starts.size());
     return line == m_starts.size() ? m_tokens.back().getOffset() + m_tokens.back().getLength() : m_starts[line];
 }
 
@@ -64,12 +62,12 @@ std::uint64_t cld::PPSourceObject::getPPLineNumber(std::uint64_t offset) const n
 
 std::uint64_t cld::PPSourceObject::getPPLineStartOffset(std::uint64_t line) const noexcept
 {
-    assert(line - 1 < m_starts.size());
+    CLD_ASSERT(line - 1 < m_starts.size());
     return m_starts[line - 1];
 }
 
 std::uint64_t cld::PPSourceObject::getPPLineEndOffset(std::uint64_t line) const noexcept
 {
-    assert(line - 1 < m_starts.size());
+    CLD_ASSERT(line - 1 < m_starts.size());
     return line == m_starts.size() ? m_tokens.back().getPPOffset() + m_tokens.back().getLength() : m_starts[line];
 }

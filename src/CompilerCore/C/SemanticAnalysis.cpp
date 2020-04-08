@@ -246,7 +246,7 @@ std::optional<cld::Semantics::FunctionDefinition>
                 !inserted)
             {
                 // TODO: Modifier
-                std::vector<Lexer::Token>::const_iterator identifierLoc;
+                Lexer::TokenIterator identifierLoc;
                 auto decl = std::find_if(node.getDeclarations().begin(), node.getDeclarations().end(),
                                          [&declarations, &identifierLoc](const Syntax::Declaration& declaration) {
                                              return std::any_of(declaration.getInitDeclarators().begin(),
@@ -794,12 +794,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                                         return result + " unsigned";
                                     case Syntax::TypeSpecifier::PrimitiveTypeSpecifier::Bool: return result + " _Bool";
                                 }
-                                OPENCL_UNREACHABLE;
+                                CLD_UNREACHABLE;
                             });
         log({Message::error(cld::ErrorMessages::Semantics::UNKNOWN_TYPE_N.args(text), declStart, declEnd,
                             cld::Modifier(declStart, declEnd))});
     }
-    OPENCL_UNREACHABLE;
+    CLD_UNREACHABLE;
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToType(
@@ -1070,8 +1070,8 @@ const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getTypedef(const s
     return nullptr;
 }
 
-cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<Lexer::Token>::const_iterator declStart,
-                                                             std::vector<Lexer::Token>::const_iterator declEnd,
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(Lexer::TokenIterator declStart,
+                                                             Lexer::TokenIterator declEnd,
                                                              PossiblyAbstractQualifierRef declarator, Type&& baseType,
                                                              const std::vector<Syntax::Declaration>& declarations)
 {
@@ -1386,7 +1386,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
             std::vector<std::pair<Type, std::string>> arguments(
                 identifiers.getIdentifiers().size(),
                 {PrimitiveType::createInt(false, false, m_sourceObject.getLanguageOptions()), ""});
-            using Iterator = std::vector<Lexer::Token>::const_iterator;
+            using Iterator = Lexer::TokenIterator;
             struct TypeBinding
             {
                 Type type;

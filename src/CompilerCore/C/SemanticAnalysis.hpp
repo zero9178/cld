@@ -54,18 +54,15 @@ class SemanticAnalysis final
                                               const std::vector<const cld::Syntax::TypeSpecifier*>& typeSpecifiers,
                                               bool isConst, bool isVolatile);
 
-    cld::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
-                               std::vector<Lexer::Token>::const_iterator declEnd,
+    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
                                PossiblyAbstractQualifierRef declarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 
-    cld::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
-                               std::vector<Lexer::Token>::const_iterator declEnd,
+    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
                                const Syntax::DirectAbstractDeclarator& abstractDeclarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 
-    cld::Semantics::Type apply(std::vector<Lexer::Token>::const_iterator declStart,
-                               std::vector<Lexer::Token>::const_iterator declEnd,
+    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
                                const Syntax::DirectDeclarator& directDeclarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 

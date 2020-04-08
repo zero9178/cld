@@ -1,7 +1,6 @@
-#include <llvm/Support/raw_ostream.h>
 
-#include <CompilerCore/C/Lexer.hpp>
 #include <CompilerCore/C/SourceObject.hpp>
+#include <CompilerCore/Preprocessor/Parser.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -22,6 +21,11 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
     std::string output;
     llvm::raw_string_ostream ss(output);
-    cld::Lexer::tokenize(input, cld::LanguageOptions::native(), true, &ss);
+    auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), true, &ss);
+    if (!output.empty() || tokens.data().empty())
+    {
+        return 0;
+    }
+    cld::PP::buildTree(tokens, &ss);
     return 0;
 }

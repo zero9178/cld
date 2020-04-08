@@ -1,5 +1,31 @@
 #include "ParserUtil.hpp"
 
+bool cld::Parser::expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenIterator end,
+                         Context& context, std::vector<Message> additional)
+{
+    if (curr == end || curr->getTokenType() != expected)
+    {
+        if (curr == end)
+        {
+            context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
+                                        Modifier{end - 1, end, Modifier::InsertAtEnd, Lexer::tokenValue(expected)})});
+        }
+        else
+        {
+            context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                            Lexer::tokenName(expected), '\'' + curr->getRepresentation() + '\''),
+                                        curr, Modifier{curr, curr + 1, Modifier::PointAtBeginning})});
+        }
+        context.log(std::move(additional));
+        return false;
+    }
+    else
+    {
+        curr++;
+        return true;
+    }
+}
+
 bool cld::Parser::isAssignment(Lexer::TokenType type)
 {
     return type == Lexer::TokenType::Assignment || type == Lexer::TokenType::PlusAssign

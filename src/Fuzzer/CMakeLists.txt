@@ -22,3 +22,11 @@ add_executable(ppLexerFuzzer ppLexerFuzzer.cpp)
 target_link_libraries(ppLexerFuzzer Frontend)
 target_compile_options(ppLexerFuzzer PRIVATE -fno-omit-frame-pointer -fsanitize=fuzzer,undefined,address,leak)
 target_link_options(ppLexerFuzzer PRIVATE -fsanitize=fuzzer,undefined,address,leak)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/PPParserCorpus)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/PPParserLogs)
+
+add_executable(ppParserFuzzer ppParserFuzzer.cpp)
+target_link_libraries(ppParserFuzzer Frontend)
+target_compile_options(ppParserFuzzer PRIVATE -fno-omit-frame-pointer -fsanitize=fuzzer,undefined,address,leak)
+target_link_options(ppParserFuzzer PRIVATE -fsanitize=fuzzer,undefined,address,leak)

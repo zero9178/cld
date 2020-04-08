@@ -32,7 +32,7 @@ cld::Semantics::Type getPtrdiff_t(const cld::LanguageOptions& options)
         }
         else
         {
-            OPENCL_UNREACHABLE;
+            CLD_UNREACHABLE;
         }
     }
     else if (options.getSizeOfVoidStar() == 8)
@@ -56,7 +56,7 @@ cld::Semantics::Type getPtrdiff_t(const cld::LanguageOptions& options)
     }
     else
     {
-        OPENCL_UNREACHABLE;
+        CLD_UNREACHABLE;
     }
 }
 } // namespace
@@ -83,7 +83,7 @@ cld::Semantics::ConstRetType
                 case Lexer::Token::Type::Double: return {floating, PrimitiveType::createDouble(false, false)};
                 case Lexer::Token::Type::LongDouble:
                     return {floating, PrimitiveType::createLongDouble(false, false, m_languageOptions)};
-                default: OPENCL_UNREACHABLE;
+                default: CLD_UNREACHABLE;
             }
         },
         [this, &node](const llvm::APSInt& integer) -> Semantics::ConstRetType {
@@ -100,7 +100,7 @@ cld::Semantics::ConstRetType
                 case Lexer::Token::Type::LongLong: return {integer, PrimitiveType::createLongLong(false, false)};
                 case Lexer::Token::Type::UnsignedLongLong:
                     return {integer, PrimitiveType::createUnsignedLongLong(false, false)};
-                default: OPENCL_UNREACHABLE;
+                default: CLD_UNREACHABLE;
             }
         });
 }
@@ -945,7 +945,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 case Syntax::AssignmentExpression::AssignOperator::BitOrAssign: return "|=";
                 case Syntax::AssignmentExpression::AssignOperator::BitXorAssign: return "^=";
             }
-            OPENCL_UNREACHABLE;
+            CLD_UNREACHABLE;
         }() + '\''),
                  Modifier(cond.begin() - 1, cond.begin()));
     }
@@ -1017,7 +1017,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::integerPromotion(cons
 {
     return match(
         m_value, [this](VoidStar) -> ConstRetType { return *this; },
-        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [this](const llvm::APFloat&) -> ConstRetType { return *this; },
         [this, &options](const llvm::APSInt& integer) -> ConstRetType {
             if (integer.getBitWidth() < options.getSizeOfInt() * 8u)
@@ -1039,8 +1039,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::negate(const Language
 {
     auto temp = integerPromotion(options);
     return match(
-        temp.getValue(), [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        temp.getValue(), [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&temp](llvm::APFloat floating) -> ConstRetType {
             floating.changeSign();
             return {floating, temp.getType()};
@@ -1059,7 +1059,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::logicalNegate(const L
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
                     Semantics::PrimitiveType::createInt(false, false, options)};
         },
-        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&options](const llvm::APFloat& floating) -> ConstRetType {
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, floating.isZero()), false),
                     Semantics::PrimitiveType::createInt(false, false, options)};
@@ -1074,9 +1074,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitwiseNegate(const L
 {
     auto temp = integerPromotion(options);
     return match(
-        temp.getValue(), [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        temp.getValue(), [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&temp](llvm::APSInt integer) -> ConstRetType {
             integer.flipAllBits();
             return {integer, temp.getType()};
@@ -1099,21 +1099,21 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
     auto copy = type.get();
     auto nonLvalue = Type(false, false, type.getName(), std::move(copy));
     return match(
-        m_value, [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        m_value, [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&nonLvalue, issues, this, &options](VoidStar address) -> ConstRetType {
             return match(
-                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
                 [issues, address, &nonLvalue, this, &options](const PrimitiveType& primitiveType) -> ConstRetType {
                     if (primitiveType.isFloatingPoint())
                     {
-                        OPENCL_UNREACHABLE;
+                        CLD_UNREACHABLE;
                     }
                     if (primitiveType.getBitCount() == 1)
                     {
                         auto result = toBool(options);
                         if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
                         {
-                            OPENCL_UNREACHABLE;
+                            CLD_UNREACHABLE;
                         }
                         return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
@@ -1142,7 +1142,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
         },
         [&nonLvalue, &options, this, issues](llvm::APFloat floating) -> ConstRetType {
             return match(
-                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
                 [&nonLvalue, &floating, this, &options,
                  issues](const PrimitiveType& primitiveType) mutable -> ConstRetType {
                     bool response;
@@ -1167,7 +1167,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                 op = floating.convert(llvm::APFloat::IEEEquad(), llvm::APFloat::rmNearestTiesToEven,
                                                       &response);
                                 break;
-                            default: OPENCL_UNREACHABLE;
+                            default: CLD_UNREACHABLE;
                         }
                         return {floating, nonLvalue};
                     }
@@ -1176,7 +1176,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         auto result = toBool(options);
                         if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
                         {
-                            OPENCL_UNREACHABLE;
+                            CLD_UNREACHABLE;
                         }
                         return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
@@ -1203,7 +1203,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
         },
         [&nonLvalue, issues, this, &options](const llvm::APSInt& integer) -> ConstRetType {
             return match(
-                nonLvalue.get(), [](const auto&) -> ConstRetType { OPENCL_UNREACHABLE; },
+                nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
                 [issues, &nonLvalue, this, &integer, &options](const PrimitiveType& primitiveType) -> ConstRetType {
                     if (primitiveType.isFloatingPoint())
                     {
@@ -1214,7 +1214,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                 case 64: return llvm::APFloat::IEEEdouble();
                                 case 80: return llvm::APFloat::x87DoubleExtended();
                                 case 128: return llvm::APFloat::IEEEquad();
-                                default: OPENCL_UNREACHABLE;
+                                default: CLD_UNREACHABLE;
                             }
                         }();
                         // A 64 bit integer can always be correctly represented in 32 bit float
@@ -1228,7 +1228,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         auto result = toBool(options);
                         if (!std::holds_alternative<llvm::APSInt>(result.getValue()))
                         {
-                            OPENCL_UNREACHABLE;
+                            CLD_UNREACHABLE;
                         }
                         return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
@@ -1345,8 +1345,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::multiply(const cld::S
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
             return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
@@ -1367,8 +1367,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::divide(const cld::Sem
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
             return {floating / std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
@@ -1389,8 +1389,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::modulo(const cld::Sem
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
             return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
@@ -1425,17 +1425,17 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Seman
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &op1 = op1, &options](VoidStar address) -> ConstRetType {
             if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {
-                OPENCL_UNREACHABLE;
+                CLD_UNREACHABLE;
             }
             auto& integer = std::get<llvm::APSInt>(op2.getValue());
             auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
             if (!size)
             {
-                OPENCL_UNREACHABLE;
+                CLD_UNREACHABLE;
             }
             if (integer.isUnsigned())
             {
@@ -1457,7 +1457,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Seman
                 auto size = sizeOf(std::get<PointerType>(op2.getType().get()).getElementType(), options);
                 if (!size)
                 {
-                    OPENCL_UNREACHABLE;
+                    CLD_UNREACHABLE;
                 }
                 if (integer.isUnsigned())
                 {
@@ -1491,12 +1491,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &op1 = op1, &options](VoidStar address) -> ConstRetType {
             auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
             if (!size)
             {
-                OPENCL_UNREACHABLE;
+                CLD_UNREACHABLE;
             }
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
@@ -1508,7 +1508,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
             }
             if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {
-                OPENCL_UNREACHABLE;
+                CLD_UNREACHABLE;
             }
             auto& integer = std::get<llvm::APSInt>(op2.getValue());
             if (integer.isUnsigned())
@@ -1549,9 +1549,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftLeft(const cld::
     auto op1 = integerPromotion(options);
     auto op2 = rhs.integerPromotion(options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.sshl_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
@@ -1578,9 +1578,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftRight(const cld:
     auto op1 = integerPromotion(options);
     auto op2 = rhs.integerPromotion(options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             auto op2Integer = std::get<llvm::APSInt>(op2.getValue());
             if (issues && (op2Integer.isSignBitSet() || op2Integer.getZExtValue() >= integer.getBitWidth()))
@@ -1603,9 +1603,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitAnd(const cld::Sem
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
             return {integer & std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
@@ -1622,9 +1622,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitXor(const cld::Sem
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
             return {integer ^ std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
@@ -1641,9 +1641,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitOr(const cld::Sema
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](VoidStar) -> ConstRetType { OPENCL_UNREACHABLE; },
-        [](const llvm::APFloat&) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
+        [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
+        [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
             return {integer | std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
@@ -1661,7 +1661,7 @@ cld::Semantics::ConstRetType::operator bool() const
         m_value, [](VoidStar address) -> bool { return address.address != 0; },
         [](const llvm::APFloat& floating) -> bool { return floating.isNonZero(); },
         [](const llvm::APSInt& integer) -> bool { return !integer.isNullValue(); },
-        [](std::monostate) -> bool { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> bool { CLD_UNREACHABLE; });
 }
 
 bool cld::Semantics::ConstRetType::isUndefined() const
@@ -1684,7 +1684,7 @@ std::int64_t cld::Semantics::ConstRetType::toInt() const
             return static_cast<std::int64_t>(floating.convertToDouble());
         },
         [](const llvm::APSInt& integer) -> std::int64_t { return integer.getSExtValue(); },
-        [](std::monostate) -> std::int64_t { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> std::int64_t { CLD_UNREACHABLE; });
 }
 
 std::uint64_t cld::Semantics::ConstRetType::toUInt() const
@@ -1695,7 +1695,7 @@ std::uint64_t cld::Semantics::ConstRetType::toUInt() const
             return static_cast<std::uint64_t>(floating.convertToDouble());
         },
         [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
-        [](std::monostate) -> std::uint64_t { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> std::uint64_t { CLD_UNREACHABLE; });
 }
 
 std::string cld::Semantics::ConstRetType::toString() const
@@ -1712,7 +1712,7 @@ std::string cld::Semantics::ConstRetType::toString() const
             integer.toString(result);
             return result.str();
         },
-        [](std::monostate) -> std::string { OPENCL_UNREACHABLE; });
+        [](std::monostate) -> std::string { CLD_UNREACHABLE; });
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::Semantics::ConstRetType& rhs,
@@ -1720,7 +1720,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::S
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &options](VoidStar address) -> ConstRetType {
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
                                              address.address < std::get<VoidStar>(op2.getValue()).address),
@@ -1762,7 +1762,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::equal(const cld::Sema
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
-        op1.getValue(), [](std::monostate) -> ConstRetType { OPENCL_UNREACHABLE; },
+        op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &options](VoidStar address) -> ConstRetType {
             if (std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {

@@ -17,18 +17,18 @@
 
 namespace Bitset2
 {
-    namespace detail
-    {
-        /// Returns the number of bits set in val
-        template <class T>
-        constexpr inline size_t count_bits(T val, size_t count = 0) noexcept
-        {
-            return (val == T(0)) ? count :
-                                   count_bits(T(val & T(val - T(1))), // clears lowest set bit
-                                              count + 1);
-        }
+namespace detail
+{
+/// Returns the number of bits set in val
+template <class T>
+constexpr inline size_t count_bits(T val, size_t count = 0) noexcept
+{
+    return (val == T(0)) ? count :
+                           count_bits(T(val & T(val - T(1))), // clears lowest set bit
+                                      count + 1);
+}
 
-    } // namespace detail
+} // namespace detail
 } // namespace Bitset2
 
 #endif // BITSET2_COUNT_BITS_CB_HPP

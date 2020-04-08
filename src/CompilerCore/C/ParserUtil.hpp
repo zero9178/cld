@@ -9,12 +9,10 @@ namespace cld::Parser
 {
 bool isAssignment(Lexer::TokenType type);
 
-template <class T = void>
-bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator& curr,
-            std::vector<Lexer::Token>::const_iterator end, Context& context, std::vector<Message> additional = {},
-            T* value = nullptr)
+template <class T>
+bool expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenIterator end, Context& context, T& value,
+            std::vector<Message> additional = {})
 {
-    (void)value;
     if (curr == end || curr->getTokenType() != expected)
     {
         if (curr == end)
@@ -33,17 +31,14 @@ bool expect(Lexer::TokenType expected, std::vector<Lexer::Token>::const_iterator
     }
     else
     {
-        if constexpr (!std::is_void_v<T>)
-        {
-            if (value)
-            {
-                *value = std::get<T>(curr->getValue());
-            }
-        }
+        value = std::get<T>(curr->getValue());
         curr++;
         return true;
     }
 }
+
+bool expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenIterator end, Context& context,
+            std::vector<Message> additional = {});
 
 constexpr Context::TokenBitSet firstPostfixSet = Context::fromTokenTypes(
     cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::Dot, cld::Lexer::TokenType::OpenSquareBracket,

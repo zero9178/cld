@@ -11,9 +11,8 @@
 #include <regex>
 #include <utility>
 
-cld::Message::Message(Severity severity, std::string message, std::vector<Lexer::Token>::const_iterator begin,
-                      std::optional<std::vector<cld::Lexer::Token>::const_iterator> rangeEnd,
-                      std::optional<Modifier> modifier)
+cld::Message::Message(Severity severity, std::string message, Lexer::TokenIterator begin,
+                      std::optional<Lexer::TokenIterator> rangeEnd, std::optional<Modifier> modifier)
     : m_modifier(std::move(modifier)),
       m_message(std::move(message)),
       m_begin(begin),
@@ -27,8 +26,7 @@ cld::Message::Severity cld::Message::getSeverity() const
     return m_severity;
 }
 
-cld::Message cld::Message::error(std::string message, std::vector<cld::Lexer::Token>::const_iterator token,
-                                 std::optional<Modifier> modifier)
+cld::Message cld::Message::error(std::string message, Lexer::TokenIterator token, std::optional<Modifier> modifier)
 {
     return cld::Message(Error, std::move(message), token, {}, std::move(modifier));
 }
@@ -40,8 +38,7 @@ cld::Message cld::Message::note(std::string message,
     return cld::Message(Note, std::move(message), token, {}, std::move(modifier));
 }
 
-cld::Message cld::Message::warning(std::string message, std::vector<cld::Lexer::Token>::const_iterator token,
-                                   std::optional<Modifier> modifier)
+cld::Message cld::Message::warning(std::string message, Lexer::TokenIterator token, std::optional<Modifier> modifier)
 {
     return cld::Message(Warning, std::move(message), token, {}, std::move(modifier));
 }
@@ -55,43 +52,108 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
 }
 } // namespace
 
-llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceObject& sourceObject) const
+llvm::raw_ostream& cld::Message::printEnd(llvm::raw_ostream& os, const SourceObject& sourceObject,
+                                          llvm::raw_ostream::Colors colour, std::string_view prefix) const
 {
-    assert(!m_rangeEnd || m_begin != sourceObject.data().end());
-    auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string> {
+    CLD_ASSERT(!m_rangeEnd || *m_rangeEnd == m_begin);
+    CLD_ASSERT(!m_modifier || m_modifier->getAction() == Modifier::InsertAtEnd);
+    const auto end = sourceObject.data().end();
+    CLD_ASSERT(!sourceObject.data().empty());
+    const auto line = sourceObject.getLineNumber((end - 1)->getOffset() + (end - 1)->getLength());
+    const auto start = sourceObject.getLineStartOffset(line);
+    const Lexer::TokenIterator begin = [&sourceObject, start] {
+        for (std::ptrdiff_t i = sourceObject.data().size() - 1; i >= 0; i--)
+        {
+            const auto& token = sourceObject.data()[i];
+            if (token.getOffset() + token.getLength() <= start)
+            {
+                return sourceObject.data().begin() + i + 1;
+            }
+        }
+        return sourceObject.data().begin();
+    }();
+    std::string text;
+    if (begin != end)
+    {
+        text =
+            std::string(begin->getColumn(sourceObject), ' ') + cld::Lexer::reconstructTrimmed(sourceObject, begin, end);
+        if (sourceObject.getLineNumber(begin->getOffset())
+            != sourceObject.getLineNumber(begin->getOffset() + begin->getLength()))
+        {
+            text = text.substr(text.find('\n') + 1);
+        }
+    }
+    os << line << ':' << ((end - 1)->getOffset() + (end - 1)->getLength() - start) << ": ";
+    llvm::WithColor(os, colour, true).get() << prefix;
+    llvm::WithColor(os, llvm::raw_ostream::SAVEDCOLOR, true) << m_message << '\n';
+    auto numSize = std::to_string(line).size();
+    const auto remainder = numSize % 4;
+    if (remainder)
+    {
+        numSize += 4 - remainder;
+    }
+    os << llvm::format_decimal(line, numSize) << " | ";
+    os << text << '\n';
+    if (m_modifier)
+    {
+        os.indent(numSize) << " | ";
+        const auto whitespace = stringOfSameWidth(text, ' ');
+        llvm::WithColor(os.indent(whitespace.size()), colour) << "^\n";
+        if (!m_modifier->getActionArgument().empty())
+        {
+            os.indent(numSize) << " | ";
+            llvm::WithColor(os.indent(whitespace.size()), colour) << m_modifier->getActionArgument() << "\n";
+        }
+    }
+    os.flush();
+    return os;
+}
+
+llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject& sourceObject) const
+{
+    auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string_view> {
         switch (getSeverity())
         {
             case Message::Error: return {llvm::raw_ostream::RED, "error: "};
             case Message::Note: return {llvm::raw_ostream::CYAN, "note: "};
             case Message::Warning: return {llvm::raw_ostream::MAGENTA, "warning: "};
-            default: OPENCL_UNREACHABLE;
+            default: CLD_UNREACHABLE;
         }
     }();
+    if (m_begin == sourceObject.data().end())
+    {
+        return printEnd(os, sourceObject, colour, prefix);
+    }
 
-    auto iterator = m_begin == sourceObject.data().end() ? sourceObject.data().end() - 1 : m_begin;
-    const auto begin = [&sourceObject, iterator] {
-        const auto line = sourceObject.getLineNumber(iterator->getOffset());
+    const auto begin = [&sourceObject, this] {
+        const auto line = sourceObject.getLineNumber(m_begin->getOffset());
         const auto start = sourceObject.getLineStartOffset(line);
-        return std::find_if(
-                   std::make_reverse_iterator(iterator), std::make_reverse_iterator(sourceObject.data().begin()),
-                   [start](const Lexer::Token& token) { return token.getOffset() + token.getLength() < start; })
-            .base();
+        for (std::ptrdiff_t i = m_begin - sourceObject.data().begin(); i >= 0; i--)
+        {
+            const auto& token = sourceObject.data()[i];
+            if (token.getOffset() + token.getLength() <= start)
+            {
+                return sourceObject.data().begin() + i + 1;
+            }
+        }
+        return sourceObject.data().begin();
     }();
-    const auto end = [&sourceObject, iterator, this] {
+    const auto end = [&sourceObject, this] {
         if (m_rangeEnd && *m_rangeEnd == sourceObject.data().end())
         {
             return sourceObject.data().end();
         }
         const auto line =
-            sourceObject.getLineNumber(m_rangeEnd ? m_rangeEnd.value()->getOffset() : iterator->getOffset());
+            sourceObject.getLineNumber(m_rangeEnd ? m_rangeEnd.value()->getOffset() : m_begin->getOffset());
         const auto end = sourceObject.getLineEndOffset(line);
-        return std::find_if(m_rangeEnd.value_or(iterator), sourceObject.data().end(),
-                            [end](const Lexer::Token& token) { return token.getOffset() > end; });
+        return std::find_if(m_rangeEnd.value_or(m_begin), sourceObject.data().end(), [end](const Lexer::Token& token) {
+            return token.getOffset() >= end || token.getTokenType() == Lexer::TokenType::Newline;
+        });
     }();
 
     auto text =
         std::string(begin->getColumn(sourceObject), ' ') + cld::Lexer::reconstructTrimmed(sourceObject, begin, end);
-    if (begin != iterator
+    if (begin != m_begin
         && sourceObject.getLineNumber(begin->getOffset())
                != sourceObject.getLineNumber(begin->getOffset() + begin->getLength()))
     {
@@ -99,16 +161,16 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         text = text.substr(text.find('\n') + 1);
     }
 
-    if ((!m_rangeEnd || *m_rangeEnd != end - 1) && iterator != end - 1
+    if ((!m_rangeEnd || *m_rangeEnd != end - 1) && m_begin != end - 1
         && sourceObject.getLineNumber((end - 1)->getOffset())
                != sourceObject.getLineNumber((end - 1)->getOffset() + (end - 1)->getLength()))
     {
         text = text.substr(0, text.rfind('\n'));
     }
 
-    const auto locationLine = sourceObject.getLineNumber(iterator->getOffset());
-    os << locationLine << ':' << iterator->getOffset() - sourceObject.getLineStartOffset(locationLine) << ": ";
-    llvm::WithColor(os, colour, true) << prefix;
+    const auto locationLine = sourceObject.getLineNumber(m_begin->getOffset());
+    os << locationLine << ':' << m_begin->getOffset() - sourceObject.getLineStartOffset(locationLine) << ": ";
+    llvm::WithColor(os, colour, true).get() << prefix;
     llvm::WithColor(os, llvm::raw_ostream::SAVEDCOLOR, true) << m_message << '\n';
 
     auto numSize = std::to_string(sourceObject.getLineNumber((end - 1)->getOffset() + (end - 1)->getLength())).size();
@@ -130,7 +192,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         } while (pos != std::string::npos);
     }
 
-    const auto beginLine = sourceObject.getLineNumber(iterator->getOffset());
+    const auto beginLine = sourceObject.getLineNumber(m_begin->getOffset());
     std::vector<std::optional<std::pair<std::uint64_t, std::uint64_t>>> underlined(lines.size());
     if (m_modifier)
     {
@@ -139,14 +201,14 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         for (std::size_t i = sourceObject.getLineNumber(underLineBegin); i <= sourceObject.getLineNumber(underLineEnd);
              i++)
         {
-            assert(i - beginLine < underlined.size());
+            CLD_ASSERT(i - beginLine < underlined.size());
             underlined[i - beginLine] = std::pair{std::max(underLineBegin, sourceObject.getLineStartOffset(i)),
                                                   (std::min(underLineEnd, sourceObject.getLineEndOffset(i)))};
         }
     }
     for (std::size_t i = 0; i < lines.size(); i++)
     {
-        os << llvm::format_decimal(beginLine + i, static_cast<unsigned>(numSize)) << " | ";
+        os << llvm::format_decimal(beginLine + i, numSize) << " | ";
         if (!underlined[i])
         {
             os << lines[i] << '\n';
@@ -169,7 +231,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
         }
         os << '\n';
 
-        os.indent(static_cast<unsigned>(numSize)) << " | ";
+        os.indent(numSize) << " | ";
         const auto whitespace = stringOfSameWidth(lines[i].substr(0, underlined[i]->first - lineStart), ' ');
         auto string = stringOfSameWidth(
             lines[i].substr(underlined[i]->first - lineStart, underlined[i]->second - underlined[i]->first), '~');
@@ -203,10 +265,17 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
             }
             case Modifier::InsertAtEnd:
             {
-                llvm::WithColor(os.indent(static_cast<unsigned>(whitespace.size() + string.size())), colour) << '^';
+                llvm::WithColor(os.indent(whitespace.size() + string.size()), colour) << '^';
+                if (!m_modifier->getActionArgument().empty())
+                {
+                    os << '\n';
+                    os.indent(static_cast<unsigned>(numSize)) << " | ";
+                    llvm::WithColor(os.indent(whitespace.size() + string.size()), colour)
+                        << m_modifier->getActionArgument();
+                }
                 break;
             }
-            default: OPENCL_UNREACHABLE;
+            default: CLD_UNREACHABLE;
         }
         os << '\n';
     }
@@ -215,26 +284,25 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const cld::SourceO
     return os;
 }
 
-cld::Message cld::Message::error(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
-                                 std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
+cld::Message cld::Message::error(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
+                                 std::optional<Modifier> modifier)
 {
     return cld::Message(Error, std::move(message), begin, end, modifier);
 }
 
-cld::Message cld::Message::warning(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
-                                   std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
+cld::Message cld::Message::warning(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
+                                   std::optional<Modifier> modifier)
 {
     return cld::Message(Warning, std::move(message), begin, end, modifier);
 }
 
-cld::Message cld::Message::note(std::string message, std::vector<cld::Lexer::Token>::const_iterator begin,
-                                std::vector<cld::Lexer::Token>::const_iterator end, std::optional<Modifier> modifier)
+cld::Message cld::Message::note(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
+                                std::optional<Modifier> modifier)
 {
     return cld::Message(Note, std::move(message), begin, end, modifier);
 }
 
-cld::Modifier::Modifier(std::vector<Lexer::Token>::const_iterator begin,
-                        std::vector<Lexer::Token>::const_iterator anEnd, cld::Modifier::Action action,
+cld::Modifier::Modifier(Lexer::TokenIterator begin, Lexer::TokenIterator anEnd, cld::Modifier::Action action,
                         std::string actionArgument)
     : m_actionArgument(std::move(actionArgument)), m_begin(begin), m_end(anEnd), m_action(action)
 {
@@ -262,7 +330,7 @@ const std::string& cld::Modifier::getActionArgument() const
 
 std::string cld::Format::format(std::vector<std::string> args) const
 {
-    static std::regex brackets(R"(\\*\{\})");
+    static std::regex brackets(R"(\\*\{\})", std::regex::ECMAScript | std::regex::optimize);
     std::reverse(args.begin(), args.end());
     std::smatch matches;
     std::string result = m_format;
@@ -278,8 +346,7 @@ std::string cld::Format::format(std::vector<std::string> args) const
         }
         if (args.empty())
         {
-            llvm::errs() << "Not enough arguments specified to substitute in format";
-            std::terminate();
+            CLD_ASSERT(false && "Not enough arguments specified to substitute in format");
         }
         result = std::string(result.cbegin(), matches[0].first + pos) + args.back()
                  + std::string(matches[0].second, result.cend());
@@ -288,8 +355,7 @@ std::string cld::Format::format(std::vector<std::string> args) const
     }
     if (!args.empty())
     {
-        llvm::errs() << "More arguments specified than needed to substitute";
-        std::terminate();
+        CLD_ASSERT(false && "More arguments specified than needed to substitute");
     }
     return result;
 }
