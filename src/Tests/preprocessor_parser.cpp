@@ -311,7 +311,6 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
                          ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N.args("'a'"))
                              && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     }
-    treeProduces("#define defined", ProducesError(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME));
 }
 
 TEST_CASE("Parse Preprocessor if section", "[PPParse]")
@@ -406,17 +405,41 @@ void parse(std::string_view source)
 {
     std::string string;
     llvm::raw_string_ostream ss(string);
-    static cld::SourceObject tokens;
-    REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(std::string(source.begin(), source.end()),
-                                                  cld::LanguageOptions::native(), true, &ss));
+    cld::SourceObject tokens;
+    tokens = cld::Lexer::tokenize(std::string(source.begin(), source.end()), cld::LanguageOptions::native(), true, &ss);
     ss.flush();
-    REQUIRE(string.empty());
-    cld::PP::buildTree(tokens, &llvm::errs());
+    if (!string.empty() || tokens.data().empty())
+    {
+        return;
+    }
+    cld::PP::buildTree(tokens);
 }
 } // namespace
 
 TEST_CASE("Parse Preprocessor Fuzzer discoveries", "[PPParse]")
 {
+    parse("#define  u0(fine   : \n"
+          "z*z\n"
+          "#define   (e.fin,e *z\n"
+          "#defin \n"
+          "z*z\n"
+          "#define   ue(efin,e *z\n"
+          "#define   ue(efin,p,ne  : \n"
+          "z*z\n"
+          "#define   ue(efin,e *z\n"
+          "#.efin \n"
+          "z*z\n"
+          "#define   ue(efin,e *z\n"
+          "#define   ue(efin,pr\\");
+    parse(
+        "#define ue(efi, u\\     e  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////// e+efin,pr");
+    parse("#if\n"
+          "#\n"
+          "#else#\\\n"
+          "else\n"
+          "#\n"
+          "\n"
+          "");
     parse("  #if\n"
           "#if\n"
           "#else  //     \n"

@@ -1,9 +1,7 @@
 #pragma once
 
-#pragma warning(push, 0)
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Unicode.h>
-#pragma warning(pop)
 
 #include <cassert>
 #include <cstdlib>

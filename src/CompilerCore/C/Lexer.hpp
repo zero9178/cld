@@ -1,10 +1,8 @@
 #pragma once
 
-#pragma warning(push, 0)
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APSInt.h>
 #include <llvm/Support/raw_ostream.h>
-#pragma warning(pop)
 
 #include <memory>
 #include <string>
@@ -83,7 +81,6 @@ enum class TokenType : std::uint8_t
     ConstKeyword,       ///<[C,OpenCL]
     RestrictKeyword,    ///<[C,OpenCL]
     SizeofKeyword,      ///<[C,OpenCL]
-    DefinedKeyword,     ///<[PP]
     Newline,            ///<[PP]
     VolatileKeyword,    ///<[C,OpenCL]
     InlineKeyword,      ///<[C,OpenCL]
@@ -119,7 +116,8 @@ enum class TokenType : std::uint8_t
 class Token;
 
 SourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
-                      bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs());
+                      bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs(),
+                      bool* errorsOccured = nullptr);
 
 struct NonCharString
 {

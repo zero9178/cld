@@ -68,7 +68,7 @@ if (NOT MSVC)
     endif ()
 else ()
     add_compile_options(/bigobj /permissive- /W4 /wd4068 /w34716 /Zc:__cplusplus /utf-8 /EHsc)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS _SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
     #Taken from HandleLLVMOptions.cmake
     add_compile_options(# Disabled warnings.
             -wd4141 # Suppress ''modifier' : used more than once' (because of __forceinline combined with inline)

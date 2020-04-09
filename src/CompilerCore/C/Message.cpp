@@ -1,9 +1,7 @@
 #include "Message.hpp"
 
-#pragma warning(push, 0)
 #include <llvm/Support/Format.h>
 #include <llvm/Support/WithColor.h>
-#pragma warning(pop)
 
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Common/Util.hpp>

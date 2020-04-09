@@ -1,8 +1,6 @@
 #include "ConstantEvaluator.hpp"
 
-#pragma warning(push, 0)
 #include <llvm/ADT/StringExtras.h>
-#pragma warning(pop)
 
 #include <CompilerCore/Common/Util.hpp>
 

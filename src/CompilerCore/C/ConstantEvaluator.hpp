@@ -1,8 +1,9 @@
 #pragma once
 
+#include <CompilerCore/Common/Expected.hpp>
+
 #include <functional>
 
-#include "../Common/Expected.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 

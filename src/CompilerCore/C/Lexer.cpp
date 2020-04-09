@@ -1,6 +1,5 @@
 #include "Lexer.hpp"
 
-#pragma warning(push, 0)
 #include <llvm/ADT/IntervalMap.h>
 #include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/ConvertUTF.h>
@@ -8,7 +7,6 @@
 #include <llvm/Support/Unicode.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
-#pragma warning(pop)
 
 #include <CompilerCore/Common/Util.hpp>
 
@@ -628,6 +626,7 @@ class Context
     std::uint64_t& m_offset;
     std::vector<std::uint64_t> m_lineStarts;
     const IntervalMap& m_characterToSourceSpace;
+    bool m_errorsOccured = false;
     struct ThingsToCache
     {
         std::vector<std::int64_t> mappingAdded;
@@ -1001,6 +1000,7 @@ public:
 
     void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
     {
+        m_errorsOccured = true;
         report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), tokenStartOffset, m_offset);
     }
 
@@ -1017,6 +1017,7 @@ public:
     void reportError(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
                      std::vector<std::uint64_t> arrows = {})
     {
+        m_errorsOccured = true;
         report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), start, end);
     }
 
@@ -1094,6 +1095,11 @@ public:
     [[nodiscard]] std::string_view currentView() const
     {
         return view(tokenStartOffset, m_offset);
+    }
+
+    bool isErrorsOccured() const
+    {
+        return m_errorsOccured;
     }
 };
 
@@ -1724,7 +1730,7 @@ struct UniversalCharacter final
 
 struct LineComment final
 {
-    StateMachine advance(char c, Context& context) noexcept;
+    std::pair<StateMachine, bool> advance(char c, Context& context) noexcept;
 };
 
 struct BlockComment final
@@ -2071,10 +2077,6 @@ std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
         {
             context.push(1, charactersToKeyword(characters));
         }
-        else if (context.isInPreprocessor() && characters == "defined")
-        {
-            context.push(1, cld::Lexer::TokenType::DefinedKeyword);
-        }
         else
         {
             context.push(1, TokenType::Identifier, std::move(characters));
@@ -2137,14 +2139,19 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         }
         return {UniversalCharacter{c == 'U'}, true};
     }
+    else if (context.isInPreprocessor())
+    {
+        if (prevState)
+        {
+            context.withOffset(context.getOffset() - 1,
+                               [&] { cld::match(*prevState, [&](auto&& value) { value.advance(' ', context); }); });
+        }
+        context.push(context.getOffset() - 2, context.getOffset() - 1, TokenType::Backslash);
+        return {Start{}, false};
+    }
     else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
              || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
     {
-        if (context.isInPreprocessor())
-        {
-            context.push(1, TokenType::Backslash);
-            return {Start{}, false};
-        }
         error = true;
         return {std::move(*this), true};
     }
@@ -2163,11 +2170,6 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
                             result, context.getOffset() - 1, std::move(arrows));
         return {Start{}, true};
-    }
-    else if (context.isInPreprocessor())
-    {
-        context.push(1, TokenType::Backslash);
-        return {Start{}, false};
     }
 
     auto location = context.currentView().rfind('\\');
@@ -2486,13 +2488,13 @@ StateMachine AfterInclude::advance(char c, Context& context)
     return Start{};
 }
 
-StateMachine LineComment::advance(char c, Context&) noexcept
+std::pair<StateMachine, bool> LineComment::advance(char c, Context&) noexcept
 {
     if (c == '\n')
     {
-        return Start{};
+        return {Start{}, false};
     }
-    return *this;
+    return {std::move(*this), true};
 }
 
 StateMachine BlockComment::advance(char c, Context&) noexcept
@@ -2536,8 +2538,12 @@ struct FirstArgOfMethod<R (*)(U, Args...) noexcept>
 constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]"};
 
 cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
-                                       llvm::raw_ostream* reporter)
+                                       llvm::raw_ostream* reporter, bool* errorsOccured)
 {
+    if (errorsOccured)
+    {
+        *errorsOccured = false;
+    }
     source += '\n';
 
     StateMachine stateMachine;
@@ -2708,6 +2714,10 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 std::move(arrows));
         });
+    if (errorsOccured)
+    {
+        *errorsOccured = context.isErrorsOccured();
+    }
 
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
 }
@@ -2806,7 +2816,6 @@ std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "'inline'";
         case TokenType::Pound: return "'#'";
         case TokenType::DoublePound: return "'##'";
-        case TokenType::DefinedKeyword: return "'defined'";
         case TokenType::Newline: return "newline";
         case TokenType::UnderlineBool: return "'_Bool'";
         case TokenType::PPNumber: return "preprocessing number";
@@ -2905,7 +2914,6 @@ std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
         case TokenType::InlineKeyword: return "inline";
         case TokenType::Pound: return "#";
         case TokenType::DoublePound: return "##";
-        case TokenType::DefinedKeyword: return "defined";
         case TokenType::Newline: return "Newline";
         case TokenType::UnderlineBool: return "_Bool";
         case TokenType::PPNumber: return "Preprocessing number";

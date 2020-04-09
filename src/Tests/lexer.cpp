@@ -1500,6 +1500,15 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
         auto result = pplexes("\\ ");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Backslash);
+        CHECK(result.data()[0].getOffset() == 0);
+        result = pplexes("u\\ e");
+        REQUIRE(result.data().size() == 4);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(result.data()[0].getOffset() == 0);
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Backslash);
+        CHECK(result.data()[1].getOffset() == 1);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(result.data()[2].getOffset() == 3);
     }
 }
 

@@ -54,28 +54,6 @@ void skipUntil(cld::Lexer::TokenIterator& begin, cld::Lexer::TokenIterator end,
     });
 }
 
-// template <std::size_t N>
-// cld::Lexer::TokenIterator findDirectives(cld::Lexer::TokenIterator begin, cld::Lexer::TokenIterator end,
-//                                         const std::array<const char*, N>& directives)
-//{
-//    for (auto iter = begin; iter != end; iter++)
-//    {
-//        if (iter + 1 == end || iter + 2 == end)
-//        {
-//            return end;
-//        }
-//        if (iter->getTokenType() == cld::Lexer::TokenType::Newline
-//            && (iter + 1)->getTokenType() == cld::Lexer::TokenType::Pound
-//            && (iter + 2)->getTokenType() == cld::Lexer::TokenType::Identifier
-//            && std::any_of(
-//                directives.begin(), directives.end(),
-//                [&string = std::get<std::string>((iter + 2)->getValue())](auto&& sv) { return sv == string; }))
-//        {
-//            return iter + 1;
-//        }
-//    }
-//    return end;
-//}
 } // namespace
 
 cld::PP::Context::Context(const cld::SourceObject& sourceObject, llvm::raw_ostream* reporter)
@@ -260,18 +238,12 @@ cld::PP::DefineDirective cld::PP::parseDefineDirective(Lexer::TokenIterator& beg
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "define");
     begin++;
-    auto identifierPos = begin;
-    if (begin->getTokenType() == Lexer::TokenType::DefinedKeyword)
-    {
-        context.log({Message::error(ErrorMessages::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME, identifierPos,
-                                    Modifier(identifierPos, identifierPos + 1))});
-        begin++;
-    }
-    else if (!expect(Lexer::TokenType::Identifier, begin, end, context))
+    if (!expect(Lexer::TokenType::Identifier, begin, end, context))
     {
         skipLine(begin, end);
         return {};
     }
+    auto identifierPos = begin - 1;
     if (begin == end)
     {
         expect(Lexer::TokenType::Newline, begin, end, context);
@@ -351,7 +323,7 @@ cld::PP::DefineDirective cld::PP::parseDefineDirective(Lexer::TokenIterator& beg
             if (!expect(Lexer::TokenType::Identifier, begin, end, context))
             {
                 skipUntil(begin, end, std::array{Lexer::TokenType::Newline, Lexer::TokenType::CloseParentheses});
-                if (begin != end && begin->getTokenType() == Lexer::TokenType::CloseParentheses)
+                if (begin == end || begin->getTokenType() == Lexer::TokenType::CloseParentheses)
                 {
                     break;
                 }
@@ -469,7 +441,10 @@ cld::PP::ElseGroup cld::PP::parseElseGroup(Lexer::TokenIterator& begin, Lexer::T
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier
                && std::get<std::string>(begin->getValue()) == "else");
     begin++;
-    expect(Lexer::TokenType::Newline, begin, end, context);
+    if (!expect(Lexer::TokenType::Newline, begin, end, context))
+    {
+        skipLine(begin, end);
+    }
     if (begin == end
         || (begin->getTokenType() == Lexer::TokenType::Pound && begin + 1 != end
             && (begin + 1)->getTokenType() == Lexer::TokenType::Identifier

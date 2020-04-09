@@ -842,7 +842,8 @@ std::optional<cld::Syntax::UnaryExpression>
                 UnaryExpressionSizeOf(start, begin, std::make_unique<UnaryExpression>(std::move(*unary))));
         }
     }
-    else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::DefinedKeyword)
+    else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
+             && std::get<std::string>(begin->getValue()) == "defined")
     {
         begin++;
         std::optional<Lexer::TokenIterator> openP;
