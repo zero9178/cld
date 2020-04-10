@@ -9,6 +9,6 @@ class SourceObject;
 
 namespace PP
 {
-cld::PPSourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+cld::PPSourceObject preprocess(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs()) noexcept;
 }
 } // namespace cld

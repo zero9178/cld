@@ -121,7 +121,7 @@ std::optional<cld::Semantics::FunctionDefinition>
                             Modifier(node.getDeclarator().begin(), node.getDeclarator().end()))});
         return {};
     }
-    const auto& functionRP = std::get<Semantics::FunctionType>(type.get());
+    const auto& functionRP = cld::get<Semantics::FunctionType>(type.get());
 
     auto* parameterTypeList = findRecursively<Syntax::DirectDeclaratorParentheseParameters>(
         node.getDeclarator().getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
@@ -164,7 +164,7 @@ std::optional<cld::Semantics::FunctionDefinition>
                             Modifier(node.getDeclarations().front().begin(), node.getDeclarations().back().end()))});
     }
 
-    std::map<std::string, Semantics::Type> declarationMap;
+    std::unordered_map<std::string, Semantics::Type> declarationMap;
     if (identifierList)
     {
         for (auto& iter : node.getDeclarations())
@@ -419,7 +419,7 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
             auto declaration = Declaration(std::move(result), linkage, lifetime, name);
             if (auto [prev, success] = m_declarations.back().emplace(name, declaration);
                 !success
-                && (std::get<Declaration>(prev->second).getLinkage() == Linkage::None || linkage == Linkage::None))
+                && (cld::get<Declaration>(prev->second).getLinkage() == Linkage::None || linkage == Linkage::None))
             {
                 auto declLoc = declaratorToLoc(*declarator);
                 // TODO: Note to show previous declaration
@@ -1143,7 +1143,7 @@ std::vector<std::pair<cld::Semantics::Type, std::string>> cld::Semantics::Semant
                     -> cld::Semantics::PossiblyAbstractQualifierRef { return abstractDeclarator.get(); }),
             declarations);
         if (parameterDeclarations.size() == 1 && result == cld::Semantics::PrimitiveType::createVoid(false, false)
-            && !std::visit([](const auto& uniquePtr) -> bool { return uniquePtr.get(); }, pair.second))
+            && !cld::match(pair.second, [](const auto& uniquePtr) -> bool { return uniquePtr.get(); }))
         {
             break;
         }
@@ -1161,7 +1161,7 @@ std::vector<std::pair<cld::Semantics::Type, std::string>> cld::Semantics::Semant
             arguments.emplace_back(
                 std::move(result),
                 std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(pair.second) ?
-                    cld::Semantics::declaratorToName(*std::get<std::unique_ptr<cld::Syntax::Declarator>>(pair.second)) :
+                    cld::Semantics::declaratorToName(*cld::get<std::unique_ptr<cld::Syntax::Declarator>>(pair.second)) :
                     "");
         }
     }
@@ -1254,16 +1254,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(
 
             if (directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator())
             {
-                std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                           *directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator());
+                cld::match(*directAbstractDeclaratorAssignmentExpression.getDirectAbstractDeclarator(),
+                           [&directSelf](auto&& value) -> void { directSelf(value); });
             }
         },
         [&](auto&& directSelf, const Syntax::DirectAbstractDeclaratorAsterisk& directAbstractDeclarator) -> void {
             baseType = ValArrayType::create(false, false, false, std::move(baseType));
             if (directAbstractDeclarator.getDirectAbstractDeclarator())
             {
-                std::visit([&directSelf](auto&& value) { directSelf(value); },
-                           *directAbstractDeclarator.getDirectAbstractDeclarator());
+                cld::match(*directAbstractDeclarator.getDirectAbstractDeclarator(),
+                           [&directSelf](auto&& value) { directSelf(value); });
             }
         },
         [&](auto&& directSelf, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) -> void {
@@ -1282,8 +1282,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(
                                             true);
             if (parameterTypeList.getDirectAbstractDeclarator())
             {
-                std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                           *parameterTypeList.getDirectAbstractDeclarator());
+                cld::match(*parameterTypeList.getDirectAbstractDeclarator(),
+                           [&directSelf](auto&& value) -> void { directSelf(value); });
             }
         });
     return std::move(baseType);
@@ -1336,8 +1336,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                     baseType = ValArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType));
                 }
             }
-            std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                       dirWithoutStaticOrAsterisk.getDirectDeclarator());
+            cld::match(dirWithoutStaticOrAsterisk.getDirectDeclarator(),
+                       [&directSelf](auto&& value) -> void { directSelf(value); });
         },
         [&](auto&& directSelf, const Syntax::DirectDeclaratorStatic& directDeclaratorStatic) -> void {
             auto [isConst, isVolatile, isRestricted] = getQualifiers(directDeclaratorStatic.getTypeQualifiers());
@@ -1364,14 +1364,14 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
             {
                 baseType = ValArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType));
             }
-            std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                       directDeclaratorStatic.getDirectDeclarator());
+            cld::match(directDeclaratorStatic.getDirectDeclarator(),
+                       [&directSelf](auto&& value) -> void { directSelf(value); });
         },
         [&](auto&& directSelf, const Syntax::DirectDeclaratorAsterisk& directDeclaratorAsterisk) -> void {
             auto [isConst, isVolatile, isRestricted] = getQualifiers(directDeclaratorAsterisk.getTypeQualifiers());
             baseType = ValArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType));
-            std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                       directDeclaratorAsterisk.getDirectDeclarator());
+            cld::match(directDeclaratorAsterisk.getDirectDeclarator(),
+                       [&directSelf](auto&& value) -> void { directSelf(value); });
         },
         [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseParameters& parentheseParameters) -> void {
             auto& parameterDeclarations =
@@ -1379,8 +1379,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
             auto argumentResult = parameterListToArguments(declStart, declEnd, parameterDeclarations, declarations);
             baseType = FunctionType::create(std::move(baseType), std::move(argumentResult),
                                             parentheseParameters.getParameterTypeList().hasEllipse(), true);
-            std::visit([&directSelf](auto&& value) -> void { directSelf(value); },
-                       parentheseParameters.getDirectDeclarator());
+            cld::match(parentheseParameters.getDirectDeclarator(),
+                       [&directSelf](auto&& value) -> void { directSelf(value); });
         },
         [&](auto&& directSelf, const Syntax::DirectDeclaratorParentheseIdentifiers& identifiers) -> void {
             std::vector<std::pair<Type, std::string>> arguments(
@@ -1393,7 +1393,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                 Iterator begin;
                 Iterator end;
             };
-            std::map<std::string, TypeBinding> declarationMap;
+            std::unordered_map<std::string, TypeBinding> declarationMap;
             for (auto& iter : declarations)
             {
                 auto thisBegin = Syntax::nodeFromNodeDerivedVariant(iter.getDeclarationSpecifiers()[0]).begin();
@@ -1478,7 +1478,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                                     declStart, declEnd, Modifier(binding.begin, binding.end))});
             }
             baseType = FunctionType::create(std::move(baseType), std::move(arguments), false, false);
-            std::visit(directSelf, identifiers.getDirectDeclarator());
+            cld::match(identifiers.getDirectDeclarator(), directSelf);
         });
     return std::move(baseType);
 }

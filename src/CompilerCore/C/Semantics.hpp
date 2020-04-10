@@ -2,7 +2,6 @@
 
 #include <CompilerCore/Common/Expected.hpp>
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>

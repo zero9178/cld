@@ -1,5 +1,7 @@
 #pragma once
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <utility>
 
 #include "ErrorMessages.hpp"
@@ -31,7 +33,7 @@ bool expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenI
     }
     else
     {
-        value = std::get<T>(curr->getValue());
+        value = cld::get<T>(curr->getValue());
         curr++;
         return true;
     }

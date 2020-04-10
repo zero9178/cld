@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CompilerCore/Common/Util.hpp>
 #include <variant>
 
 namespace cld::Semantics
@@ -18,7 +19,7 @@ const T* findRecursively(const Variant<Args...>& variant, F&& getNextFunc)
         auto* next = getNextFunc(value);
         if (next)
         {
-            std::visit([&self](auto&& value) { return self(value); }, *next);
+            cld::match(*next, [&self](auto&& value) { return self(value); });
         }
     });
     return result;
@@ -44,7 +45,7 @@ std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args..
                       auto* next = getNextFunc(value);
                       if (next)
                       {
-                          std::visit([&self](auto&& value) { return self(value); }, *next);
+                          cld::match(*next, [&self](auto&& value) { return self(value); });
                       }
                   });
     return {result, resultDepth};

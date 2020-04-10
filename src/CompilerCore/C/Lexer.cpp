@@ -1790,7 +1790,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
             if (context.isInPreprocessor() && context.getResult().size() >= 2
                 && context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
                 && context.getResult().back().getTokenType() == TokenType::Identifier
-                && std::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue()) == "include")
+                && cld::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue()) == "include")
             {
                 return AfterInclude{'"'};
             }
@@ -1823,7 +1823,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
             if (context.isInPreprocessor() && context.getResult().size() >= 2
                 && context.getResult()[context.getResult().size() - 2].getTokenType() == TokenType::Pound
                 && context.getResult()[context.getResult().size() - 1].getTokenType() == TokenType::Identifier
-                && std::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue()) == "include")
+                && cld::get<std::string>(context.getResult()[context.getResult().size() - 1].getValue()) == "include")
             {
                 return AfterInclude{'>'};
             }
@@ -2122,7 +2122,7 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         {
             if (std::holds_alternative<Text>(*prevState))
             {
-                return {UniversalCharacter{c == 'U', std::move(std::get<Text>(*prevState))}, true};
+                return {UniversalCharacter{c == 'U', cld::get<Text>(std::move(*prevState))}, true};
             }
             else if (std::holds_alternative<L>(*prevState))
             {
@@ -2130,7 +2130,7 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
             }
             else if (std::holds_alternative<PreprocessingNumber>(*prevState))
             {
-                return {UniversalCharacter{c == 'U', std::move(std::get<PreprocessingNumber>(*prevState))}, true};
+                return {UniversalCharacter{c == 'U', cld::get<PreprocessingNumber>(std::move(*prevState))}, true};
             }
             else
             {
@@ -2240,7 +2240,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
     {
         // In an PP Number we only go through the whole mechanism to check if the universal character is invalid.
         // Otherwise different tokens need to be generated
-        auto pp = std::move(std::get<PreprocessingNumber>(*suspHolder));
+        auto pp = cld::get<PreprocessingNumber>(std::move(*suspHolder));
         pp.characters += context.currentView().substr(ucStart - context.tokenStartOffset);
         return {std::move(pp), true};
     }
@@ -2272,7 +2272,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
     }
     // This line is needed because a text can start with a universal character. Luckily a Preprocessing number can't
     // So we only reach this line if suspHolder is either empty or contains a Text
-    auto newText = suspHolder ? std::move(std::get<Text>(*suspHolder)) : Text{};
+    auto newText = suspHolder ? cld::get<Text>(std::move(*suspHolder)) : Text{};
     newText.characters.resize(newText.characters.size() + 4);
     auto start = newText.characters.data() + newText.characters.size() - 4;
     llvm::ConvertCodePointToUTF8(*result, start);
@@ -2677,7 +2677,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                 return !proceed;
             }
         };
-        while (std::visit(visitor, stateMachine))
+        while (cld::match(stateMachine, visitor))
         {
             offset = prevOffset;
         }
@@ -2720,11 +2720,6 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     }
 
     return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
-}
-
-const std::string& cld::Lexer::Token::getRepresentation() const
-{
-    return m_representation;
 }
 
 std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
@@ -2923,21 +2918,6 @@ std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     CLD_UNREACHABLE;
 }
 
-bool cld::Lexer::Token::macroInserted() const noexcept
-{
-    return m_macroId;
-}
-
-const cld::Lexer::Token::variant& cld::Lexer::Token::getValue() const noexcept
-{
-    return m_value;
-}
-
-cld::Lexer::TokenType cld::Lexer::Token::getTokenType() const noexcept
-{
-    return m_tokenType;
-}
-
 cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value,
                          Type type)
     : m_value(std::move(value)),
@@ -2948,31 +2928,6 @@ cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string 
       m_type(type)
 {
     CLD_ASSERT(!m_representation.empty());
-}
-
-std::uint64_t cld::Lexer::Token::getMacroId() const noexcept
-{
-    return m_macroId;
-}
-
-void cld::Lexer::Token::setMacroId(std::uint64_t macroId) noexcept
-{
-    m_macroId = macroId;
-}
-
-std::size_t Token::getLength() const noexcept
-{
-    return m_representation.size();
-}
-
-std::uint64_t Token::getOffset() const noexcept
-{
-    return m_offset;
-}
-
-std::uint64_t Token::getPPOffset() const noexcept
-{
-    return m_afterPPOffset;
 }
 
 std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexcept
@@ -2995,16 +2950,6 @@ std::uint64_t Token::getPPColumn(const cld::PPSourceObject& sourceObject) const 
 {
     auto line = sourceObject.getPPLineNumber(getPPOffset());
     return getPPOffset() - sourceObject.getPPLineStartOffset(line);
-}
-
-Token::Type Token::getType() const
-{
-    return m_type;
-}
-
-void Token::setPPOffset(std::uint64_t ppOffset) noexcept
-{
-    m_afterPPOffset = ppOffset;
 }
 
 std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end)

@@ -385,7 +385,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if (value.isArithmetic() != other.isArithmetic())
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
-                    auto& elementType = std::get<PointerType>(ptr.getType().get()).getElementType();
+                    auto& elementType = cld::get<PointerType>(ptr.getType().get()).getElementType();
                     auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
@@ -412,8 +412,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 }
                 if (!value.isArithmetic() && !other.isArithmetic())
                 {
-                    if (std::get<PointerType>(value.getType().get()).getElementType().get()
-                        != std::get<PointerType>(other.getType().get()).getElementType().get())
+                    if (cld::get<PointerType>(value.getType().get()).getElementType().get()
+                        != cld::get<PointerType>(other.getType().get()).getElementType().get())
                     {
                         logError(ErrorMessages::Semantics::
                                      CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
@@ -426,7 +426,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
-                    auto& elementType = std::get<PointerType>(ptr.getType().get()).getElementType();
+                    auto& elementType = cld::get<PointerType>(ptr.getType().get()).getElementType();
                     auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
@@ -724,8 +724,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!value.isArithmetic() && !other.isArithmetic())
         {
-            if (std::get<PointerType>(value.getType().get()).getElementType().get()
-                != std::get<PointerType>(other.getType().get()).getElementType().get())
+            if (cld::get<PointerType>(value.getType().get()).getElementType().get()
+                != cld::get<PointerType>(other.getType().get()).getElementType().get())
             {
                 logError(
                     ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
@@ -787,10 +787,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         std::string opName = op == Syntax::EqualityExpression::EqualityOperator::Equal ? "==" : "!=";
         if (!value.isArithmetic() && !other.isArithmetic())
         {
-            if (std::get<PointerType>(value.getType().get()).getElementType().get()
-                    != std::get<PointerType>(other.getType().get()).getElementType().get()
-                && !isVoid(std::get<PointerType>(value.getType().get()).getElementType())
-                && !isVoid(std::get<PointerType>(other.getType().get()).getElementType()))
+            if (cld::get<PointerType>(value.getType().get()).getElementType().get()
+                    != cld::get<PointerType>(other.getType().get()).getElementType().get()
+                && !isVoid(cld::get<PointerType>(value.getType().get()).getElementType())
+                && !isVoid(cld::get<PointerType>(other.getType().get()).getElementType()))
             {
                 logError(
                     ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
@@ -910,7 +910,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpression& node)
 {
-    return std::visit([this](auto&& value) -> cld::Semantics::ConstRetType { return visit(value); }, node);
+    return cld::match(node, [this](auto&& value) -> cld::Semantics::ConstRetType { return visit(value); });
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::Expression& node)
@@ -1081,16 +1081,6 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitwiseNegate(const L
         });
 }
 
-const cld::Semantics::Type& cld::Semantics::ConstRetType::getType() const
-{
-    return m_type;
-}
-
-const cld::Semantics::ConstRetType::ValueType& cld::Semantics::ConstRetType::getValue() const
-{
-    return m_value;
-}
-
 cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Semantics::Type& type,
                                                                   const LanguageOptions& options, Issues* issues) const
 {
@@ -1113,7 +1103,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         {
                             CLD_UNREACHABLE;
                         }
-                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                        return {llvm::APSInt(cld::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
                     }
                     if (issues
@@ -1176,7 +1166,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         {
                             CLD_UNREACHABLE;
                         }
-                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                        return {llvm::APSInt(cld::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
                     }
 
@@ -1228,7 +1218,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         {
                             CLD_UNREACHABLE;
                         }
-                        return {llvm::APSInt(std::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
+                        return {llvm::APSInt(cld::get<llvm::APSInt>(result.getValue()).zextOrTrunc(8)),
                                 PrimitiveType::createUnderlineBool(false, false)};
                     }
 
@@ -1288,8 +1278,8 @@ std::pair<cld::Semantics::ConstRetType, cld::Semantics::ConstRetType>
             && std::holds_alternative<llvm::APFloat>(rhs.getValue()))
         {
             bool useless;
-            auto lhsFloat = std::get<llvm::APFloat>(lhs.getValue());
-            auto rhsFloat = std::get<llvm::APFloat>(rhs.getValue());
+            auto lhsFloat = cld::get<llvm::APFloat>(lhs.getValue());
+            auto rhsFloat = cld::get<llvm::APFloat>(rhs.getValue());
 
             auto leftBigger = llvm::APFloat::getSizeInBits(lhsFloat.getSemantics())
                               > llvm::APFloat::getSizeInBits(rhsFloat.getSemantics());
@@ -1300,25 +1290,25 @@ std::pair<cld::Semantics::ConstRetType, cld::Semantics::ConstRetType>
             return {{lhsFloat, biggerType}, {rhsFloat, biggerType}};
         }
         auto& floating = std::holds_alternative<llvm::APFloat>(lhs.getValue()) ? lhs : rhs;
-        const auto& semantics = std::get<llvm::APFloat>(floating.getValue()).getSemantics();
+        const auto& semantics = cld::get<llvm::APFloat>(floating.getValue()).getSemantics();
         if (std::holds_alternative<llvm::APSInt>(lhs.getValue()))
         {
-            auto& integer = std::get<llvm::APSInt>(lhs.getValue());
+            auto& integer = cld::get<llvm::APSInt>(lhs.getValue());
             auto result = llvm::APFloat(semantics);
             result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
             lhs = {std::move(result), floating.getType()};
         }
         if (std::holds_alternative<llvm::APSInt>(rhs.getValue()))
         {
-            auto& integer = std::get<llvm::APSInt>(rhs.getValue());
+            auto& integer = cld::get<llvm::APSInt>(rhs.getValue());
             auto result = llvm::APFloat(semantics);
             result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
             rhs = {std::move(result), floating.getType()};
         }
         return {std::move(lhs), std::move(rhs)};
     }
-    auto lhsInteger = std::get<llvm::APSInt>(lhs.getValue());
-    auto rhsInteger = std::get<llvm::APSInt>(rhs.getValue());
+    auto lhsInteger = cld::get<llvm::APSInt>(lhs.getValue());
+    auto rhsInteger = cld::get<llvm::APSInt>(rhs.getValue());
     if (lhsInteger.isSigned() == rhsInteger.isSigned() || lhsInteger.getBitWidth() != rhsInteger.getBitWidth())
     {
         auto lhsBigger = lhsInteger.getBitWidth() > rhsInteger.getBitWidth();
@@ -1346,12 +1336,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::multiply(const cld::S
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+            return {floating * cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
         [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             bool overflow = false;
-            auto apsInt = integer.isSigned() ? integer.smul_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
-                                               integer.umul_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            auto apsInt = integer.isSigned() ? integer.smul_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.umul_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow);
             if (issues && integer.isSigned())
             {
                 *issues = overflow ? NotRepresentable : NoIssues;
@@ -1368,12 +1358,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::divide(const cld::Sem
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating / std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+            return {floating / cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
         [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             bool overflow = false;
-            auto apsInt = integer.isSigned() ? integer.sdiv_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
-                                               integer.udiv(std::get<llvm::APSInt>(op2.getValue()));
+            auto apsInt = integer.isSigned() ? integer.sdiv_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.udiv(cld::get<llvm::APSInt>(op2.getValue()));
             if (issues && integer.isSigned())
             {
                 *issues = overflow ? NotRepresentable : NoIssues;
@@ -1390,11 +1380,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::modulo(const cld::Sem
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating * std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+            return {floating * cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
-            auto apsInt = integer.isSigned() ? integer.srem(std::get<llvm::APSInt>(op2.getValue())) :
-                                               integer.urem(std::get<llvm::APSInt>(op2.getValue()));
+            auto apsInt = integer.isSigned() ? integer.srem(cld::get<llvm::APSInt>(op2.getValue())) :
+                                               integer.urem(cld::get<llvm::APSInt>(op2.getValue()));
             return {llvm::APSInt(std::move(apsInt), integer.isUnsigned()), op2.getType()};
         });
 }
@@ -1429,8 +1419,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Seman
             {
                 CLD_UNREACHABLE;
             }
-            auto& integer = std::get<llvm::APSInt>(op2.getValue());
-            auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
+            auto& integer = cld::get<llvm::APSInt>(op2.getValue());
+            auto size = sizeOf(cld::get<PointerType>(op1.getType().get()).getElementType(), options);
             if (!size)
             {
                 CLD_UNREACHABLE;
@@ -1446,13 +1436,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Seman
             return {address, op1.getType()};
         },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating + std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+            return {floating + cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
         [&op2 = op2, issues, &options](const llvm::APSInt& integer) -> ConstRetType {
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
-                auto address = std::get<VoidStar>(op2.getValue());
-                auto size = sizeOf(std::get<PointerType>(op2.getType().get()).getElementType(), options);
+                auto address = cld::get<VoidStar>(op2.getValue());
+                auto size = sizeOf(cld::get<PointerType>(op2.getType().get()).getElementType(), options);
                 if (!size)
                 {
                     CLD_UNREACHABLE;
@@ -1468,8 +1458,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Seman
                 return {address, op2.getType()};
             }
             bool overflow = false;
-            auto apsInt = integer.isSigned() ? integer.sadd_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
-                                               integer.uadd_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            auto apsInt = integer.isSigned() ? integer.sadd_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.uadd_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow);
             if (issues && integer.isSigned())
             {
                 *issues = overflow ? NotRepresentable : NoIssues;
@@ -1491,7 +1481,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
     return match(
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &op1 = op1, &options](VoidStar address) -> ConstRetType {
-            auto size = sizeOf(std::get<PointerType>(op1.getType().get()).getElementType(), options);
+            auto size = sizeOf(cld::get<PointerType>(op1.getType().get()).getElementType(), options);
             if (!size)
             {
                 CLD_UNREACHABLE;
@@ -1499,7 +1489,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
                 return {llvm::APSInt(llvm::APInt(options.getSizeOfVoidStar() * 8,
-                                                 (address.address - std::get<VoidStar>(op2.getValue()).address) / *size,
+                                                 (address.address - cld::get<VoidStar>(op2.getValue()).address) / *size,
                                                  true),
                                      false),
                         getPtrdiff_t(options)};
@@ -1508,7 +1498,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
             {
                 CLD_UNREACHABLE;
             }
-            auto& integer = std::get<llvm::APSInt>(op2.getValue());
+            auto& integer = cld::get<llvm::APSInt>(op2.getValue());
             if (integer.isUnsigned())
             {
                 address.address -= *size * integer.getZExtValue();
@@ -1520,12 +1510,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
             return {address, op1.getType()};
         },
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
-            return {floating - std::get<llvm::APFloat>(op2.getValue()), op2.getType()};
+            return {floating - cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
         [&op2 = op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             bool overflow = false;
-            auto apsInt = integer.isSigned() ? integer.ssub_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
-                                               integer.usub_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            auto apsInt = integer.isSigned() ? integer.ssub_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.usub_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow);
             if (issues && integer.isSigned())
             {
                 *issues = overflow ? NotRepresentable : NoIssues;
@@ -1552,8 +1542,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftLeft(const cld::
         [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
             bool overflow = false;
-            auto apsInt = integer.isSigned() ? integer.sshl_ov(std::get<llvm::APSInt>(op2.getValue()), overflow) :
-                                               integer.ushl_ov(std::get<llvm::APSInt>(op2.getValue()), overflow);
+            auto apsInt = integer.isSigned() ? integer.sshl_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow) :
+                                               integer.ushl_ov(cld::get<llvm::APSInt>(op2.getValue()), overflow);
             if (issues && integer.isSigned())
             {
                 *issues = overflow ? NotRepresentable : NoIssues;
@@ -1580,7 +1570,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftRight(const cld:
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2, issues](const llvm::APSInt& integer) -> ConstRetType {
-            auto op2Integer = std::get<llvm::APSInt>(op2.getValue());
+            auto op2Integer = cld::get<llvm::APSInt>(op2.getValue());
             if (issues && (op2Integer.isSignBitSet() || op2Integer.getZExtValue() >= integer.getBitWidth()))
             {
                 *issues = NotRepresentable;
@@ -1605,7 +1595,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitAnd(const cld::Sem
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
-            return {integer & std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+            return {integer & cld::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
 }
 
@@ -1624,7 +1614,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitXor(const cld::Sem
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
-            return {integer ^ std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+            return {integer ^ cld::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
 }
 
@@ -1643,7 +1633,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::bitOr(const cld::Sema
         [](VoidStar) -> ConstRetType { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2](const llvm::APSInt& integer) -> ConstRetType {
-            return {integer | std::get<llvm::APSInt>(op2.getValue()), op2.getType()};
+            return {integer | cld::get<llvm::APSInt>(op2.getValue()), op2.getType()};
         });
 }
 
@@ -1721,17 +1711,17 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::S
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &options](VoidStar address) -> ConstRetType {
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
-                                             address.address < std::get<VoidStar>(op2.getValue()).address),
+                                             address.address < cld::get<VoidStar>(op2.getValue()).address),
                                  false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
-            auto cmp = floating.compare(std::get<llvm::APFloat>(op2.getValue()));
+            auto cmp = floating.compare(cld::get<llvm::APFloat>(op2.getValue()));
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, cmp == llvm::APFloat::cmpLessThan), false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
-            auto apsInt = integer < std::get<llvm::APSInt>(op2.getValue());
+            auto apsInt = integer < cld::get<llvm::APSInt>(op2.getValue());
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, apsInt), false),
                     PrimitiveType::createInt(false, false, options)};
         });
@@ -1764,18 +1754,18 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::equal(const cld::Sema
         [&op2 = op2, &options](VoidStar address) -> ConstRetType {
             if (std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {
-                assert(std::get<llvm::APSInt>(op2.getValue()) == 0);
+                CLD_ASSERT(cld::get<llvm::APSInt>(op2.getValue()) == 0);
                 return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
                         PrimitiveType::createInt(false, false, options)};
             }
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
-                                             address.address == std::get<VoidStar>(op2.getValue()).address, true),
+                                             address.address == cld::get<VoidStar>(op2.getValue()).address, true),
                                  false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
             return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
-                                             floating.compare(std::get<llvm::APFloat>(op2.getValue()))
+                                             floating.compare(cld::get<llvm::APFloat>(op2.getValue()))
                                                  == llvm::APFloat::cmpEqual),
                                  false),
                     PrimitiveType::createInt(false, false, options)};
@@ -1783,12 +1773,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::equal(const cld::Sema
         [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
             if (auto* address = std::get_if<VoidStar>(&op2.getValue()))
             {
-                assert(integer == 0);
+                CLD_ASSERT(integer == 0);
                 return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address->address == 0), false),
                         PrimitiveType::createInt(false, false, options)};
             }
             return {
-                llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == std::get<llvm::APSInt>(op2.getValue())),
+                llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == cld::get<llvm::APSInt>(op2.getValue())),
                              false),
                 PrimitiveType::createInt(false, false, options)};
         });

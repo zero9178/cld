@@ -181,27 +181,60 @@ public:
     Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value = std::monostate{},
           Type type = Type::None);
 
-    [[nodiscard]] TokenType getTokenType() const noexcept;
+    [[nodiscard]] TokenType getTokenType() const noexcept
+    {
+        return m_tokenType;
+    }
 
-    [[nodiscard]] const variant& getValue() const noexcept;
+    [[nodiscard]] const variant& getValue() const noexcept
+    {
+        return m_value;
+    }
 
-    [[nodiscard]] Type getType() const;
+    [[nodiscard]] Type getType() const
+    {
+        return m_type;
+    }
 
-    [[nodiscard]] bool macroInserted() const noexcept;
+    [[nodiscard]] bool macroInserted() const noexcept
+    {
+        return m_macroId;
+    }
 
-    [[nodiscard]] std::uint64_t getOffset() const noexcept;
+    [[nodiscard]] std::uint64_t getOffset() const noexcept
+    {
+        return m_offset;
+    }
 
-    [[nodiscard]] std::uint64_t getPPOffset() const noexcept;
+    [[nodiscard]] std::uint64_t getPPOffset() const noexcept
+    {
+        return m_afterPPOffset;
+    }
 
-    void setPPOffset(std::uint64_t ppOffset) noexcept;
+    void setPPOffset(std::uint64_t ppOffset) noexcept
+    {
+        m_afterPPOffset = ppOffset;
+    }
 
-    [[nodiscard]] std::size_t getLength() const noexcept;
+    [[nodiscard]] std::size_t getLength() const noexcept
+    {
+        return m_representation.size();
+    }
 
-    [[nodiscard]] std::uint64_t getMacroId() const noexcept;
+    [[nodiscard]] std::uint64_t getMacroId() const noexcept
+    {
+        return m_macroId;
+    }
 
-    void setMacroId(std::uint64_t macroId) noexcept;
+    void setMacroId(std::uint64_t macroId) noexcept
+    {
+        m_macroId = macroId;
+    }
 
-    [[nodiscard]] const std::string& getRepresentation() const;
+    [[nodiscard]] const std::string& getRepresentation() const
+    {
+        return m_representation;
+    }
 
     [[nodiscard]] std::uint64_t getLine(const SourceObject& sourceObject) const noexcept;
 

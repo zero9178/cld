@@ -177,7 +177,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                         && std::holds_alternative<TypeSpecifier>(specifiers[0]))
                     {
                         auto* primitive = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(
-                            &std::get<TypeSpecifier>(specifiers[0]).getVariant());
+                            &cld::get<TypeSpecifier>(specifiers[0]).getVariant());
                         if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
                         {
                             break;
@@ -226,10 +226,10 @@ std::optional<cld::Syntax::ExternalDeclaration>
                         }
                         std::vector<Message> notes;
                         if (specifiers.size() == 1 && std::holds_alternative<TypeSpecifier>(specifiers[0])
-                            && std::holds_alternative<std::string>(std::get<TypeSpecifier>(specifiers[0]).getVariant()))
+                            && std::holds_alternative<std::string>(cld::get<TypeSpecifier>(specifiers[0]).getVariant()))
                         {
-                            auto& typeSpecifier = std::get<TypeSpecifier>(specifiers[0]);
-                            const auto& name = std::get<std::string>(typeSpecifier.getVariant());
+                            auto& typeSpecifier = cld::get<TypeSpecifier>(specifiers[0]);
+                            const auto& name = cld::get<std::string>(typeSpecifier.getVariant());
                             auto* loc = context.getLocationOf(name);
                             if (loc)
                             {
@@ -247,7 +247,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                         context.log(std::move(notes));
                         continue;
                     }
-                    auto& decl = std::get<std::unique_ptr<Declarator>>(paramDeclarator);
+                    auto& decl = cld::get<std::unique_ptr<Declarator>>(paramDeclarator);
                     auto result = Semantics::declaratorToName(*decl);
                     context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
                     addedByParameters.insert(result);
@@ -381,7 +381,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::Tok
             declarationSpecifiers.begin(), declarationSpecifiers.end(),
             [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
         && begin->getTokenType() == Lexer::TokenType::Identifier
-        && context.isTypedef(std::get<std::string>(begin->getValue())))
+        && context.isTypedef(cld::get<std::string>(begin->getValue())))
     {
         declaratorMightActuallyBeTypedef = true;
     }
@@ -582,7 +582,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             }
             case Lexer::TokenType::Identifier:
             {
-                auto name = std::get<std::string>(begin->getValue());
+                auto name = cld::get<std::string>(begin->getValue());
                 if (context.isTypedefInScope(name))
                 {
                     return Syntax::DeclarationSpecifier{TypeSpecifier(start, ++begin, name)};
@@ -639,7 +639,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         return {};
     }
 
-    auto name = begin->getTokenType() == Lexer::TokenType::Identifier ? std::get<std::string>(begin->getValue()) : "";
+    auto name = begin->getTokenType() == Lexer::TokenType::Identifier ? cld::get<std::string>(begin->getValue()) : "";
     if (!name.empty())
     {
         begin++;
@@ -816,14 +816,14 @@ std::optional<cld::Syntax::SpecifierQualifier>
             }
             case Lexer::TokenType::Identifier:
             {
-                auto name = std::get<std::string>(begin->getValue());
+                auto name = cld::get<std::string>(begin->getValue());
                 if (context.isTypedefInScope(name))
                 {
                     return Syntax::SpecifierQualifier{TypeSpecifier(start, ++begin, name)};
                 }
                 else if (context.isTypedef(name))
                 {
-                    auto* loc = context.getLocationOf(std::get<std::string>(begin->getValue()));
+                    auto* loc = context.getLocationOf(cld::get<std::string>(begin->getValue()));
                     context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                                     "typename", '\'' + begin->getRepresentation() + '\''),
                                                 start, Modifier{begin, begin + 1, Modifier::PointAtBeginning}),
@@ -882,7 +882,7 @@ std::optional<cld::Syntax::DirectDeclarator>
         auto currToken = begin;
         begin++;
         directDeclarator = std::make_unique<DirectDeclarator>(
-            DirectDeclaratorIdentifier(start, begin, std::get<std::string>(currToken->getValue()), currToken));
+            DirectDeclaratorIdentifier(start, begin, cld::get<std::string>(currToken->getValue()), currToken));
     }
     else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
     {
@@ -953,7 +953,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                     std::vector<std::pair<std::string, Lexer::TokenIterator>> identifiers;
                     if (begin->getTokenType() == Lexer::TokenType::Identifier)
                     {
-                        identifiers.emplace_back(std::get<std::string>(begin->getValue()), begin);
+                        identifiers.emplace_back(cld::get<std::string>(begin->getValue()), begin);
                         begin++;
                         while (begin < end
                                && (begin->getTokenType() == Lexer::TokenType::Comma
@@ -1485,7 +1485,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
     std::string name;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
     {
-        name = std::get<std::string>(begin->getValue());
+        name = cld::get<std::string>(begin->getValue());
         begin++;
     }
     else if (begin == end)
@@ -1918,7 +1918,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::TokenIt
             {
                 if (begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::Colon)
                 {
-                    const auto& name = std::get<std::string>(begin->getValue());
+                    const auto& name = cld::get<std::string>(begin->getValue());
                     begin += 2;
                     auto statement = parseStatement(begin, end, context);
                     if (!statement)
@@ -1941,10 +1941,10 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::TokenIt
             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon)));
         std::vector<Message> notes;
         if (start + 1 == begin && start->getTokenType() == Lexer::TokenType::Identifier
-            && context.isTypedef(std::get<std::string>(start->getValue()))
+            && context.isTypedef(cld::get<std::string>(start->getValue()))
             && begin->getTokenType() == Lexer::TokenType::Identifier)
         {
-            auto* loc = context.getLocationOf(std::get<std::string>(start->getValue()));
+            auto* loc = context.getLocationOf(cld::get<std::string>(start->getValue()));
             if (loc)
             {
                 notes.push_back(Message::note(

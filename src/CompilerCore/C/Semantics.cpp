@@ -490,12 +490,12 @@ std::string cld::Semantics::declaratorToName(const cld::Syntax::Declarator& decl
         declarator.getDirectDeclarator(),
         [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string { return name.getIdentifier(); },
         [](auto&& self, const Syntax::DirectDeclaratorParenthese& declarator) -> std::string {
-            return std::visit([&self](auto&& value) -> std::string { return self(value); },
-                              declarator.getDeclarator().getDirectDeclarator());
+            return cld::match(declarator.getDeclarator().getDirectDeclarator(),
+                              [&self](auto&& value) -> std::string { return self(value); });
         },
         [](auto&& self, auto&& value) -> std::string {
-            return std::visit([&self](auto&& value) -> std::string { return self(value); },
-                              value.getDirectDeclarator());
+            return cld::match(value.getDirectDeclarator(),
+                              [&self](auto&& value) -> std::string { return self(value); });
         });
 }
 
@@ -509,14 +509,14 @@ std::vector<cld::Lexer::Token>::const_iterator
         },
         [](auto&& self,
            const Syntax::DirectDeclaratorParenthese& declarator) -> std::vector<cld::Lexer::Token>::const_iterator {
-            return std::visit(
-                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); },
-                declarator.getDeclarator().getDirectDeclarator());
+            return cld::match(
+                declarator.getDeclarator().getDirectDeclarator(),
+                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); });
         },
         [](auto&& self, auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator {
-            return std::visit(
-                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); },
-                value.getDirectDeclarator());
+            return cld::match(
+                value.getDirectDeclarator(),
+                [&self](auto&& value) -> std::vector<cld::Lexer::Token>::const_iterator { return self(value); });
         });
 }
 

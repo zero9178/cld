@@ -244,7 +244,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             }
             case cld::getIndex<std::optional<Term>>(state):
             {
-                auto& result = std::get<std::optional<Term>>(state);
+                auto& result = cld::get<std::optional<Term>>(state);
 
                 std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
                 while (begin != end
@@ -275,7 +275,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             }
             case cld::getIndex<std::optional<AdditiveExpression>>(state):
             {
-                auto& result = std::get<std::optional<AdditiveExpression>>(state);
+                auto& result = cld::get<std::optional<AdditiveExpression>>(state);
 
                 std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
                 while (begin != end
@@ -306,7 +306,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             }
             case cld::getIndex<std::optional<ShiftExpression>>(state):
             {
-                auto& result = std::get<std::optional<ShiftExpression>>(state);
+                auto& result = cld::get<std::optional<ShiftExpression>>(state);
 
                 std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
                 while (begin != end
@@ -351,7 +351,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             }
             case cld::getIndex<std::optional<RelationalExpression>>(state):
             {
-                auto& result = std::get<std::optional<RelationalExpression>>(state);
+                auto& result = cld::get<std::optional<RelationalExpression>>(state);
 
                 std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> list;
                 while (begin != end
@@ -382,7 +382,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             }
             case cld::getIndex<std::optional<EqualityExpression>>(state):
             {
-                auto& result = std::get<std::optional<EqualityExpression>>(state);
+                auto& result = cld::get<std::optional<EqualityExpression>>(state);
 
                 std::vector<EqualityExpression> list;
                 if (result)
@@ -405,7 +405,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             case cld::getIndex<BitAndExpression>(state):
             {
                 std::vector<BitAndExpression> list;
-                list.push_back(std::move(std::get<BitAndExpression>(state)));
+                list.push_back(std::move(cld::get<BitAndExpression>(state)));
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::BitXor)
                 {
                     begin++;
@@ -418,7 +418,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             case cld::getIndex<BitXorExpression>(state):
             {
                 std::vector<BitXorExpression> list;
-                list.push_back(std::move(std::get<BitXorExpression>(state)));
+                list.push_back(std::move(cld::get<BitXorExpression>(state)));
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::BitOr)
                 {
                     begin++;
@@ -430,7 +430,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             case cld::getIndex<BitOrExpression>(state):
             {
                 std::vector<BitOrExpression> list;
-                list.push_back(std::move(std::get<BitOrExpression>(state)));
+                list.push_back(std::move(cld::get<BitOrExpression>(state)));
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::LogicAnd)
                 {
                     begin++;
@@ -443,7 +443,7 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
             case cld::getIndex<LogicalAndExpression>(state):
             {
                 std::vector<LogicalAndExpression> list;
-                list.push_back(std::move(std::get<LogicalAndExpression>(state)));
+                list.push_back(std::move(cld::get<LogicalAndExpression>(state)));
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::LogicOr)
                 {
                     begin++;
@@ -466,7 +466,7 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
                                                                            Lexer::TokenIterator end, Context& context)
 {
     auto start = begin;
-    auto logicalOrExpression = std::get<LogicalOrExpression>(
+    auto logicalOrExpression = cld::get<LogicalOrExpression>(
         parseBinaryOperators(EndState::LogicalOr, begin, end,
                              context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::QuestionMark))));
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
@@ -491,62 +491,62 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
 cld::Syntax::LogicalOrExpression cld::Parser::parseLogicalOrExpression(Lexer::TokenIterator& begin,
                                                                        Lexer::TokenIterator end, Context& context)
 {
-    return std::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
+    return cld::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
 cld::Syntax::LogicalAndExpression cld::Parser::parseLogicalAndExpression(Lexer::TokenIterator& begin,
                                                                          Lexer::TokenIterator end, Context& context)
 {
-    return std::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
+    return cld::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
 cld::Syntax::BitOrExpression cld::Parser::parseBitOrExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
                                                                Context& context)
 {
-    return std::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
+    return cld::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
 cld::Syntax::BitXorExpression cld::Parser::parseBitXorExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
                                                                  Context& context)
 {
-    return std::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
+    return cld::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
 cld::Syntax::BitAndExpression cld::Parser::parseBitAndExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
                                                                  Context& context)
 {
-    return std::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
+    return cld::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
 std::optional<cld::Syntax::EqualityExpression>
     cld::Parser::parseEqualityExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
 {
-    return std::get<std::optional<EqualityExpression>>(parseBinaryOperators(EndState::Equality, begin, end, context));
+    return cld::get<std::optional<EqualityExpression>>(parseBinaryOperators(EndState::Equality, begin, end, context));
 }
 
 std::optional<cld::Syntax::RelationalExpression>
     cld::Parser::parseRelationalExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
 {
-    return std::get<std::optional<RelationalExpression>>(
+    return cld::get<std::optional<RelationalExpression>>(
         parseBinaryOperators(EndState::Relational, begin, end, context));
 }
 
 std::optional<cld::Syntax::ShiftExpression>
     cld::Parser::parseShiftExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
 {
-    return std::get<std::optional<ShiftExpression>>(parseBinaryOperators(EndState::Shift, begin, end, context));
+    return cld::get<std::optional<ShiftExpression>>(parseBinaryOperators(EndState::Shift, begin, end, context));
 }
 
 std::optional<cld::Syntax::AdditiveExpression>
     cld::Parser::parseAdditiveExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
 {
-    return std::get<std::optional<AdditiveExpression>>(parseBinaryOperators(EndState::Additive, begin, end, context));
+    return cld::get<std::optional<AdditiveExpression>>(parseBinaryOperators(EndState::Additive, begin, end, context));
 }
 
 std::optional<cld::Syntax::Term> cld::Parser::parseTerm(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
                                                         Context& context)
 {
-    return std::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context));
+    return cld::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context));
 }
 
 std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
@@ -843,7 +843,7 @@ std::optional<cld::Syntax::UnaryExpression>
         }
     }
     else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
-             && std::get<std::string>(begin->getValue()) == "defined")
+             && cld::get<std::string>(begin->getValue()) == "defined")
     {
         begin++;
         std::optional<Lexer::TokenIterator> openP;
@@ -925,25 +925,23 @@ std::optional<cld::Syntax::PostFixExpression>
         std::optional<cld::Syntax::PrimaryExpression> newPrimary;
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
         {
-            const auto& value = std::get<std::string>(begin->getValue());
+            const auto& value = cld::get<std::string>(begin->getValue());
             begin++;
             newPrimary = PrimaryExpression(PrimaryExpressionIdentifier(start, begin, value));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::Literal)
         {
-            auto value = std::visit(
-                [](auto&& value) -> typename PrimaryExpressionConstant::variant {
-                    using T = std::decay_t<decltype(value)>;
-                    if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::variant, T>)
-                    {
-                        return {std::forward<decltype(value)>(value)};
-                    }
-                    else
-                    {
-                        throw std::runtime_error("ICE: Can't convert type of variant to constant expression");
-                    }
-                },
-                begin->getValue());
+            auto value = cld::match(begin->getValue(), [](auto&& value) -> typename PrimaryExpressionConstant::variant {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::variant, T>)
+                {
+                    return {std::forward<decltype(value)>(value)};
+                }
+                else
+                {
+                    CLD_UNREACHABLE;
+                }
+            });
             auto type = begin->getType();
             begin++;
             newPrimary = PrimaryExpression(PrimaryExpressionConstant(start, begin, std::move(value), type));

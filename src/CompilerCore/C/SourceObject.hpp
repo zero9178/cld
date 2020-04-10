@@ -1,6 +1,6 @@
 #pragma once
 
-#include <map>
+#include <unordered_map>
 
 #include "LanguageOptions.hpp"
 #include "Lexer.hpp"
@@ -52,15 +52,15 @@ public:
         std::vector<Lexer::Token> identifier;
         std::vector<Lexer::Token> replacedTokens;
     };
-    using SubstitutionMap = std::map<std::uint64_t, Substitution>;
+    using SubstitutionMap = std::unordered_map<std::uint64_t, Substitution>;
 
 private:
     SubstitutionMap m_substitutions;
     std::vector<std::uint64_t> m_starts;
 
 public:
-    PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens,
-                   const SubstitutionMap& substitutions, const std::vector<std::uint64_t>& ppstarts);
+    PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens = {},
+                   const SubstitutionMap& substitutions = {}, const std::vector<std::uint64_t>& ppstarts = {});
 
     PPSourceObject(const PPSourceObject&) = delete;
 

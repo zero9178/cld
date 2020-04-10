@@ -39,9 +39,15 @@ public:
 
     /* implicit */ ConstRetType(const ValueType& value, const Type& type);
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
 
-    [[nodiscard]] const ValueType& getValue() const;
+    [[nodiscard]] const ValueType& getValue() const
+    {
+        return m_value;
+    }
 
     [[nodiscard]] bool isInteger() const;
 
