@@ -4,10 +4,9 @@
 #include <llvm/Support/WithColor.h>
 
 #include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Util.hpp>
 
+#include <cmath>
 #include <ctre.hpp>
-#include <utility>
 
 cld::Message::Message(Severity severity, std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
                       std::vector<Modifier> modifiers)
@@ -86,7 +85,8 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
         result = newline + 1;
     }
 
-    auto width = 1 + (std::size_t)std::ceil(std::log10f(endLine));
+    // log10f instead of std::log10f because of a libstdc++ bug
+    auto width = 1 + (std::size_t)std::ceil(log10f(endLine));
     {
         const auto remainder = width % 4;
         if (remainder)
