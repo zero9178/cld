@@ -4,6 +4,8 @@
 #include <llvm/ADT/APSInt.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <CompilerCore/Common/Util.hpp>
+
 #include <memory>
 #include <string>
 #include <variant>
@@ -144,14 +146,15 @@ struct NonCharString
 class Token
 {
     using variant = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, std::string, NonCharString>;
-    variant m_value;              ///< Optional value of the token
-    std::string m_representation; ///< Original spelling of the token
-    std::uint64_t m_macroId = 0;  /**< MacroID. All tokens with the same ID have been inserted by the same macro
-                                     substitution. ID of 0 means the the token originated from the Lexer*/
-    std::uint64_t m_offset;       /**< Offset of the token. That is bytes offset to the first character of the
-                                       token from the beginning of the file of the very original source code passed
-                                       from the user. This value is not unique as after preprocessing all inserted
-                                       tokens have the offset of the original position in the replacement list*/
+    variant m_value; ///< Optional value of the token
+    const char* m_originalSource = nullptr;
+    std::uint64_t m_length;
+    std::uint64_t m_macroId = 0; /**< MacroID. All tokens with the same ID have been inserted by the same macro
+                                    substitution. ID of 0 means the the token originated from the Lexer*/
+    std::uint64_t m_offset;      /**< Offset of the token. That is bytes offset to the first character of the
+                                      token from the beginning of the file of the very original source code passed
+                                      from the user. This value is not unique as after preprocessing all inserted
+                                      tokens have the offset of the original position in the replacement list*/
     std::uint64_t
         m_afterPPOffset;   /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
                               m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
@@ -178,7 +181,7 @@ private:
 public:
     using ValueType = variant;
 
-    Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value = std::monostate{},
+    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, variant value = std::monostate{},
           Type type = Type::None);
 
     [[nodiscard]] TokenType getTokenType() const noexcept
@@ -218,7 +221,7 @@ public:
 
     [[nodiscard]] std::size_t getLength() const noexcept
     {
-        return m_representation.size();
+        return m_length;
     }
 
     [[nodiscard]] std::uint64_t getMacroId() const noexcept
@@ -231,9 +234,10 @@ public:
         m_macroId = macroId;
     }
 
-    [[nodiscard]] const std::string& getRepresentation() const
+    [[nodiscard]] std::string_view getRepresentation() const
     {
-        return m_representation;
+        CLD_ASSERT(m_originalSource);
+        return std::string_view(m_originalSource + m_offset, m_length);
     }
 
     [[nodiscard]] std::uint64_t getLine(const SourceObject& sourceObject) const noexcept;
@@ -243,6 +247,10 @@ public:
     [[nodiscard]] std::uint64_t getColumn(const SourceObject& sourceObject) const noexcept;
 
     [[nodiscard]] std::uint64_t getPPColumn(const PPSourceObject& sourceObject) const noexcept;
+
+    [[nodiscard]] const char* getOriginalSource() const noexcept;
+
+    void setOriginalSource(const char* originalSource) noexcept;
 };
 
 /**

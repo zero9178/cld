@@ -1350,15 +1350,15 @@ TEST_CASE("Lexing Comments", "[lexer]")
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
-        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[0].getColumn(result) == 1);
         CHECK(result.data()[1].getOffset() == 12);
         CHECK(result.data()[1].getLine(result) == 2);
-        CHECK(result.data()[1].getColumn(result) == 0);
+        CHECK(result.data()[1].getColumn(result) == 1);
         result = lexes("test//wdwdw\\\ntest");
         REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
-        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[0].getColumn(result) == 1);
     }
     SECTION("Block comments")
     {
@@ -1366,18 +1366,18 @@ TEST_CASE("Lexing Comments", "[lexer]")
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
-        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[0].getColumn(result) == 1);
         CHECK(result.data()[1].getOffset() == 13);
         CHECK(result.data()[1].getLine(result) == 1);
-        CHECK(result.data()[1].getColumn(result) == 13);
+        CHECK(result.data()[1].getColumn(result) == 14);
         result = lexes("test/*wdwdw*\\\n/test");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getOffset() == 0);
         CHECK(result.data()[0].getLine(result) == 1);
-        CHECK(result.data()[0].getColumn(result) == 0);
+        CHECK(result.data()[0].getColumn(result) == 1);
         CHECK(result.data()[1].getOffset() == 15);
         CHECK(result.data()[1].getLine(result) == 2);
-        CHECK(result.data()[1].getColumn(result) == 1);
+        CHECK(result.data()[1].getColumn(result) == 2);
         LEXER_OUTPUTS_WITH("ad\n/*/", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
     }
 }

@@ -133,7 +133,7 @@ class ConstantEvaluator final
     LanguageOptions m_languageOptions;
     std::function<Type(const Syntax::TypeName&)> m_typeCallback;
     std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
-    std::function<void(std::string, std::optional<Modifier>, Message::Severity)> m_loggerCallback;
+    std::function<void(std::string, std::vector<Modifier>, Message::Severity)> m_loggerCallback;
 
 public:
     enum Mode
@@ -146,17 +146,17 @@ public:
 private:
     Mode m_mode;
 
-    void logError(std::string message, std::optional<Modifier> modifier = {});
+    void logError(std::string message, std::vector<Modifier> modifiers = {});
 
-    void logWarning(std::string message, std::optional<Modifier> modifier = {});
+    void logWarning(std::string message, std::vector<Modifier> modifiers = {});
 
-    void logNote(std::string message, std::optional<Modifier> modifier = {});
+    void logNote(std::string message, std::vector<Modifier> modifiers = {});
 
 public:
     explicit ConstantEvaluator(
         const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback = {},
         std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
-        std::function<void(std::string, std::optional<Modifier>, Message::Severity)> loggerCallback = {},
+        std::function<void(std::string, std::vector<Modifier>, Message::Severity)> loggerCallback = {},
         Mode mode = Integer);
 
     ConstRetType visit(const Syntax::Expression& node);

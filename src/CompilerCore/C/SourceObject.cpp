@@ -1,12 +1,17 @@
 #include "SourceObject.hpp"
 
-#include <CompilerCore/Common/Util.hpp>
-
-cld::SourceObject::SourceObject(std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
+cld::SourceObject::SourceObject(std::string source, std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
                                 LanguageOptions languageOptions)
-    : m_starts(std::move(starts)), m_languageOptions(languageOptions), m_tokens(std::move(tokens))
+    : m_source(std::move(source)),
+      m_starts(std::move(starts)),
+      m_languageOptions(std::move(languageOptions)),
+      m_tokens(std::move(tokens))
 {
     CLD_ASSERT(std::is_sorted(m_starts.begin(), m_starts.end()));
+    for (auto& iter : m_tokens)
+    {
+        iter.setOriginalSource(m_source.data());
+    }
 }
 
 cld::LanguageOptions cld::SourceObject::getLanguageOptions() const
@@ -40,6 +45,49 @@ const std::vector<cld::Lexer::Token>& cld::SourceObject::data() const
 bool cld::SourceObject::isPreprocessed() const
 {
     return false;
+}
+
+const std::string& cld::SourceObject::getSource() const
+{
+    return m_source;
+}
+
+cld::SourceObject::SourceObject(const cld::SourceObject& rhs)
+    : SourceObject(rhs.getSource(), rhs.m_starts, rhs.m_tokens, rhs.getLanguageOptions())
+{
+}
+
+cld::SourceObject& cld::SourceObject::operator=(const cld::SourceObject& rhs)
+{
+    m_source = rhs.m_source;
+    m_starts = rhs.m_starts;
+    m_tokens.clear();
+    m_tokens.reserve(rhs.m_tokens.size());
+    std::transform(rhs.m_tokens.begin(), rhs.m_tokens.end(), std::back_inserter(m_tokens), [this](Lexer::Token token) {
+        token.setOriginalSource(m_source.data());
+        return token;
+    });
+    m_languageOptions = rhs.m_languageOptions;
+    return *this;
+}
+
+cld::SourceObject::SourceObject(cld::SourceObject&& rhs) noexcept
+    : SourceObject(std::move(rhs.m_source), std::move(rhs.m_starts), std::move(rhs.m_tokens),
+                   std::move(rhs.m_languageOptions))
+{
+}
+
+cld::SourceObject& cld::SourceObject::operator=(cld::SourceObject&& rhs) noexcept
+{
+    m_source = std::move(rhs.m_source);
+    m_starts = std::move(rhs.m_starts);
+    m_tokens = std::move(rhs.m_tokens);
+    for (auto& iter : m_tokens)
+    {
+        iter.setOriginalSource(m_source.data());
+    }
+    m_languageOptions = std::move(rhs.m_languageOptions);
+    return *this;
 }
 
 cld::PPSourceObject::PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens,

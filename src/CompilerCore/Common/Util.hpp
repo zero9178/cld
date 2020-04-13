@@ -130,7 +130,8 @@ decltype(auto) match(Variant&& variant, Matchers&&... matchers)
 template <typename Variant, typename... Matchers>
 decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
-    return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}}, std::forward<Variant>(variant));
+    return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
+                         std::forward<Variant>(variant));
 }
 
 template <typename T, typename Variant>
@@ -166,5 +167,16 @@ inline std::string stringOfSameWidth(std::string_view original, char characterTo
 {
     auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
     return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
+}
+
+inline std::string to_string(std::string_view stringView)
+{
+    return std::string(stringView.begin(), stringView.end());
+}
+
+template <class T, class = std::enable_if_t<std::is_invocable_v<std::to_string, T>>>
+inline std::string to_string(T value)
+{
+    return std::to_string(value);
 }
 } // namespace cld

@@ -1693,44 +1693,40 @@ constexpr bool isReferenceWrapper = isSpecilization<T, std::reference_wrapper>{}
 template <class... T>
 [[nodiscard]] Node& nodeFromNodeDerivedVariant(std::variant<T...>& variant)
 {
-    return std::visit(
-        [](auto&& value) -> Node& {
-            using U = std::decay_t<decltype(value)>;
-            if constexpr (detail::isVariant<U>)
-            {
-                return nodeFromNodeDerivedVariant(value);
-            }
-            else if constexpr (detail::isReferenceWrapper<U>)
-            {
-                return nodeFromNodeDerivedVariant(value.get());
-            }
-            else
-            {
-                return value;
-            }
-        },
-        variant);
+    return cld::match(variant, [](auto&& value) -> Node& {
+        using U = std::decay_t<decltype(value)>;
+        if constexpr (detail::isVariant<U>)
+        {
+            return nodeFromNodeDerivedVariant(value);
+        }
+        else if constexpr (detail::isReferenceWrapper<U>)
+        {
+            return nodeFromNodeDerivedVariant(value.get());
+        }
+        else
+        {
+            return value;
+        }
+    });
 }
 
 template <class... T>
 [[nodiscard]] const Node& nodeFromNodeDerivedVariant(const std::variant<T...>& variant)
 {
-    return std::visit(
-        [](auto&& value) -> const Node& {
-            using U = std::decay_t<decltype(value)>;
-            if constexpr (detail::isVariant<U>)
-            {
-                return nodeFromNodeDerivedVariant(value);
-            }
-            else if constexpr (detail::isReferenceWrapper<U>)
-            {
-                return nodeFromNodeDerivedVariant(value.get());
-            }
-            else
-            {
-                return value;
-            }
-        },
-        variant);
+    return cld::match(variant, [](auto&& value) -> const Node& {
+        using U = std::decay_t<decltype(value)>;
+        if constexpr (detail::isVariant<U>)
+        {
+            return nodeFromNodeDerivedVariant(value);
+        }
+        else if constexpr (detail::isReferenceWrapper<U>)
+        {
+            return nodeFromNodeDerivedVariant(value.get());
+        }
+        else
+        {
+            return value;
+        }
+    });
 }
 } // namespace cld::Syntax

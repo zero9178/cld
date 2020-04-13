@@ -1,8 +1,8 @@
 #pragma once
 
-#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "Lexer.hpp"
 
@@ -94,35 +94,50 @@ public:
     }
 };
 
-class Modifier final
+class Underline final
 {
-public:
-    enum Action : std::uint8_t
-    {
-        Underline,
-        PointAtBeginning,
-        PointAtEnd,
-        InsertAtEnd
-    };
-
-private:
-    std::string m_actionArgument;
     Lexer::TokenIterator m_begin;
     Lexer::TokenIterator m_end;
-    Action m_action;
 
 public:
-    Modifier(Lexer::TokenIterator begin, Lexer::TokenIterator anEnd, Action action = Underline,
-             std::string actionArgument = {});
+    Underline(Lexer::TokenIterator begin);
+
+    Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end);
 
     [[nodiscard]] Lexer::TokenIterator begin() const;
 
     [[nodiscard]] Lexer::TokenIterator end() const;
-
-    [[nodiscard]] Action getAction() const;
-
-    [[nodiscard]] const std::string& getActionArgument() const;
 };
+
+class PointAt final
+{
+    Lexer::TokenIterator m_begin;
+    Lexer::TokenIterator m_end;
+
+public:
+    PointAt(Lexer::TokenIterator begin);
+
+    PointAt(Lexer::TokenIterator begin, Lexer::TokenIterator end);
+
+    [[nodiscard]] Lexer::TokenIterator begin() const;
+
+    [[nodiscard]] Lexer::TokenIterator end() const;
+};
+
+class Insert final
+{
+    Lexer::TokenIterator m_insertAfter;
+    std::string m_argument;
+
+public:
+    explicit Insert(Lexer::TokenIterator insertAfter, std::string argument = {});
+
+    [[nodiscard]] Lexer::TokenIterator getInsertAfter() const noexcept;
+
+    [[nodiscard]] const std::string& getArgument() const noexcept;
+};
+
+using Modifier = std::variant<Underline, PointAt, Insert>;
 
 /**
  * Class used to present Messages from various components of the compiler, eg. Parser or Semantics.
@@ -145,17 +160,17 @@ public:
     };
 
 private:
-    std::optional<Modifier> m_modifier;
+    std::vector<Modifier> m_modifier;
     std::string m_message;
     Lexer::TokenIterator m_begin;
-    std::optional<Lexer::TokenIterator> m_rangeEnd;
+    Lexer::TokenIterator m_end;
     Severity m_severity;
 
-    Message(Severity severity, std::string message, Lexer::TokenIterator begin,
-            std::optional<Lexer::TokenIterator> rangeEnd = {}, std::optional<Modifier> modifier = {});
+    Message(Severity severity, std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
+            std::vector<Modifier> modifiers = {});
 
-    llvm::raw_ostream& printEnd(llvm::raw_ostream& os, const SourceObject& sourceObject,
-                                llvm::raw_ostream::Colors colour, std::string_view prefix) const;
+    //    llvm::raw_ostream& printEnd(llvm::raw_ostream& os, const SourceObject& sourceObject,
+    //                                llvm::raw_ostream::Colors colour, std::string_view prefix) const;
 
 public:
     /**
@@ -163,10 +178,10 @@ public:
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines that this token is contained in. Can be end
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message error(std::string message, Lexer::TokenIterator token, std::optional<Modifier> modifier = {});
+    static Message error(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers = {});
 
     /**
      * Generates an error Message
@@ -174,21 +189,21 @@ public:
      * @param begin Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines from begin until exclusive end.
      * @param end Exclusive end of all tokens whose lines need to be printed
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
     static Message error(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                         std::optional<Modifier> modifier = {});
+                         std::vector<Modifier> modifiers = {});
 
     /**
      * Generates a note Message
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines that this token is contained in. Can be end
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message note(std::string message, Lexer::TokenIterator token, std::optional<Modifier> modifier = {});
+    static Message note(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers = {});
 
     /**
      * Generates a note Message
@@ -196,21 +211,21 @@ public:
      * @param begin Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines from begin until exclusive end.
      * @param end Exclusive end of all tokens whose lines need to be printed
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
     static Message note(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                        std::optional<Modifier> modifier = {});
+                        std::vector<Modifier> modifiers = {});
 
     /**
      * Generates a warning Message
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines that this token is contained in. Can be end
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message warning(std::string message, Lexer::TokenIterator token, std::optional<Modifier> modifier = {});
+    static Message warning(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers = {});
 
     /**
      * Generates a warning Message
@@ -218,11 +233,11 @@ public:
      * @param begin Token that is used for the source location to be printed. The source code displayed is
      * guaranteed to display all lines from begin until exclusive end.
      * @param end Exclusive end of all tokens whose lines need to be printed
-     * @param modifier optional modifier to apply
+     * @param modifiers optional modifier to apply
      * @return Message object
      */
     static Message warning(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                           std::optional<Modifier> modifier = {});
+                           std::vector<Modifier> modifiers = {});
 
     [[nodiscard]] Severity getSeverity() const;
 

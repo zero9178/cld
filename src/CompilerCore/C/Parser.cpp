@@ -21,9 +21,9 @@ void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocati
     if (!inserted && iter->second.isTypedef)
     {
         log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
-                            declarator.end, Modifier(declarator.identifier, declarator.identifier + 1)),
+                            declarator.end, {Underline(declarator.identifier, declarator.identifier + 1)}),
              Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
-                           Modifier(iter->second.location.identifier, iter->second.location.identifier + 1))});
+                           {Underline(iter->second.location.identifier, iter->second.location.identifier + 1)})});
     }
 }
 
@@ -61,9 +61,9 @@ void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocati
     if (!inserted && iter->second.isTypedef)
     {
         log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
-                            declarator.end, Modifier(declarator.identifier, declarator.identifier + 1)),
+                            declarator.end, {Underline(declarator.identifier, declarator.identifier + 1)}),
              Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
-                           Modifier(iter->second.location.identifier, iter->second.location.identifier + 1))});
+                           {Underline(iter->second.location.identifier, iter->second.location.identifier + 1)})});
     }
 }
 
@@ -142,7 +142,7 @@ void cld::Parser::Context::parenthesesEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+                        bracket, {PointAt(bracket, bracket + 1)})});
     throw FatalParserError();
 }
 
@@ -158,7 +158,7 @@ void cld::Parser::Context::squareBracketEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+                        bracket, {PointAt(bracket, bracket + 1)})});
     throw FatalParserError();
 }
 
@@ -174,7 +174,7 @@ void cld::Parser::Context::braceEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, Modifier(bracket, bracket + 1, Modifier::PointAtBeginning))});
+                        bracket, {PointAt(bracket, bracket + 1)})});
     throw FatalParserError();
 }
 

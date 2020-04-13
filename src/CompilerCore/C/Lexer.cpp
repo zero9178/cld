@@ -1072,8 +1072,7 @@ public:
         start = map(start).first;
         end = map(end - 1).second;
 
-        auto view = m_sourceSpace.substr(start, end - start);
-        m_result.emplace_back(start, tokenType, std::string(view.begin(), view.end()), std::move(value), type);
+        m_result.emplace_back(start, tokenType, end - start, std::move(value), type);
     }
 
     void push(TokenType tokenType, Token::ValueType value = {}, Token::Type type = Token::Type::None)
@@ -2719,7 +2718,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
         *errorsOccured = context.isErrorsOccured();
     }
 
-    return SourceObject(std::move(starts), std::move(context).getResult(), languageOptions);
+    return SourceObject(std::move(source), std::move(starts), std::move(context).getResult(), languageOptions);
 }
 
 std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
@@ -2918,16 +2917,14 @@ std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     CLD_UNREACHABLE;
 }
 
-cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::string representation, variant value,
-                         Type type)
+cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, variant value, Type type)
     : m_value(std::move(value)),
-      m_representation(std::move(representation)),
+      m_length(length),
       m_offset(offset),
       m_afterPPOffset(offset),
       m_tokenType(tokenType),
       m_type(type)
 {
-    CLD_ASSERT(!m_representation.empty());
 }
 
 std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexcept
@@ -2943,13 +2940,23 @@ std::uint64_t Token::getPPLine(const cld::PPSourceObject& sourceObject) const no
 std::uint64_t Token::getColumn(const cld::SourceObject& sourceObject) const noexcept
 {
     auto line = sourceObject.getLineNumber(getOffset());
-    return getOffset() - sourceObject.getLineStartOffset(line);
+    return getOffset() - sourceObject.getLineStartOffset(line) + 1;
 }
 
 std::uint64_t Token::getPPColumn(const cld::PPSourceObject& sourceObject) const noexcept
 {
     auto line = sourceObject.getPPLineNumber(getPPOffset());
-    return getPPOffset() - sourceObject.getPPLineStartOffset(line);
+    return getPPOffset() - sourceObject.getPPLineStartOffset(line) + 1;
+}
+
+const char* Token::getOriginalSource() const noexcept
+{
+    return m_originalSource;
+}
+
+void Token::setOriginalSource(const char* originalSource) noexcept
+{
+    m_originalSource = originalSource;
 }
 
 std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end)

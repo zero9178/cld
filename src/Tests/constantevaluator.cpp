@@ -37,22 +37,22 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                 typeName.getAbstractDeclarator());
         },
         {},
-        [&ss, &tokens](std::string message, std::optional<cld::Modifier> modifier, cld::Message::Severity severity) {
+        [&ss, &tokens](std::string message, std::vector<cld::Modifier> modifiers, cld::Message::Severity severity) {
             switch (severity)
             {
                 case cld::Message::Error:
                     cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                        std::move(modifier))
+                                        std::move(modifiers))
                         .print(ss, tokens);
                     break;
                 case cld::Message::Note:
                     cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                       std::move(modifier))
+                                       std::move(modifiers))
                         .print(ss, tokens);
                     break;
                 case cld::Message::Warning:
                     cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                          std::move(modifier))
+                                          std::move(modifiers))
                         .print(ss, tokens);
                     break;
             }
@@ -70,24 +70,24 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                     typeName.getAbstractDeclarator());
             },
             {},
-            [&tokens](std::string message, std::optional<cld::Modifier> modifier, cld::Message::Severity severity) {
+            [&tokens](std::string message, std::vector<cld::Modifier> modifiers, cld::Message::Severity severity) {
                 switch (severity)
                 {
                     case cld::Message::Error:
                         cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                            std::move(modifier))
+                                            std::move(modifiers))
                                 .print(llvm::errs(), tokens)
                             << '\n';
                         break;
                     case cld::Message::Note:
                         cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                           std::move(modifier))
+                                           std::move(modifiers))
                                 .print(llvm::errs(), tokens)
                             << '\n';
                         break;
                     case cld::Message::Warning:
                         cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
-                                              std::move(modifier))
+                                              std::move(modifiers))
                                 .print(llvm::errs(), tokens)
                             << '\n';
                         break;
