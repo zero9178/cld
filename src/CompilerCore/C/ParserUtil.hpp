@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CompilerCore/Common/Text.hpp>
 #include <CompilerCore/Common/Util.hpp>
 
 #include <utility>
@@ -20,7 +21,7 @@ bool expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenI
         if (curr == end)
         {
             context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
-                                        {Insert(end - 1, Lexer::tokenValue(expected))})});
+                                        {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
         }
         else
         {

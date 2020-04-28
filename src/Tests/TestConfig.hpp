@@ -1,12 +1,12 @@
 #pragma once
 
-#pragma warning(push, 0)
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
-#pragma warning(pop)
 
 #include <CompilerCore/C/LanguageOptions.hpp>
 #include <CompilerCore/C/Semantics.hpp>
+
+#include <numeric>
 
 namespace cld::Tests
 {
@@ -92,6 +92,77 @@ struct ProducesNoWarnings : Catch::Matchers::StdString::ContainsMatcher
 };
 
 #define ProducesNothing() ProducesNoErrors() && ProducesNoNotes() && ProducesNoWarnings()
+
+// Matcher that works almost like == of two strings except it doesn't care of any leading whitespaces per line
+struct ProducesLines : Catch::MatcherBase<std::string_view>
+{
+    ProducesLines(std::string_view text)
+    {
+        std::size_t result = 0;
+        while (true)
+        {
+            auto newline = text.find('\n', result);
+            if (newline == std::string_view::npos)
+            {
+                m_linesTrimmed.emplace_back(trimEnd(text.substr(result)));
+                break;
+            }
+            m_linesTrimmed.emplace_back(trimEnd(text.substr(result, newline - result)));
+            result = newline + 1;
+        }
+    }
+
+    std::string describe() const override
+    {
+        return "lines match \""
+               + std::accumulate(m_linesTrimmed.begin(), m_linesTrimmed.end(), std::string(),
+                                 [](const std::string& lhs, const std::string& rhs) {
+                                     if (!lhs.empty())
+                                     {
+                                         return lhs + '\n' + rhs;
+                                     }
+                                     else
+                                     {
+                                         return rhs;
+                                     }
+                                 })
+               + '"';
+    }
+
+    bool match(const std::string_view& source) const override
+    {
+        std::size_t i = 0;
+        std::size_t result = 0;
+        while (true)
+        {
+            auto newline = source.find('\n', result);
+            if (newline == std::string_view::npos)
+            {
+                return trimEnd(source.substr(result)) == m_linesTrimmed[i] && i + 1 == m_linesTrimmed.size();
+            }
+            if (trimEnd(source.substr(result, newline - result)) != m_linesTrimmed[i])
+            {
+                return false;
+            }
+            result = newline + 1;
+            i++;
+        }
+    }
+
+private:
+    static std::string_view trimEnd(std::string_view text)
+    {
+        // ASCII should hopefully suffice for our tests... Otherwise I will have to properly parse it to UTF32
+        // and use one of the whitespace sets of the Lexer to match whitespace characters
+        auto end =
+            std::find_if(std::make_reverse_iterator(text.end()), std::make_reverse_iterator(text.begin()), [](char c) {
+                return c != ' ' && c != '\t';
+            }).base();
+        return text.substr(0, end - text.begin());
+    }
+
+    std::vector<std::string> m_linesTrimmed;
+};
 
 } // namespace cld::Tests
 

@@ -1,29 +1,31 @@
 #include "Lexer.hpp"
 
-#include <llvm/ADT/IntervalMap.h>
 #include <llvm/ADT/ScopeExit.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
 
-#include <CompilerCore/Common/Util.hpp>
+#include <CompilerCore/Common/Text.hpp>
 
 #include <algorithm>
-#include <ctre.hpp>
+#include <map>
 #include <numeric>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
+#include <ctre.hpp>
+
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
 
 using namespace cld::Lexer;
 
-using IntervalMap = llvm::IntervalMap<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
+using IntervalMap = std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
 
 namespace
 {
@@ -185,6 +187,8 @@ TokenType charactersToKeyword(const std::string& characters)
     }
     CLD_UNREACHABLE;
 }
+
+#pragma region UnicodeRanges
 
 // C99 Annex D
 constexpr llvm::sys::UnicodeCharRange C99AllowedIDCharRanges[] = {
@@ -542,6 +546,8 @@ constexpr llvm::sys::UnicodeCharRange C99AllowedIDCharRanges[] = {
     // Hangul,
     {0xAC00, 0xD7A3}};
 
+const llvm::sys::UnicodeCharSet C99AllowedIDChar(C99AllowedIDCharRanges);
+
 // C99 6.4.2.1p3: The initial character [of an identifier] shall not be a
 // universal character name designating a digit.
 // C99 Annex D defines these characters as "Digits".
@@ -550,42 +556,17 @@ constexpr llvm::sys::UnicodeCharRange C99DisallowedInitialIDCharRanges[] = {
     {0x0AE6, 0x0AEF}, {0x0B66, 0x0B6F}, {0x0BE7, 0x0BEF}, {0x0C66, 0x0C6F}, {0x0CE6, 0x0CEF},
     {0x0D66, 0x0D6F}, {0x0E50, 0x0E59}, {0x0ED0, 0x0ED9}, {0x0F20, 0x0F33}};
 
-constexpr llvm::sys::UnicodeCharRange UnicodeWhitespaceCharRanges[] = {
-    {0x0085, 0x0085}, {0x00A0, 0x00A0}, {0x1680, 0x1680}, {0x180E, 0x180E}, {0x2000, 0x200A},
-    {0x2028, 0x2029}, {0x202F, 0x202F}, {0x205F, 0x205F}, {0x3000, 0x3000}};
+const llvm::sys::UnicodeCharSet C99DisallowedInitialIDChar(C99DisallowedInitialIDCharRanges);
 
-template <class Iter>
-std::uint8_t getNumBytesForUTF8(Iter begin, Iter end)
-{
-    CLD_ASSERT(begin != end);
-    std::uint8_t des;
-    std::int8_t temp = *begin;
-    std::memcpy(&des, &temp, 1);
-    if (des >= 0b11111000)
-    {
-        return 1;
-    }
-    else
-    {
-        auto step = llvm::getNumBytesForUTF8(*begin);
-        for (std::uint8_t i = 1; i < step; i++)
-        {
-            if (begin + i == end || (*(begin + i) & 0b11000000) != 0b10000000)
-            {
-                return i;
-            }
-        }
-        return step;
-    }
-}
+#pragma endregion UnicodeRanges
 
 std::uint8_t getNumUTF8ForUTF32(std::uint32_t c)
 {
-    if (c <= 0x7F)
+    if (c <= 0x007F)
     {
         return 1;
     }
-    if (c <= 0x7FF)
+    if (c <= 0x07FF)
     {
         return 2;
     }
@@ -593,7 +574,11 @@ std::uint8_t getNumUTF8ForUTF32(std::uint32_t c)
     {
         return 3;
     }
-    return 4;
+    if (c <= 0x10FFFF)
+    {
+        return 4;
+    }
+    CLD_UNREACHABLE;
 }
 
 struct Start;
@@ -615,6 +600,14 @@ using StateMachine =
     std::variant<Start, CharacterLiteral, StringLiteral, Text, PreprocessingNumber, MaybeUC, UniversalCharacter,
                  LineComment, BlockComment, Number, Dot, Punctuation, AfterInclude, L>;
 
+using ArrowRange = std::vector<std::pair<std::uint64_t, std::uint64_t>>;
+
+llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
+{
+    os.write(sv.data(), sv.size());
+    return os;
+}
+
 class Context
 {
     cld::LanguageOptions m_languageOptions;
@@ -625,16 +618,8 @@ class Context
     std::string_view m_characterSpace;
     std::uint64_t& m_offset;
     std::vector<std::uint64_t> m_lineStarts;
-    const IntervalMap& m_characterToSourceSpace;
+    IntervalMap m_characterToSourceSpace;
     bool m_errorsOccured = false;
-    struct ThingsToCache
-    {
-        std::vector<std::int64_t> mappingAdded;
-        std::string line;
-        std::int64_t delta;
-        std::vector<std::uint64_t> deletedArrows;
-    };
-    mutable std::unordered_map<std::uint64_t, ThingsToCache> m_lineCache;
 
     std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
     {
@@ -645,241 +630,104 @@ class Context
                    std::distance(m_lineStarts.begin(), *result != offset ? result - 1 : result) + 1;
     }
 
+    /**
+     * @param line Line whose start offset should be queried for
+     * @return Offset at which the line starts in source space
+     */
     std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept
     {
         CLD_ASSERT(line - 1 < m_lineStarts.size());
         return m_lineStarts[line - 1];
     }
 
+    /**
+     * @param line Line whose end offset should be queried for
+     * @return Offset at which the line ends (aka offset to newline) in source space
+     */
     std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept
     {
         CLD_ASSERT(line - 1 < m_lineStarts.size());
         return line == m_lineStarts.size() ? m_sourceSpace.size() : m_lineStarts[line];
     }
 
-    std::string toSafeUTF8(std::string_view inputLine, std::uint64_t lineStart, std::vector<std::int64_t>& deltas,
-                           std::vector<std::uint64_t>& arrows, std::vector<std::int64_t>& mapping) const
-    {
-        std::vector<std::uint64_t> wereDeleted;
-        std::string line;
-        mapping.resize(lineStart);
-        if (auto cacheEntry = m_lineCache.find(lineStart); cacheEntry == m_lineCache.end())
-        {
-            deltas.emplace_back();
-            auto prevSize = mapping.size();
-            auto sourceStart = inputLine.data();
-            const auto sourceEnd = inputLine.data() + inputLine.size();
-            std::vector<llvm::UTF32> utf32;
-            utf32.reserve(inputLine.size());
-            while (sourceStart != sourceEnd)
-            {
-                llvm::ConversionResult result;
-                do
-                {
-                    const std::uint64_t currentOldOffset = lineStart + sourceStart - inputLine.data();
-                    utf32.emplace_back();
-                    const auto prev = sourceStart;
-                    result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                                       reinterpret_cast<const llvm::UTF8*>(sourceEnd), &utf32.back(),
-                                                       llvm::strictConversion);
-                    if (result == llvm::conversionOK)
-                    {
-                        mapping.resize(currentOldOffset + std::distance(prev, sourceStart), deltas.back());
-
-                        if (!llvm::sys::unicode::isPrintable(utf32.back()))
-                        {
-                            const auto step = getNumUTF8ForUTF32(utf32.back());
-                            if (step == 4)
-                            {
-                                wereDeleted.push_back(currentOldOffset + 3);
-                            }
-                            deltas.back() += 3 - step;
-                            utf32.back() = utf32.back() <= 0x1F ? 0x2400 + utf32.back() : 0xFFFD;
-                        }
-                    }
-                    else
-                    {
-                        utf32.pop_back();
-                    }
-                } while (result == llvm::conversionOK && sourceStart != sourceEnd);
-
-                if (result != llvm::conversionOK)
-                {
-                    const uint64_t currentOldOffset = lineStart + sourceStart - inputLine.data();
-                    utf32.push_back(0xFFFD);
-                    if (sourceStart != sourceEnd)
-                    {
-                        const auto step = getNumBytesForUTF8(sourceStart, sourceEnd);
-                        mapping.resize(currentOldOffset + step, deltas.back());
-                        if (step == 4)
-                        {
-                            wereDeleted.push_back(currentOldOffset + 3);
-                        }
-                        deltas.back() += 3 - step;
-                        sourceStart += step;
-                    }
-                }
-            }
-
-            const std::uint64_t oldEndOffset = lineStart + sourceStart - inputLine.data();
-            mapping.resize(oldEndOffset + 1, deltas.back());
-            line.resize(4 * utf32.size(), '\0');
-            const auto* targetStart = utf32.data();
-            auto lineMemStart = line.data() + line.size() - 4 * utf32.size();
-            llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&targetStart), utf32.data() + utf32.size(),
-                                     reinterpret_cast<llvm::UTF8**>(&lineMemStart),
-                                     reinterpret_cast<llvm::UTF8*>(line.data() + line.size()), llvm::strictConversion);
-            line.resize(line.size() - std::distance(lineMemStart, line.data() + line.size()));
-
-            m_lineCache.insert(
-                {lineStart,
-                 {std::vector(mapping.begin() + prevSize, mapping.end()), line, deltas.back(), wereDeleted}});
-        }
-        else
-        {
-            line = cacheEntry->second.line;
-            deltas.push_back(cacheEntry->second.delta);
-            mapping.insert(mapping.end(), cacheEntry->second.mappingAdded.begin(),
-                           cacheEntry->second.mappingAdded.end());
-            wereDeleted = cacheEntry->second.deletedArrows;
-        }
-
-        arrows.erase(std::remove_if(arrows.begin(), arrows.end(),
-                                    [&wereDeleted](std::uint64_t offset) {
-                                        return std::any_of(
-                                            wereDeleted.begin(), wereDeleted.end(),
-                                            [offset](std::uint64_t forbidden) { return forbidden == offset; });
-                                    }),
-                     arrows.end());
-        return line;
-    }
-
-    std::vector<std::vector<std::uint64_t>>
-        transformToPrintSpace(std::vector<std::uint64_t>&& arrows, std::uint64_t startLine, std::uint64_t endLine,
-                              std::vector<std::int64_t>& deltas, std::vector<std::string>& lines,
-                              std::uint64_t& underlineStart, std::uint64_t& underlineEnd) const
-    {
-        std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine(endLine - startLine + 1);
-        lines.reserve(columnsOfArrowsForLine.size());
-        deltas.reserve(columnsOfArrowsForLine.size());
-
-        std::vector<std::int64_t> mapping;
-        for (auto i = startLine; i <= endLine; i++)
-        {
-            const auto start = getLineStartOffset(i);
-            const auto end = getLineEndOffset(i);
-            const auto stringView = m_sourceSpace.substr(start, end - start - 1);
-
-            lines.push_back(toSafeUTF8(stringView, start, deltas, arrows, mapping));
-        }
-
-        underlineStart += mapping[underlineStart];
-        underlineEnd += mapping[underlineEnd];
-
-        if (!arrows.empty())
-        {
-            for (auto i = startLine; i <= endLine; i++)
-            {
-                const auto begin = getLineStartOffset(i);
-                const auto end = getLineEndOffset(i) - 1 + deltas[i - startLine];
-                // For every arrow, transform the byte offset into a character width offset, then check if the byte
-                // offset points to one of the bytes of a code point and make it point at the full width of it
-                std::vector<std::vector<uint64_t>> replacements;
-                std::uint64_t currentWidth = 0;
-                for (auto j = begin; j != end;)
-                {
-                    const std::uint8_t step = getNumBytesForUTF8(lines[i - startLine].begin() + (j - begin),
-                                                                 lines[i - startLine].begin() + (end - begin));
-                    const auto size =
-                        llvm::sys::unicode::columnWidthUTF8({lines[i - startLine].data() + j - begin, step});
-                    std::vector<std::uint64_t> columns(size);
-                    std::iota(columns.begin(), columns.end(), currentWidth);
-                    replacements.resize(replacements.size() + step, columns);
-                    currentWidth += size;
-                    j += step;
-                }
-
-                for (auto iter : arrows)
-                {
-                    if (iter < begin || iter >= end - deltas[i - startLine])
-                    {
-                        continue;
-                    }
-                    CLD_ASSERT(iter + mapping[iter] - begin < replacements.size());
-                    const auto& vector = replacements[iter + mapping[iter] - begin];
-                    columnsOfArrowsForLine[i - startLine].insert(columnsOfArrowsForLine[i - startLine].end(),
-                                                                 vector.begin(), vector.end());
-                }
-            }
-        }
-        return columnsOfArrowsForLine;
-    }
-
-    void report(const std::string& prefix, llvm::raw_ostream::Colors colour, const std::string& message,
-                std::uint64_t location, std::vector<std::uint64_t>&& arrows, std::uint64_t underlineStart,
+    void report(const std::string& type, llvm::raw_ostream::Colors colour, const std::string& message,
+                std::uint64_t location, ArrowRange&& arrows, std::uint64_t underlineStart,
                 std::uint64_t underlineEnd) const
     {
         if (!m_reporter)
         {
             return;
         }
+        CLD_ASSERT(underlineStart < underlineEnd);
 
-        std::sort(arrows.begin(), arrows.end());
-        arrows.erase(std::unique(arrows.begin(), arrows.end()), arrows.end());
+        // Convert from character space to source space
         location = map(location).first;
         underlineStart = map(underlineStart).first;
         underlineEnd = map(underlineEnd - 1).second;
+        for (auto& [lower, upper] : arrows)
         {
-            std::vector<std::uint64_t> result;
-            for (auto iter = arrows.cbegin(); iter != arrows.cend(); iter++)
-            {
-                auto [lower, upper] = map(*iter);
-                if (iter != arrows.cbegin() && *iter - 1 == *(iter - 1) && !result.empty()
-                    && result.back() + 1 != lower)
-                {
-                    // A whole range is supposed to be under an arrow but because some characters in-between don't exist
-                    // in character space (like a backslash newline pair) we add them here so it's prettier!
-                    auto skipped = m_sourceSpace.substr(result.back() + 1, lower - result.back() - 1);
-                    if (skipped == "\\\n" || skipped == "?\?/\n")
-                    {
-                        auto back = result.back();
-                        result.resize(result.size() + skipped.size());
-                        std::iota(result.begin() + result.size() - skipped.size(), result.end(), back + 1);
-                    }
-                }
-                result.resize(result.size() + upper - lower);
-                std::iota(result.begin() + result.size() - (upper - lower), result.end(), lower);
-            }
-            arrows = std::move(result);
+            lower = map(lower).first;
+            upper = map(upper - 1).second;
         }
 
         const auto startLine = getLineNumber(underlineStart);
         const auto endLine = getLineNumber(underlineEnd);
-        std::vector<std::int64_t> deltas;
-        std::vector<std::string> lines;
-
         const auto lineNumber = getLineNumber(location);
-        *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) << ": ";
-        llvm::WithColor(*m_reporter, colour, true) << prefix << ": ";
+        *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) + 1 << ": ";
+        llvm::WithColor(*m_reporter, colour, true) << type << ": ";
         llvm::WithColor(*m_reporter, llvm::raw_ostream::SAVEDCOLOR, true) << message << '\n';
-        std::size_t numSize = 0;
 
-        std::vector<std::vector<std::uint64_t>> columnsOfArrowsForLine =
-            transformToPrintSpace(std::move(arrows), startLine, endLine, deltas, lines, underlineStart, underlineEnd);
-        numSize = std::to_string(endLine).size();
+        auto textStartOffset = getLineStartOffset(startLine);
+        std::vector<std::int64_t> mapping(getLineEndOffset(endLine) - textStartOffset + 1);
+        llvm::SmallString<128> safeUTF8;
+        safeUTF8.reserve(mapping.size() - 1);
+        cld::toSafeUTF8(m_sourceSpace.substr(textStartOffset, mapping.size() - 1), std::back_inserter(safeUTF8),
+                        mapping.begin());
+
+        llvm::SmallVector<std::string_view, 2> lines;
+        lines.reserve(endLine - startLine + 1);
+        {
+            auto view = std::string_view(safeUTF8.data(), safeUTF8.size());
+            std::size_t result = 0;
+            while (true)
+            {
+                auto newline = view.find('\n', result);
+                if (newline == std::string_view::npos)
+                {
+                    lines.emplace_back(view.substr(result));
+                    break;
+                }
+                lines.emplace_back(view.substr(result, newline - result));
+                result = newline + 1;
+            }
+        }
+
+        underlineStart += mapping[underlineStart - textStartOffset];
+        underlineEnd += mapping[underlineEnd - textStartOffset];
+        for (auto& iter : arrows)
+        {
+            iter.first += mapping[iter.first - textStartOffset];
+            iter.second += mapping[iter.second - textStartOffset];
+            CLD_ASSERT(iter.first >= underlineStart && iter.second <= underlineEnd);
+        }
+
+        auto numSize = 1 + (std::size_t)std::floor(log10f(endLine));
         const auto remainder = numSize % 4;
         if (remainder)
         {
             numSize += 4 - remainder;
         }
 
+        llvm::SmallString<128> underline;
+        llvm::SmallString<128> space;
         for (auto i = startLine; i <= endLine; i++)
         {
             // Text
-            *m_reporter << llvm::format_decimal(i, static_cast<unsigned>(numSize)) << " | ";
+            *m_reporter << llvm::format_decimal(i, numSize) << " | ";
 
             auto string = lines[i - startLine];
-            const auto& arrowsForLine = columnsOfArrowsForLine[i - startLine];
+            std::int64_t lineStartOffset = getLineStartOffset(i);
+            lineStartOffset += mapping[lineStartOffset - textStartOffset];
             if (i != startLine && i != endLine)
             {
                 // The token spans multiple lines and we are neither at the first nor last line. Therefore
@@ -889,7 +737,7 @@ class Context
             else if (i == startLine && i == endLine)
             {
                 // The token does not span lines and starts as well as ends here
-                auto column = underlineStart - getLineStartOffset(i);
+                auto column = underlineStart - lineStartOffset;
                 *m_reporter << string.substr(0, column);
                 llvm::WithColor(*m_reporter, colour).get() << string.substr(column, underlineEnd - underlineStart);
                 *m_reporter << string.substr(column + underlineEnd - underlineStart);
@@ -897,96 +745,97 @@ class Context
             else if (i == startLine)
             {
                 // The token starts here and does not end here
-                auto column = underlineStart - getLineStartOffset(i);
+                auto column = underlineStart - lineStartOffset;
                 *m_reporter << string.substr(0, column);
                 llvm::WithColor(*m_reporter, colour).get() << string.substr(column);
             }
             else
             {
                 // The token ends here and did not start here
-                auto endColumn = underlineEnd - getLineStartOffset(i);
+                auto endColumn = underlineEnd - lineStartOffset;
                 llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
                 *m_reporter << string.substr(endColumn);
             }
             *m_reporter << '\n';
 
             // Underline + Arrows
-            m_reporter->indent(static_cast<unsigned>(numSize)) << " | ";
+            underline.clear();
+            space.clear();
+            m_reporter->indent(numSize) << " | ";
             if (i != startLine && i != endLine)
             {
                 // The token spans multiple lines and we are neither at the first nor last line. Therefore
                 // this line consist only of the token
-                auto underline = cld::stringOfSameWidth(string, '~');
-                for (auto iter : arrowsForLine)
-                {
-                    CLD_ASSERT(iter < underline.size());
-                    underline[iter] = '^';
-                }
-                llvm::WithColor(*m_reporter, colour) << underline;
+                cld::stringOfSameWidth(string, '~', std::back_inserter(underline));
             }
             else if (i == startLine && i == endLine)
             {
                 // The token does not span lines and starts as well as ends here
-                auto column = underlineStart - getLineStartOffset(i);
-                auto space = cld::stringOfSameWidth(string.substr(0, column), ' ');
-                *m_reporter << space;
-                auto underline = cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~');
-                for (auto iter : arrowsForLine)
-                {
-                    CLD_ASSERT(iter - space.size() < underline.size());
-                    underline[iter - space.size()] = '^';
-                }
-                llvm::WithColor(*m_reporter, colour) << underline;
+                auto column = underlineStart - lineStartOffset;
+                cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
+                underline += space;
+                cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~',
+                                       std::back_inserter(underline));
             }
             else if (i == startLine)
             {
                 // The token starts here and does not end here
-                auto column = underlineStart - getLineStartOffset(i);
-                auto space = cld::stringOfSameWidth(string.substr(0, column), ' ');
-                *m_reporter << space;
-                auto underline = cld::stringOfSameWidth(string.substr(column), '~');
-                for (auto iter : arrowsForLine)
-                {
-                    CLD_ASSERT(iter - space.size() < underline.size());
-                    underline[iter - space.size()] = '^';
-                }
-                llvm::WithColor(*m_reporter, colour) << underline;
+                auto column = underlineStart - lineStartOffset;
+                cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
+                underline += space;
+                cld::stringOfSameWidth(string.substr(column), '~', std::back_inserter(underline));
             }
             else
             {
                 // The token ends here and did not start here
-                auto endColumn = underlineEnd - getLineStartOffset(i);
-                auto underline = cld::stringOfSameWidth(string.substr(0, endColumn), '~');
-                for (auto iter : arrowsForLine)
-                {
-                    CLD_ASSERT(iter < underline.size());
-                    underline[iter] = '^';
-                }
-                llvm::WithColor(*m_reporter, colour) << underline;
+                auto endColumn = underlineEnd - lineStartOffset;
+                cld::stringOfSameWidth(string.substr(0, endColumn), '~', std::back_inserter(underline));
             }
-            *m_reporter << '\n';
+            for (auto [begin, end] : arrows)
+            {
+                if ((std::int64_t)end <= lineStartOffset || begin >= lineStartOffset + string.size())
+                {
+                    continue;
+                }
+                auto startIndex = std::max<std::int64_t>((std::int64_t)begin - lineStartOffset, 0);
+                auto endIndex =
+                    std::min<std::int64_t>((std::int64_t)end - lineStartOffset, lineStartOffset + string.size());
+                auto toHighlightView = string.substr(startIndex, endIndex - startIndex);
+                auto prefix = string.substr(0, startIndex);
+                auto pos = cld::unsafeColumnWidth(prefix);
+                std::fill(underline.begin() + pos, underline.begin() + pos + cld::unsafeColumnWidth(toHighlightView),
+                          '^');
+            }
+            llvm::WithColor(*m_reporter, colour) << underline << '\n';
         }
         m_reporter->flush();
     }
 
     std::pair<std::uint64_t, std::uint64_t> map(std::uint64_t offset) const
     {
-        auto actualIter = m_characterToSourceSpace.find(offset);
-        CLD_ASSERT(actualIter != m_characterToSourceSpace.end());
-        auto denominator = actualIter.stop() - actualIter.start() + 1;
+        auto result = m_characterToSourceSpace.lower_bound(offset);
+        CLD_ASSERT(result != m_characterToSourceSpace.end());
+        if (result->first > offset)
+        {
+            result--;
+        }
+        auto next = result;
+        next++;
+        CLD_ASSERT(next != m_characterToSourceSpace.begin());
+        auto denominator = next->first - result->first;
         CLD_ASSERT(denominator != 0);
-        auto nominatorRange = actualIter.value().second - actualIter.value().first;
-        auto lowBound = (offset - actualIter.start()) * nominatorRange / denominator + actualIter.value().first;
-        auto highBound = (offset + 1 - actualIter.start()) * nominatorRange / denominator + actualIter.value().first;
+        auto nominatorRange = result->second.second - result->second.first;
+        auto lowBound = (offset - result->first) * nominatorRange / denominator + result->second.first;
+        auto highBound = (offset + 1 - result->first) * nominatorRange / denominator + result->second.first;
         return {lowBound, highBound};
     }
 
 public:
     std::uint64_t tokenStartOffset;
 
-    Context(const std::string& sourceSpace, const IntervalMap& characterToSourceSpace,
-            const std::string& characterSpace, std::uint64_t& offset, std::vector<std::uint64_t> lineStarts,
-            cld::LanguageOptions languageOptions, bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
+    Context(std::string_view sourceSpace, IntervalMap&& characterToSourceSpace, const std::string& characterSpace,
+            std::uint64_t& offset, std::vector<std::uint64_t> lineStarts, cld::LanguageOptions languageOptions,
+            bool inPreprocessor, llvm::raw_ostream* reporter) noexcept
         : m_languageOptions(languageOptions),
           m_inPreprocessor(inPreprocessor),
           m_reporter(reporter),
@@ -994,41 +843,41 @@ public:
           m_characterSpace(characterSpace),
           m_offset(offset),
           m_lineStarts(std::move(lineStarts)),
-          m_characterToSourceSpace(characterToSourceSpace)
+          m_characterToSourceSpace(std::move(characterToSourceSpace))
     {
     }
 
-    void reportError(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+    void reportError(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
     {
         m_errorsOccured = true;
         report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), tokenStartOffset, m_offset);
     }
 
-    void reportNote(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+    void reportNote(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
     {
         report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), tokenStartOffset, m_offset);
     }
 
-    void reportWarning(const std::string& message, std::uint64_t location, std::vector<std::uint64_t> arrows = {})
+    void reportWarning(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
     {
         report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), tokenStartOffset, m_offset);
     }
 
     void reportError(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                     std::vector<std::uint64_t> arrows = {})
+                     ArrowRange&& arrows = {})
     {
         m_errorsOccured = true;
         report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), start, end);
     }
 
     void reportNote(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                    std::vector<std::uint64_t> arrows = {})
+                    ArrowRange&& arrows = {})
     {
         report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), start, end);
     }
 
     void reportWarning(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                       std::vector<std::uint64_t> arrows = {})
+                       ArrowRange&& arrows = {})
     {
         report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), start, end);
     }
@@ -1102,6 +951,24 @@ public:
     }
 };
 
+std::uint32_t octalToValue(const std::string& value)
+{
+    char* end = const_cast<char*>(value.data() + value.size());
+    auto result = std::strtoul(value.data(), &end, 8);
+    CLD_ASSERT(*end == '\0');
+    return result;
+}
+
+std::uint32_t hexToValue(const std::string& value)
+{
+    char* end = const_cast<char*>(value.data() + value.size());
+    auto result = std::strtoul(value.data(), &end, 16);
+    CLD_ASSERT(*end == '\0');
+    return result;
+}
+
+constexpr auto UTF32_MAX = 0x10FFFF;
+
 /**
  * Callee responsible for right format
  * @param value string that either consist of 4 or 8 hex digits
@@ -1111,45 +978,34 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
                                                        std::uint64_t endOffset, Context& context)
 {
     CLD_ASSERT(value.size() == 4 || value.size() == 8);
-    auto result = std::stoul(std::string{value.begin(), value.end()}, nullptr, 16);
+    auto result = hexToValue(std::string(value.begin(), value.end()));
     if (result < 0xA0)
     {
         if (result != '$' && result != '@' && result != '`')
         {
             if (!context.isInPreprocessor())
             {
-                std::vector<std::uint64_t> arrows(value.size());
-                std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
                 context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                         value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
-                                    endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+                                    endOffset - value.size(), startOffset, endOffset,
+                                    {{endOffset - value.size(), endOffset}});
             }
             return {};
         }
     }
-    else if (result >= 0xD800 && result <= 0xDFFF)
+    else if ((result >= 0xD800 && result <= 0xDFFF) || result > UTF32_MAX)
     {
         if (!context.isInPreprocessor())
         {
-            std::vector<std::uint64_t> arrows(value.size());
-            std::iota(arrows.begin(), arrows.end(), endOffset - value.size());
             context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                                endOffset - value.size(), startOffset, endOffset, std::move(arrows));
+                                    value, result > UTF32_MAX ? cld::ErrorMessages::Lexer::VALUE_MUST_FIT_IN_UTF32 :
+                                                                cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                                endOffset - value.size(), startOffset, endOffset,
+                                {{endOffset - value.size(), endOffset}});
         }
         return {};
     }
     return result;
-}
-
-std::uint32_t octalToValue(std::string_view value)
-{
-    return std::stoul(std::string(value.begin(), value.end()), nullptr, 8);
-}
-
-std::uint32_t hexToValue(std::string_view value)
-{
-    return std::stoul(std::string(value.begin(), value.end()), nullptr, 16);
 }
 
 std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, Context& context)
@@ -1170,20 +1026,26 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
         case ' ':
         {
             context.reportError(cld::ErrorMessages::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
-                                {backslash, backslash + 1});
+                                {{backslash, backslash + 2}});
             return {};
         }
         default:
         {
             context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
-                                backslash + 1, {backslash, backslash + 1});
+                                backslash + 1, {{backslash, backslash + 2}});
             return {};
         }
     }
 }
 
+enum class Literal
+{
+    CharLiteral,
+    StringLiteral,
+};
+
 std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& characters, Context& context, bool wide,
-                                                            const char* literalType)
+                                                            Literal literalType)
 {
     std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
         return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
@@ -1200,8 +1062,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
         if (*iter == '\n')
         {
-            context.reportError(cld::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(literalType),
-                                context.tokenStartOffset, {offset});
+            context.reportError(cld::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
+                                    literalType == Literal::CharLiteral ? cld::ErrorMessages::Lexer::CHARACTER_LITERAL :
+                                                                          cld::ErrorMessages::Lexer::STRING_LITERAL),
+                                context.tokenStartOffset, {{offset, offset + 2}});
             iter++;
             errorOccured = true;
             continue;
@@ -1216,8 +1080,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                                                 llvm::strictConversion);
             if (res != llvm::conversionOK)
             {
+                auto invalid = context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data());
                 context.reportError(cld::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
-                                    {context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data())});
+                                    {{invalid, invalid + 1}});
                 errorOccured = true;
             }
             continue;
@@ -1237,7 +1102,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
                 context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"),
-                                    start, {start, start + 1});
+                                    start, {{start, start + 2}});
                 errorOccured = true;
                 continue;
             }
@@ -1251,13 +1116,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
                 {
                     auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                    std::vector<std::uint64_t> arrows = {start, start + 1};
-                    arrows.resize(2 + std::distance(hexStart, hexEnd));
-                    std::iota(arrows.begin() + 2, arrows.end(), start + 2);
                     context.reportError(
                         cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
                             std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-                        start, std::move(arrows));
+                        start, {{start, start + std::distance(hexStart, hexEnd)}});
                     errorOccured = true;
                     iter = hexEnd;
                     continue;
@@ -1287,12 +1149,45 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
                 context.reportError(cld::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
-                                    {start, start + 1});
+                                    {{start, start + 2}});
                 errorOccured = true;
                 continue;
             }
 
-            *resultStart = hexToValue({iter, static_cast<std::size_t>(lastHex - iter)});
+            llvm::APInt input;
+            llvm::StringRef(iter, static_cast<std::size_t>(lastHex - iter)).getAsInteger(16, input);
+            auto rhs = llvm::APInt(input.getBitWidth(), UTF32_MAX);
+            if (input.getBitWidth() >= 21 && input.ugt(rhs))
+            {
+                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::ErrorMessages::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
+                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            auto value = input.getZExtValue();
+            if (value >= 0xD800 && value <= 0xDFFF)
+            {
+                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::ErrorMessages::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
+                                        cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                                    start, start, start + 2 + lastHex - iter,
+                                    {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            if (value > largestCharacter)
+            {
+                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            *resultStart = value;
             resultStart++;
 
             iter = lastHex;
@@ -1310,12 +1205,22 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // Also since there must be at least one character after \, lastOctal is definitely not end
                 // here.
                 context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
-                                    offset, {offset, offset + 1});
+                                    offset, {{offset, offset + 2}});
                 errorOccured = true;
                 continue;
             }
 
-            *resultStart = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+            auto value = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+            if (value > largestCharacter)
+            {
+                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal - iter}});
+                errorOccured = true;
+                iter = lastOctal;
+                continue;
+            }
+            *resultStart = value;
             resultStart++;
 
             iter = lastOctal;
@@ -1323,8 +1228,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         else
         {
             // Escape sequence or illegal escape
-            auto start = offset;
-            auto character = escapeCharToValue(iter[1], start, context);
+            auto character = escapeCharToValue(iter[1], offset, context);
             if (character)
             {
                 *resultStart = *character;
@@ -1338,13 +1242,16 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         }
     }
 
-    for (auto iter = result.data(); iter != resultStart; iter++)
+    if (literalType == Literal::CharLiteral)
     {
-        if (*iter > largestCharacter)
+        for (auto iter = result.data(); iter != resultStart; iter++)
         {
-            context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                context.tokenStartOffset);
-            errorOccured = true;
+            if (*iter > largestCharacter)
+            {
+                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                    context.tokenStartOffset);
+                errorOccured = true;
+            }
         }
     }
     result.resize(std::distance(result.data(), resultStart));
@@ -1398,8 +1305,11 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                                                                       std::uint64_t beginLocation, Context& context)
 {
     CLD_ASSERT(std::distance(begin, end) >= 1);
-    bool isHex = std::distance(begin, end) >= 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X');
-    std::vector<char> legalValues(10);
+    // If the number is just "0x", treat the x as a suffix instead of as a hex prefix
+    bool isHex = std::distance(begin, end) > 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X')
+                 && ((*(begin + 2) >= '0' && *(begin + 2) <= '9') || (*(begin + 2) >= 'a' && *(begin + 2) <= 'f')
+                     || (*(begin + 2) >= 'A' && *(begin + 2) <= 'F'));
+    llvm::SmallVector<char, 22> legalValues(10);
     std::iota(legalValues.begin(), legalValues.end(), '0');
     if (isHex)
     {
@@ -1455,9 +1365,10 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         while (result != suffixBegin)
         {
             errorsOccurred = true;
+            auto arrowBegin = beginLocation + std::distance(begin, result);
             context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
                                 beginLocation + std::distance(begin, result), context.tokenStartOffset,
-                                context.getOffset() - 1, {beginLocation + std::distance(begin, result)});
+                                context.getOffset() - 1, {{arrowBegin, arrowBegin + 1}});
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
         }
     }
@@ -1474,11 +1385,10 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
     }
     if (set.count(suffix) == 0)
     {
-        std::vector<std::uint64_t> arrows(suffix.size());
-        std::iota(arrows.begin(), arrows.end(), beginLocation + std::distance(begin, suffixBegin));
+        auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
         context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
                             beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
-                            context.getOffset() - 1, std::move(arrows));
+                            context.getOffset() - 1, {{arrowBegin, arrowBegin + suffix.size()}});
         return {};
     }
 
@@ -1654,27 +1564,6 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
     CLD_UNREACHABLE;
 }
 
-std::uint8_t codePointToUtf8ByteCount(std::uint32_t codepoint)
-{
-    if (codepoint <= 0x007F)
-    {
-        return 1;
-    }
-    if (codepoint <= 0x07FF)
-    {
-        return 2;
-    }
-    if (codepoint <= 0xFFFF)
-    {
-        return 3;
-    }
-    if (codepoint <= 0x10FFFF)
-    {
-        return 4;
-    }
-    CLD_UNREACHABLE;
-}
-
 struct Start final
 {
     StateMachine advance(std::uint32_t c, Context& context);
@@ -1722,9 +1611,9 @@ struct UniversalCharacter final
 {
     bool big;
     std::optional<std::variant<Text, PreprocessingNumber>> suspHolder{};
-    llvm::SmallVector<char, 8> characters{};
+    llvm::SmallString<8> characters{};
 
-    std::pair<StateMachine, bool> advance(std::uint32_t c, Context& context);
+    std::pair<StateMachine, bool> advance(char c, Context& context);
 };
 
 struct LineComment final
@@ -1865,8 +1754,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
         default:
         {
             if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
-                || (llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
-                    && !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(c)))
+                || (C99AllowedIDChar.contains(c) && !C99DisallowedInitialIDChar.contains(c)))
             {
                 std::string buffer(4, ' ');
                 auto* start = buffer.data();
@@ -1874,8 +1762,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                 buffer.resize(std::distance(buffer.data(), start));
                 return Text{std::move(buffer)};
             }
-            else if (c != ' ' && c != '\t' && c != '\r' && c != '\f' && c != '\v' && c != '\n'
-                     && !llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+            else if (!cld::isWhitespace(c))
             {
                 if (!llvm::sys::unicode::isPrintable(c))
                 {
@@ -1884,11 +1771,9 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     ss << llvm::format_hex_no_prefix(c, 8);
                     ss.flush();
                     auto size = getNumUTF8ForUTF32(c);
-                    std::vector<std::uint64_t> arrows(size);
-                    std::iota(arrows.begin(), arrows.end(), context.getOffset() - size);
                     context.reportError(cld::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
                                         context.getOffset() - size, context.getOffset() - size, context.getOffset(),
-                                        std::move(arrows));
+                                        {{context.getOffset() - size, context.getOffset()}});
                 }
                 else if (!context.isInPreprocessor())
                 {
@@ -1896,11 +1781,10 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     auto* start = buffer.data();
                     llvm::ConvertCodePointToUTF8(c, start);
                     buffer.resize(std::distance(buffer.data(), start));
-                    std::vector<std::uint64_t> arrows(buffer.size());
-                    std::iota(arrows.begin(), arrows.end(), context.getOffset() - buffer.size());
                     context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
                                         context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
-                                        context.getOffset(), std::move(arrows));
+                                        context.getOffset(),
+                                        {{context.getOffset() - buffer.size(), context.getOffset()}});
                 }
                 else
                 {
@@ -1926,8 +1810,7 @@ std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context
             context.push(TokenType::Literal, characters);
             return {Start{}, true};
         }
-        auto [result, errorOccured] =
-            processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::CHARACTER_LITERAL);
+        auto [result, errorOccured] = processCharacters(characters, context, wide, Literal::CharLiteral);
         if (result.empty())
         {
             if (!errorOccured)
@@ -1935,16 +1818,14 @@ std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context
                 std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
                 std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
                 context.reportError(cld::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
-                                    context.tokenStartOffset, std::move(arrows));
+                                    context.tokenStartOffset, {{context.tokenStartOffset, context.getOffset()}});
             }
             return {Start{}, true};
         }
         else if (result.size() > 1)
         {
-            std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
-            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportWarning(cld::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
-                                  context.tokenStartOffset, std::move(arrows));
+                                  context.tokenStartOffset, {{context.tokenStartOffset, context.getOffset()}});
         }
 
         if (wide)
@@ -1978,8 +1859,7 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
             context.push(cld::Lexer::TokenType::StringLiteral, characters);
             return {Start{}, true};
         }
-        auto [result, errorOccured] =
-            processCharacters(characters, context, wide, cld::ErrorMessages::Lexer::STRING_LITERAL);
+        auto [result, errorOccured] = processCharacters(characters, context, wide, Literal::StringLiteral);
         if (errorOccured)
         {
             return {Start{}, true};
@@ -1993,7 +1873,7 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
                                                        llvm::strictConversion);
             if (conversion != llvm::conversionOK)
             {
-                // Due to error occurred being true at failed utf8 to utf 32 conversion this
+                // Due to errorOccurred being true at failed utf8 to utf 32 conversion this
                 // code can't be reached
                 CLD_UNREACHABLE;
             }
@@ -2070,7 +1950,7 @@ std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
         return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
     }
     else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
-             && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+             && !C99AllowedIDChar.contains(c))
     {
         if (!context.isInPreprocessor() && isKeyword(characters))
         {
@@ -2100,7 +1980,7 @@ std::pair<StateMachine, bool> PreprocessingNumber::advance(std::uint32_t c, Cont
     else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_' && c != '.'
              && (((characters.back() | toLower) != 'e' && (characters.back() | toLower) != 'p')
                  || (c != '+' && c != '-'))
-             && !llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c))
+             && !C99AllowedIDChar.contains(c))
     {
         context.push(1, TokenType::PPNumber, std::move(characters));
         return {Start{}, false};
@@ -2148,55 +2028,47 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         context.push(context.getOffset() - 2, context.getOffset() - 1, TokenType::Backslash);
         return {Start{}, false};
     }
-    else if (c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
-             || llvm::sys::UnicodeCharSet(UnicodeWhitespaceCharRanges).contains(c))
+    else if (c != '\n' && cld::isWhitespace(c))
     {
         error = true;
         return {std::move(*this), true};
     }
     else if (c == '\n')
     {
-        if (context.isInPreprocessor())
-        {
-            context.push(1, TokenType::Backslash);
-            return {Start{}, false};
-        }
         auto result = context.currentView().rfind('\\');
         CLD_ASSERT(result != std::string_view::npos);
         result += context.tokenStartOffset;
-        std::vector<std::uint64_t> arrows(context.getOffset() - result - 1);
-        std::iota(arrows.begin(), arrows.end(), result);
         context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
-                            result, context.getOffset() - 1, std::move(arrows));
+                            result, context.getOffset() - 1, {{result, context.getOffset() - 1}});
         return {Start{}, true};
     }
 
-    auto location = context.currentView().rfind('\\');
+    auto location = context.view(context.tokenStartOffset, context.getOffset() - 1).rfind('\\');
     CLD_ASSERT(location != std::string_view::npos);
     location += context.tokenStartOffset;
     context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), location, location, location + 1,
-                        {location});
+                        {{location, location + 1}});
     return {Start{}, false};
 }
 
-std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Context& context)
+std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& context)
 {
     if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
     {
-        std::size_t result = context.currentView().rfind('\\');
+        std::size_t result = context.view(context.tokenStartOffset, context.getOffset() - 1).rfind('\\');
         CLD_ASSERT(result != std::string_view::npos);
         result += context.tokenStartOffset;
         if (!context.isInPreprocessor())
         {
             context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
-                                {result});
+                                {{result, result + 1}});
             context.reportNote(
                 cld::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
-                result, result, context.getOffset() - codePointToUtf8ByteCount(c));
+                result, result, context.getOffset() - 1);
             return {Start{}, false};
         }
-        // We are actually not a univeral character. In non PP we would error. Instead we now need to push the
-        // suspendate state if there is one and then push a backslash token followed by Text containing a u or U that
+        // We are actually not a universal character. In non PP we would error. Instead we now need to push the
+        // suspended state if there is one and then push a backslash token followed by Text containing a u or U that
         // will then handle whatever character we just encountered
         if (suspHolder)
         {
@@ -2208,7 +2080,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
         return {Text{big ? "U" : "u"}, false};
     }
 
-    characters.push_back(static_cast<char>(c));
+    characters.push_back(c);
     if (characters.size() != (big ? 8 : 4))
     {
         return {std::move(*this), true};
@@ -2246,16 +2118,13 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(std::uint32_t c, Conte
     // According to 6.4.2.1 Paragraph 3 of the C99 Standard these restrictions apply only to an identifier.
     // This means even if a identifier-nondigit element is allowed in a PP Number it doesn't have to meet those
     // requirements per my interpretation
-    if (!llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(*result)
-        || !(suspHolder || !llvm::sys::UnicodeCharSet(C99DisallowedInitialIDCharRanges).contains(*result)))
+    if (!C99AllowedIDChar.contains(*result) || !(suspHolder || !C99DisallowedInitialIDChar.contains(*result)))
     {
         if (!context.isInPreprocessor())
         {
-            std::vector<std::uint64_t> arrows(context.getOffset() - (ucStart));
-            std::iota(arrows.begin(), arrows.end(), ucStart);
-            context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(
-                                    (big ? "\\U" : "\\u" + std::string(characters.begin(), characters.end()))),
-                                ucStart, ucStart, context.getOffset(), std::move(arrows));
+            context.reportError(
+                cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(((big ? "\\U" : "\\u") + characters)), ucStart,
+                ucStart, context.getOffset(), {{ucStart, context.getOffset()}});
             return {Start{}, true};
         }
         if (suspHolder)
@@ -2284,8 +2153,8 @@ std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
 {
     CLD_ASSERT(!context.isInPreprocessor());
     // Consuming all characters first before then doing a proper parse
-    if ((c >= '0' && c <= '9') || c == '.' || llvm::sys::UnicodeCharSet(C99AllowedIDCharRanges).contains(c)
-        || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+    if ((c >= '0' && c <= '9') || c == '.' || C99AllowedIDChar.contains(c) || (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
         || (!numberChars.empty() && (c == '+' || c == '-')
             && (numberChars.back() == 'e' || numberChars.back() == 'E' || numberChars.back() == 'p'
                 || numberChars.back() == 'P')))
@@ -2534,16 +2403,21 @@ struct FirstArgOfMethod<R (*)(U, Args...) noexcept>
 };
 } // namespace
 
-constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)\n|\\?\\?[=()'<!>\\-/]"};
+constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
 
-cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions, bool isInPreprocessor,
+cld::SourceObject cld::Lexer::tokenize(std::string_view source, LanguageOptions languageOptions, bool isInPreprocessor,
                                        llvm::raw_ostream* reporter, bool* errorsOccured)
 {
     if (errorsOccured)
     {
         *errorsOccured = false;
     }
-    source += '\n';
+
+    constexpr static std::string_view UTF8_BOM = "\xEF\xBB\xBF";
+    if (source.size() >= 3 && source.substr(0, 3) == UTF8_BOM)
+    {
+        source.remove_prefix(3);
+    }
 
     StateMachine stateMachine;
     std::uint64_t offset = 0;
@@ -2556,11 +2430,11 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
             starts.push_back(offset);
         }
     }
+    starts.push_back(offset + 1);
     offset = 0;
 
     std::string charactersSpace;
-    IntervalMap::Allocator allocator;
-    IntervalMap characterToSourceSpace(allocator);
+    IntervalMap characterToSourceSpace;
     charactersSpace.reserve(source.size());
     {
         auto stringView = std::string_view(source);
@@ -2571,8 +2445,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
             auto prefix = stringView.substr(0, view.data() - stringView.data());
             if (prefix.length() != 0)
             {
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + prefix.size() - 1,
-                                              {pos - prefix.size(), pos});
+                characterToSourceSpace.emplace(charactersSpace.size(), std::pair{pos - prefix.size(), pos});
             }
             charactersSpace += prefix;
             if (!iter.get<1>())
@@ -2585,21 +2458,27 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                     {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
                 auto result = mapping.find(view);
                 CLD_ASSERT(result != mapping.end());
-                characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size(), {pos, pos + view.size()});
+                characterToSourceSpace.emplace(charactersSpace.size(), std::pair{pos, pos + view.size()});
                 charactersSpace += result->second;
             }
             stringView.remove_prefix(prefix.size() + view.size());
         }
         if (!stringView.empty())
         {
-            characterToSourceSpace.insert(charactersSpace.size(), charactersSpace.size() + stringView.size() - 1,
-                                          {source.size() - stringView.size(), source.size()});
+            characterToSourceSpace.emplace(charactersSpace.size(),
+                                           std::pair{source.size() - stringView.size(), source.size()});
             charactersSpace += stringView;
         }
+        if (charactersSpace.empty() || charactersSpace.back() != '\n')
+        {
+            characterToSourceSpace.emplace(charactersSpace.size(), std::pair{source.size(), source.size()});
+            charactersSpace += '\n';
+        }
+        characterToSourceSpace.insert({charactersSpace.size(), {}});
     }
 
-    Context context(source, characterToSourceSpace, charactersSpace, offset, starts, languageOptions, isInPreprocessor,
-                    reporter);
+    Context context(source, std::move(characterToSourceSpace), charactersSpace, offset, starts, languageOptions,
+                    isInPreprocessor, reporter);
     const auto* end = charactersSpace.data() + charactersSpace.size();
     for (const auto* iter = charactersSpace.data(); iter != end;)
     {
@@ -2620,7 +2499,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
                 {
                     step = getNumBytesForUTF8(start, end);
                     context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
-                                        {offset});
+                                        {{offset, offset + 1}});
                     return false;
                 }
                 c = result;
@@ -2686,39 +2565,32 @@ cld::SourceObject cld::Lexer::tokenize(std::string source, LanguageOptions langu
     cld::match(
         stateMachine, [](auto&&) {},
         [&context](CharacterLiteral&) {
-            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::CHARACTER_LITERAL),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                std::move(arrows));
+                                {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](StringLiteral&) {
-            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::STRING_LITERAL),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                std::move(arrows));
+                                {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](AfterInclude&) {
-            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                std::move(arrows));
+                                {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](BlockComment&) {
-            std::vector<std::uint64_t> arrows(context.getOffset() - 1 - context.tokenStartOffset);
-            std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
             context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::BLOCK_COMMENT),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                                std::move(arrows));
+                                {{context.tokenStartOffset, context.getOffset() - 1}});
         });
     if (errorsOccured)
     {
         *errorsOccured = context.isErrorsOccured();
     }
 
-    return SourceObject(std::move(source), std::move(starts), std::move(context).getResult(), languageOptions);
+    return SourceObject(std::string(source.begin(), source.end()), std::move(starts), std::move(context).getResult(),
+                        languageOptions);
 }
 
 std::string cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)

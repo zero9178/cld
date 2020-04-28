@@ -2,7 +2,7 @@
 
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Util.hpp>
+#include <CompilerCore/Common/Text.hpp>
 
 namespace
 {
@@ -15,7 +15,7 @@ bool expect(cld::Lexer::TokenType tokenType, cld::Lexer::TokenIterator& begin, c
         {
             context.log(
                 {cld::Message::error(cld::ErrorMessages::Parser::EXPECTED_N.args(cld::Lexer::tokenName(tokenType)),
-                                     begin - 1, {cld::Insert(begin - 1)})});
+                                     begin - 1, {cld::InsertAfter(begin - 1)})});
         }
         else
         {
@@ -185,7 +185,7 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::TokenIterator& begin, Lexe
         if (value == "include" || value == "line")
         {
             context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("Tokens", "'" + value + "'"),
-                                        begin - 1, {Insert(begin - 1)})});
+                                        begin - 1, {InsertAfter(begin - 1)})});
             if (value == "include")
             {
                 return {ControlLine::IncludeTag{}};
@@ -411,9 +411,9 @@ cld::PP::IfSection cld::PP::parseIfSection(Lexer::TokenIterator& begin, Lexer::T
         auto additional = Message::note(Notes::TO_MATCH_N_HERE.args("'if'"), ifPos, {Underline(ifPos, ifPos + 1)});
         if (begin == end)
         {
-            context.log(
-                {Message::error(ErrorMessages::Parser::EXPECTED_N.args("'#endif'"), end, {Insert(begin - 1, "#endif")}),
-                 std::move(additional)});
+            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args("'#endif'"), end,
+                                        {InsertAfter(begin - 1, "#endif")}),
+                         std::move(additional)});
         }
         else if (begin->getTokenType() == Lexer::TokenType::Pound && begin + 1 != end)
         {
@@ -463,7 +463,7 @@ cld::PP::ElIfGroup cld::PP::parseElIfGroup(Lexer::TokenIterator& begin, Lexer::T
     if (vector.empty())
     {
         context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("Tokens", "'elif'"), begin - 1,
-                                    {Insert(begin - 1)})});
+                                    {InsertAfter(begin - 1)})});
     }
     begin = eol;
     expect(Lexer::TokenType::Newline, begin, end, context);
@@ -493,7 +493,7 @@ cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::TokenIterator& begin, Lexer::Token
         if (vector.empty())
         {
             context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_AFTER_N.args("Tokens", "'if'"), begin - 1,
-                                        {Insert(begin - 1)})});
+                                        {InsertAfter(begin - 1)})});
         }
         variant = vector;
         begin = eol == end ? eol : eol + 1;

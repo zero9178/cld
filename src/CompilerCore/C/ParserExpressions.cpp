@@ -566,7 +566,7 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIter
         else
         {
             context.log(
-                {Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), start, {Insert(begin - 1)})});
+                {Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), start, {InsertAfter(begin - 1)})});
         }
     }
 
@@ -662,7 +662,7 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
 
             if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                        {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'['"), start, openPpos,
+                        {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
                                             {cld::PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
@@ -742,7 +742,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start, {PointAt(start, start + 1)})}))
+                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, {PointAt(start, start + 1)})}))
     {
         context.skipUntil(begin, end, firstExpressionSet);
     }
@@ -1071,9 +1071,9 @@ std::optional<cld::Syntax::PostFixExpression>
             auto openPpos = begin++;
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
-                                       {PointAt(openPpos, openPpos + 1)})}))
+            if (!expect(
+                    Lexer::TokenType::CloseParentheses, begin, end, context,
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end);
             }
@@ -1086,7 +1086,7 @@ std::optional<cld::Syntax::PostFixExpression>
             {
                 context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
                                                 cld::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                            begin, {Insert(begin - 1)})});
+                                            begin, {InsertAfter(begin - 1)})});
             }
             else
             {

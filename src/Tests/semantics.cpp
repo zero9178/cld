@@ -14,7 +14,7 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     cld::SourceObject tokens;
-    REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(source, options));
+    tokens = cld::Lexer::tokenize(source, options);
     auto parsing = cld::Parser::buildTree(tokens, &ss);
     REQUIRE((ss.str().empty() && parsing.second));
     cld::Semantics::SemanticAnalysis analysis(tokens, &ss);

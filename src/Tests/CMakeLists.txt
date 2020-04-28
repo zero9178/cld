@@ -3,3 +3,9 @@ add_executable(CompilerTests lexer.cpp parser.cpp main.cpp semantics.cpp constan
 target_link_libraries(CompilerTests Frontend)
 target_include_directories(CompilerTests PRIVATE ..)
 target_compile_definitions(CompilerTests PRIVATE CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
+if (MSVC AND ("${CLD_SANITIZER}" MATCHES ".*address.*"))
+    target_compile_definitions(CompilerTests PRIVATE CATCH_CONFIG_NO_WINDOWS_SEH)
+endif ()
+
+add_executable(fuzzerCrashRunner fuzzerCrashRunner.cpp)
+target_link_libraries(fuzzerCrashRunner Frontend)

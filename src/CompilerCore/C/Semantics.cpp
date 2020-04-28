@@ -31,7 +31,7 @@ bool cld::Semantics::ArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                        cld::Semantics::Type&& type, std::size_t size)
 {
-    auto name = type.getName() + "[" + std::to_string(size) + "]";
+    auto name = type.getTypeName() + "[" + std::to_string(size) + "]";
     return cld::Semantics::Type(isConst, isVolatile, name,
                                 ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }
@@ -104,6 +104,7 @@ bool cld::Semantics::Type::isUndefined() const
 {
     return std::holds_alternative<std::monostate>(m_type);
 }
+
 const std::string& cld::Semantics::Type::getTypeName() const
 {
     return m_typeName;
@@ -113,6 +114,7 @@ bool cld::Semantics::Type::isTypedef() const
 {
     return m_typeName != m_name;
 }
+
 std::string cld::Semantics::Type::getFullFormattedTypeName() const
 {
     return '\'' + m_name + '\'' + (isTypedef() ? "(aka '" + m_typeName + "')" : "");
@@ -137,21 +139,22 @@ cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVo
                                                          cld::Semantics::Type&& elementType)
 {
     std::string name;
-    if (std::holds_alternative<FunctionType>(elementType.get()))
+    if (!elementType.isTypedef() && std::holds_alternative<FunctionType>(elementType.get()))
     {
         auto openParenthese = elementType.getName().find('(');
         name = elementType.getName().substr(0, openParenthese) + "(*)" + elementType.getName().substr(openParenthese);
     }
-    else if (std::holds_alternative<ArrayType>(elementType.get())
-             || std::holds_alternative<ValArrayType>(elementType.get())
-             || std::holds_alternative<AbstractArrayType>(elementType.get()))
+    else if (!elementType.isTypedef()
+             && (std::holds_alternative<ArrayType>(elementType.get())
+                 || std::holds_alternative<ValArrayType>(elementType.get())
+                 || std::holds_alternative<AbstractArrayType>(elementType.get())))
     {
         auto openBracket = elementType.getName().find('[');
         name = elementType.getName().substr(0, openBracket) + "(*)" + elementType.getName().substr(openBracket);
     }
     else
     {
-        name = elementType.getName() + "*";
+        name = elementType.getTypeName() + "*";
     }
     if (isRestricted)
     {
@@ -419,13 +422,13 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&&
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
     {
-        argumentsNames += arguments[i].first.getName();
+        argumentsNames += arguments[i].first.getTypeName();
         if (i + 1 < arguments.size())
         {
             argumentsNames += ", ";
         }
     }
-    argumentsNames = returnType.getName() + "(" + argumentsNames + ")";
+    argumentsNames = returnType.getTypeName() + "(" + argumentsNames + ")";
     return cld::Semantics::Type(
         false, false, argumentsNames,
         FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, hasPrototype));
@@ -469,7 +472,7 @@ bool cld::Semantics::AbstractArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                cld::Semantics::Type&& type)
 {
-    auto name = type.getName() + "[]";
+    auto name = type.getTypeName() + "[]";
     return cld::Semantics::Type(isConst, isVolatile, name,
                                 AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }

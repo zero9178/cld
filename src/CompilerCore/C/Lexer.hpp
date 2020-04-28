@@ -117,8 +117,8 @@ enum class TokenType : std::uint8_t
 
 class Token;
 
-SourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
-                      bool inPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs(),
+SourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
+                      bool isInPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs(),
                       bool* errorsOccured = nullptr);
 
 struct NonCharString

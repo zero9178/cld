@@ -2,7 +2,7 @@
 
 #include <llvm/ADT/StringExtras.h>
 
-#include <CompilerCore/Common/Util.hpp>
+#include <CompilerCore/Common/Text.hpp>
 
 #include <algorithm>
 #include <stdexcept>
@@ -12,7 +12,7 @@
 
 namespace
 {
-cld::Semantics::Type getPtrdiff_t(const cld::LanguageOptions& options)
+cld::Semantics::Type getPtrdiffT(const cld::LanguageOptions& options)
 {
     if (options.getSizeOfVoidStar() == 4)
     {
@@ -132,7 +132,7 @@ cld::Semantics::ConstRetType
     if (!value.isInteger() && m_mode == Integer)
     {
         logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                 {Underline(node.begin() + 1, node.end())});
+                 {Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
         return {};
     }
     switch (node.getAnOperator())
@@ -141,18 +141,18 @@ cld::Semantics::ConstRetType
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
             logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                          '\'' + to_string(node.begin()->getRepresentation()) + '\''),
-                     {Underline(node.begin(), node.begin() + 1)});
+                     {PointAt(node.begin(), node.begin() + 1)});
             return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
-        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
-            throw std::runtime_error("Not supported yet");
+        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand: CLD_ASSERT(false && "Not supported yet");
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
         {
             if (!value.isArithmetic())
             {
                 logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "+", value.getType().getFullFormattedTypeName()),
-                         {PointAt(node.begin(), node.end())});
+                         {PointAt(node.begin(), node.begin() + 1),
+                          Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
                 return {};
             }
             return value.unaryPlus(m_languageOptions);
@@ -163,7 +163,8 @@ cld::Semantics::ConstRetType
             {
                 logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "-", value.getType().getFullFormattedTypeName()),
-                         {PointAt(node.begin(), node.end())});
+                         {PointAt(node.begin(), node.begin() + 1),
+                          Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
                 return {};
             }
             return value.negate(m_languageOptions);
@@ -174,7 +175,8 @@ cld::Semantics::ConstRetType
             {
                 logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "~", value.getType().getFullFormattedTypeName()),
-                         {PointAt(node.begin(), node.end())});
+                         {PointAt(node.begin(), node.begin() + 1),
+                          Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
                 return {};
             }
             return value.bitwiseNegate(m_languageOptions);
@@ -206,7 +208,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             }
             return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createUnsignedLongLong(false, false)};
         },
-        [](auto &&) -> cld::Semantics::ConstRetType { throw std::runtime_error("Not implemented yet"); });
+        [](auto &&) -> cld::Semantics::ConstRetType {
+            CLD_ASSERT(false && "Not implemented yet");
+            CLD_UNREACHABLE;
+        });
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::CastExpression& node)
@@ -237,7 +242,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 {
                     logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                             {Underline(cast.first.begin(), cast.first.end())});
+                             {Underline(cast.first.begin(), cast.first.end()),
+                              Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
                     return {};
                 }
             }
@@ -253,7 +259,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 {
                     logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                             {Underline(cast.first.begin(), cast.first.end())});
+                             {Underline(cast.first.begin(), cast.first.end()),
+                              Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
                     return {};
                 }
             }
@@ -261,7 +268,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                              value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
-                         {Underline(cast.first.begin(), cast.first.end())});
+                         {Underline(cast.first.begin(), cast.first.end()),
+                          Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
                 return {};
             }
 
@@ -270,7 +278,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             if (issues != ConstRetType::Issues::NoIssues)
             {
                 logWarning(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
-                    value.toString(), type.getFullFormattedTypeName()));
+                               value.toString(), type.getFullFormattedTypeName()),
+                           {Underline(cast.second->begin(), cast.second->end())});
             }
             return ret;
         });
@@ -307,7 +316,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "*", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 value.multiplyAssign(other, m_languageOptions);
@@ -320,7 +331,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "/", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 value.divideAssign(other, m_languageOptions);
@@ -333,7 +346,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "%", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 value.moduloAssign(other, m_languageOptions);
@@ -376,7 +391,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "+", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 if (value.isArithmetic() != other.isArithmetic())
@@ -386,10 +403,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
-                        logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-                                     elementType.getFullFormattedTypeName()),
-                                 {Underline(value.isArithmetic() ? exp.begin() : node.begin(),
-                                            value.isArithmetic() ? exp.end() : exp.begin() - 1)});
+                        logError(
+                            ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                                elementType.getFullFormattedTypeName()),
+                            {Annotate(value.isArithmetic() ? exp.begin() : node.begin(),
+                                      value.isArithmetic() ? exp.end() : exp.begin() - 1, elementType.getTypeName())});
                         return {};
                     }
                 }
@@ -403,7 +421,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "-", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 if (!value.isArithmetic() && !other.isArithmetic())
@@ -415,7 +435,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                                      CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
                                          "-", value.getType().getFullFormattedTypeName(),
                                          other.getType().getFullFormattedTypeName()),
-                                 {Underline(exp.begin() - 1, exp.begin())});
+                                 {Underline(exp.begin() - 1, exp.begin()),
+                                  Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                                  Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                         return {};
                     }
                 }
@@ -429,7 +451,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                         logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                                      elementType.getFullFormattedTypeName()),
                                  {Underline(value.isArithmetic() ? exp.begin() : node.begin(),
-                                            value.isArithmetic() ? exp.end() : exp.begin() - 1)});
+                                            value.isArithmetic() ? exp.end() : exp.begin() - 1),
+                                  Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                                  Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                         return {};
                     }
                 }
@@ -472,7 +496,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "<<", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 value.shiftLeftAssign(other, m_languageOptions);
@@ -485,7 +511,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  ">>", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
-                             {PointAt(exp.begin() - 1, exp.begin())});
+                             {PointAt(exp.begin() - 1, exp.begin()),
+                              Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                              Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                     return {};
                 }
                 value.shiftRightAssign(other, m_languageOptions);
@@ -522,7 +550,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         {
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "&", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                     {PointAt(iter->begin() - 1, iter->begin())});
+                     {PointAt(iter->begin() - 1, iter->begin()),
+                      Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
+                      Annotate(iter->begin(), iter->end(), other.getType().getTypeName())});
             return {};
         }
         value.bitAndAssign(other, m_languageOptions);
@@ -556,7 +586,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         {
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "^", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                     {PointAt(iter->begin() - 1, iter->begin())});
+                     {PointAt(iter->begin() - 1, iter->begin()),
+                      Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
+                      Annotate(iter->begin(), iter->end(), other.getType().getTypeName())});
             return {};
         }
         value.bitXorAssign(other, m_languageOptions);
@@ -590,7 +622,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         {
             logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "|", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                     {PointAt(iter->begin() - 1, iter->begin())});
+                     {PointAt(iter->begin() - 1, iter->begin()),
+                      Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
+                      Annotate(iter->begin(), iter->end(), other.getType().getTypeName())});
             return {};
         }
         value.bitOrAssign(other, m_languageOptions);
@@ -725,7 +759,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
                         .args("-", value.getType().getFullFormattedTypeName(),
                               other.getType().getFullFormattedTypeName()),
-                    {Underline(exp.begin() - 1, exp.begin())});
+                    {PointAt(exp.begin() - 1, exp.begin()),
+                     Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                     Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                 return {};
             }
         }
@@ -790,7 +826,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
                         .args(opName, value.getType().getFullFormattedTypeName(),
                               other.getType().getFullFormattedTypeName()),
-                    {Underline(exp.begin() - 1, exp.begin())});
+                    {PointAt(exp.begin() - 1, exp.begin()),
+                     Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                     Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                 return {};
             }
         }
@@ -801,7 +839,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 logError(
                     ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                         opName, value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
-                    {Underline(exp.begin() - 1, exp.begin())});
+                    {PointAt(exp.begin() - 1, exp.begin()),
+                     Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                     Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                 return {};
             }
             else
@@ -835,17 +875,17 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionSubscript&)
 {
-    throw std::runtime_error("Not implemented yet");
+    CLD_ASSERT(false && "Not implemented yet");
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionArrow&)
 {
-    throw std::runtime_error("Not implemented yet");
+    CLD_ASSERT(false && "Not implemented yet");
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PostFixExpressionDot&)
 {
-    throw std::runtime_error("Not implemented yet");
+    CLD_ASSERT(false && "Not implemented yet");
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::PrimaryExpression& node)
@@ -879,14 +919,14 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         },
         [this](const Syntax::PostFixExpressionIncrement& increment) -> ConstRetType {
             logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
-                     {Underline(Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
-                                increment.end())});
+                     {PointAt(Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
+                              increment.end())});
             return {};
         },
         [this](const Syntax::PostFixExpressionDecrement& decrement) -> ConstRetType {
             logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
-                     {Underline(Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
-                                decrement.end())});
+                     {PointAt(Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
+                              decrement.end())});
             return {};
         },
         [this](const Syntax::PostFixExpressionTypeInitializer& initializer) -> ConstRetType {
@@ -905,9 +945,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 {
     if (node.getAssignmentExpressions().size() > 1)
     {
-        logError(
-            ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
-            {Underline(node.getAssignmentExpressions()[1].begin() - 1, node.getAssignmentExpressions()[1].begin())});
+        logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
+                 {PointAt(node.getAssignmentExpressions()[1].begin() - 1, node.getAssignmentExpressions()[1].begin())});
         return {};
     }
     return visit(node.getAssignmentExpressions()[0]);
@@ -934,7 +973,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             }
             CLD_UNREACHABLE;
         }() + '\''),
-                 {Underline(cond.begin() - 1, cond.begin())});
+                 {PointAt(cond.begin() - 1, cond.begin())});
     }
     if (!node.getAssignments().empty())
     {
@@ -1481,7 +1520,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
                                                  (address.address - cld::get<VoidStar>(op2.getValue()).address) / *size,
                                                  true),
                                      false),
-                        getPtrdiff_t(options)};
+                        getPtrdiffT(options)};
             }
             if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {

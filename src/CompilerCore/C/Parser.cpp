@@ -1,7 +1,5 @@
 #include "Parser.hpp"
 
-#include <CompilerCore/Common/Util.hpp>
-
 #include <algorithm>
 
 #include "ParserUtil.hpp"
@@ -142,8 +140,12 @@ void cld::Parser::Context::parenthesesEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, {PointAt(bracket, bracket + 1)})});
+                        {PointAt(bracket, bracket + 1)})});
+#ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
+#else
+    std::terminate();
+#endif
 }
 
 void cld::Parser::Context::parenthesesLeft()
@@ -158,8 +160,12 @@ void cld::Parser::Context::squareBracketEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, {PointAt(bracket, bracket + 1)})});
+                        {PointAt(bracket, bracket + 1)})});
+#ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
+#else
+    std::terminate();
+#endif
 }
 
 void cld::Parser::Context::squareBracketLeft()
@@ -174,8 +180,12 @@ void cld::Parser::Context::braceEntered(Lexer::TokenIterator bracket)
         return;
     }
     log({Message::error(ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        bracket, {PointAt(bracket, bracket + 1)})});
+                        {PointAt(bracket, bracket + 1)})});
+#ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
+#else
+    std::terminate();
+#endif
 }
 
 void cld::Parser::Context::braceLeft()

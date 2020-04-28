@@ -1,7 +1,7 @@
 #include "SemanticAnalysis.hpp"
 
 #include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Util.hpp>
+#include <CompilerCore/Common/Text.hpp>
 
 #include <algorithm>
 #include <array>
@@ -186,10 +186,7 @@ std::optional<cld::Semantics::FunctionDefinition>
         {
             auto* declarator = std::get_if<std::unique_ptr<Syntax::Declarator>>(
                 &parameterTypeList->getParameterTypeList().getParameterList().getParameterDeclarations()[i].second);
-            if (!declarator)
-            {
-                throw std::runtime_error("Internal compiler error");
-            }
+            CLD_ASSERT(declarator);
             // declarator cannot be null as otherwise it'd have failed in the parser
             auto argName = declaratorToName(**declarator);
             auto& specifiers =
@@ -271,7 +268,7 @@ std::optional<cld::Semantics::FunctionDefinition>
         }
         else
         {
-            throw std::runtime_error("Internal compiler error");
+            CLD_UNREACHABLE;
         }
     }
 
@@ -1025,10 +1022,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
         },
         [&](const std::string& typedefName) -> Type {
             auto* result = getTypedef(typedefName);
-            if (!result)
-            {
-                throw std::runtime_error("Internal compiler error: could not find typedef in semantics");
-            }
+            CLD_ASSERT(result);
             Type copy = *result;
             copy.setName(typedefName);
             return copy;

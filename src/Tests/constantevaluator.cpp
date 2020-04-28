@@ -21,7 +21,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     cld::SourceObject tokens;
-    REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(expression, options));
+    tokens = cld::Lexer::tokenize(expression, options);
     REQUIRE(!tokens.data().empty());
     cld::Parser::Context context(tokens, &ss);
     auto ref = tokens.data().cbegin();

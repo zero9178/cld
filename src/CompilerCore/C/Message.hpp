@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,17 +28,22 @@ class Format
     template <class T>
     static std::string toString(T&& value)
     {
-        if constexpr (std::is_convertible_v<T, std::string>)
+        using U = std::decay_t<T>;
+        if constexpr (std::is_convertible_v<U, std::string>)
         {
             return value;
         }
-        else if constexpr (canStaticCast<T, std::string>{})
+        else if constexpr (canStaticCast<U, std::string>{})
         {
             return static_cast<std::string>(value);
         }
-        else if constexpr (std::is_same_v<T, char>)
+        else if constexpr (std::is_same_v<U, char>)
         {
             return std::string(1, value);
+        }
+        else if constexpr (std::is_same_v<llvm::Twine, U>)
+        {
+            return value.str();
         }
         else
         {
@@ -98,15 +104,18 @@ class Underline final
 {
     Lexer::TokenIterator m_begin;
     Lexer::TokenIterator m_end;
+    char m_character;
 
 public:
-    Underline(Lexer::TokenIterator begin);
+    Underline(Lexer::TokenIterator begin, char character = '~');
 
-    Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end);
+    Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end, char character = '~');
 
     [[nodiscard]] Lexer::TokenIterator begin() const;
 
     [[nodiscard]] Lexer::TokenIterator end() const;
+
+    [[nodiscard]] char getCharacter() const;
 };
 
 class PointAt final
@@ -124,20 +133,38 @@ public:
     [[nodiscard]] Lexer::TokenIterator end() const;
 };
 
-class Insert final
+class InsertAfter final
 {
     Lexer::TokenIterator m_insertAfter;
     std::string m_argument;
 
 public:
-    explicit Insert(Lexer::TokenIterator insertAfter, std::string argument = {});
+    explicit InsertAfter(Lexer::TokenIterator insertAfter, std::string argument = {});
 
     [[nodiscard]] Lexer::TokenIterator getInsertAfter() const noexcept;
 
     [[nodiscard]] const std::string& getArgument() const noexcept;
 };
 
-using Modifier = std::variant<Underline, PointAt, Insert>;
+class Annotate final
+{
+    Lexer::TokenIterator m_begin;
+    Lexer::TokenIterator m_end;
+    std::string m_argument;
+
+public:
+    Annotate(Lexer::TokenIterator begin, std::string argument);
+
+    Annotate(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string argument);
+
+    [[nodiscard]] Lexer::TokenIterator begin() const;
+
+    [[nodiscard]] Lexer::TokenIterator end() const;
+
+    [[nodiscard]] const std::string& getArgument() const;
+};
+
+using Modifier = std::variant<Underline, PointAt, InsertAfter, Annotate>;
 
 /**
  * Class used to present Messages from various components of the compiler, eg. Parser or Semantics.
@@ -160,17 +187,14 @@ public:
     };
 
 private:
-    std::vector<Modifier> m_modifier;
+    std::vector<Modifier> m_modifiers;
     std::string m_message;
     Lexer::TokenIterator m_begin;
-    Lexer::TokenIterator m_end;
+    std::optional<Lexer::TokenIterator> m_end;
     Severity m_severity;
 
-    Message(Severity severity, std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Message(Severity severity, std::string message, Lexer::TokenIterator begin, std::optional<Lexer::TokenIterator> end,
             std::vector<Modifier> modifiers = {});
-
-    //    llvm::raw_ostream& printEnd(llvm::raw_ostream& os, const SourceObject& sourceObject,
-    //                                llvm::raw_ostream::Colors colour, std::string_view prefix) const;
 
 public:
     /**

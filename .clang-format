@@ -41,12 +41,14 @@ IncludeCategories:
     Priority: 2
   - Regex: '<CompilerCore/.*>'
     Priority: 3
+  - Regex: '<.*\..*>'
+    Priority: 5
   - Regex: '<.*>'
     Priority: 4
   - Regex: '"CompilerCore/.*"'
-    Priority: 5
-  - Regex: '".*"'
     Priority: 6
+  - Regex: '".*"'
+    Priority: 7
 IndentCaseLabels: true
 IndentPPDirectives: BeforeHash
 IndentWidth: 4

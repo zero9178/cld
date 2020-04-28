@@ -49,7 +49,8 @@ namespace
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
-    auto result = cld::Lexer::tokenize({code.begin(), code.end()}, options, false, &ss);
+    auto result = cld::Lexer::tokenize(code, options, false, &ss);
+    INFO(buffer);
     REQUIRE(buffer.empty());
     return result;
 }
@@ -59,7 +60,8 @@ namespace
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
-    auto result = cld::Lexer::tokenize({code.begin(), code.end()}, options, true, &ss);
+    auto result = cld::Lexer::tokenize(code, options, true, &ss);
+    INFO(buffer);
     REQUIRE(buffer.empty());
     return result;
 }
@@ -280,6 +282,13 @@ TEST_CASE("Lexing backslashes", "[lexer]")
         CHECK(result.data()[0].getRepresentation() == "N");
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         CHECK(std::get<std::string>(result.data()[0].getValue()) == "N");
+    }
+    SECTION("Splined unicode")
+    {
+        LEXER_OUTPUTS_WITH("\xe3\\\n\x80\xBA",
+                           Catch::Contains(UNEXPECTED_CHARACTER.args(
+                               "〺"))); // U+303a(〺) but after the first byte of it's utf8 representation
+        // we have a backslash followed by a newline
     }
 }
 
@@ -520,6 +529,8 @@ TEST_CASE("Lexing character literals", "[lexer]")
                                                 "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         LEXER_OUTPUTS_WITH("L'\\U0000D977'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                                  "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("L'\\UFFFFFFFF'", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                 "FFFFFFFF", VALUE_MUST_FIT_IN_UTF32)));
         auto result = lexes("L'\\u3435'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -543,17 +554,49 @@ TEST_CASE("Lexing unicode", "[lexer]")
 {
     SECTION("Characters")
     {
+        SECTION("UTF-8")
+        {
+            auto result = lexes("\"貓\"");
+            REQUIRE(result.data().size() == 1);
+            REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            auto value = std::get<std::string>(result.data()[0].getValue());
+            CHECK(value == "貓");
+            result = lexes("\"🍌\"");
+            REQUIRE(result.data().size() == 1);
+            REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            value = std::get<std::string>(result.data()[0].getValue());
+            CHECK(value == "🍌");
+        }
         SECTION("UTF-16")
         {
-            auto result = lexes("L'貓'", cld::Tests::x64windowsGnu);
-            REQUIRE(result.data().size() == 1);
-            REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
-            auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
-            CHECK(value == u'貓');
-            CHECK(value.getBitWidth() == 16);
-            CHECK(value.isUnsigned());
-            LEXER_OUTPUTS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
-            LEXER_OUTPUTS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+            SECTION("Character literal")
+            {
+                auto result = lexes("L'貓'", cld::Tests::x64windowsGnu);
+                REQUIRE(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+                auto value = std::get<llvm::APSInt>(result.data()[0].getValue());
+                CHECK(value == u'貓');
+                CHECK(value.getBitWidth() == 16);
+                CHECK(value.isUnsigned());
+                LEXER_OUTPUTS_WITH("'貓'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+                LEXER_OUTPUTS_WITH("'🍌'", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
+            }
+            SECTION("String literal")
+            {
+                auto result = lexes("L\"貓\"", cld::Tests::x64windowsGnu);
+                REQUIRE(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+                auto value = std::get<cld::Lexer::NonCharString>(result.data()[0].getValue());
+                REQUIRE(value.characters.size() == 1);
+                CHECK(value.characters[0] == u'貓');
+                result = lexes("L\"🍌\"", cld::Tests::x64windowsGnu);
+                REQUIRE(result.data().size() == 1);
+                REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+                value = std::get<cld::Lexer::NonCharString>(result.data()[0].getValue());
+                REQUIRE(value.characters.size() == sizeof(u"🍌") / sizeof(u"🍌"[0]) - 1);
+                CHECK(value.characters[0] == u"🍌"[0]);
+                CHECK(value.characters[1] == u"🍌"[1]);
+            }
         }
         SECTION("UTF-32")
         {
@@ -598,15 +641,28 @@ TEST_CASE("Lexing string literals", "[lexer]")
     }
     SECTION("Octals")
     {
+        LEXER_OUTPUTS_WITH("\"\\777\"", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         LEXER_OUTPUTS_WITH("\"\\9\"", Catch::Contains(INVALID_OCTAL_CHARACTER.args("9")));
         auto result = lexes("\"\\070\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         REQUIRE(std::get<std::string>(result.data()[0].getValue()) == "\070");
+        result = lexes("L\"\\777\"", x64windowsMsvc);
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
+        REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()).characters[0] == u'\777');
+        result = lexes("L\"\\777\"", x64linux);
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
+        REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()).characters[0] == U'\777');
     }
     SECTION("Hex")
     {
+        LEXER_OUTPUTS_WITH("\"\\xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\"", Catch::Contains(VALUE_MUST_FIT_IN_UTF32));
+        LEXER_OUTPUTS_WITH("\"\\x100\"", Catch::Contains(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE));
         LEXER_OUTPUTS_WITH("\"\\xG\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         LEXER_OUTPUTS_WITH("\"\\x\"", Catch::Contains(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED));
         auto result = lexes("\"\\x070\"");
@@ -614,6 +670,20 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<std::string>(result.data()[0].getValue()));
         REQUIRE(std::get<std::string>(result.data()[0].getValue()) == "\x070");
+        result = lexes("L\"\\xd000\"", x64windowsMsvc);
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
+        REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()).characters[0] == u'\xd000');
+        result = lexes("L\"\\x10F000\"", x64linux);
+        REQUIRE(result.data().size() == 1);
+        REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
+        REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()).characters[0] == U'\x10F000');
+        LEXER_OUTPUTS_WITH("\"\\xD800\"",
+                           Catch::Contains(INVALID_HEX_ESCAPE_SEQUENCE_N.args(VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("\"\\xDFFF\"",
+                           Catch::Contains(INVALID_HEX_ESCAPE_SEQUENCE_N.args(VALUE_MUSTNT_BE_IN_RANGE)));
     }
     SECTION("Multibyte")
     {
@@ -638,6 +708,8 @@ TEST_CASE("Lexing string literals", "[lexer]")
                                                   "00000090", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         LEXER_OUTPUTS_WITH("L\"\\U0000D977\"", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                                    "0000D977", VALUE_MUSTNT_BE_IN_RANGE)));
+        LEXER_OUTPUTS_WITH("L\"\\UFFFFFFFF\"", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                                   "FFFFFFFF", VALUE_MUST_FIT_IN_UTF32)));
         auto result = lexes("L\"\\u3435\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
@@ -1586,17 +1658,17 @@ std::string toS(const std::vector<std::uint8_t>& data)
 
 TEST_CASE("Lexing invalid characters", "[lexer]")
 {
-    LEXER_OUTPUTS_WITH("\xaez\xf0\x9e\xbb\xaf", Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0x1, 0x1, 0x1, 0x1, '\n', 0}),
                        Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000001"))
                            && Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
+    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0b11110000, 0b10011110, 0b10111011, 0b10101111}),
+                       Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0001eeef")));
+    LEXER_OUTPUTS_WITH("\xaez\xf0\x9e\xbb\xaf", Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({'\n', '*', 0x9b}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xde, '\n'}), Catch::Contains(INVALID_UTF8_SEQUENCE));
     LEXER_OUTPUTS_WITH(toS({0xa, 0x0}), Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U00000000")));
     LEXER_OUTPUTS_WITH(toS({'L', '\'', 0xE7, 0xB1, 0x92, 0xE0, 0x80, 0x80, '\''}),
                        Catch::Contains(INVALID_UTF8_SEQUENCE));
-    LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0b11110000, 0b10011110, 0b10111011, 0b10101111}),
-                       Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0001eeef")));
     LEXER_OUTPUTS_WITH(toS({0xE7, 0xB1, 0x92, 0b11110000, 0b10011110, 0b10111011, 0b10101111, 'a'}),
                        Catch::Contains(NON_PRINTABLE_CHARACTER_N.args("\\U0001eeef")));
     LEXER_OUTPUTS_WITH(
@@ -1634,6 +1706,16 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
 
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
 {
+    cld::Lexer::tokenize(
+        "[N___Bo\"d__\\\\\": 2A\"\"\\x4\"\"\\xdddd___Bo\"d__\\\\\": 2A\"\"\\x4\"\"\\xdddd98f\"  ? \"d_98f\"  ? \"d__0");
+    cld::Lexer::tokenize("=7L`]+0xL`]+0xpp\n");
+    cld::Lexer::tokenize("\\\n"
+                         "\\\n");
+    cld::Lexer::tokenize(
+        "=,,=,#+\x0b\x0b\x0b+\\\\666\x0b\x0b%eL\"N*\x09'     n\\\x0aVX      @'Qy;cas\\U990990959999095*i'cL\"[ xb 0\\xb  !'\\x/'");
+    cld::Lexer::tokenize("case&>?>>'1\\x06fffffffffffffffffffffff     '");
+    cld::Lexer::tokenize("x\\0x:\\");
+    cld::Lexer::tokenize("CX\\\x0a)\\\x0a\\\x0a)\\\x0a-\x0aL\\u\\\x0a\\=");
     cld::Lexer::tokenize("#define   ue(efi,n\\");
     cld::Lexer::tokenize("#if\n"
                          "i3#if\n"

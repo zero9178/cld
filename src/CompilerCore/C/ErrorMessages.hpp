@@ -107,10 +107,10 @@ constexpr auto CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION =
     "Can only cast to integers in integer constant expression";
 
 constexpr auto CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N =
-    Format("Cannot apply binary operator '{}' to value of type {} and {}");
+    Format("Cannot apply binary operator '{}' to values of type {} and {}");
 
 constexpr auto CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N =
-    Format("Cannot apply binary operator '{}' to value of incompatible types {} and {}");
+    Format("Cannot apply binary operator '{}' to values of incompatible types {} and {}");
 
 constexpr auto INVALID_CAST_FROM_TYPE_N_TO_TYPE_N = Format("Invalid cast from type {} to type {}");
 
@@ -139,6 +139,12 @@ constexpr auto INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N =
 constexpr auto VALUE_MUSTNT_BE_LESS_THAN_A0 = "Value mustn't be less than 0x00A0";
 
 constexpr auto VALUE_MUSTNT_BE_IN_RANGE = "Value mustn't be in range of 0xD800 to 0xDFFF";
+
+constexpr auto INVALID_HEX_ESCAPE_SEQUENCE_N = Format("Invalid hex escape sequence {}");
+
+constexpr auto INVALID_OCTAL_ESCAPE_SEQUENCE_N = Format("Invalid hex escape sequence {}");
+
+constexpr auto VALUE_MUST_FIT_IN_UTF32 = "Value must fit in UTF32";
 
 constexpr auto EXPECTED_CHARACTER_AFTER_BACKSLASH = "Expected character after \\";
 

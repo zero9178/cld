@@ -1,36 +1,54 @@
 #pragma once
 
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/Unicode.h>
-
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
-#include <string>
 #include <variant>
 
 #ifdef NDEBUG
 
-    #ifndef _MSC_VER
+    #ifndef CLD_USE_ASSERTS
 
-        #define CLD_UNREACHABLE          \
-            do                           \
-                __builtin_unreachable(); \
-            while (0)
+        #ifndef _MSC_VER
 
-        #define CLD_ASSERT(x) \
-            if (x)            \
-                ;             \
-            else              \
-                __builtin_unreachable()
+            #define CLD_UNREACHABLE          \
+                do                           \
+                    __builtin_unreachable(); \
+                while (0)
+
+            #define CLD_ASSERT(x) \
+                if (x)            \
+                    ;             \
+                else              \
+                    __builtin_unreachable()
+
+        #else
+
+            #define CLD_UNREACHABLE  \
+                do                   \
+                    __assume(false); \
+                while (0)
+
+            #define CLD_ASSERT(x) __assume((bool)(x))
+
+        #endif
 
     #else
 
-        #define CLD_UNREACHABLE  \
-            do                   \
-                __assume(false); \
+        #define CLD_UNREACHABLE \
+            do                  \
+                std::abort();   \
             while (0)
 
-        #define CLD_ASSERT(x) __assume((bool)(x))
+        #define CLD_ASSERT(x)                                            \
+            do                                                           \
+            {                                                            \
+                if (!(x))                                                \
+                {                                                        \
+                    fprintf(stderr, __FILE__ ":%d: " #x "\n", __LINE__); \
+                    std::abort();                                        \
+                }                                                        \
+            } while (0)
 
     #endif
 
@@ -49,6 +67,38 @@
 
 namespace cld
 {
+template <typename T, typename Variant>
+decltype(auto) get(Variant&& variant) noexcept
+{
+    CLD_ASSERT(!variant.valueless_by_exception() && std::holds_alternative<T>(variant));
+    auto* value = std::get_if<T>(&variant);
+    CLD_ASSERT(value);
+    if constexpr (std::is_lvalue_reference_v<Variant>)
+    {
+        return *value;
+    }
+    else
+    {
+        return std::move(*value);
+    }
+}
+
+template <std::size_t i, typename Variant>
+decltype(auto) get(Variant&& variant) noexcept
+{
+    CLD_ASSERT(!variant.valueless_by_exception() && variant.index() == i);
+    auto* value = std::get_if<i>(&variant);
+    CLD_ASSERT(value);
+    if constexpr (std::is_lvalue_reference_v<Variant>)
+    {
+        return *value;
+    }
+    else
+    {
+        return std::move(*value);
+    }
+}
+
 namespace detail
 {
 template <class... Ts>
@@ -74,16 +124,16 @@ struct Y
 template <typename G>
 Y(G) -> Y<G>;
 
-template <std::size_t i, class Callable, class... Args>
-decltype(auto) visitImpl(Callable&& callable, std::variant<Args...>& variant)
+template <std::size_t i = 0, class Callable, class Variant>
+decltype(auto) visitImpl(Callable&& callable, Variant&& variant)
 {
     if (variant.index() == i)
     {
-        return callable(*std::get_if<i>(&variant));
+        return std::forward<Callable>(callable)(cld::get<i>(std::forward<Variant>(variant)));
     }
-    else if constexpr (i > 0)
+    else if constexpr (i + 1 != std::variant_size_v<std::decay_t<Variant>>)
     {
-        return visitImpl<i - 1>(std::forward<Callable>(callable), variant);
+        return visitImpl<i + 1>(std::forward<Callable>(callable), std::forward<Variant>(variant));
     }
     else
     {
@@ -91,33 +141,10 @@ decltype(auto) visitImpl(Callable&& callable, std::variant<Args...>& variant)
     }
 }
 
-template <class Callable, class... Args>
-decltype(auto) visit(Callable&& callable, std::variant<Args...>& variant)
+template <class Callable, class Variant>
+decltype(auto) visit(Callable&& callable, Variant&& variant)
 {
-    return visitImpl<sizeof...(Args) - 1>(std::forward<Callable>(callable), variant);
-}
-
-template <std::size_t i, class Callable, class... Args>
-decltype(auto) visitImpl(Callable&& callable, const std::variant<Args...>& variant)
-{
-    if (variant.index() == i)
-    {
-        return callable(*std::get_if<i>(&variant));
-    }
-    else if constexpr (i > 0)
-    {
-        return visitImpl<i - 1>(std::forward<Callable>(callable), variant);
-    }
-    else
-    {
-        CLD_UNREACHABLE;
-    }
-}
-
-template <class Callable, class... Args>
-decltype(auto) visit(Callable&& callable, const std::variant<Args...>& variant)
-{
-    return visitImpl<sizeof...(Args) - 1>(std::forward<Callable>(callable), variant);
+    return visitImpl(std::forward<Callable>(callable), std::forward<Variant>(variant));
 }
 } // namespace detail
 
@@ -134,22 +161,6 @@ decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
                          std::forward<Variant>(variant));
 }
 
-template <typename T, typename Variant>
-decltype(auto) get(Variant&& variant) noexcept
-{
-    CLD_ASSERT(!variant.valueless_by_exception() && std::holds_alternative<T>(variant));
-    auto* value = std::get_if<T>(&variant);
-    CLD_ASSERT(value);
-    if constexpr (std::is_lvalue_reference_v<Variant>)
-    {
-        return *value;
-    }
-    else
-    {
-        return std::move(*value);
-    }
-}
-
 template <typename T, typename... Ts>
 constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
 {
@@ -161,22 +172,5 @@ constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
     };
     (test(std::is_same_v<T, Ts>) || ...);
     return r;
-}
-
-inline std::string stringOfSameWidth(std::string_view original, char characterToReplace)
-{
-    auto utf8Width = llvm::sys::unicode::columnWidthUTF8({original.data(), original.size()});
-    return std::string(utf8Width < 0 ? original.size() : utf8Width, characterToReplace);
-}
-
-inline std::string to_string(std::string_view stringView)
-{
-    return std::string(stringView.begin(), stringView.end());
-}
-
-template <class T, class = std::enable_if_t<std::is_invocable_v<std::to_string, T>>>
-inline std::string to_string(T value)
-{
-    return std::to_string(value);
 }
 } // namespace cld

@@ -266,8 +266,7 @@ public:
 
     constexpr bitset2& reset(size_t bit)
     {
-        if (bit >= N)
-            throw std::out_of_range("bitset2: reset out of range");
+        assert(bit < N);
         return set(bit, false);
     }
 

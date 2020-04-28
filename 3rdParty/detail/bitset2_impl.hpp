@@ -14,6 +14,7 @@
 #define BITSET2_IMPL_CB_HPP
 
 #include <bitset>
+#include <cassert>
 
 #include "array2u_long_t.hpp"
 #include "array_add.hpp"
@@ -115,9 +116,7 @@ protected:
                           typename std::basic_string<CharT, Traits, Alloc>::size_type n, CharT zero, CharT one)
     {
         auto const str_sz = str.size();
-        if (pos > str_sz)
-            throw std::out_of_range("bitset2: String submitted to "
-                                    "constructor smaller than pos");
+        assert(pos <= str_sz);
         auto const n_bits = std::min(N, std::min(n, str_sz - pos));
 
         for (size_t bit_ct = 0; bit_ct < n_bits; ++bit_ct)
@@ -125,9 +124,8 @@ protected:
             auto const chr = str[bit_ct + pos];
             if (Traits::eq(one, chr))
                 set(n_bits - bit_ct - 1);
-            else if (!Traits::eq(zero, chr))
-                throw std::invalid_argument("bitset2: Invalid argument in "
-                                            "string submitted to constructor");
+            else
+                assert(Traits::eq(zero, chr));
         } // for bit_ct
     }
     /* ----------------------------------------------------------------------- */
@@ -151,8 +149,7 @@ protected:
 
     constexpr bitset2_impl& set(size_t bit, bool value = true)
     {
-        if (bit >= N)
-            throw std::out_of_range("bitset2: Setting of bit out of range");
+        assert(bit < N);
         set_noexcept(bit, value);
         return *this;
     } // set
@@ -178,8 +175,7 @@ protected:
 
     constexpr bool test_set(size_t bit, bool value = true)
     {
-        if (bit >= N)
-            throw std::out_of_range("bitset2: test_set out of range");
+        assert(bit < N);
         return test_set_noexcept(bit, value);
     } // test_set
 
@@ -191,8 +187,7 @@ protected:
 
     constexpr bitset2_impl& flip(size_t bit)
     {
-        if (bit >= N)
-            throw std::out_of_range("bitset2: Flipping of bit out of range");
+        assert(bit < N);
         return flip_noexcept(bit);
     } // flip
 
@@ -217,24 +212,19 @@ public:
     constexpr ULONG_t to_ulong() const
     {
         using a2l = array2u_long_t<N, T, ULONG_t>;
-        return (N == 0) ? 0ul :
-                          a2l().check_overflow(m_value) ? throw std::overflow_error("Cannot convert bitset2 "
-                                                                                    "to unsigned long") :
-                                                          a2l()(m_value);
+        return (N == 0) ? 0ul : (assert(!a2l().check_overflow(m_value)), a2l()(m_value));
     } // to_ulong
 
     constexpr ULLONG_t to_ullong() const
     {
         using a2l = array2u_long_t<N, T, ULLONG_t>;
-        return (N == 0) ? 0ull :
-                          a2l().check_overflow(m_value) ? throw std::overflow_error("Cannot convert bitset2 "
-                                                                                    "to unsigned long long") :
-                                                          a2l()(m_value);
+        return (N == 0) ? 0ull : (assert(!a2l().check_overflow(m_value)), a2l()(m_value));
     } // to_ullong
 
     constexpr bool test(size_t bit) const
     {
-        return (bit >= N) ? throw std::out_of_range("bitset2: Testing of bit out of range") : operator[](bit);
+        assert(bit < N);
+        return operator[](bit);
     }
 
     constexpr void set_noexcept(size_t bit, bool value = true) noexcept
@@ -292,9 +282,8 @@ public:
     /// Throws out_of_range if idx >= N.
     constexpr size_t find_next(size_t idx) const
     {
-        return idx >= N ?
-                   throw std::out_of_range("bitset2: find_next index out of range") :
-                   idx + 1 == N ?
+        assert(idx < N);
+        return idx + 1 == N ?
                    npos :
                    detail::array_funcs<n_array, T>().idx_lsb_set(
                        m_value,

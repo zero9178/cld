@@ -6,46 +6,50 @@
 
 #include "TestConfig.hpp"
 
-#define treeProduces(source, matches)                                                                      \
-    [] {                                                                                                   \
-        std::string string;                                                                                \
-        llvm::raw_string_ostream ss(string);                                                               \
-        static cld::SourceObject tokens;                                                                   \
-        REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss)); \
-        ss.flush();                                                                                        \
-        REQUIRE(string.empty());                                                                           \
-        auto tree = cld::PP::buildTree(tokens, &ss);                                                       \
-        CHECK_THAT(string, matches);                                                                       \
-        cld::PP::buildTree(tokens);                                                                        \
-        if (!string.empty())                                                                               \
-        {                                                                                                  \
-            llvm::errs() << '\n';                                                                          \
-        }                                                                                                  \
-        return std::move(tree.first);                                                                      \
+namespace
+{
+}
+
+#define treeProduces(source, matches)                                                     \
+    []() mutable {                                                                        \
+        std::string string;                                                               \
+        llvm::raw_string_ostream ss(string);                                              \
+        static cld::SourceObject tokens;                                                  \
+        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss); \
+        ss.flush();                                                                       \
+        REQUIRE(string.empty());                                                          \
+        auto tree = cld::PP::buildTree(tokens, &ss);                                      \
+        CHECK_THAT(string, matches);                                                      \
+        cld::PP::buildTree(tokens);                                                       \
+        if (!string.empty())                                                              \
+        {                                                                                 \
+            llvm::errs() << '\n';                                                         \
+        }                                                                                 \
+        return std::move(tree.first);                                                     \
     }()
 
-#define functionProduces(parser, source, matches)                                                          \
-    [] {                                                                                                   \
-        std::string string;                                                                                \
-        llvm::raw_string_ostream ss(string);                                                               \
-        static cld::SourceObject tokens;                                                                   \
-        REQUIRE_NOTHROW(tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss)); \
-        ss.flush();                                                                                        \
-        REQUIRE(string.empty());                                                                           \
-        cld::PP::Context context(tokens, &ss);                                                             \
-        auto begin = tokens.data().cbegin();                                                               \
-        auto ret = parser(begin, tokens.data().cend(), context);                                           \
-        CHECK_THAT(string, matches);                                                                       \
-        {                                                                                                  \
-            auto begin2 = tokens.data().cbegin();                                                          \
-            cld::PP::Context context2(tokens);                                                             \
-            parser(begin2, tokens.data().cend(), context2);                                                \
-            if (!string.empty())                                                                           \
-            {                                                                                              \
-                llvm::errs() << '\n';                                                                      \
-            }                                                                                              \
-        }                                                                                                  \
-        return ret;                                                                                        \
+#define functionProduces(parser, source, matches)                                         \
+    []() mutable {                                                                        \
+        std::string string;                                                               \
+        llvm::raw_string_ostream ss(string);                                              \
+        static cld::SourceObject tokens;                                                  \
+        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss); \
+        ss.flush();                                                                       \
+        REQUIRE(string.empty());                                                          \
+        cld::PP::Context context(tokens, &ss);                                            \
+        auto begin = tokens.data().cbegin();                                              \
+        auto ret = parser(begin, tokens.data().cend(), context);                          \
+        CHECK_THAT(string, matches);                                                      \
+        {                                                                                 \
+            auto begin2 = tokens.data().cbegin();                                         \
+            cld::PP::Context context2(tokens);                                            \
+            parser(begin2, tokens.data().cend(), context2);                               \
+            if (!string.empty())                                                          \
+            {                                                                             \
+                llvm::errs() << '\n';                                                     \
+            }                                                                             \
+        }                                                                                 \
+        return ret;                                                                       \
     }()
 
 using namespace cld::ErrorMessages;

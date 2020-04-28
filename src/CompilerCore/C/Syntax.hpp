@@ -1457,7 +1457,7 @@ public:
  *
  * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
  *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> }
- * <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
+ *                              <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
  */
 class StructOrUnionSpecifier final : public Node
 {

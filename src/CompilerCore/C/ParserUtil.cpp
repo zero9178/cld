@@ -8,7 +8,7 @@ bool cld::Parser::expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, 
         if (curr == end)
         {
             context.log({Message::error(cld::ErrorMessages::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
-                                        {Insert(end - 1, Lexer::tokenValue(expected))})});
+                                        {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
         }
         else
         {
