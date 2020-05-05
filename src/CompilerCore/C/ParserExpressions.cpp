@@ -559,14 +559,13 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIter
     {
         if (begin < end)
         {
-            context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_BEFORE_N.args(
+            context.log({Message::error(Errors::Parser::EXPECTED_N_BEFORE_N.args(
                                             "typename", '\'' + to_string(begin->getRepresentation()) + '\''),
                                         start, begin, {PointAt(begin, begin + 1)})});
         }
         else
         {
-            context.log(
-                {Message::error(ErrorMessages::Parser::EXPECTED_N.args("typename"), start, {InsertAfter(begin - 1)})});
+            context.log({Message::error(Errors::Parser::EXPECTED_N.args("typename"), start, {InsertAfter(begin - 1)})});
         }
     }
 
@@ -962,7 +961,7 @@ std::optional<cld::Syntax::PostFixExpression>
                         return match(
                             literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
                             [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
-                                switch (context.getSourceObject().getLanguageOptions().getSizeOfWChar())
+                                switch (context.getSourceObject().getLanguageOptions().sizeOfWChar)
                                 {
                                     case 2:
                                     {
@@ -1007,7 +1006,7 @@ std::optional<cld::Syntax::PostFixExpression>
                         return match(
                             literal,
                             [&str, &context](const std::string& lhs) -> stringVariant {
-                                switch (context.getSourceObject().getLanguageOptions().getSizeOfWChar())
+                                switch (context.getSourceObject().getLanguageOptions().sizeOfWChar)
                                 {
                                     case 2:
                                     {
@@ -1084,13 +1083,13 @@ std::optional<cld::Syntax::PostFixExpression>
         {
             if (begin == end)
             {
-                context.log({Message::error(ErrorMessages::Parser::EXPECTED_N.args(
-                                                cld::Format::List(", ", " or ", "literal", "identifier", "'('")),
-                                            begin, {InsertAfter(begin - 1)})});
+                context.log({Message::error(
+                    Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "literal", "identifier", "'('")),
+                    begin, {InsertAfter(begin - 1)})});
             }
             else
             {
-                context.log({Message::error(ErrorMessages::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                context.log({Message::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                                 cld::Format::List(", ", " or ", "literal", "identifier", "'('"),
                                                 '\'' + to_string(begin->getRepresentation()) + '\''),
                                             begin, {PointAt(begin, begin + 1)})});

@@ -53,8 +53,8 @@
     } while (0)
 
 using namespace cld::Notes;
-using namespace cld::ErrorMessages;
-using namespace cld::ErrorMessages::Parser;
+using namespace cld::Errors;
+using namespace cld::Errors::Parser;
 using namespace cld::Parser;
 
 TEST_CASE("Parse specifier qualifier list", "[parser]")
@@ -976,19 +976,19 @@ TEST_CASE("Parser limits", "[parser]")
     SECTION("Parenthese expression")
     {
         auto source = "int main(void){" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
-        treeProduces(source, ProducesError(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
                                  "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
     }
     SECTION("Direct Declarator")
     {
         auto source = "int" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
-        treeProduces(source, ProducesError(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
                                  "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
     }
     SECTION("Compound statement")
     {
         auto source = "int main(void)" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '{');
-        treeProduces(source, ProducesError(cld::ErrorMessages::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args(
                                  "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
     }
 }

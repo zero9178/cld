@@ -10,12 +10,12 @@
 
 namespace cld::Tests
 {
-const inline auto x64windowsGnu = LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8);
-const inline auto x86windowsGnu = LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 4);
-const inline auto x64windowsMsvc = LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 8);
-const inline auto x86windowsMsvc = LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 4);
-const inline auto x64linux = LanguageOptions(cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 8, 80, 8);
-const inline auto x86linux = LanguageOptions(cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 4, 80, 4);
+const inline auto x64windowsGnu = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8};
+const inline auto x86windowsGnu = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 4};
+const inline auto x64windowsMsvc = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 8};
+const inline auto x86windowsMsvc = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 4};
+const inline auto x64linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 8, 80, 8};
+const inline auto x86linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 4, 80, 4};
 
 struct ProducesError : Catch::Matchers::StdString::ContainsMatcher
 {
@@ -116,13 +116,14 @@ struct ProducesLines : Catch::MatcherBase<std::string_view>
     {
         return "lines match \""
                + std::accumulate(m_linesTrimmed.begin(), m_linesTrimmed.end(), std::string(),
-                                 [](const std::string& lhs, const std::string& rhs) {
-                                     if (!lhs.empty())
+                                 [first = true](const std::string& lhs, const std::string& rhs) mutable {
+                                     if (!first)
                                      {
                                          return lhs + '\n' + rhs;
                                      }
                                      else
                                      {
+                                         first = false;
                                          return rhs;
                                      }
                                  })

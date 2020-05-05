@@ -40,7 +40,7 @@ public:
 
     [[nodiscard]] const std::vector<Lexer::Token>& data() const;
 
-    [[nodiscard]] LanguageOptions getLanguageOptions() const;
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const;
 
     [[nodiscard]] virtual bool isPreprocessed() const;
 
@@ -52,8 +52,7 @@ class PPSourceObject final : public SourceObject
 public:
     struct Substitution
     {
-        std::vector<Lexer::Token> identifier;
-        std::vector<Lexer::Token> replacedTokens;
+        Lexer::Token identifier;
     };
     using SubstitutionMap = std::unordered_map<std::uint64_t, Substitution>;
 
@@ -63,7 +62,7 @@ private:
 
 public:
     PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens = {},
-                   const SubstitutionMap& substitutions = {}, const std::vector<std::uint64_t>& ppstarts = {});
+                   SubstitutionMap substitutions = {}, std::vector<uint64_t> ppstarts = {});
 
     PPSourceObject(const PPSourceObject&) = delete;
 
@@ -80,5 +79,7 @@ public:
     [[nodiscard]] std::uint64_t getPPLineStartOffset(std::uint64_t line) const noexcept;
 
     [[nodiscard]] std::uint64_t getPPLineEndOffset(std::uint64_t line) const noexcept;
+
+    const SubstitutionMap& getSubstitutions() const;
 };
 } // namespace cld

@@ -94,7 +94,7 @@ std::optional<cld::Semantics::FunctionDefinition>
         {
             if (storageClassSpecifier)
             {
-                log({Message::error(ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
+                log({Message::error(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
                                     node.getCompoundStatement().begin(), {Underline(storage->begin(), storage->end())}),
                      Message::note(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(),
                                    node.getCompoundStatement().begin(),
@@ -104,7 +104,7 @@ std::optional<cld::Semantics::FunctionDefinition>
             if (storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                 && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
             {
-                log({Message::error(ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
+                log({Message::error(Errors::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
                                     node.begin(), node.getCompoundStatement().begin(),
                                     {Underline(storage->begin(), storage->end())})});
                 continue;
@@ -116,7 +116,7 @@ std::optional<cld::Semantics::FunctionDefinition>
                                   node.getDeclarator(), node.getDeclarations());
     if (!std::holds_alternative<Semantics::FunctionType>(type.get()))
     {
-        log({Message::error(ErrorMessages::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, node.begin(),
+        log({Message::error(Errors::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, node.begin(),
                             node.getCompoundStatement().begin(),
                             {Underline(node.getDeclarator().begin(), node.getDeclarator().end())})});
         return {};
@@ -159,7 +159,7 @@ std::optional<cld::Semantics::FunctionDefinition>
 
     if (!identifierList && !node.getDeclarations().empty())
     {
-        log({Message::error(ErrorMessages::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, node.begin(),
+        log({Message::error(Errors::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, node.begin(),
                             node.getCompoundStatement().end(),
                             {Underline(node.getDeclarations().front().begin(), node.getDeclarations().back().end())})});
     }
@@ -211,9 +211,9 @@ std::optional<cld::Semantics::FunctionDefinition>
                                                                     .getParameterDeclarations()[i]
                                                                     .first.front())
                                  .begin();
-                log({Message::error(
-                    ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
-                    node.begin(), node.getCompoundStatement().begin(), {Underline(begin, (*declarator)->end())})});
+                log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
+                                    node.begin(), node.getCompoundStatement().begin(),
+                                    {Underline(begin, (*declarator)->end())})});
             }
         }
         else if (identifierList)
@@ -259,9 +259,8 @@ std::optional<cld::Semantics::FunctionDefinition>
                                                                     return false;
                                                                 });
                                          });
-                log({Message::error(
-                         ErrorMessages::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
-                         node.begin(), node.getCompoundStatement().begin()),
+                log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + declarations.back().getName() + '\''),
+                                    node.begin(), node.getCompoundStatement().begin()),
                      Message::note(Notes::PREVIOUSLY_DECLARED_HERE, decl->begin(), decl->end(),
                                    {Underline(identifierLoc, identifierLoc + 1)})});
             }
@@ -303,7 +302,7 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
             }
             else
             {
-                log({Message::error(ErrorMessages::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(), node.end(),
+                log({Message::error(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(), node.end(),
                                     {Underline(storage->begin(), storage->end())}),
                      Message::note(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(), node.end(),
                                    {Underline(storageClassSpecifier->begin(), storageClassSpecifier->end())})});
@@ -312,7 +311,7 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
                 && (storage->getSpecifier() == Syntax::StorageClassSpecifier::Auto
                     || storage->getSpecifier() == Syntax::StorageClassSpecifier::Register))
             {
-                log({Message::error(ErrorMessages::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER,
+                log({Message::error(Errors::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER,
                                     node.begin(), node.end(), {Underline(storage->begin(), storage->end())})});
             }
         }
@@ -333,7 +332,7 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
                 Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().front()).begin(),
                 Syntax::nodeFromNodeDerivedVariant(node.getDeclarationSpecifiers().back()).end(),
                 [](const Lexer::Token& token) { return token.getTokenType() == Lexer::TokenType::VoidKeyword; });
-            log({Message::error(ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, node.begin(), node.end(),
+            log({Message::error(Errors::Semantics::DECLARATION_CANNNOT_BE_VOID, node.begin(), node.end(),
                                 {Underline(voidLoc, voidLoc + 1)})});
         }
         if (auto* functionType = std::get_if<FunctionType>(&result.get()))
@@ -356,27 +355,27 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
                                      return storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                                             && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern;
                                  });
-                log({Message::error(ErrorMessages::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION,
+                log({Message::error(Errors::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION,
                                     node.begin(), node.end(),
                                     {Underline(Syntax::nodeFromNodeDerivedVariant(*storageLoc).begin(),
                                                Syntax::nodeFromNodeDerivedVariant(*storageLoc).end())})});
             }
             if (initializer)
             {
-                log({Message::error(ErrorMessages::Semantics::FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
+                log({Message::error(Errors::Semantics::FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
                                     node.begin(), node.end(), {Underline(initializer->begin(), initializer->end())})});
             }
             if (m_declarations.size() > 1 && storageClassSpecifier
                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
-                log({Message::error(
-                    ErrorMessages::Semantics::STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE, node.begin(),
-                    node.end(), {Underline(storageClassSpecifier->begin(), storageClassSpecifier->end())})});
+                log({Message::error(Errors::Semantics::STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE,
+                                    node.begin(), node.end(),
+                                    {Underline(storageClassSpecifier->begin(), storageClassSpecifier->end())})});
             }
             if (!functionType->hasPrototype() && !functionType->getArguments().empty())
             {
                 // TODO: Recursively walk down direct declarators to find identifier list
-                log({Message::error(ErrorMessages::Semantics::IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION,
+                log({Message::error(Errors::Semantics::IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION,
                                     node.begin(), node.end())});
             }
             decls.emplace_back(
@@ -420,7 +419,7 @@ std::vector<cld::Semantics::Declaration> cld::Semantics::SemanticAnalysis::visit
             {
                 auto declLoc = declaratorToLoc(*declarator);
                 // TODO: Note to show previous declaration
-                log({Message::error(ErrorMessages::REDEFINITION_OF_SYMBOL_N.args(name), node.begin(), node.end(),
+                log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args(name), node.begin(), node.end(),
                                     {Underline(declLoc, declLoc + 1)})});
             }
             decls.emplace_back(std::move(declaration));
@@ -453,7 +452,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                 + 1,
             declEnd, [tokenType](const cld::Lexer::Token& token) { return token.getTokenType() == tokenType; });
         log({Message::error(
-            cld::ErrorMessages::Semantics::N_APPEARING_MORE_THAN_N.args(cld::Lexer::tokenName(tokenType), amountString),
+            cld::Errors::Semantics::N_APPEARING_MORE_THAN_N.args(cld::Lexer::tokenName(tokenType), amountString),
             declStart, declEnd, {Underline(result, result + 1)})});
     };
 
@@ -528,8 +527,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                              return token.getTokenType() == cld::Lexer::TokenType::SignedKeyword
                                     || token.getTokenType() == cld::Lexer::TokenType::UnsignedKeyword;
                          });
-        log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"),
-                            declStart, declEnd, {Underline(result, result + 1)})});
+        log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args("'unsigned'", "'signed'"), declStart,
+                            declEnd, {Underline(result, result + 1)})});
         return Type{};
     }
 
@@ -562,9 +561,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::VoidKeyword});
-            log({Message::error(
-                cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
-                declStart, declEnd, {Underline(result, result + 1)})});
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args("'void'", " any other primitives"),
+                                declStart, declEnd, {Underline(result, result + 1)})});
         }
         return cld::Semantics::PrimitiveType::createVoid(isConst, isVolatile);
     }
@@ -581,8 +579,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         {
             auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::FloatKeyword});
             log({Message::error(
-                cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"),
-                declStart, declEnd, {Underline(result, result + 1)})});
+                cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args("'float'", " any other primitives"), declStart,
+                declEnd, {Underline(result, result + 1)})});
         }
         return cld::Semantics::PrimitiveType::createFloat(isConst, isVolatile);
     }
@@ -600,9 +598,9 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             }))
         {
             auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::DoubleKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
-                                    "'double'", " any other primitives but long"),
-                                declStart, declEnd, {Underline(result, result + 1)})});
+            log({Message::error(
+                cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args("'double'", " any other primitives but long"),
+                declStart, declEnd, {Underline(result, result + 1)})});
         }
         if (primitivesCount[Long])
         {
@@ -626,7 +624,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
         {
             auto result = firstPrimitiveNotOf({cld::Lexer::TokenType::CharKeyword, cld::Lexer::TokenType::SignedKeyword,
                                                cld::Lexer::TokenType::UnsignedKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                     "'char'", " any other primitives but signed and unsigned"),
                                 declStart, declEnd, {Underline(result, result + 1)})});
         }
@@ -659,7 +657,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({cld::Lexer::TokenType::ShortKeyword, cld::Lexer::TokenType::SignedKeyword,
                                      cld::Lexer::TokenType::UnsignedKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                     "'short'", " any other primitives but signed and unsigned"),
                                 declStart, declEnd, {Underline(result, result + 1)})});
         }
@@ -689,7 +687,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({cld::Lexer::TokenType::LongKeyword, cld::Lexer::TokenType::IntKeyword,
                                      cld::Lexer::TokenType::SignedKeyword, cld::Lexer::TokenType::UnsignedKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                     "'long'", " any other primitives but signed, unsigned, long and int"),
                                 declStart, declEnd, {Underline(result, result + 1)})});
         }
@@ -718,7 +716,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({cld::Lexer::TokenType::LongKeyword, cld::Lexer::TokenType::IntKeyword,
                                      cld::Lexer::TokenType::SignedKeyword, cld::Lexer::TokenType::UnsignedKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                     "'long'", " any other primitives but signed, unsigned, long and int"),
                                 declStart, declEnd, {Underline(result, result + 1)})});
         }
@@ -747,7 +745,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
             auto result =
                 firstPrimitiveNotOf({cld::Lexer::TokenType::ShortKeyword, cld::Lexer::TokenType::SignedKeyword,
                                      cld::Lexer::TokenType::UnsignedKeyword});
-            log({Message::error(cld::ErrorMessages::Semantics::CANNOT_COMBINE_N_WITH_N.args(
+            log({Message::error(cld::Errors::Semantics::CANNOT_COMBINE_N_WITH_N.args(
                                     "'int'", " any other primitives but signed and unsigned"),
                                 declStart, declEnd, {Underline(result, result + 1)})});
         }
@@ -793,7 +791,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitivesToType(
                                 }
                                 CLD_UNREACHABLE;
                             });
-        log({Message::error(cld::ErrorMessages::Semantics::UNKNOWN_TYPE_N.args(text), declStart, declEnd,
+        log({Message::error(cld::Errors::Semantics::UNKNOWN_TYPE_N.args(text), declStart, declEnd,
                             {Underline(declStart, declEnd)})});
     }
     CLD_UNREACHABLE;
@@ -855,8 +853,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToType(
                                         return typeQualifier->getQualifier() == Syntax::TypeQualifier::Restrict;
                                     });
                                 });
-                            log({Message::error(ErrorMessages::Semantics::ONLY_POINTERS_CAN_BE_RESTRICTED, declStart,
-                                                declEnd,
+                            log({Message::error(Errors::Semantics::ONLY_POINTERS_CAN_BE_RESTRICTED, declStart, declEnd,
                                                 {Underline(Syntax::nodeFromNodeDerivedVariant(*result).begin(),
                                                            Syntax::nodeFromNodeDerivedVariant(*result).end())})});
                         }
@@ -884,7 +881,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToType(
     if (typeSpecifiers.empty())
     {
         log({Message::error(
-            ErrorMessages::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, declStart, declEnd,
+            Errors::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, declStart, declEnd,
             {Underline(declStart,
                        Syntax::nodeFromNodeDerivedVariant(declarationOrSpecifierQualifiers.back()).end())})});
     }
@@ -911,7 +908,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
                                  });
                 result != typeSpecifiers.end())
             {
-                log({Message::error(ErrorMessages::Semantics::EXPECTED_ONLY_PRIMITIVES.args(
+                log({Message::error(Errors::Semantics::EXPECTED_ONLY_PRIMITIVES.args(
                                         '\'' + to_string(typeSpecifiers[0]->begin()->getRepresentation()) + '\''),
                                     declStart, declEnd, {Underline((*result)->begin(), (*result)->end())})});
             }
@@ -929,7 +926,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
             if (typeSpecifiers.size() > 1)
             {
                 log({Message::error(
-                    ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args(
+                    Errors::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args(
                         "type specifiers", (structOrUnion->isUnion() ? "union specifier" : "struct specifier")),
                     declStart, declEnd, {Underline(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end())})});
             }
@@ -963,7 +960,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
                         else if (!result.isInteger())
                         {
                             log({Message::error(
-                                ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                                 iter.second->begin(), iter.second->end(),
                                 {Underline(iter.second->begin(), iter.second->end())})});
                             members.emplace_back(std::move(type), std::move(name), 0);
@@ -981,9 +978,9 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
         [&](const std::unique_ptr<Syntax::EnumSpecifier>& enumSpecifier) -> Type {
             if (typeSpecifiers.size() > 1)
             {
-                log({Message::error(
-                    ErrorMessages::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args("type specifiers", "enum"), declStart,
-                    declEnd, {Underline(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end())})});
+                log({Message::error(Errors::Semantics::EXPECTED_NO_FURTHER_N_AFTER_N.args("type specifiers", "enum"),
+                                    declStart, declEnd,
+                                    {Underline(typeSpecifiers[1]->begin(), typeSpecifiers[1]->end())})});
             }
             std::vector<std::pair<std::string, std::int32_t>> values;
             auto declName = match(
@@ -1006,7 +1003,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::typeSpecifiersToType(
                             else if (!value.isInteger())
                             {
                                 log({Message::error(
-                                    ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                    Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                                     expression->begin(), expression->end(),
                                     {Underline(expression->begin(), expression->end())})});
                             }
@@ -1117,15 +1114,14 @@ std::vector<std::pair<cld::Semantics::Type, std::string>> cld::Semantics::Semant
                 [this, declStart, declEnd](const cld::Syntax::StorageClassSpecifier& storageClassSpecifier) {
                     if (storageClassSpecifier.getSpecifier() != cld::Syntax::StorageClassSpecifier::Register)
                     {
-                        log({Message::error(cld::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
+                        log({Message::error(cld::Errors::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
                                             declStart, declEnd,
                                             {Underline(storageClassSpecifier.begin(), storageClassSpecifier.end())})});
                     }
                 },
                 [this, declStart, declEnd](const cld::Syntax::FunctionSpecifier& functionSpecifier) {
-                    log({Message::error(cld::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
-                                        declStart, declEnd,
-                                        {Underline(functionSpecifier.begin(), functionSpecifier.end())})});
+                    log({Message::error(cld::Errors::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, declStart,
+                                        declEnd, {Underline(functionSpecifier.begin(), functionSpecifier.end())})});
                 });
         }
         auto result = declaratorsToType(
@@ -1148,7 +1144,7 @@ std::vector<std::pair<cld::Semantics::Type, std::string>> cld::Semantics::Semant
                 Syntax::nodeFromNodeDerivedVariant(pair.first.front()).begin(),
                 Syntax::nodeFromNodeDerivedVariant(pair.first.back()).end(),
                 [](const Lexer::Token& token) { return token.getTokenType() == Lexer::TokenType::VoidKeyword; });
-            log({Message::error(cld::ErrorMessages::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart, declEnd,
+            log({Message::error(cld::Errors::Semantics::FUNCTION_PARAMETER_CANNOT_BE_VOID, declStart, declEnd,
                                 {Underline(voidBegin, voidBegin + 1)})});
         }
         else
@@ -1229,11 +1225,10 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(
                 {
                     if (!size.isInteger())
                     {
-                        log({Message::error(
-                            ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                            directAbstractDeclaratorAssignmentExpression.begin(),
-                            directAbstractDeclaratorAssignmentExpression.end(),
-                            {Underline(expression->begin(), expression->end())})});
+                        log({Message::error(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                            directAbstractDeclaratorAssignmentExpression.begin(),
+                                            directAbstractDeclaratorAssignmentExpression.end(),
+                                            {Underline(expression->begin(), expression->end())})});
                         baseType = ArrayType::create(false, false, false, std::move(baseType), 0);
                     }
                     else
@@ -1314,10 +1309,9 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                 {
                     if (!size.isInteger())
                     {
-                        log({Message::error(
-                            ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-                            dirWithoutStaticOrAsterisk.begin(), dirWithoutStaticOrAsterisk.end(),
-                            {Underline(expression->begin(), expression->end())})});
+                        log({Message::error(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                                            dirWithoutStaticOrAsterisk.begin(), dirWithoutStaticOrAsterisk.end(),
+                                            {Underline(expression->begin(), expression->end())})});
                         baseType = ArrayType::create(isConst, isVolatile, isRestricted, std::move(baseType), 0);
                     }
                     else
@@ -1344,7 +1338,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
             {
                 if (!size.isInteger())
                 {
-                    log({Message::error(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+                    log({Message::error(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                                         directDeclaratorStatic.begin(), directDeclaratorStatic.end(),
                                         {Underline(directDeclaratorStatic.getAssignmentExpression().begin(),
                                                    directDeclaratorStatic.getAssignmentExpression().end())})});
@@ -1400,13 +1394,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                             if (storageClassSpecifier.getSpecifier() != Syntax::StorageClassSpecifier::Register)
                             {
                                 log({Message::error(
-                                    cld::ErrorMessages::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
-                                    declStart, declEnd,
-                                    {Underline(storageClassSpecifier.begin(), storageClassSpecifier.end())})});
+                                    cld::Errors::Semantics::ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT, declStart,
+                                    declEnd, {Underline(storageClassSpecifier.begin(), storageClassSpecifier.end())})});
                             }
                         },
                         [this, declStart, declEnd](const Syntax::FunctionSpecifier& functionSpecifier) {
-                            log({Message::error(cld::ErrorMessages::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
+                            log({Message::error(cld::Errors::Semantics::INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION,
                                                 declStart, declEnd,
                                                 {Underline(functionSpecifier.begin(), functionSpecifier.end())})});
                         });
@@ -1416,8 +1409,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                     if (pair.second)
                     {
                         log({Message::error(
-                            cld::ErrorMessages::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
-                            declStart, declEnd, {Underline(pair.second->begin(), pair.second->end())})});
+                            cld::Errors::Semantics::PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER, declStart,
+                            declEnd, {Underline(pair.second->begin(), pair.second->end())})});
                     }
                     auto name = Semantics::declaratorToName(*pair.first);
                     auto result = declaratorsToType(
@@ -1444,7 +1437,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
                     }
                     else if (primitive->getBitCount() == 0)
                     {
-                        log({Message::error(ErrorMessages::Semantics::DECLARATION_CANNNOT_BE_VOID, declStart, declEnd,
+                        log({Message::error(Errors::Semantics::DECLARATION_CANNNOT_BE_VOID, declStart, declEnd,
                                             {Underline(result->second.begin, result->second.end)})});
                     }
                     else if (primitive->getBitCount() < 32)
@@ -1468,7 +1461,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::apply(std::vector<cld::Le
 
             for (auto& [name, binding] : declarationMap)
             {
-                log({Message::error(ErrorMessages::Semantics::N_APPEARING_IN_N_BUT_NOT_IN_N.args(
+                log({Message::error(Errors::Semantics::N_APPEARING_IN_N_BUT_NOT_IN_N.args(
                                         '\'' + name + '\'', "declarations", "identifier list"),
                                     declStart, declEnd, {Underline(binding.begin, binding.end)})});
             }

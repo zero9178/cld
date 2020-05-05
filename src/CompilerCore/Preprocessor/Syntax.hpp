@@ -9,6 +9,12 @@
 
 namespace cld::PP
 {
+struct Node
+{
+    Lexer::TokenIterator begin;
+    Lexer::TokenIterator end;
+};
+
 struct Group;
 
 /**
@@ -16,7 +22,7 @@ struct Group;
  *             | <TokenType::Pound> <Identifier=ifdef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
  *             | <TokenType::Pound> <Identifier=ifndef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
  */
-struct IfGroup final
+struct IfGroup final : Node
 {
     struct IfnDefTag final
     {
@@ -34,7 +40,7 @@ struct IfGroup final
 /**
  * <ElIfGroup> ::= <TokenType::Pound> <Identifier=elif> <TOKENS> <TokenType::Newline> [ <Group> ]
  */
-struct ElIfGroup final
+struct ElIfGroup final : Node
 {
     std::vector<Lexer::Token> constantExpression;
     std::unique_ptr<Group> optionalGroup;
@@ -43,7 +49,7 @@ struct ElIfGroup final
 /**
  * <ElseGroup> ::= <TokenType::Pound> <Identifier=else> <TokenType::Newline> [<Group>]
  */
-struct ElseGroup final
+struct ElseGroup final : Node
 {
     std::unique_ptr<Group> optionalGroup;
 };
@@ -51,7 +57,7 @@ struct ElseGroup final
 /**
  * <IfSection> ::= <IfGroup> {<ElIfGroup>} [<ElseGroup>] <TokenType::Pound> <Identifier=endif> <TokenType::Newline>
  */
-struct IfSection final
+struct IfSection final : Node
 {
     IfGroup ifGroup;
     std::vector<ElIfGroup> elifGroups;
@@ -73,7 +79,7 @@ struct IfSection final
  *                         [ <TokenType::Identifier { <TokenType::Comma> <TokenType::Identifier> } ] <TokenType::Comma>
  *                         <TokenType::Ellipse> <TokenType::CloseParentheses> [ <TOKENS> ] <TokenType::Newline>
  */
-struct DefineDirective final
+struct DefineDirective final : Node
 {
     Lexer::TokenIterator identifierPos;
     /**
@@ -94,7 +100,7 @@ struct DefineDirective final
  *                 | <TokenType::Pound> <Identifier=error> [<TOKENS>] <TokenType::Newline>
  *                 | <TokenType::Pound> <Identifier=pragma> [<TOKENS>] <TokenType::Newline>
  */
-struct ControlLine final
+struct ControlLine final : Node
 {
     struct IncludeTag final
     {
@@ -120,13 +126,13 @@ struct ControlLine final
         Lexer::TokenIterator end;
     };
 
-    std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, std::string, DefineDirective> variant;
+    std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, Lexer::TokenIterator, DefineDirective> variant;
 };
 
 /**
  * <NonDirective> ::= <TokenType::Pound> <TOKEN> { <TOKEN> } <TokenType::Newline>
  */
-struct NonDirective final
+struct NonDirective final : Node
 {
     Lexer::TokenIterator begin;
     Lexer::TokenIterator end;
@@ -140,7 +146,7 @@ using GroupPart = std::variant<IfSection, ControlLine, std::vector<Lexer::Token>
 /**
  * <Group> ::= <GroupPart> { <GroupPart> }
  */
-struct Group final
+struct Group final : Node
 {
     std::vector<GroupPart> groupPart;
 };
@@ -148,8 +154,22 @@ struct Group final
 /**
  * <File> := { <Group> }
  */
-struct File final
+struct File final : Node
 {
     std::vector<Group> groups;
 };
+
+template <template <class...> class Variant, class... Args>
+Node& getNode(Variant<Args...>& variant)
+{
+    static_assert((std::is_base_of_v<Node, Args> && ...));
+    return cld::match(variant, [](auto&& value) -> Node& { return value; });
+}
+
+template <template <class...> class Variant, class... Args>
+const Node& getNode(const Variant<Args...>& variant)
+{
+    static_assert((std::is_base_of_v<Node, Args> && ...));
+    return cld::match(variant, [](auto&& value) -> Node& { return value; });
+}
 } // namespace cld::PP

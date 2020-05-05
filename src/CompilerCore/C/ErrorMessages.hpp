@@ -7,7 +7,7 @@
 
 namespace cld
 {
-namespace ErrorMessages
+namespace Errors
 {
 namespace Parser
 {
@@ -194,9 +194,17 @@ constexpr auto WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION = "Whitespace r
 
 constexpr auto DEFINED_CANNOT_BE_USED_AS_MACRO_NAME = "'defined' cannot be used as macro name";
 
-constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for Macro {}");
+constexpr auto REDEFINITION_OF_MACRO_N = Format("Redefinition of macro {}");
 
-constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for Macro {}");
+constexpr auto VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST = "__VA_ARGS__ not allowed in replacement list";
+
+constexpr auto DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED = Format("Defining builtin macro {} is not allowed");
+
+constexpr auto UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED = Format("Undefining builtin macro {} is not allowed");
+
+constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for macro {}");
+
+constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for macro {}");
 } // namespace PP
 } // namespace ErrorMessages
 
@@ -205,6 +213,10 @@ namespace Warnings
 namespace Semantics
 {
 constexpr auto VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N = Format("Value of {} is too large for integer type {}");
+}
+namespace PP
+{
+constexpr auto N_REDEFINED = Format("{} redefined");
 }
 } // namespace Warnings
 

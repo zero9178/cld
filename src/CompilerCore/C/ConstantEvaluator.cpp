@@ -14,17 +14,17 @@ namespace
 {
 cld::Semantics::Type getPtrdiffT(const cld::LanguageOptions& options)
 {
-    if (options.getSizeOfVoidStar() == 4)
+    if (options.sizeOfVoidStar == 4)
     {
-        if (options.getSizeOfInt() == 4)
+        if (options.sizeOfInt == 4)
         {
             return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
-        else if (options.getSizeOfLong() == 4)
+        else if (options.sizeOfLong == 4)
         {
             return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
-        else if (options.getSizeOfShort() == 4)
+        else if (options.sizeOfShort == 4)
         {
             return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
@@ -33,17 +33,17 @@ cld::Semantics::Type getPtrdiffT(const cld::LanguageOptions& options)
             CLD_UNREACHABLE;
         }
     }
-    else if (options.getSizeOfVoidStar() == 8)
+    else if (options.sizeOfVoidStar == 8)
     {
-        if (options.getSizeOfInt() == 8)
+        if (options.sizeOfInt == 8)
         {
             return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
-        else if (options.getSizeOfLong() == 8)
+        else if (options.sizeOfLong == 8)
         {
             return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
-        else if (options.getSizeOfShort() == 8)
+        else if (options.sizeOfShort == 8)
         {
             return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
@@ -65,12 +65,12 @@ cld::Semantics::ConstRetType
     return match(
         node.getValue(),
         [&node, this](const std::string&) -> Semantics::ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
                      {Underline(node.begin(), node.end())});
             return {};
         },
         [&node, this](const Lexer::NonCharString&) -> Semantics::ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("String literals"),
                      {Underline(node.begin(), node.end())});
             return {};
         },
@@ -131,7 +131,7 @@ cld::Semantics::ConstRetType
     }
     if (!value.isInteger() && m_mode == Integer)
     {
-        logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+        logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                  {Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
         return {};
     }
@@ -139,7 +139,7 @@ cld::Semantics::ConstRetType
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                          '\'' + to_string(node.begin()->getRepresentation()) + '\''),
                      {PointAt(node.begin(), node.begin() + 1)});
             return {};
@@ -149,7 +149,7 @@ cld::Semantics::ConstRetType
         {
             if (!value.isArithmetic())
             {
-                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                logError(Errors::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "+", value.getType().getFullFormattedTypeName()),
                          {PointAt(node.begin(), node.begin() + 1),
                           Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
@@ -161,7 +161,7 @@ cld::Semantics::ConstRetType
         {
             if (!value.isArithmetic())
             {
-                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                logError(Errors::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "-", value.getType().getFullFormattedTypeName()),
                          {PointAt(node.begin(), node.begin() + 1),
                           Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
@@ -173,7 +173,7 @@ cld::Semantics::ConstRetType
         {
             if (!value.isInteger())
             {
-                logError(ErrorMessages::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
+                logError(Errors::Semantics::CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N.args(
                              "~", value.getType().getFullFormattedTypeName()),
                          {PointAt(node.begin(), node.begin() + 1),
                           Annotate(node.begin() + 1, node.end(), value.getType().getTypeName())});
@@ -234,13 +234,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (m_mode == Integer && (!primitive || primitive->isFloatingPoint() || primitive->getByteCount() == 0))
                 {
-                    logError(ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
+                    logError(Errors::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
                              {Underline(cast.first.begin(), cast.first.end())});
                     return {};
                 }
                 else if (!value.isArithmetic())
                 {
-                    logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                    logError(Errors::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
                              {Underline(cast.first.begin(), cast.first.end()),
                               Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
@@ -251,13 +251,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (m_mode != Initialization)
                 {
-                    logError(ErrorMessages::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
+                    logError(Errors::Semantics::CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
                              {Underline(cast.first.begin(), cast.first.end())});
                     return {};
                 }
                 else if (!value.isInteger() && value.isArithmetic())
                 {
-                    logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                    logError(Errors::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                                  value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
                              {Underline(cast.first.begin(), cast.first.end()),
                               Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
@@ -266,7 +266,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             }
             else
             {
-                logError(ErrorMessages::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
+                logError(Errors::Semantics::INVALID_CAST_FROM_TYPE_N_TO_TYPE_N.args(
                              value.getType().getFullFormattedTypeName(), type.getFullFormattedTypeName()),
                          {Underline(cast.first.begin(), cast.first.end()),
                           Annotate(cast.second->begin(), cast.second->end(), value.getType().getTypeName())});
@@ -292,7 +292,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getCastExpression().begin(), node.getCastExpression().end())});
             return {};
         }
@@ -303,7 +303,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(exp.begin(), exp.end())});
             return {};
         }
@@ -313,7 +313,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "*", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -328,7 +328,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "/", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -343,7 +343,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "%", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -366,7 +366,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getTerm().begin(), node.getTerm().end())});
             return {};
         }
@@ -377,7 +377,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(exp.begin(), exp.end())});
             return {};
         }
@@ -388,7 +388,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if ((!value.isArithmetic() && !other.isArithmetic())
                     || (value.isArithmetic() != other.isArithmetic() && (!value.isInteger() && !other.isInteger())))
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "+", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -404,7 +404,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     if (!result)
                     {
                         logError(
-                            ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                            Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                                 elementType.getFullFormattedTypeName()),
                             {Annotate(value.isArithmetic() ? exp.begin() : node.begin(),
                                       value.isArithmetic() ? exp.end() : exp.begin() - 1, elementType.getTypeName())});
@@ -418,7 +418,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if ((value.isArithmetic() || !other.isInteger()) && (value.isArithmetic() != other.isArithmetic()))
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "-", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -431,13 +431,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     if (cld::get<PointerType>(value.getType().get()).getElementType().get()
                         != cld::get<PointerType>(other.getType().get()).getElementType().get())
                     {
-                        logError(ErrorMessages::Semantics::
-                                     CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
-                                         "-", value.getType().getFullFormattedTypeName(),
-                                         other.getType().getFullFormattedTypeName()),
-                                 {Underline(exp.begin() - 1, exp.begin()),
-                                  Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
-                                  Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
+                        logError(
+                            Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
+                                .args("-", value.getType().getFullFormattedTypeName(),
+                                      other.getType().getFullFormattedTypeName()),
+                            {Underline(exp.begin() - 1, exp.begin()),
+                             Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
+                             Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
                         return {};
                     }
                 }
@@ -448,7 +448,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     auto result = sizeOf(elementType, m_languageOptions);
                     if (!result)
                     {
-                        logError(ErrorMessages::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                        logError(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                                      elementType.getFullFormattedTypeName()),
                                  {Underline(value.isArithmetic() ? exp.begin() : node.begin(),
                                             value.isArithmetic() ? exp.end() : exp.begin() - 1),
@@ -472,7 +472,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getAdditiveExpression().begin(), node.getAdditiveExpression().end())});
             return {};
         }
@@ -483,7 +483,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(exp.begin(), exp.end())});
             return {};
         }
@@ -493,7 +493,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  "<<", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -508,7 +508,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 if (!value.isInteger() || !other.isInteger())
                 {
-                    logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                                  ">>", value.getType().getFullFormattedTypeName(),
                                  other.getType().getFullFormattedTypeName()),
                              {PointAt(exp.begin() - 1, exp.begin()),
@@ -531,7 +531,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getEqualityExpressions()[0].begin(), node.getEqualityExpressions()[0].end())});
             return {};
         }
@@ -542,13 +542,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(iter->begin(), iter->end())});
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+            logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "&", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                      {PointAt(iter->begin() - 1, iter->begin()),
                       Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
@@ -567,7 +567,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getBitAndExpressions()[0].begin(), node.getBitAndExpressions()[0].end())});
             return {};
         }
@@ -578,13 +578,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(iter->begin(), iter->end())});
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+            logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "^", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                      {PointAt(iter->begin() - 1, iter->begin()),
                       Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
@@ -603,7 +603,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getBitXorExpressions()[0].begin(), node.getBitXorExpressions()[0].end())});
             return {};
         }
@@ -614,13 +614,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(iter->begin(), iter->end())});
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
-            logError(ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+            logError(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                          "|", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                      {PointAt(iter->begin() - 1, iter->begin()),
                       Annotate(node.begin(), iter->begin() - 1, value.getType().getTypeName()),
@@ -639,7 +639,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getBitOrExpressions()[0].begin(), node.getBitOrExpressions()[0].end())});
             return {};
         }
@@ -651,7 +651,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(iter->begin(), iter->end())});
             return {};
         }
@@ -671,7 +671,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getAndExpressions()[0].begin(), node.getAndExpressions()[0].end())});
             return {};
         }
@@ -683,7 +683,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(iter->begin(), iter->end())});
             return {};
         }
@@ -735,7 +735,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getShiftExpression().begin(), node.getShiftExpression().end())});
             return {};
         }
@@ -746,7 +746,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(exp.begin(), exp.end())});
             return {};
         }
@@ -756,9 +756,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 != cld::get<PointerType>(other.getType().get()).getElementType().get())
             {
                 logError(
-                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
-                        .args("-", value.getType().getFullFormattedTypeName(),
-                              other.getType().getFullFormattedTypeName()),
+                    Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                        "-", value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                     {PointAt(exp.begin() - 1, exp.begin()),
                      Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
                      Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
@@ -799,7 +798,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(node.getRelationalExpression().begin(), node.getRelationalExpression().end())});
             return {};
         }
@@ -810,7 +809,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            logError(ErrorMessages::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
+            logError(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
                      {Underline(exp.begin(), exp.end())});
             return {};
         }
@@ -823,9 +822,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 && !isVoid(cld::get<PointerType>(other.getType().get()).getElementType()))
             {
                 logError(
-                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N
-                        .args(opName, value.getType().getFullFormattedTypeName(),
-                              other.getType().getFullFormattedTypeName()),
+                    Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N.args(
+                        opName, value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                     {PointAt(exp.begin() - 1, exp.begin()),
                      Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
                      Annotate(exp.begin(), exp.end(), other.getType().getTypeName())});
@@ -837,7 +835,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             if (!value.isInteger() && !other.isInteger())
             {
                 logError(
-                    ErrorMessages::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
+                    Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
                         opName, value.getType().getFullFormattedTypeName(), other.getType().getFullFormattedTypeName()),
                     {PointAt(exp.begin() - 1, exp.begin()),
                      Annotate(node.begin(), exp.begin() - 1, value.getType().getTypeName()),
@@ -849,7 +847,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 auto& null = value.isInteger() ? value : other;
                 if (null.toUInt() != 0)
                 {
-                    logError(ErrorMessages::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
+                    logError(Errors::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
                              {Underline(value.isInteger() ? node.begin() : exp.begin(),
                                         value.isInteger() ? exp.begin() - 1 : exp.end())});
                     return {};
@@ -896,12 +894,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             auto* decl = m_declarationCallback ? m_declarationCallback(identifier.getIdentifier()) : nullptr;
             if (decl)
             {
-                return {
-                    llvm::APSInt(llvm::APInt(m_languageOptions.getSizeOfInt() * 8, cld::get<std::int32_t>(*decl), true),
-                                 false),
-                    PrimitiveType::createInt(false, false, m_languageOptions)};
+                return {llvm::APSInt(llvm::APInt(m_languageOptions.sizeOfInt * 8, cld::get<std::int32_t>(*decl), true),
+                                     false),
+                        PrimitiveType::createInt(false, false, m_languageOptions)};
             }
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("variable access"),
                      {Underline(identifier.begin(), identifier.end())});
             return {};
         });
@@ -913,24 +910,24 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
         [this](const Syntax::PostFixExpressionFunctionCall& call) -> ConstRetType {
             logError(
-                ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call"),
+                Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("function call"),
                 {Underline(Syntax::nodeFromNodeDerivedVariant(call.getPostFixExpression()).begin() + 1, call.end())});
             return {};
         },
         [this](const Syntax::PostFixExpressionIncrement& increment) -> ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
                      {PointAt(Syntax::nodeFromNodeDerivedVariant(increment.getPostFixExpression()).begin() + 1,
                               increment.end())});
             return {};
         },
         [this](const Syntax::PostFixExpressionDecrement& decrement) -> ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
                      {PointAt(Syntax::nodeFromNodeDerivedVariant(decrement.getPostFixExpression()).begin() + 1,
                               decrement.end())});
             return {};
         },
         [this](const Syntax::PostFixExpressionTypeInitializer& initializer) -> ConstRetType {
-            logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer"),
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("initializer"),
                      {Underline(initializer.begin(), initializer.end())});
             return {};
         });
@@ -945,7 +942,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 {
     if (node.getAssignmentExpressions().size() > 1)
     {
-        logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
+        logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("','"),
                  {PointAt(node.getAssignmentExpressions()[1].begin() - 1, node.getAssignmentExpressions()[1].begin())});
         return {};
     }
@@ -956,7 +953,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 {
     for (auto& [op, cond] : node.getAssignments())
     {
-        logError(ErrorMessages::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + [op = op]() -> std::string {
+        logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + [op = op]() -> std::string {
             switch (op)
             {
                 case Syntax::AssignmentExpression::AssignOperator::NoOperator: return "=";
@@ -1046,9 +1043,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::integerPromotion(cons
         [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [this](const llvm::APFloat&) -> ConstRetType { return *this; },
         [this, &options](const llvm::APSInt& integer) -> ConstRetType {
-            if (integer.getBitWidth() < options.getSizeOfInt() * 8u)
+            if (integer.getBitWidth() < options.sizeOfInt * 8u)
             {
-                auto apsInt = integer.extend(options.getSizeOfInt() * 8);
+                auto apsInt = integer.extend(options.sizeOfInt * 8);
                 apsInt.setIsSigned(true);
                 return {std::move(apsInt), PrimitiveType::createInt(false, false, options)};
             }
@@ -1082,16 +1079,16 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::logicalNegate(const L
     return match(
         m_value,
         [&options](VoidStar address) -> ConstRetType {
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false),
                     Semantics::PrimitiveType::createInt(false, false, options)};
         },
         [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&options](const llvm::APFloat& floating) -> ConstRetType {
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, floating.isZero()), false),
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, floating.isZero()), false),
                     Semantics::PrimitiveType::createInt(false, false, options)};
         },
         [&options](const llvm::APSInt& integer) -> ConstRetType {
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == 0), false),
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, integer == 0), false),
                     Semantics::PrimitiveType::createInt(false, false, options)};
         });
 }
@@ -1146,11 +1143,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                             nonLvalue};
                 },
                 [issues, &nonLvalue, address, &options](const EnumType&) -> ConstRetType {
-                    if (issues && llvm::APInt::getSignedMaxValue(options.getSizeOfInt() * 8).ugt(address.address))
+                    if (issues && llvm::APInt::getSignedMaxValue(options.sizeOfInt * 8).ugt(address.address))
                     {
                         *issues = Issues::NotRepresentable;
                     }
-                    return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address), false), nonLvalue};
+                    return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address), false), nonLvalue};
                 },
                 [&nonLvalue, address](const PointerType&) -> ConstRetType {
                     return {address, nonLvalue};
@@ -1208,7 +1205,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                 },
                 [&options, &nonLvalue, &floating, issues](const EnumType&) -> ConstRetType {
                     bool response;
-                    llvm::APSInt result(options.getSizeOfInt() * 8, false);
+                    llvm::APSInt result(options.sizeOfInt * 8, false);
                     auto op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
                     if (issues && op == llvm::APFloat::opInvalidOp)
                     {
@@ -1270,12 +1267,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                     return {apsInt, nonLvalue};
                 },
                 [issues, &nonLvalue, &options, &integer](const EnumType&) -> ConstRetType {
-                    if (issues && llvm::APInt::getSignedMaxValue(options.getSizeOfInt() * 8).ugt(integer))
+                    if (issues && llvm::APInt::getSignedMaxValue(options.sizeOfInt * 8).ugt(integer))
                     {
                         *issues = Issues::NotRepresentable;
                     }
 
-                    auto apsInt = integer.extOrTrunc(options.getSizeOfInt() * 8);
+                    auto apsInt = integer.extOrTrunc(options.sizeOfInt * 8);
                     apsInt.setIsSigned(true);
                     return {apsInt, nonLvalue};
                 },
@@ -1516,7 +1513,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Sema
             }
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
-                return {llvm::APSInt(llvm::APInt(options.getSizeOfVoidStar() * 8,
+                return {llvm::APSInt(llvm::APInt(options.sizeOfVoidStar * 8,
                                                  (address.address - cld::get<VoidStar>(op2.getValue()).address) / *size,
                                                  true),
                                      false),
@@ -1687,9 +1684,9 @@ bool cld::Semantics::ConstRetType::isUndefined() const
 
 cld::Semantics::ConstRetType cld::Semantics::ConstRetType::toBool(const LanguageOptions& options) const
 {
-    return notEqual({llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, 0), false),
-                     PrimitiveType::createInt(false, false, options)},
-                    options);
+    return notEqual(
+        {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, 0), false), PrimitiveType::createInt(false, false, options)},
+        options);
 }
 
 std::int64_t cld::Semantics::ConstRetType::toInt() const
@@ -1738,19 +1735,19 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::lessThan(const cld::S
     return match(
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&op2 = op2, &options](VoidStar address) -> ConstRetType {
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8,
                                              address.address < cld::get<VoidStar>(op2.getValue()).address),
                                  false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
             auto cmp = floating.compare(cld::get<llvm::APFloat>(op2.getValue()));
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, cmp == llvm::APFloat::cmpLessThan), false),
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, cmp == llvm::APFloat::cmpLessThan), false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
             auto apsInt = integer < cld::get<llvm::APSInt>(op2.getValue());
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, apsInt), false),
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, apsInt), false),
                     PrimitiveType::createInt(false, false, options)};
         });
 }
@@ -1783,32 +1780,31 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::equal(const cld::Sema
             if (std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {
                 CLD_ASSERT(cld::get<llvm::APSInt>(op2.getValue()) == 0);
-                return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address.address == 0), false),
+                return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false),
                         PrimitiveType::createInt(false, false, options)};
             }
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8,
                                              address.address == cld::get<VoidStar>(op2.getValue()).address, true),
                                  false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APFloat& floating) -> ConstRetType {
-            return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8,
-                                             floating.compare(cld::get<llvm::APFloat>(op2.getValue()))
-                                                 == llvm::APFloat::cmpEqual),
-                                 false),
+            return {llvm::APSInt(
+                        llvm::APInt(options.sizeOfInt * 8, floating.compare(cld::get<llvm::APFloat>(op2.getValue()))
+                                                               == llvm::APFloat::cmpEqual),
+                        false),
                     PrimitiveType::createInt(false, false, options)};
         },
         [&op2 = op2, &options](const llvm::APSInt& integer) -> ConstRetType {
             if (auto* address = std::get_if<VoidStar>(&op2.getValue()))
             {
                 CLD_ASSERT(integer == 0);
-                return {llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, address->address == 0), false),
+                return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address->address == 0), false),
                         PrimitiveType::createInt(false, false, options)};
             }
-            return {
-                llvm::APSInt(llvm::APInt(options.getSizeOfInt() * 8, integer == cld::get<llvm::APSInt>(op2.getValue())),
-                             false),
-                PrimitiveType::createInt(false, false, options)};
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, integer == cld::get<llvm::APSInt>(op2.getValue())),
+                                 false),
+                    PrimitiveType::createInt(false, false, options)};
         });
 }
 

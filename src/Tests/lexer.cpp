@@ -12,7 +12,7 @@
 
 #include "TestConfig.hpp"
 
-using namespace cld::ErrorMessages::Lexer;
+using namespace cld::Errors::Lexer;
 using namespace cld::Notes::Lexer;
 using namespace Catch::Matchers;
 
@@ -688,7 +688,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
     SECTION("Multibyte")
     {
         auto result =
-            lexes("L\"5\"", cld::LanguageOptions(cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8));
+            lexes("L\"5\"", cld::LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8});
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
@@ -819,7 +819,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             SECTION("128 bit")
             {
                 auto result = lexes(
-                    "1.18e4900L", cld::LanguageOptions(cld::LanguageOptions::C99, 1, true, 4, false, 2, 4, 8, 128, 8));
+                    "1.18e4900L", cld::LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, false, 2, 4, 8, 128, 8});
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 CHECK(result.data()[0].getType() == cld::Lexer::Token::Type::LongDouble);
@@ -1280,7 +1280,12 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(3).getTokenType() == cld::Lexer::TokenType::CloseBrace);
     CHECK(result.data().at(4).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(5).getTokenType() == cld::Lexer::TokenType::DoublePound);
-    CHECK(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end()) == "<: :> <% %> %: %:%:");
+    CHECK(result.data().at(0).getRepresentation() == "<:");
+    CHECK(result.data().at(1).getRepresentation() == ":>");
+    CHECK(result.data().at(2).getRepresentation() == "<%");
+    CHECK(result.data().at(3).getRepresentation() == "%>");
+    CHECK(result.data().at(4).getRepresentation() == "%:");
+    CHECK(result.data().at(5).getRepresentation() == "%:%:");
 
     result = lexes("%: %: #%: %:# # %: %: #");
     REQUIRE(result.data().size() == 8);
@@ -1292,8 +1297,14 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(5).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(6).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(7).getTokenType() == cld::Lexer::TokenType::Pound);
-    CHECK(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end())
-          == "%: %: #%: %:# # %: %: #");
+    CHECK(result.data().at(0).getRepresentation() == "%:");
+    CHECK(result.data().at(1).getRepresentation() == "%:");
+    CHECK(result.data().at(2).getRepresentation() == "#%:");
+    CHECK(result.data().at(3).getRepresentation() == "%:#");
+    CHECK(result.data().at(4).getRepresentation() == "#");
+    CHECK(result.data().at(5).getRepresentation() == "%:");
+    CHECK(result.data().at(6).getRepresentation() == "%:");
+    CHECK(result.data().at(7).getRepresentation() == "#");
 
     result = lexes("#%");
     REQUIRE(result.data().size() == 2);
@@ -1329,14 +1340,6 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     REQUIRE(result.data().size() == 1);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::DoublePound);
     CHECK(result.data().at(0).getRepresentation() == "%:\\\n%:");
-}
-
-TEST_CASE("Lexing input reconstruction", "[lexer]")
-{
-    auto source =
-        "ad(){}<% %> \"test\" 52345 ; , - ~ ! + * / % && || & | ^ == != < <= > >= = += -= /= *= %= <<= >>= &= |= ^= >> << ++ -- : ? void char short int long float double signed unsigned typedef extern static auto register const sizeof return break continue do else for if while [] struct . -> switch case default union volatile enum goto ... restrict inline # ##";
-    auto result = lexes(source);
-    REQUIRE(cld::Lexer::reconstructTrimmed(result, result.data().begin(), result.data().end()) == source);
 }
 
 TEST_CASE("Lexing include directives", "[lexer]")

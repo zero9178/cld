@@ -10,11 +10,14 @@ cld::SourceObject::SourceObject(std::string source, std::vector<std::uint64_t> s
     CLD_ASSERT(std::is_sorted(m_starts.begin(), m_starts.end()));
     for (auto& iter : m_tokens)
     {
-        iter.setOriginalSource(m_source.data());
+        if (!iter.isBuiltin())
+        {
+            iter.setOriginalSource(m_source.data());
+        }
     }
 }
 
-cld::LanguageOptions cld::SourceObject::getLanguageOptions() const
+const cld::LanguageOptions& cld::SourceObject::getLanguageOptions() const
 {
     return m_languageOptions;
 }
@@ -64,7 +67,10 @@ cld::SourceObject& cld::SourceObject::operator=(const cld::SourceObject& rhs)
     m_tokens.clear();
     m_tokens.reserve(rhs.m_tokens.size());
     std::transform(rhs.m_tokens.begin(), rhs.m_tokens.end(), std::back_inserter(m_tokens), [this](Lexer::Token token) {
-        token.setOriginalSource(m_source.data());
+        if (!token.isBuiltin())
+        {
+            token.setOriginalSource(m_source.data());
+        }
         return token;
     });
     m_languageOptions = rhs.m_languageOptions;
@@ -84,17 +90,35 @@ cld::SourceObject& cld::SourceObject::operator=(cld::SourceObject&& rhs) noexcep
     m_tokens = std::move(rhs.m_tokens);
     for (auto& iter : m_tokens)
     {
-        iter.setOriginalSource(m_source.data());
+        if (!iter.isBuiltin())
+        {
+            iter.setOriginalSource(m_source.data());
+        }
     }
     m_languageOptions = std::move(rhs.m_languageOptions);
     return *this;
 }
 
 cld::PPSourceObject::PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens,
-                                    const SubstitutionMap& substitutions, const std::vector<std::uint64_t>& ppstarts)
-    : SourceObject(sourceObject), m_substitutions(substitutions), m_starts(ppstarts)
+                                    SubstitutionMap substitutions, std::vector<uint64_t> ppstarts)
+    : SourceObject(sourceObject), m_substitutions(std::move(substitutions)), m_starts(std::move(ppstarts))
 {
     m_tokens = std::move(tokens);
+    CLD_ASSERT(std::is_sorted(m_starts.begin(), m_starts.end()));
+    for (auto& iter : m_tokens)
+    {
+        if (!iter.isBuiltin())
+        {
+            iter.setOriginalSource(getSource().data());
+        };
+    }
+    for (auto& iter : m_substitutions)
+    {
+        if (!iter.second.identifier.isBuiltin())
+        {
+            iter.second.identifier.setOriginalSource(getSource().data());
+        }
+    }
 }
 
 bool cld::PPSourceObject::isPreprocessed() const
@@ -118,4 +142,9 @@ std::uint64_t cld::PPSourceObject::getPPLineEndOffset(std::uint64_t line) const 
 {
     CLD_ASSERT(line - 1 < m_starts.size());
     return line == m_starts.size() ? m_tokens.back().getPPOffset() + m_tokens.back().getLength() : m_starts[line];
+}
+
+const cld::PPSourceObject::SubstitutionMap& cld::PPSourceObject::getSubstitutions() const
+{
+    return m_substitutions;
 }

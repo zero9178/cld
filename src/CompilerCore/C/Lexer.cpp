@@ -895,7 +895,7 @@ public:
         std::forward<F>(f)();
     }
 
-    [[nodiscard]] cld::LanguageOptions getLanguageOptions() const
+    [[nodiscard]] const cld::LanguageOptions& getLanguageOptions() const
     {
         return m_languageOptions;
     }
@@ -918,10 +918,11 @@ public:
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, Token::ValueType value = {},
               Token::Type type = Token::Type::None)
     {
-        start = map(start).first;
-        end = map(end - 1).second;
+        auto sourceStart = map(start).first;
+        auto sourceEnd = map(end - 1).second;
 
-        m_result.emplace_back(start, tokenType, end - start, std::move(value), type);
+        m_result.emplace_back(sourceStart, tokenType, sourceEnd - sourceStart, start, end - start, std::move(value),
+                              type);
     }
 
     void push(TokenType tokenType, Token::ValueType value = {}, Token::Type type = Token::Type::None)
@@ -985,8 +986,8 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
         {
             if (!context.isInPreprocessor())
             {
-                context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                        value, cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
+                context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                        value, cld::Errors::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
                                     endOffset - value.size(), startOffset, endOffset,
                                     {{endOffset - value.size(), endOffset}});
             }
@@ -997,9 +998,9 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     {
         if (!context.isInPreprocessor())
         {
-            context.reportError(cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, result > UTF32_MAX ? cld::ErrorMessages::Lexer::VALUE_MUST_FIT_IN_UTF32 :
-                                                                cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+            context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+                                    value, result > UTF32_MAX ? cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32 :
+                                                                cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                                 endOffset - value.size(), startOffset, endOffset,
                                 {{endOffset - value.size(), endOffset}});
         }
@@ -1025,13 +1026,13 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
         case 'r': return '\r';
         case ' ':
         {
-            context.reportError(cld::ErrorMessages::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
+            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
                                 {{backslash, backslash + 2}});
             return {};
         }
         default:
         {
-            context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
+            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
                                 backslash + 1, {{backslash, backslash + 2}});
             return {};
         }
@@ -1048,7 +1049,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                                                             Literal literalType)
 {
     std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
-        return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().getSizeOfWChar()) : 0x7F;
+        return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().sizeOfWChar) : 0x7F;
     }();
     std::vector<llvm::UTF32> result;
     result.resize(characters.size());
@@ -1062,9 +1063,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
         if (*iter == '\n')
         {
-            context.reportError(cld::ErrorMessages::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
-                                    literalType == Literal::CharLiteral ? cld::ErrorMessages::Lexer::CHARACTER_LITERAL :
-                                                                          cld::ErrorMessages::Lexer::STRING_LITERAL),
+            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
+                                    literalType == Literal::CharLiteral ? cld::Errors::Lexer::CHARACTER_LITERAL :
+                                                                          cld::Errors::Lexer::STRING_LITERAL),
                                 context.tokenStartOffset, {{offset, offset + 2}});
             iter++;
             errorOccured = true;
@@ -1081,7 +1082,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (res != llvm::conversionOK)
             {
                 auto invalid = context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data());
-                context.reportError(cld::ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
+                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
                                     {{invalid, invalid + 1}});
                 errorOccured = true;
             }
@@ -1101,8 +1102,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // First character followed after \u or \U is not a hex digit or its the end of string
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"),
-                                    start, {{start, start + 2}});
+                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
+                                    {{start, start + 2}});
                 errorOccured = true;
                 continue;
             }
@@ -1116,10 +1117,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
                 {
                     auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                    context.reportError(
-                        cld::ErrorMessages::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-                            std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-                        start, {{start, start + std::distance(hexStart, hexEnd)}});
+                    context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                                            std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
+                                        start, {{start, start + std::distance(hexStart, hexEnd)}});
                     errorOccured = true;
                     iter = hexEnd;
                     continue;
@@ -1148,7 +1148,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (lastHex == iter)
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
+                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
                                     {{start, start + 2}});
                 errorOccured = true;
                 continue;
@@ -1160,7 +1160,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (input.getBitWidth() >= 21 && input.ugt(rhs))
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
+                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
                                     start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
                 errorOccured = true;
                 iter = lastHex;
@@ -1170,8 +1170,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (value >= 0xD800 && value <= 0xDFFF)
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
-                                        cld::ErrorMessages::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
+                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
                                     start, start, start + 2 + lastHex - iter,
                                     {{start + 2, start + 2 + lastHex - iter}});
                 errorOccured = true;
@@ -1181,7 +1181,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (value > largestCharacter)
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
                                     start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
                 errorOccured = true;
                 iter = lastHex;
@@ -1204,7 +1204,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
                 // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                 // Also since there must be at least one character after \, lastOctal is definitely not end
                 // here.
-                context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
+                context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
                                     offset, {{offset, offset + 2}});
                 errorOccured = true;
                 continue;
@@ -1214,7 +1214,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
             if (value > largestCharacter)
             {
                 auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
                                     start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal - iter}});
                 errorOccured = true;
                 iter = lastOctal;
@@ -1248,8 +1248,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& c
         {
             if (*iter > largestCharacter)
             {
-                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                    context.tokenStartOffset);
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, context.tokenStartOffset);
                 errorOccured = true;
             }
         }
@@ -1344,7 +1343,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
-            context.reportError(cld::ErrorMessages::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
                                 beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
                                 context.getOffset() - 1);
             errorsOccurred = true;
@@ -1352,8 +1351,8 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
     }
     else if (isHex && isFloat)
     {
-        context.reportError(cld::ErrorMessages::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
-                            context.getOffset() - 1, context.tokenStartOffset, context.getOffset() - 1);
+        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT, context.getOffset() - 1,
+                            context.tokenStartOffset, context.getOffset() - 1);
         errorsOccurred = true;
     }
 
@@ -1366,7 +1365,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         {
             errorsOccurred = true;
             auto arrowBegin = beginLocation + std::distance(begin, result);
-            context.reportError(cld::ErrorMessages::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
+            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
                                 beginLocation + std::distance(begin, result), context.tokenStartOffset,
                                 context.getOffset() - 1, {{arrowBegin, arrowBegin + 1}});
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
@@ -1386,7 +1385,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
     if (set.count(suffix) == 0)
     {
         auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
-        context.reportError(cld::ErrorMessages::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
                             beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
                             context.getOffset() - 1, {{arrowBegin, arrowBegin + suffix.size()}});
         return {};
@@ -1403,7 +1402,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         llvm::StringRef(number).getAsInteger(0, test);
         if (test.getBitWidth() > 64)
         {
-            context.reportError(cld::ErrorMessages::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
+            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
                                 context.tokenStartOffset, context.getOffset() - 1);
             return {};
         }
@@ -1412,12 +1411,12 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         CLD_ASSERT(*endPtr == '\0');
         if (suffix.empty())
         {
-            switch (context.getLanguageOptions().getSizeOfInt())
+            switch (context.getLanguageOptions().sizeOfInt)
             {
                 case 2:
                     if (isHexOrOctal)
                     {
-                        if (context.getLanguageOptions().getSizeOfLong() == 4)
+                        if (context.getLanguageOptions().sizeOfLong == 4)
                         {
                             return castInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
                                                std::uint64_t>(integer,
@@ -1429,7 +1428,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                             integer,
                             {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::Long, Token::Type::UnsignedLong});
                     }
-                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    if (context.getLanguageOptions().sizeOfLong == 4)
                     {
                         return castInteger<std::int16_t, std::int32_t, std::int64_t>(
                             integer, {Token::Type::Int, Token::Type::Long, Token::Type::LongLong});
@@ -1438,7 +1437,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                 case 4:
                     if (isHexOrOctal)
                     {
-                        if (context.getLanguageOptions().getSizeOfLong() == 4)
+                        if (context.getLanguageOptions().sizeOfLong == 4)
                         {
                             return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
                                 integer, {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::LongLong,
@@ -1448,7 +1447,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                             integer,
                             {Token::Type::Int, Token::Type::UnsignedInt, Token::Type::Long, Token::Type::UnsignedLong});
                     }
-                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    if (context.getLanguageOptions().sizeOfLong == 4)
                     {
                         return castInteger<std::int32_t, std::int64_t>(integer,
                                                                        {Token::Type::Int, Token::Type::LongLong});
@@ -1466,10 +1465,10 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         }
         else if (suffix == "u" || suffix == "U")
         {
-            switch (context.getLanguageOptions().getSizeOfInt())
+            switch (context.getLanguageOptions().sizeOfInt)
             {
                 case 2:
-                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    if (context.getLanguageOptions().sizeOfLong == 4)
                     {
                         return castInteger<std::uint16_t, std::uint32_t, std::uint64_t>(
                             integer,
@@ -1478,7 +1477,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                     return castInteger<std::uint16_t, std::uint64_t>(
                         integer, {Token::Type::UnsignedInt, Token::Type::UnsignedLong});
                 case 4:
-                    if (context.getLanguageOptions().getSizeOfLong() == 4)
+                    if (context.getLanguageOptions().sizeOfLong == 4)
                     {
                         return castInteger<std::uint32_t, std::uint64_t>(
                             integer, {Token::Type::UnsignedInt, Token::Type::UnsignedLongLong});
@@ -1493,7 +1492,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         {
             if (isHexOrOctal)
             {
-                if (context.getLanguageOptions().getSizeOfLong() == 4)
+                if (context.getLanguageOptions().sizeOfLong == 4)
                 {
                     return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
                         integer, {Token::Type::Long, Token::Type::UnsignedLong, Token::Type::LongLong,
@@ -1502,7 +1501,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                 return castInteger<std::int64_t, std::uint64_t>(integer,
                                                                 {Token::Type::Long, Token::Type::UnsignedLong});
             }
-            if (context.getLanguageOptions().getSizeOfLong() == 4)
+            if (context.getLanguageOptions().sizeOfLong == 4)
             {
                 return castInteger<std::int32_t, std::int64_t>(integer, {Token::Type::Long, Token::Type::LongLong});
             }
@@ -1512,7 +1511,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
                  && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
                  && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
         {
-            if (context.getLanguageOptions().getSizeOfLong() == 4)
+            if (context.getLanguageOptions().sizeOfLong == 4)
             {
                 return castInteger<std::uint32_t, std::uint64_t>(
                     integer, {Token::Type::UnsignedLong, Token::Type::UnsignedLongLong});
@@ -1552,7 +1551,7 @@ std::optional<std::pair<Token::ValueType, Token::Type>> processNumber(const char
         }
         else if (suffix == "l" || suffix == "L")
         {
-            switch (context.getLanguageOptions().getSizeOfLongDoubleBits())
+            switch (context.getLanguageOptions().sizeOfLongDoubleBits)
             {
                 case 64: return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), Token::Type::LongDouble}};
                 case 80: return {{llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input), Token::Type::LongDouble}};
@@ -1771,7 +1770,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     ss << llvm::format_hex_no_prefix(c, 8);
                     ss.flush();
                     auto size = getNumUTF8ForUTF32(c);
-                    context.reportError(cld::ErrorMessages::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
+                    context.reportError(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
                                         context.getOffset() - size, context.getOffset() - size, context.getOffset(),
                                         {{context.getOffset() - size, context.getOffset()}});
                 }
@@ -1781,7 +1780,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     auto* start = buffer.data();
                     llvm::ConvertCodePointToUTF8(c, start);
                     buffer.resize(std::distance(buffer.data(), start));
-                    context.reportError(cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(buffer),
+                    context.reportError(cld::Errors::Lexer::UNEXPECTED_CHARACTER.args(buffer),
                                         context.getOffset() - buffer.size(), context.getOffset() - buffer.size(),
                                         context.getOffset(),
                                         {{context.getOffset() - buffer.size(), context.getOffset()}});
@@ -1817,22 +1816,22 @@ std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context
             {
                 std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
                 std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-                context.reportError(cld::ErrorMessages::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
-                                    context.tokenStartOffset, {{context.tokenStartOffset, context.getOffset()}});
+                context.reportError(cld::Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY, context.tokenStartOffset,
+                                    {{context.tokenStartOffset, context.getOffset()}});
             }
             return {Start{}, true};
         }
         else if (result.size() > 1)
         {
-            context.reportWarning(cld::ErrorMessages::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
-                                  context.tokenStartOffset, {{context.tokenStartOffset, context.getOffset()}});
+            context.reportWarning(cld::Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER, context.tokenStartOffset,
+                                  {{context.tokenStartOffset, context.getOffset()}});
         }
 
         if (wide)
         {
             context.push(TokenType::Literal,
-                         llvm::APSInt(llvm::APInt(context.getLanguageOptions().getSizeOfWChar() * 8, result[0]),
-                                      !context.getLanguageOptions().isWCharSigned()));
+                         llvm::APSInt(llvm::APInt(context.getLanguageOptions().sizeOfWChar * 8, result[0]),
+                                      !context.getLanguageOptions().wcharIsSigned));
         }
         else
         {
@@ -1864,7 +1863,7 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
         {
             return {Start{}, true};
         }
-        if (!wide || context.getLanguageOptions().getSizeOfWChar() == 1)
+        if (!wide || context.getLanguageOptions().sizeOfWChar == 1)
         {
             const auto* start = result.data();
             std::vector<llvm::UTF8> utf8(result.size() * 5);
@@ -1879,7 +1878,7 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
             }
             else if (wide)
             {
-                context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, {utf8.data(), dest}});
+                context.push(TokenType::StringLiteral, NonCharString{{utf8.data(), dest}, NonCharString::Wide});
             }
             else
             {
@@ -1888,7 +1887,7 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
         }
         else
         {
-            switch (context.getLanguageOptions().getSizeOfWChar())
+            switch (context.getLanguageOptions().sizeOfWChar)
             {
                 case 2:
                 {
@@ -1905,13 +1904,13 @@ std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
                     else
                     {
                         context.push(TokenType::StringLiteral,
-                                     NonCharString{NonCharString::Wide, {utf16.data(), dest}});
+                                     NonCharString{{utf16.data(), dest}, NonCharString::Wide});
                     }
                     break;
                 }
                 case 4:
                 {
-                    context.push(TokenType::StringLiteral, NonCharString{NonCharString::Wide, result});
+                    context.push(TokenType::StringLiteral, NonCharString{result, NonCharString::Wide});
                     break;
                 }
                 default: CLD_UNREACHABLE;
@@ -2038,15 +2037,15 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         auto result = context.currentView().rfind('\\');
         CLD_ASSERT(result != std::string_view::npos);
         result += context.tokenStartOffset;
-        context.reportError(cld::ErrorMessages::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result,
-                            result, context.getOffset() - 1, {{result, context.getOffset() - 1}});
+        context.reportError(cld::Errors::Lexer::NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE, result, result,
+                            context.getOffset() - 1, {{result, context.getOffset() - 1}});
         return {Start{}, true};
     }
 
     auto location = context.view(context.tokenStartOffset, context.getOffset() - 1).rfind('\\');
     CLD_ASSERT(location != std::string_view::npos);
     location += context.tokenStartOffset;
-    context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), location, location, location + 1,
+    context.reportError(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args("\\"), location, location, location + 1,
                         {{location, location + 1}});
     return {Start{}, false};
 }
@@ -2060,7 +2059,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
         result += context.tokenStartOffset;
         if (!context.isInPreprocessor())
         {
-            context.reportError(cld::ErrorMessages::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
+            context.reportError(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args("\\"), result, result, result + 1,
                                 {{result, result + 1}});
             context.reportNote(
                 cld::Notes::Lexer::UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS.args((big ? 8 : 4) - characters.size()),
@@ -2122,9 +2121,8 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
     {
         if (!context.isInPreprocessor())
         {
-            context.reportError(
-                cld::ErrorMessages::Lexer::UNEXPECTED_CHARACTER.args(((big ? "\\U" : "\\u") + characters)), ucStart,
-                ucStart, context.getOffset(), {{ucStart, context.getOffset()}});
+            context.reportError(cld::Errors::Lexer::UNEXPECTED_CHARACTER.args(((big ? "\\U" : "\\u") + characters)),
+                                ucStart, ucStart, context.getOffset(), {{ucStart, context.getOffset()}});
             return {Start{}, true};
         }
         if (suspHolder)
@@ -2498,7 +2496,7 @@ cld::SourceObject cld::Lexer::tokenize(std::string_view source, LanguageOptions 
                     != llvm::conversionOK)
                 {
                     step = getNumBytesForUTF8(start, end);
-                    context.reportError(ErrorMessages::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
+                    context.reportError(Errors::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
                                         {{offset, offset + 1}});
                     return false;
                 }
@@ -2565,22 +2563,22 @@ cld::SourceObject cld::Lexer::tokenize(std::string_view source, LanguageOptions 
     cld::match(
         stateMachine, [](auto&&) {},
         [&context](CharacterLiteral&) {
-            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::CHARACTER_LITERAL),
+            context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::CHARACTER_LITERAL),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](StringLiteral&) {
-            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::STRING_LITERAL),
+            context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::STRING_LITERAL),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](AfterInclude&) {
-            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::INCLUDE_DIRECTIVE),
+            context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::INCLUDE_DIRECTIVE),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 {{context.tokenStartOffset, context.getOffset() - 1}});
         },
         [&context](BlockComment&) {
-            context.reportError(ErrorMessages::Lexer::UNTERMINATED_N.args(ErrorMessages::Lexer::BLOCK_COMMENT),
+            context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::BLOCK_COMMENT),
                                 context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
                                 {{context.tokenStartOffset, context.getOffset() - 1}});
         });
@@ -2789,14 +2787,32 @@ std::string cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     CLD_UNREACHABLE;
 }
 
-cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, variant value, Type type)
+cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
+                         std::uint64_t charSpaceLength, variant value, Type type, const char* builtinRepresentation)
     : m_value(std::move(value)),
+      m_originalSource(builtinRepresentation),
       m_length(length),
       m_offset(offset),
       m_afterPPOffset(offset),
+      m_charSpaceOffset(charSpaceOffset),
+      m_charSpaceLength(charSpaceLength),
       m_tokenType(tokenType),
-      m_type(type)
+      m_type(type),
+      m_isBuiltin(builtinRepresentation != nullptr)
 {
+}
+
+cld::Lexer::Token::Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
+                         std::uint64_t charSpaceLength, variant value, Type type)
+    : Token(offset, tokenType, length, charSpaceOffset, charSpaceLength, std::move(value), type, nullptr)
+{
+}
+
+cld::Lexer::Token cld::Lexer::Token::builtinToken(TokenType tokenType, variant value, std::string_view representation)
+{
+    auto* buffer = new char[representation.size()];
+    std::memcpy(buffer, representation.data(), representation.size());
+    return Token(0, tokenType, representation.size(), 0, representation.size(), std::move(value), Type::None, buffer);
 }
 
 std::uint64_t Token::getLine(const cld::SourceObject& sourceObject) const noexcept
@@ -2826,52 +2842,6 @@ const char* Token::getOriginalSource() const noexcept
     return m_originalSource;
 }
 
-void Token::setOriginalSource(const char* originalSource) noexcept
-{
-    m_originalSource = originalSource;
-}
-
-std::string cld::Lexer::reconstruct(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end)
-{
-    if (begin == end)
-    {
-        return {};
-    }
-    auto lineNumber = sourceObject.getLineNumber(begin->getOffset());
-    return std::string(lineNumber - 1, '\n')
-           + std::string(begin->getOffset() - sourceObject.getLineStartOffset(lineNumber), ' ')
-           + reconstructTrimmed(sourceObject, begin, end);
-}
-
-std::string cld::Lexer::reconstructTrimmed(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end)
-{
-    std::string result;
-    if (begin != end)
-    {
-        result.reserve((end - 1)->getOffset() + (end - 1)->getLength() - begin->getOffset());
-    }
-    for (auto curr = begin; curr != end; curr++)
-    {
-        if (curr != begin)
-        {
-            auto prev = curr - 1;
-            auto currLineNumber = sourceObject.getLineNumber(curr->getOffset());
-            auto prevLineNumber = sourceObject.getLineNumber(prev->getOffset() + prev->getLength());
-            if (currLineNumber == prevLineNumber)
-            {
-                result.resize(result.size() + curr->getOffset() - (prev->getOffset() + prev->getLength()), ' ');
-            }
-            else
-            {
-                result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
-                result.resize(result.size() + curr->getOffset() - sourceObject.getLineStartOffset(currLineNumber), ' ');
-            }
-        }
-        result += curr->getRepresentation();
-    }
-    return result;
-}
-
 std::string cld::Lexer::constructPP(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end)
 {
     if (begin == end)
@@ -2889,18 +2859,19 @@ std::string cld::Lexer::constructPPTrimmed(const PPSourceObject& sourceObject, T
     std::string result;
     if (begin != end)
     {
-        result.reserve((end - 1)->getPPOffset() + (end - 1)->getLength() - begin->getPPOffset());
+        result.reserve((end - 1)->getPPOffset() + (end - 1)->getCharSpaceLength() - begin->getPPOffset());
     }
     for (auto curr = begin; curr != end; curr++)
     {
         if (curr != begin)
         {
             auto prev = curr - 1;
-            auto currLineNumber = sourceObject.getLineNumber(curr->getPPOffset());
-            auto prevLineNumber = sourceObject.getLineNumber(prev->getPPOffset() + prev->getLength());
+            auto currLineNumber = sourceObject.getPPLineNumber(curr->getPPOffset());
+            auto prevLineNumber = sourceObject.getPPLineNumber(prev->getPPOffset() + prev->getCharSpaceLength());
             if (currLineNumber == prevLineNumber)
             {
-                result.resize(result.size() + curr->getPPOffset() - (prev->getPPOffset() + prev->getLength()), ' ');
+                result.resize(result.size() + curr->getPPOffset() - (prev->getPPOffset() + prev->getCharSpaceLength()),
+                              ' ');
             }
             else
             {
@@ -2909,7 +2880,26 @@ std::string cld::Lexer::constructPPTrimmed(const PPSourceObject& sourceObject, T
                               ' ');
             }
         }
-        result += curr->getRepresentation();
+        auto sizeBefore = result.size();
+        auto stringView = curr->getRepresentation();
+        for (auto& iter : ctre::range<pattern>(stringView))
+        {
+            auto view = iter.view();
+            result += stringView.substr(0, view.data() - stringView.data());
+            if (!iter.get<1>())
+            {
+                static const std::unordered_map<std::string_view, char> mapping = {
+                    {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
+                    {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
+                auto rep = mapping.find(view);
+                CLD_ASSERT(rep != mapping.end());
+                result += rep->second;
+            }
+            stringView.remove_prefix(view.data() + view.size() - stringView.data());
+        }
+        result += stringView;
+        (void)sizeBefore;
+        CLD_ASSERT(result.size() - sizeBefore == curr->getCharSpaceLength());
     }
     return result;
 }

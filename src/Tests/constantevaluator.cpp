@@ -8,8 +8,8 @@
 
 #include "TestConfig.hpp"
 
-using namespace cld::ErrorMessages;
-using namespace cld::ErrorMessages::Semantics;
+using namespace cld::Errors;
+using namespace cld::Errors::Semantics;
 using namespace cld::Warnings::Semantics;
 
 namespace

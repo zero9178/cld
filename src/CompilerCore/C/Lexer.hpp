@@ -123,11 +123,11 @@ SourceObject tokenize(std::string_view source, LanguageOptions languageOptions =
 
 struct NonCharString
 {
-    enum Type
+    std::vector<std::uint32_t> characters;
+    enum Type : std::uint8_t
     {
         Wide
     } type;
-    std::vector<std::uint32_t> characters;
 
     bool operator==(const std::wstring& wideString) const
     {
@@ -135,11 +135,16 @@ struct NonCharString
         {
             return false;
         }
-        else
+        return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end());
+    }
+
+    bool operator==(const NonCharString& other) const
+    {
+        if (type != other.type)
         {
-            return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end(),
-                              [](auto lhs, auto rhs) { return (std::int64_t)lhs == (std::int64_t)rhs; });
+            return false;
         }
+        return std::equal(characters.begin(), characters.end(), other.characters.begin(), other.characters.end());
     }
 };
 
@@ -156,12 +161,17 @@ class Token
                                       from the user. This value is not unique as after preprocessing all inserted
                                       tokens have the offset of the original position in the replacement list*/
     std::uint64_t
-        m_afterPPOffset;   /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
-                              m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
+        m_afterPPOffset; /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
+                            m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
+    std::uint64_t m_charSpaceOffset; /**< Offset to the token in bytes after trigraphs have been replaced and
+                                      Backslash Newline pairs have been spliced*/
+    std::uint64_t m_charSpaceLength; /**< Length of the token if any trigraphs and Backslash Newline pairs in it's
+                                      representation have been removed*/
+    std::uint64_t m_fileID = 0;
     TokenType m_tokenType; ///< Type of the token
 
 public:
-    enum class Type
+    enum class Type : std::uint8_t
     {
         None,
         Int,
@@ -177,12 +187,114 @@ public:
 
 private:
     Type m_type;
+    bool m_isBuiltin;
+
+    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
+          std::uint64_t charSpaceLength, variant value, Type type, const char* builtinRepresentation);
 
 public:
     using ValueType = variant;
 
-    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, variant value = std::monostate{},
-          Type type = Type::None);
+    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
+          std::uint64_t charSpaceLength, variant value = std::monostate{}, Type type = Type::None);
+
+    static Token builtinToken(TokenType tokenType, variant value, std::string_view representation);
+
+    ~Token()
+    {
+        if (m_isBuiltin)
+        {
+            delete[] m_originalSource;
+        }
+    }
+
+    Token(const Token& rhs)
+    {
+        m_value = rhs.m_value;
+        m_isBuiltin = rhs.m_isBuiltin;
+        if (!m_isBuiltin)
+        {
+            m_originalSource = rhs.m_originalSource;
+        }
+        else
+        {
+            auto* buffer = new char[rhs.m_length];
+            std::memcpy(buffer, rhs.m_originalSource, rhs.m_length);
+            m_originalSource = buffer;
+        }
+        m_length = rhs.m_length;
+        m_macroId = rhs.m_macroId;
+        m_offset = rhs.m_offset;
+        m_afterPPOffset = rhs.m_afterPPOffset;
+        m_charSpaceOffset = rhs.m_charSpaceOffset;
+        m_charSpaceLength = rhs.m_charSpaceLength;
+        m_tokenType = rhs.m_tokenType;
+        m_type = rhs.m_type;
+    }
+
+    Token& operator=(const Token& rhs)
+    {
+        if (m_isBuiltin)
+        {
+            delete[] m_originalSource;
+        }
+        m_value = rhs.m_value;
+        m_isBuiltin = rhs.m_isBuiltin;
+        if (!m_isBuiltin)
+        {
+            m_originalSource = rhs.m_originalSource;
+        }
+        else
+        {
+            auto* buffer = new char[rhs.m_length];
+            std::memcpy(buffer, rhs.m_originalSource, rhs.m_length);
+            m_originalSource = buffer;
+        }
+        m_length = rhs.m_length;
+        m_macroId = rhs.m_macroId;
+        m_offset = rhs.m_offset;
+        m_afterPPOffset = rhs.m_afterPPOffset;
+        m_charSpaceOffset = rhs.m_charSpaceOffset;
+        m_charSpaceLength = rhs.m_charSpaceLength;
+        m_tokenType = rhs.m_tokenType;
+        m_type = rhs.m_type;
+        return *this;
+    }
+
+    Token(Token&& rhs) noexcept
+    {
+        m_value = std::move(rhs.m_value);
+        m_isBuiltin = rhs.m_isBuiltin;
+        m_originalSource = std::exchange(rhs.m_originalSource, nullptr);
+        m_length = rhs.m_length;
+        m_macroId = rhs.m_macroId;
+        m_offset = rhs.m_offset;
+        m_afterPPOffset = rhs.m_afterPPOffset;
+        m_charSpaceOffset = rhs.m_charSpaceOffset;
+        m_charSpaceLength = rhs.m_charSpaceLength;
+        m_tokenType = rhs.m_tokenType;
+        m_type = rhs.m_type;
+    }
+
+    Token& operator=(Token&& rhs) noexcept
+    {
+        if (m_isBuiltin)
+        {
+            delete[] m_originalSource;
+        }
+        m_value = std::move(rhs.m_value);
+        m_isBuiltin = rhs.m_isBuiltin;
+        m_originalSource = std::exchange(rhs.m_originalSource, nullptr);
+        m_length = rhs.m_length;
+        m_macroId = rhs.m_macroId;
+        m_offset = rhs.m_offset;
+        m_afterPPOffset = rhs.m_afterPPOffset;
+        m_charSpaceOffset = rhs.m_charSpaceOffset;
+        m_charSpaceLength = rhs.m_charSpaceLength;
+        m_tokenType = rhs.m_tokenType;
+        m_type = rhs.m_type;
+        return *this;
+    }
 
     [[nodiscard]] TokenType getTokenType() const noexcept
     {
@@ -250,7 +362,36 @@ public:
 
     [[nodiscard]] const char* getOriginalSource() const noexcept;
 
-    void setOriginalSource(const char* originalSource) noexcept;
+    [[nodiscard]] std::uint64_t getCharSpaceLength() const
+    {
+        return m_charSpaceLength;
+    }
+
+    [[nodiscard]] std::uint64_t getCharSpaceOffset() const
+    {
+        return m_charSpaceOffset;
+    }
+
+    [[nodiscard]] bool isBuiltin() const
+    {
+        return m_isBuiltin;
+    }
+
+    void setOriginalSource(const char* originalSource) noexcept
+    {
+        CLD_ASSERT(!m_isBuiltin);
+        m_originalSource = originalSource;
+    }
+
+    [[nodiscard]] std::uint64_t getFileId() const
+    {
+        return m_fileID;
+    }
+
+    void setFileId(std::uint64_t fileId)
+    {
+        m_fileID = fileId;
+    }
 };
 
 /**
@@ -266,10 +407,6 @@ std::string tokenName(TokenType tokenType);
 std::string tokenValue(TokenType tokenType);
 
 using TokenIterator = std::vector<Token>::const_iterator;
-
-std::string reconstruct(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end);
-
-std::string reconstructTrimmed(const SourceObject& sourceObject, TokenIterator begin, TokenIterator end);
 
 std::string constructPP(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end);
 

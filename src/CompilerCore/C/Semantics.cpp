@@ -271,7 +271,7 @@ bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveTy
 cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, options.isCharSigned(), 8, "char", Kind::Char);
+    return create(isConst, isVolatile, false, options.charIsSigned, 8, "char", Kind::Char);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
@@ -292,38 +292,37 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isC
 cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
                                                                 const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfShort() * 8, "short", Kind::Short);
+    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, "short", Kind::Short);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
                                                                         const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfShort() * 8, "unsigned short",
-                  Kind::UnsignedShort);
+    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, "unsigned short", Kind::UnsignedShort);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
                                                               const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfInt() * 8, "int", Kind::Int);
+    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, "int", Kind::Int);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
                                                                       const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfInt() * 8, "unsigned int", Kind::UnsignedInt);
+    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, "unsigned int", Kind::UnsignedInt);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.getSizeOfLong() * 8, "long", Kind::Long);
+    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, "long", Kind::Long);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
                                                                        const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.getSizeOfLong() * 8, "unsigned long", Kind::UnsignedLong);
+    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, "unsigned long", Kind::UnsignedLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
@@ -349,7 +348,7 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, b
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, options.getSizeOfLongDoubleBits(), "long double", Kind::LongDouble);
+    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, "long double", Kind::LongDouble);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
@@ -580,19 +579,18 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
             return alignmentOf(arrayType.getType(), options);
         },
         [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
         },
         [&options](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
             return alignmentOf(valArrayType.getType(), options);
         },
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
         },
         [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
-                return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(
-                    type.getFullFormattedTypeName());
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
             }
             if (!recordType.isUnion())
             {
@@ -634,11 +632,9 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
                 return alignmentOf(std::get<0>(*result), options);
             }
         },
-        [&options](const EnumType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.getSizeOfInt()};
-        },
+        [&options](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{options.sizeOfInt}; },
         [&options](const PointerType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.getSizeOfVoidStar()};
+            return std::size_t{options.sizeOfVoidStar};
         },
         [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
 }
@@ -670,18 +666,18 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
             return *result * arrayType.getSize();
         },
         [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
         },
         [](const ValArrayType&) -> Expected<std::size_t, std::string> {
-            return ErrorMessages::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
+            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
         },
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            return ErrorMessages::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
         },
         [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
-                return ErrorMessages::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
             }
             if (!recordType.isUnion())
             {
@@ -726,11 +722,9 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
                 return maxSize;
             }
         },
-        [&options](const EnumType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.getSizeOfInt()};
-        },
+        [&options](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{options.sizeOfInt}; },
         [&options](const PointerType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.getSizeOfVoidStar()};
+            return std::size_t{options.sizeOfVoidStar};
         },
         [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
 }
