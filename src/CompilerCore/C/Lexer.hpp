@@ -12,12 +12,10 @@
 #include <vector>
 
 #include "LanguageOptions.hpp"
+#include "SourceObject.hpp"
 
 namespace cld
 {
-class SourceObject;
-class PPSourceObject;
-
 namespace Lexer
 {
 enum class TokenType : std::uint8_t
@@ -115,200 +113,75 @@ enum class TokenType : std::uint8_t
     TOKEN_MAX_VALUE = Miscellaneous,
 };
 
-class Token;
+template <class T>
+using TokenIterator = typename std::vector<T>::const_iterator;
+using CTokenIterator = TokenIterator<CToken>;
+using PPTokenIterator = TokenIterator<PPToken>;
 
-SourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
-                      bool isInPreprocessor = false, llvm::raw_ostream* reporter = &llvm::errs(),
-                      bool* errorsOccured = nullptr);
 
-struct NonCharString
+PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
+                        llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,std::string_view sourceFile = "<stdin>");
+
+CSourceObject toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+                        bool* errorsOccured = nullptr);
+
+std::vector<CToken> toCTokens(PPTokenIterator begin,PPTokenIterator end, const PPSourceObject& sourceObject,
+                              llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr);
+
+template <class Derived>
+class TokenBase
 {
-    std::vector<std::uint32_t> characters;
-    enum Type : std::uint8_t
-    {
-        Wide
-    } type;
-
-    bool operator==(const std::wstring& wideString) const
-    {
-        if (type != Wide)
-        {
-            return false;
-        }
-        return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end());
-    }
-
-    bool operator==(const NonCharString& other) const
-    {
-        if (type != other.type)
-        {
-            return false;
-        }
-        return std::equal(characters.begin(), characters.end(), other.characters.begin(), other.characters.end());
-    }
-};
-
-class Token
-{
-    using variant = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, std::string, NonCharString>;
-    variant m_value; ///< Optional value of the token
-    const char* m_originalSource = nullptr;
+protected:
     std::uint64_t m_length;
-    std::uint64_t m_macroId = 0; /**< MacroID. All tokens with the same ID have been inserted by the same macro
-                                    substitution. ID of 0 means the the token originated from the Lexer*/
-    std::uint64_t m_offset;      /**< Offset of the token. That is bytes offset to the first character of the
-                                      token from the beginning of the file of the very original source code passed
-                                      from the user. This value is not unique as after preprocessing all inserted
-                                      tokens have the offset of the original position in the replacement list*/
-    std::uint64_t
-        m_afterPPOffset; /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
+    std::uint64_t m_macroId = 0;   /**< MacroID. All tokens with the same ID have been inserted by the same macro
+                                      substitution. ID of 0 means the the token originated from the Lexer*/
+    std::uint64_t m_offset;        /**< Offset of the token. That is bytes offset to the first character of the
+                                        token from the beginning of the file of the very original source code passed
+                                        from the user. This value is not unique as after preprocessing all inserted
+                                        tokens have the offset of the original position in the replacement list*/
+    std::uint64_t m_afterPPOffset; /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
                             m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
-    std::uint64_t m_charSpaceOffset; /**< Offset to the token in bytes after trigraphs have been replaced and
-                                      Backslash Newline pairs have been spliced*/
-    std::uint64_t m_charSpaceLength; /**< Length of the token if any trigraphs and Backslash Newline pairs in it's
-                                      representation have been removed*/
     std::uint64_t m_fileID = 0;
     TokenType m_tokenType; ///< Type of the token
 
-public:
-    enum class Type : std::uint8_t
+    TokenBase() = default;
+
+    TokenBase(std::uint64_t length, std::uint64_t offset, std::uint64_t afterPPOffset, TokenType tokenType)
+        : m_length(length), m_offset(offset), m_afterPPOffset(afterPPOffset), m_tokenType(tokenType)
     {
-        None,
-        Int,
-        UnsignedInt,
-        Long,
-        UnsignedLong,
-        LongLong,
-        UnsignedLongLong,
-        Float,
-        Double,
-        LongDouble
-    };
-
-private:
-    Type m_type;
-    bool m_isBuiltin;
-
-    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
-          std::uint64_t charSpaceLength, variant value, Type type, const char* builtinRepresentation);
+    }
 
 public:
-    using ValueType = variant;
-
-    Token(std::uint64_t offset, TokenType tokenType, std::uint64_t length, std::uint64_t charSpaceOffset,
-          std::uint64_t charSpaceLength, variant value = std::monostate{}, Type type = Type::None);
-
-    static Token builtinToken(TokenType tokenType, variant value, std::string_view representation);
-
-    ~Token()
+    [[nodiscard]] std::string_view getRepresentation(const SourceObject<Derived>& sourceObject) const
     {
-        if (m_isBuiltin)
-        {
-            delete[] m_originalSource;
-        }
+        return std::string_view(sourceObject.getFiles()[m_fileID].source).substr(m_offset, m_length);
     }
 
-    Token(const Token& rhs)
+    [[nodiscard]] std::uint64_t getLine(const SourceObject<Derived>& sourceObject) const noexcept
     {
-        m_value = rhs.m_value;
-        m_isBuiltin = rhs.m_isBuiltin;
-        if (!m_isBuiltin)
-        {
-            m_originalSource = rhs.m_originalSource;
-        }
-        else
-        {
-            auto* buffer = new char[rhs.m_length];
-            std::memcpy(buffer, rhs.m_originalSource, rhs.m_length);
-            m_originalSource = buffer;
-        }
-        m_length = rhs.m_length;
-        m_macroId = rhs.m_macroId;
-        m_offset = rhs.m_offset;
-        m_afterPPOffset = rhs.m_afterPPOffset;
-        m_charSpaceOffset = rhs.m_charSpaceOffset;
-        m_charSpaceLength = rhs.m_charSpaceLength;
-        m_tokenType = rhs.m_tokenType;
-        m_type = rhs.m_type;
+        return sourceObject.getLineNumber(m_fileID, m_offset);
     }
 
-    Token& operator=(const Token& rhs)
+    [[nodiscard]] std::uint64_t getPPLine(const SourceObject<Derived>& sourceObject) const noexcept
     {
-        if (m_isBuiltin)
-        {
-            delete[] m_originalSource;
-        }
-        m_value = rhs.m_value;
-        m_isBuiltin = rhs.m_isBuiltin;
-        if (!m_isBuiltin)
-        {
-            m_originalSource = rhs.m_originalSource;
-        }
-        else
-        {
-            auto* buffer = new char[rhs.m_length];
-            std::memcpy(buffer, rhs.m_originalSource, rhs.m_length);
-            m_originalSource = buffer;
-        }
-        m_length = rhs.m_length;
-        m_macroId = rhs.m_macroId;
-        m_offset = rhs.m_offset;
-        m_afterPPOffset = rhs.m_afterPPOffset;
-        m_charSpaceOffset = rhs.m_charSpaceOffset;
-        m_charSpaceLength = rhs.m_charSpaceLength;
-        m_tokenType = rhs.m_tokenType;
-        m_type = rhs.m_type;
-        return *this;
+        return sourceObject.getPPLineNumber(m_fileID, m_afterPPOffset);
     }
 
-    Token(Token&& rhs) noexcept
+    [[nodiscard]] std::uint64_t getColumn(const SourceObject<Derived>& sourceObject) const noexcept
     {
-        m_value = std::move(rhs.m_value);
-        m_isBuiltin = rhs.m_isBuiltin;
-        m_originalSource = std::exchange(rhs.m_originalSource, nullptr);
-        m_length = rhs.m_length;
-        m_macroId = rhs.m_macroId;
-        m_offset = rhs.m_offset;
-        m_afterPPOffset = rhs.m_afterPPOffset;
-        m_charSpaceOffset = rhs.m_charSpaceOffset;
-        m_charSpaceLength = rhs.m_charSpaceLength;
-        m_tokenType = rhs.m_tokenType;
-        m_type = rhs.m_type;
+        auto line = sourceObject.getLineNumber(m_fileID, m_offset);
+        return m_offset - sourceObject.getLineStartOffset(m_fileID, line) + 1;
     }
 
-    Token& operator=(Token&& rhs) noexcept
+    [[nodiscard]] std::uint64_t getPPColumn(const SourceObject<Derived>& sourceObject) const noexcept
     {
-        if (m_isBuiltin)
-        {
-            delete[] m_originalSource;
-        }
-        m_value = std::move(rhs.m_value);
-        m_isBuiltin = rhs.m_isBuiltin;
-        m_originalSource = std::exchange(rhs.m_originalSource, nullptr);
-        m_length = rhs.m_length;
-        m_macroId = rhs.m_macroId;
-        m_offset = rhs.m_offset;
-        m_afterPPOffset = rhs.m_afterPPOffset;
-        m_charSpaceOffset = rhs.m_charSpaceOffset;
-        m_charSpaceLength = rhs.m_charSpaceLength;
-        m_tokenType = rhs.m_tokenType;
-        m_type = rhs.m_type;
-        return *this;
+        auto line = sourceObject.getPPLineNumber(m_fileID, m_afterPPOffset);
+        return m_afterPPOffset - sourceObject.getPPLineStartOffset(m_fileID, line) + 1;
     }
 
     [[nodiscard]] TokenType getTokenType() const noexcept
     {
         return m_tokenType;
-    }
-
-    [[nodiscard]] const variant& getValue() const noexcept
-    {
-        return m_value;
-    }
-
-    [[nodiscard]] Type getType() const
-    {
-        return m_type;
     }
 
     [[nodiscard]] bool macroInserted() const noexcept
@@ -346,43 +219,6 @@ public:
         m_macroId = macroId;
     }
 
-    [[nodiscard]] std::string_view getRepresentation() const
-    {
-        CLD_ASSERT(m_originalSource);
-        return std::string_view(m_originalSource + m_offset, m_length);
-    }
-
-    [[nodiscard]] std::uint64_t getLine(const SourceObject& sourceObject) const noexcept;
-
-    [[nodiscard]] std::uint64_t getPPLine(const PPSourceObject& sourceObject) const noexcept;
-
-    [[nodiscard]] std::uint64_t getColumn(const SourceObject& sourceObject) const noexcept;
-
-    [[nodiscard]] std::uint64_t getPPColumn(const PPSourceObject& sourceObject) const noexcept;
-
-    [[nodiscard]] const char* getOriginalSource() const noexcept;
-
-    [[nodiscard]] std::uint64_t getCharSpaceLength() const
-    {
-        return m_charSpaceLength;
-    }
-
-    [[nodiscard]] std::uint64_t getCharSpaceOffset() const
-    {
-        return m_charSpaceOffset;
-    }
-
-    [[nodiscard]] bool isBuiltin() const
-    {
-        return m_isBuiltin;
-    }
-
-    void setOriginalSource(const char* originalSource) noexcept
-    {
-        CLD_ASSERT(!m_isBuiltin);
-        m_originalSource = originalSource;
-    }
-
     [[nodiscard]] std::uint64_t getFileId() const
     {
         return m_fileID;
@@ -394,22 +230,118 @@ public:
     }
 };
 
+class PPToken : public TokenBase<PPToken>
+{
+    std::string m_value;
+    std::uint64_t m_charSpaceOffset; /**< Offset to the token in bytes after trigraphs have been replaced and
+                                      Backslash Newline pairs have been spliced*/
+    std::uint64_t m_charSpaceLength; /**< Length of the token if any trigraphs and Backslash Newline pairs in it's
+                                      representation have been removed*/
+public:
+    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
+            std::uint64_t charSpaceLength, std::string_view value = {});
+
+    [[nodiscard]] std::uint64_t getCharSpaceLength() const
+    {
+        return m_charSpaceLength;
+    }
+
+    [[nodiscard]] std::uint64_t getCharSpaceOffset() const
+    {
+        return m_charSpaceOffset;
+    }
+
+    [[nodiscard]] const std::string& getValue() const noexcept
+    {
+        return m_value;
+    }
+};
+
+static_assert(!std::is_polymorphic_v<PPToken>);
+
+struct NonCharString
+{
+    std::vector<std::uint32_t> characters;
+    enum Type : std::uint8_t
+    {
+        Wide
+    } type;
+
+    bool operator==(const std::wstring& wideString) const
+    {
+        if (type != Wide)
+        {
+            return false;
+        }
+        return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end());
+    }
+
+    bool operator==(const NonCharString& other) const
+    {
+        if (type != other.type)
+        {
+            return false;
+        }
+        return std::equal(characters.begin(), characters.end(), other.characters.begin(), other.characters.end());
+    }
+};
+
+class CToken : public TokenBase<CToken>
+{
+    using variant = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, std::string, NonCharString>;
+    variant m_value; ///< Optional value of the token
+
+public:
+    enum class Type : std::uint8_t
+    {
+        None,
+        Int,
+        UnsignedInt,
+        Long,
+        UnsignedLong,
+        LongLong,
+        UnsignedLongLong,
+        Float,
+        Double,
+        LongDouble
+    };
+
+private:
+    Type m_type;
+
+public:
+    using ValueType = variant;
+
+    CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, variant value = std::monostate{},
+           Type type = Type::None);
+
+    [[nodiscard]] const variant& getValue() const noexcept
+    {
+        return m_value;
+    }
+
+    [[nodiscard]] Type getType() const
+    {
+        return m_type;
+    }
+};
+
+static_assert(!std::is_polymorphic_v<CToken>);
+
 /**
  * @param tokenType Token
  * @return name of the token. If the token is a punctuation it's surrounded in '
  */
-std::string tokenName(TokenType tokenType);
+std::string_view tokenName(TokenType tokenType);
 
 /**
  * @param tokenType Token
  * @return generic value of the token. For non punctuations this is just a description. eg. identifier
  */
-std::string tokenValue(TokenType tokenType);
+std::string_view tokenValue(TokenType tokenType);
 
-using TokenIterator = std::vector<Token>::const_iterator;
+std::string constructPP(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end);
 
-std::string constructPP(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end);
-
-std::string constructPPTrimmed(const PPSourceObject& sourceObject, TokenIterator begin, TokenIterator end);
+std::string constructPPTrimmed(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end);
 } // namespace Lexer
 } // namespace cld

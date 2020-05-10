@@ -15,7 +15,7 @@ class ConstantEvaluator;
 
 class SemanticAnalysis final
 {
-    const SourceObject& m_sourceObject;
+    const CSourceObject& m_sourceObject;
     llvm::raw_ostream* m_reporter;
     std::vector<std::map<std::string, Semantics::RecordType>> m_structsUnions{1};
     std::vector<std::map<std::string, DeclarationTypedefEnums>> m_declarations{1};
@@ -32,8 +32,7 @@ class SemanticAnalysis final
         m_structsUnions.emplace_back();
     }
 
-    ConstantEvaluator makeEvaluator(std::vector<cld::Lexer::Token>::const_iterator exprBegin,
-                                    std::vector<cld::Lexer::Token>::const_iterator exprEnd);
+    ConstantEvaluator makeEvaluator(Lexer::CTokenIterator exprBegin, Lexer::CTokenIterator exprEnd);
 
     [[nodiscard]] bool isTypedef(const std::string& name) const;
 
@@ -41,41 +40,38 @@ class SemanticAnalysis final
 
     [[nodiscard]] const Semantics::Type* getTypedef(const std::string& name) const;
 
-    void log(std::vector<Message> messages);
+    void log(std::vector<CMessage> messages);
 
     cld::Semantics::Type
-        primitivesToType(std::vector<cld::Lexer::Token>::const_iterator declStart,
-                         std::vector<cld::Lexer::Token>::const_iterator declEnd,
+        primitivesToType(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                          const std::vector<cld::Syntax::TypeSpecifier::PrimitiveTypeSpecifier>& primitives,
                          bool isConst, bool isVolatile);
 
-    cld::Semantics::Type typeSpecifiersToType(std::vector<cld::Lexer::Token>::const_iterator declStart,
-                                              std::vector<cld::Lexer::Token>::const_iterator declEnd,
+    cld::Semantics::Type typeSpecifiersToType(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                                               const std::vector<const cld::Syntax::TypeSpecifier*>& typeSpecifiers,
                                               bool isConst, bool isVolatile);
 
-    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
+    cld::Semantics::Type apply(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                                PossiblyAbstractQualifierRef declarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 
-    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
+    cld::Semantics::Type apply(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                                const Syntax::DirectAbstractDeclarator& abstractDeclarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 
-    cld::Semantics::Type apply(Lexer::TokenIterator declStart, Lexer::TokenIterator declEnd,
+    cld::Semantics::Type apply(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                                const Syntax::DirectDeclarator& directDeclarator, Type&& baseType,
                                const std::vector<Syntax::Declaration>& declarations);
 
     static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers);
 
     std::vector<std::pair<cld::Semantics::Type, std::string>>
-        parameterListToArguments(std::vector<cld::Lexer::Token>::const_iterator declStart,
-                                 std::vector<cld::Lexer::Token>::const_iterator declEnd,
+        parameterListToArguments(Lexer::CTokenIterator declStart, Lexer::CTokenIterator declEnd,
                                  const std::vector<cld::Syntax::ParameterDeclaration>& parameterDeclarations,
                                  const std::vector<cld::Syntax::Declaration>& declarations);
 
 public:
-    explicit SemanticAnalysis(const SourceObject& sourceObject, llvm::raw_ostream* reporter = nullptr)
+    explicit SemanticAnalysis(const CSourceObject& sourceObject, llvm::raw_ostream* reporter = nullptr)
         : m_sourceObject(sourceObject), m_reporter(reporter)
     {
     }

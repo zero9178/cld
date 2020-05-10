@@ -17,7 +17,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::memcpy(input.data(), data, size);
 
     bool errors;
-    auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), true, &llvm::nulls(), &errors);
+    auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
     if (errors || tokens.data().empty())
     {
         return 0;

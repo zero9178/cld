@@ -152,7 +152,7 @@ constexpr auto BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT = "Binary floating po
 
 constexpr auto EXPECTED_DIGITS_AFTER_EXPONENT = "Expected digits after exponent";
 
-constexpr auto UNEXPECTED_CHARACTER = Format("Unexpected character '{}'");
+constexpr auto UNEXPECTED_CHARACTER = "Unexpected character";
 
 constexpr auto NON_PRINTABLE_CHARACTER_N = Format("Non printable character '{}'");
 
@@ -177,9 +177,6 @@ constexpr auto CHARACTER_LITERAL_CANNOT_BE_EMPTY = "Character literal cannot be 
 constexpr auto DISCARDING_ALL_BUT_FIRST_CHARACTER = "Discarding all but first character";
 
 constexpr auto STRAY_N_IN_PROGRAM = Format("Stray '{}' in program");
-
-constexpr auto NO_WHITESPACE_ALLOWED_BETWEEN_BACKSLASH_AND_NEWLINE =
-    "No whitespace allowed between backslash and newline";
 
 constexpr auto INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE = "Integer value too big to be representable";
 } // namespace Lexer
@@ -233,10 +230,6 @@ constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
 
 constexpr auto PREVIOUS_STORAGE_SPECIFIER_HERE = "Previous storage specifier encountered here:";
 
-namespace Lexer
-{
-constexpr auto UNIVERSAL_CHARACTER_REQUIRES_N_MORE_DIGITS = Format("Universal character requires {} more digits");
-}
 } // namespace Notes
 } // namespace cld
 

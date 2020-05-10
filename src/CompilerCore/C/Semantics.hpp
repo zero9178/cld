@@ -457,7 +457,7 @@ using DeclarationTypedefEnums = std::variant<Semantics::Declaration, Semantics::
 
 std::string declaratorToName(const cld::Syntax::Declarator& declarator);
 
-Lexer::TokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
+Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
 cld::Expected<std::size_t, std::string> sizeOf(const Type& type, const LanguageOptions& options);
 

@@ -2,8 +2,6 @@
 
 #include <llvm/ADT/StringExtras.h>
 
-#include <CompilerCore/Common/Text.hpp>
-
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
@@ -77,9 +75,9 @@ cld::Semantics::ConstRetType
         [this, &node](const llvm::APFloat& floating) -> Semantics::ConstRetType {
             switch (node.getType())
             {
-                case Lexer::Token::Type::Float: return {floating, PrimitiveType::createFloat(false, false)};
-                case Lexer::Token::Type::Double: return {floating, PrimitiveType::createDouble(false, false)};
-                case Lexer::Token::Type::LongDouble:
+                case Lexer::CToken::Type::Float: return {floating, PrimitiveType::createFloat(false, false)};
+                case Lexer::CToken::Type::Double: return {floating, PrimitiveType::createDouble(false, false)};
+                case Lexer::CToken::Type::LongDouble:
                     return {floating, PrimitiveType::createLongDouble(false, false, m_languageOptions)};
                 default: CLD_UNREACHABLE;
             }
@@ -87,16 +85,16 @@ cld::Semantics::ConstRetType
         [this, &node](const llvm::APSInt& integer) -> Semantics::ConstRetType {
             switch (node.getType())
             {
-                case Lexer::Token::Type::Int:
+                case Lexer::CToken::Type::Int:
                     return {integer, PrimitiveType::createInt(false, false, m_languageOptions)};
-                case Lexer::Token::Type::UnsignedInt:
+                case Lexer::CToken::Type::UnsignedInt:
                     return {integer, PrimitiveType::createUnsignedInt(false, false, m_languageOptions)};
-                case Lexer::Token::Type::Long:
+                case Lexer::CToken::Type::Long:
                     return {integer, PrimitiveType::createLong(false, false, m_languageOptions)};
-                case Lexer::Token::Type::UnsignedLong:
+                case Lexer::CToken::Type::UnsignedLong:
                     return {integer, PrimitiveType::createUnsignedLong(false, false, m_languageOptions)};
-                case Lexer::Token::Type::LongLong: return {integer, PrimitiveType::createLongLong(false, false)};
-                case Lexer::Token::Type::UnsignedLongLong:
+                case Lexer::CToken::Type::LongLong: return {integer, PrimitiveType::createLongLong(false, false)};
+                case Lexer::CToken::Type::UnsignedLongLong:
                     return {integer, PrimitiveType::createUnsignedLongLong(false, false)};
                 default: CLD_UNREACHABLE;
             }
@@ -139,9 +137,9 @@ cld::Semantics::ConstRetType
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                         '\'' + to_string(node.begin()->getRepresentation()) + '\''),
-                     {PointAt(node.begin(), node.begin() + 1)});
+            // TODO:            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+            //                         '\'' + to_string(node.begin()->getRepresentation()) + '\''),
+            //                     {PointAt(node.begin(), node.begin() + 1)});
             return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand: CLD_ASSERT(false && "Not supported yet");
@@ -982,7 +980,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstantEvaluator::ConstantEvaluator(
     const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
-    std::function<void(std::string, std::vector<Modifier>, Message::Severity)> loggerCallback, Mode mode)
+    std::function<void(std::string, std::vector<Modifier<Lexer::CToken>>, CMessage::Severity)> loggerCallback,
+    Mode mode)
     : m_languageOptions(languageOptions),
       m_typeCallback(std::move(typeCallback)),
       m_declarationCallback(std::move(declarationCallback)),
@@ -991,27 +990,27 @@ cld::Semantics::ConstantEvaluator::ConstantEvaluator(
 {
 }
 
-void cld::Semantics::ConstantEvaluator::logError(std::string message, std::vector<Modifier> modifiers)
+void cld::Semantics::ConstantEvaluator::logError(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Error);
+        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Error);
     }
 }
 
-void cld::Semantics::ConstantEvaluator::logWarning(std::string message, std::vector<Modifier> modifiers)
+void cld::Semantics::ConstantEvaluator::logWarning(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Warning);
+        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Warning);
     }
 }
 
-void cld::Semantics::ConstantEvaluator::logNote(std::string message, std::vector<Modifier> modifiers)
+void cld::Semantics::ConstantEvaluator::logNote(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Note);
+        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Note);
     }
 }
 

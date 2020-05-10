@@ -13,11 +13,12 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
-    cld::SourceObject tokens;
+    cld::PPSourceObject tokens;
     tokens = cld::Lexer::tokenize(source, options);
-    auto parsing = cld::Parser::buildTree(tokens, &ss);
+    auto ctokens = cld::Lexer::toCTokens(tokens);
+    auto parsing = cld::Parser::buildTree(ctokens, &ss);
     REQUIRE((ss.str().empty() && parsing.second));
-    cld::Semantics::SemanticAnalysis analysis(tokens, &ss);
+    cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     auto semantics = analysis.visit(parsing.first);
     return {semantics, ss.str()};
 }

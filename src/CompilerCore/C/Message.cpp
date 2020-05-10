@@ -11,30 +11,38 @@
 
 #include <ctre.hpp>
 
-cld::Message::Message(Severity severity, std::string message, Lexer::TokenIterator begin,
-                      std::optional<Lexer::TokenIterator> end, std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T>::Message(Severity severity, std::string message, Lexer::TokenIterator<T> begin,
+                         std::optional<Lexer::TokenIterator<T>> end, std::vector<Modifier<T>> modifiers)
     : m_modifiers(std::move(modifiers)), m_message(std::move(message)), m_begin(begin), m_end(end), m_severity(severity)
 {
 }
 
-cld::Message::Severity cld::Message::getSeverity() const
+template <class T>
+typename cld::Message<T>::Severity cld::Message<T>::getSeverity() const
 {
     return m_severity;
 }
 
-cld::Message cld::Message::error(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::error(std::string message, Lexer::TokenIterator<T> token,
+                                       std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Error, std::move(message), token, {}, std::move(modifiers));
+    return Message(Error, std::move(message), token, {}, std::move(modifiers));
 }
 
-cld::Message cld::Message::note(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::note(std::string message, Lexer::TokenIterator<T> token,
+                                      std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Note, std::move(message), token, {}, std::move(modifiers));
+    return Message(Note, std::move(message), token, {}, std::move(modifiers));
 }
 
-cld::Message cld::Message::warning(std::string message, Lexer::TokenIterator token, std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::warning(std::string message, Lexer::TokenIterator<T> token,
+                                         std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Warning, std::move(message), token, {}, std::move(modifiers));
+    return Message(Warning, std::move(message), token, {}, std::move(modifiers));
 }
 
 namespace
@@ -46,7 +54,8 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
 }
 } // namespace
 
-llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject& sourceObject) const
+template <class T>
+llvm::raw_ostream& cld::Message<T>::print(llvm::raw_ostream& os, const SourceObject<T>& sourceObject) const
 {
     auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string_view> {
         switch (getSeverity())
@@ -62,9 +71,13 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
     CLD_ASSERT(endIterator > m_begin || m_begin == sourceObject.data().end());
     const auto& back = sourceObject.data().back();
     const auto line = m_begin != endIterator ? m_begin->getLine(sourceObject) : back.getLine(sourceObject);
-    const auto startOffset = sourceObject.getLineStartOffset(line);
-    const auto endLine = sourceObject.getLineNumber((endIterator - 1)->getOffset() + (endIterator - 1)->getLength());
-    const auto endOffset = sourceObject.getLineEndOffset(endLine);
+
+    const auto TEST_ME_FILE_ID = m_begin != endIterator ? m_begin->getFileId() : back.getFileId();
+
+    const auto startOffset = sourceObject.getLineStartOffset(TEST_ME_FILE_ID, line);
+    const auto endLine =
+        sourceObject.getLineNumber(TEST_ME_FILE_ID, (endIterator - 1)->getOffset() + (endIterator - 1)->getLength());
+    const auto endOffset = sourceObject.getLineEndOffset(TEST_ME_FILE_ID, endLine);
 
     std::uint64_t column;
     if (m_begin != endIterator)
@@ -78,7 +91,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
         // with a newline token we want to output the location PAST the newline (aka in the line after) not the the
         // previous one
         llvm::WithColor(os, os.SAVEDCOLOR, true)
-            << sourceObject.getLineNumber(back.getOffset() + back.getLength()) << ":1: ";
+            << sourceObject.getLineNumber(TEST_ME_FILE_ID, back.getOffset() + back.getLength()) << ":1: ";
     }
     else
     {
@@ -89,7 +102,8 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
     llvm::WithColor(os, os.SAVEDCOLOR, true) << m_message;
     os << '\n';
 
-    auto view = std::string_view(sourceObject.getSource()).substr(startOffset, endOffset - startOffset - 1);
+    auto view = std::string_view(sourceObject.getFiles()[TEST_ME_FILE_ID].source)
+                    .substr(startOffset, endOffset - startOffset - 1);
     std::vector<std::int64_t> mapping(endOffset - startOffset);
     llvm::SmallString<128> safeUTF8;
     safeUTF8.reserve(mapping.size() - 1);
@@ -112,7 +126,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
     {
         cld::match(
             iter, [](auto&&) {},
-            [&](const InsertAfter& insertAfter) {
+            [&](const InsertAfter<T>& insertAfter) {
                 CLD_ASSERT(insertAfter.getInsertAfter() != sourceObject.data().end());
                 auto begin = insertAfter.getInsertAfter()->getOffset() + insertAfter.getInsertAfter()->getLength();
                 auto oldBegin = begin + oldMapping[begin - startOffset];
@@ -171,7 +185,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
     {
         cld::match(
             iter,
-            [&](const Underline& underline) {
+            [&](const Underline<T>& underline) {
                 CLD_ASSERT(underline.begin() < underline.end());
                 auto begin = underline.begin()->getOffset();
                 CLD_ASSERT(begin >= startOffset);
@@ -181,7 +195,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
                 end += mapping[end - startOffset];
                 underlines.push_back({begin, end, underline.getCharacter()});
             },
-            [&](const PointAt& pointAt) {
+            [&](const PointAt<T>& pointAt) {
                 for (auto iter = pointAt.begin(); iter != pointAt.end(); iter++)
                 {
                     CLD_ASSERT(pointAt.begin() < pointAt.end());
@@ -194,7 +208,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
                     pointAts.push_back({begin, end});
                 }
             },
-            [&](const Annotate& annotate) {
+            [&](const Annotate<T>& annotate) {
                 CLD_ASSERT(std::distance(annotate.begin(), annotate.end()) > 0);
                 auto begin = annotate.begin()->getOffset();
                 CLD_ASSERT(begin >= startOffset);
@@ -291,7 +305,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
         toPaintOn.resize(1);
         os << llvm::format_decimal(line + i, width) << " | ";
         auto string = lines[i];
-        std::int64_t lineStartOffset = sourceObject.getLineStartOffset(line + i);
+        std::int64_t lineStartOffset = sourceObject.getLineStartOffset(TEST_ME_FILE_ID, line + i);
         lineStartOffset += mapping[lineStartOffset - startOffset];
 
         std::int64_t result = 0;
@@ -456,59 +470,53 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceObject
     return os;
 }
 
-cld::Message cld::Message::error(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                                 std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::error(std::string message, Lexer::TokenIterator<T> begin, Lexer::TokenIterator<T> end,
+                                       std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Error, std::move(message), begin, end, modifiers);
+    return Message(Error, std::move(message), begin, end, modifiers);
 }
 
-cld::Message cld::Message::warning(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                                   std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::warning(std::string message, Lexer::TokenIterator<T> begin,
+                                         Lexer::TokenIterator<T> end, std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Warning, std::move(message), begin, end, modifiers);
+    return Message(Warning, std::move(message), begin, end, modifiers);
 }
 
-cld::Message cld::Message::note(std::string message, Lexer::TokenIterator begin, Lexer::TokenIterator end,
-                                std::vector<Modifier> modifiers)
+template <class T>
+cld::Message<T> cld::Message<T>::note(std::string message, Lexer::TokenIterator<T> begin, Lexer::TokenIterator<T> end,
+                                      std::vector<Modifier<T>> modifiers)
 {
-    return cld::Message(Note, std::move(message), begin, end, modifiers);
+    return Message(Note, std::move(message), begin, end, modifiers);
 }
 
-cld::Underline::Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end, char character)
-    : m_begin(begin), m_end(end), m_character(character)
-{
-}
-
-cld::Underline::Underline(Lexer::TokenIterator begin, char character)
-    : m_begin(begin), m_end(m_begin + 1), m_character(character)
-{
-}
-
-cld::Lexer::TokenIterator cld::Underline::begin() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::Underline<T>::begin() const
 {
     return m_begin;
 }
 
-cld::Lexer::TokenIterator cld::Underline::end() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::Underline<T>::end() const
 {
     return m_end;
 }
 
-char cld::Underline::getCharacter() const
+template <class T>
+char cld::Underline<T>::getCharacter() const
 {
     return m_character;
 }
 
-cld::PointAt::PointAt(Lexer::TokenIterator begin, Lexer::TokenIterator end) : m_begin(begin), m_end(end) {}
-
-cld::PointAt::PointAt(Lexer::TokenIterator begin) : m_begin(begin), m_end(m_begin + 1) {}
-
-cld::Lexer::TokenIterator cld::PointAt::begin() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::PointAt<T>::begin() const
 {
     return m_begin;
 }
 
-cld::Lexer::TokenIterator cld::PointAt::end() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::PointAt<T>::end() const
 {
     return m_end;
 }
@@ -534,42 +542,52 @@ std::string cld::Format::format(std::vector<std::string> args) const
     return result;
 }
 
-cld::InsertAfter::InsertAfter(Lexer::TokenIterator insertAfter, std::string argument)
-    : m_insertAfter(insertAfter), m_argument(std::move(argument))
-{
-}
-
-cld::Lexer::TokenIterator cld::InsertAfter::getInsertAfter() const noexcept
+template <class T>
+cld::Lexer::TokenIterator<T> cld::InsertAfter<T>::getInsertAfter() const noexcept
 {
     return m_insertAfter;
 }
 
-const std::string& cld::InsertAfter::getArgument() const noexcept
+template <class T>
+const std::string& cld::InsertAfter<T>::getArgument() const noexcept
 {
     return m_argument;
 }
 
-cld::Annotate::Annotate(Lexer::TokenIterator begin, std::string argument)
-    : m_begin(begin), m_end(begin + 1), m_argument(std::move(argument))
-{
-}
-
-cld::Annotate::Annotate(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string argument)
-    : m_begin(begin), m_end(end), m_argument(std::move(argument))
-{
-}
-
-cld::Lexer::TokenIterator cld::Annotate::begin() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::Annotate<T>::begin() const
 {
     return m_begin;
 }
 
-cld::Lexer::TokenIterator cld::Annotate::end() const
+template <class T>
+cld::Lexer::TokenIterator<T> cld::Annotate<T>::end() const
 {
     return m_end;
 }
 
-const std::string& cld::Annotate::getArgument() const
+template <class T>
+const std::string& cld::Annotate<T>::getArgument() const
 {
     return m_argument;
 }
+
+template class cld::Underline<cld::Lexer::CToken>;
+
+template class cld::Underline<cld::Lexer::PPToken>;
+
+template class cld::PointAt<cld::Lexer::CToken>;
+
+template class cld::PointAt<cld::Lexer::PPToken>;
+
+template class cld::InsertAfter<cld::Lexer::CToken>;
+
+template class cld::InsertAfter<cld::Lexer::PPToken>;
+
+template class cld::Annotate<cld::Lexer::CToken>;
+
+template class cld::Annotate<cld::Lexer::PPToken>;
+
+template class cld::Message<cld::Lexer::CToken>;
+
+template class cld::Message<cld::Lexer::PPToken>;

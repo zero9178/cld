@@ -1,21 +1,22 @@
 #include "ParserUtil.hpp"
 
-bool cld::Parser::expect(Lexer::TokenType expected, Lexer::TokenIterator& curr, Lexer::TokenIterator end,
-                         Context& context, std::vector<Message> additional)
+bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CTokenIterator end,
+                         Context& context, std::vector<CMessage> additional)
 {
     if (curr == end || curr->getTokenType() != expected)
     {
         if (curr == end)
         {
-            context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
-                                        {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
+            context.log({CMessage::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
+                                         {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
         }
         else
         {
             context.log(
-                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                    Lexer::tokenName(expected), '\'' + to_string(curr->getRepresentation()) + '\''),
-                                curr, {PointAt(curr, curr + 1)})});
+                {CMessage::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                     Lexer::tokenName(expected),
+                                     '\'' + to_string(curr->getRepresentation(context.getSourceObject())) + '\''),
+                                 curr, {PointAt(curr, curr + 1)})});
         }
         context.log(std::move(additional));
         return false;
@@ -37,22 +38,22 @@ bool cld::Parser::isAssignment(Lexer::TokenType type)
            || type == Lexer::TokenType::BitXorAssign;
 }
 
-bool cld::Parser::firstIsInExternalDeclaration(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInExternalDeclaration(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInDeclaration(token, context) || firstIsInFunctionDefinition(token, context);
 }
 
-bool cld::Parser::firstIsInFunctionDefinition(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInFunctionDefinition(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInDeclarationSpecifier(token, context);
 }
 
-bool cld::Parser::firstIsInDeclaration(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInDeclaration(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInDeclarationSpecifier(token, context);
 }
 
-bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     switch (token.getTokenType())
     {
@@ -82,7 +83,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::Token& token, const
     }
 }
 
-bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     switch (token.getTokenType())
     {
@@ -106,62 +107,62 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::Token& token, const c
     }
 }
 
-bool cld::Parser::firstIsInDeclarator(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInDeclarator(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInPointer(token, context) || firstIsInDirectDeclarator(token, context);
 }
 
-bool cld::Parser::firstIsInDirectDeclarator(const Lexer::Token& token, const cld::Parser::Context&)
+bool cld::Parser::firstIsInDirectDeclarator(const Lexer::CToken& token, const cld::Parser::Context&)
 {
     return token.getTokenType() == Lexer::TokenType::Identifier
            || token.getTokenType() == Lexer::TokenType::OpenParentheses;
 }
 
-[[maybe_unused]] bool cld::Parser::firstIsInParameterTypeList(const Lexer::Token& token,
+[[maybe_unused]] bool cld::Parser::firstIsInParameterTypeList(const Lexer::CToken& token,
                                                               const cld::Parser::Context& context)
 {
     return firstIsInParameterList(token, context);
 }
 
-bool cld::Parser::firstIsInAbstractDeclarator(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInAbstractDeclarator(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInPointer(token, context) || firstIsInDirectAbstractDeclarator(token, context);
 }
 
-bool cld::Parser::firstIsInDirectAbstractDeclarator(const Lexer::Token& token, const cld::Parser::Context&)
+bool cld::Parser::firstIsInDirectAbstractDeclarator(const Lexer::CToken& token, const cld::Parser::Context&)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParentheses
            || token.getTokenType() == Lexer::TokenType::OpenSquareBracket;
 }
 
-bool cld::Parser::firstIsInParameterList(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInParameterList(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInDeclarationSpecifier(token, context);
 }
 
-bool cld::Parser::firstIsInPointer(const Lexer::Token& token, const cld::Parser::Context&)
+bool cld::Parser::firstIsInPointer(const Lexer::CToken& token, const cld::Parser::Context&)
 {
     return token.getTokenType() == Lexer::TokenType::Asterisk;
 }
 
-[[maybe_unused]] bool cld::Parser::firstIsInCompoundItem(const Lexer::Token& token, const cld::Parser::Context& context)
+[[maybe_unused]] bool cld::Parser::firstIsInCompoundItem(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInDeclaration(token, context) || firstIsInStatement(token, context);
 }
 
-bool cld::Parser::firstIsInInitializer(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInInitializer(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInAssignmentExpression(token, context) || token.getTokenType() == Lexer::TokenType::OpenBrace;
 }
 
-[[maybe_unused]] bool cld::Parser::firstIsInInitializerList(const Lexer::Token& token,
+[[maybe_unused]] bool cld::Parser::firstIsInInitializerList(const Lexer::CToken& token,
                                                             const cld::Parser::Context& context)
 {
     return token.getTokenType() == Lexer::TokenType::OpenSquareBracket || token.getTokenType() == Lexer::TokenType::Dot
            || firstIsInInitializer(token, context);
 }
 
-bool cld::Parser::firstIsInStatement(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInStatement(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return token.getTokenType() == Lexer::TokenType::IfKeyword || token.getTokenType() == Lexer::TokenType::ForKeyword
            || token.getTokenType() == Lexer::TokenType::OpenBrace
@@ -178,82 +179,82 @@ bool cld::Parser::firstIsInStatement(const Lexer::Token& token, const cld::Parse
            || token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context);
 }
 
-bool cld::Parser::firstIsInExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInAssignmentExpression(token, context);
 }
 
-bool cld::Parser::firstIsInAssignmentExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInAssignmentExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInConditionalExpression(token, context);
 }
 
-bool cld::Parser::firstIsInConditionalExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInConditionalExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInLogicalOrExpression(token, context);
 }
 
-bool cld::Parser::firstIsInLogicalOrExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInLogicalOrExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInLogicalAndExpression(token, context);
 }
 
-bool cld::Parser::firstIsInLogicalAndExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInLogicalAndExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInBitOrExpression(token, context);
 }
 
-bool cld::Parser::firstIsInBitOrExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInBitOrExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInBitXorExpression(token, context);
 }
 
-bool cld::Parser::firstIsInBitXorExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInBitXorExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInBitAndExpression(token, context);
 }
 
-bool cld::Parser::firstIsInBitAndExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInBitAndExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInEqualityExpression(token, context);
 }
 
-bool cld::Parser::firstIsInEqualityExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInEqualityExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInRelationalExpression(token, context);
 }
 
-bool cld::Parser::firstIsInRelationalExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInRelationalExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInShiftExpression(token, context);
 }
 
-bool cld::Parser::firstIsInShiftExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInShiftExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInAdditiveExpression(token, context);
 }
 
-bool cld::Parser::firstIsInAdditiveExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInAdditiveExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInTerm(token, context);
 }
 
-bool cld::Parser::firstIsInTerm(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInTerm(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInCastExpression(token, context);
 }
 
-[[maybe_unused]] bool cld::Parser::firstIsInTypeName(const Lexer::Token& token, const cld::Parser::Context& context)
+[[maybe_unused]] bool cld::Parser::firstIsInTypeName(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInSpecifierQualifier(token, context);
 }
 
-bool cld::Parser::firstIsInCastExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInCastExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParentheses || firstIsInUnaryExpression(token, context);
 }
 
-bool cld::Parser::firstIsInUnaryExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInUnaryExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return firstIsInPostFixExpression(token, context) || token.getTokenType() == Lexer::TokenType::Increment
            || token.getTokenType() == Lexer::TokenType::Decrement || token.getTokenType() == Lexer::TokenType::Ampersand
@@ -263,12 +264,12 @@ bool cld::Parser::firstIsInUnaryExpression(const Lexer::Token& token, const cld:
            || token.getTokenType() == Lexer::TokenType::SizeofKeyword;
 }
 
-bool cld::Parser::firstIsInPostFixExpression(const Lexer::Token& token, const cld::Parser::Context& context)
+bool cld::Parser::firstIsInPostFixExpression(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParentheses || firstIsInPrimaryExpression(token, context);
 }
 
-bool cld::Parser::firstIsInPrimaryExpression(const Lexer::Token& token, const cld::Parser::Context&)
+bool cld::Parser::firstIsInPrimaryExpression(const Lexer::CToken& token, const cld::Parser::Context&)
 {
     return token.getTokenType() == Lexer::TokenType::OpenParentheses
            || token.getTokenType() == Lexer::TokenType::Identifier || token.getTokenType() == Lexer::TokenType::Literal

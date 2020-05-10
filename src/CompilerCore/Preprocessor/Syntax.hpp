@@ -1,8 +1,9 @@
 #pragma once
 
-#include <CompilerCore/C/Syntax.hpp>
+#include <CompilerCore/C/Lexer.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -11,8 +12,8 @@ namespace cld::PP
 {
 struct Node
 {
-    Lexer::TokenIterator begin;
-    Lexer::TokenIterator end;
+    Lexer::PPTokenIterator begin;
+    Lexer::PPTokenIterator end;
 };
 
 struct Group;
@@ -32,7 +33,7 @@ struct IfGroup final : Node
     {
         std::string identifier;
     };
-    using variant = std::variant<IfnDefTag, IfDefTag, std::vector<Lexer::Token>>;
+    using variant = std::variant<IfnDefTag, IfDefTag, std::vector<Lexer::PPToken>>;
     variant ifs;
     std::unique_ptr<Group> optionalGroup;
 };
@@ -42,7 +43,7 @@ struct IfGroup final : Node
  */
 struct ElIfGroup final : Node
 {
-    std::vector<Lexer::Token> constantExpression;
+    std::vector<Lexer::PPToken> constantExpression;
     std::unique_ptr<Group> optionalGroup;
 };
 
@@ -81,14 +82,14 @@ struct IfSection final : Node
  */
 struct DefineDirective final : Node
 {
-    Lexer::TokenIterator identifierPos;
+    Lexer::PPTokenIterator identifierPos;
     /**
      * Its an optional to differentiate between an empty identifier list and no identifier list
      */
     std::optional<std::vector<std::string>> identifierList;
     bool hasEllipse;
-    Lexer::TokenIterator replacementBegin;
-    Lexer::TokenIterator replacementEnd;
+    Lexer::PPTokenIterator replacementBegin;
+    Lexer::PPTokenIterator replacementEnd;
 };
 
 /**
@@ -104,29 +105,29 @@ struct ControlLine final : Node
 {
     struct IncludeTag final
     {
-        Lexer::TokenIterator begin;
-        Lexer::TokenIterator end;
+        Lexer::PPTokenIterator begin;
+        Lexer::PPTokenIterator end;
     };
 
     struct LineTag final
     {
-        Lexer::TokenIterator begin;
-        Lexer::TokenIterator end;
+        Lexer::PPTokenIterator begin;
+        Lexer::PPTokenIterator end;
     };
 
     struct ErrorTag final
     {
-        Lexer::TokenIterator begin;
-        Lexer::TokenIterator end;
+        Lexer::PPTokenIterator begin;
+        Lexer::PPTokenIterator end;
     };
 
     struct PragmaTag final
     {
-        Lexer::TokenIterator begin;
-        Lexer::TokenIterator end;
+        Lexer::PPTokenIterator begin;
+        Lexer::PPTokenIterator end;
     };
 
-    std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, Lexer::TokenIterator, DefineDirective> variant;
+    std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, Lexer::PPTokenIterator, DefineDirective> variant;
 };
 
 /**
@@ -134,14 +135,14 @@ struct ControlLine final : Node
  */
 struct NonDirective final : Node
 {
-    Lexer::TokenIterator begin;
-    Lexer::TokenIterator end;
+    Lexer::PPTokenIterator begin;
+    Lexer::PPTokenIterator end;
 };
 
 /**
  * <GroupPart> ::= <IfSection> | <ControlLine> | <TextLine> | <NonDirective>
  */
-using GroupPart = std::variant<IfSection, ControlLine, std::vector<Lexer::Token>, NonDirective>;
+using GroupPart = std::variant<IfSection, ControlLine, std::vector<Lexer::PPToken>, NonDirective>;
 
 /**
  * <Group> ::= <GroupPart> { <GroupPart> }

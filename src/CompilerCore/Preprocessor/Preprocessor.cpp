@@ -22,23 +22,22 @@ constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",          "__FILE__",
 class Preprocessor final
 {
     llvm::raw_ostream* m_report;
-    const cld::SourceObject& m_sourceObject;
-    const cld::PP::Options& m_options;
+    const cld::PPSourceObject& m_sourceObject;
+    const cld::LanguageOptions& m_options;
     std::uint64_t m_currentOffset = 0;
     std::uint64_t m_macroID = 0;
-    std::vector<cld::Lexer::Token> m_result;
-    cld::PPSourceObject::SubstitutionMap m_substitutions;
+    std::vector<cld::Lexer::PPToken> m_result;
+    std::vector<cld::Source::Substitution> m_substitutions;
     std::vector<std::uint64_t> m_ppStarts{0};
     struct Macro
     {
-        std::optional<cld::Lexer::TokenIterator> identifierPos;
+        std::optional<cld::Lexer::PPTokenIterator> identifierPos;
         std::optional<std::vector<std::string>> identifierList;
         bool hasEllipse;
-        std::vector<cld::Lexer::Token> replacement;
+        std::vector<cld::Lexer::PPToken> replacement;
     };
     std::unordered_map<std::string_view, Macro> m_defines;
     std::vector<std::unordered_set<std::string_view>> m_disabledMacros;
-    std::vector<std::string> m_filesInUse;
     bool m_errorsOccured = false;
 
     void pushNewline()
@@ -46,7 +45,7 @@ class Preprocessor final
         m_ppStarts.push_back(++m_currentOffset);
     }
 
-    void pushTokens(llvm::ArrayRef<cld::Lexer::Token> tokens, std::uint64_t id = 0)
+    void pushTokens(llvm::ArrayRef<cld::Lexer::PPToken> tokens, std::uint64_t id = 0)
     {
         if (tokens.empty())
         {
@@ -56,7 +55,7 @@ class Preprocessor final
         auto& front = tokens.front();
         auto base = front.getCharSpaceOffset();
         std::transform(tokens.begin(), tokens.end(), std::back_inserter(m_result),
-                       [this, base, id](cld::Lexer::Token token) {
+                       [this, base, id](cld::Lexer::PPToken token) {
                            token.setPPOffset(m_currentOffset + token.getCharSpaceOffset() - base);
                            token.setMacroId(id);
                            return token;
@@ -64,11 +63,11 @@ class Preprocessor final
         m_currentOffset = m_result.back().getPPOffset() + m_result.back().getCharSpaceLength();
     }
 
-    void log(std::vector<cld::Message> messages)
+    void log(std::vector<cld::PPMessage> messages)
     {
         for (auto& iter : messages)
         {
-            if (iter.getSeverity() == cld::Message::Error)
+            if (iter.getSeverity() == cld::PPMessage::Error)
             {
                 m_errorsOccured = true;
             }
@@ -90,31 +89,16 @@ class Preprocessor final
             return false;
         }
         return std::equal(lhs.replacementBegin, lhs.replacementEnd, rhs.replacement.begin(), rhs.replacement.end(),
-                          [](const cld::Lexer::Token& lhs, const cld::Lexer::Token& rhs) {
+                          [](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
                               if (lhs.getTokenType() != rhs.getTokenType())
                               {
                                   return false;
                               }
-                              if (lhs.getValue().index() != rhs.getValue().index())
-                              {
-                                  return false;
-                              }
-                              return cld::match(lhs.getValue(), [&rhs](auto&& value) -> bool {
-                                  using T = std::decay_t<decltype(value)>;
-                                  auto& other = cld::get<T>(rhs.getValue());
-                                  if constexpr (std::is_same_v<llvm::APFloat, T>)
-                                  {
-                                      return value.bitwiseIsEqual(other);
-                                  }
-                                  else
-                                  {
-                                      return value == other;
-                                  }
-                              });
+                              return lhs.getValue() == rhs.getValue();
                           });
     }
 
-    void macroSubstitute(llvm::ArrayRef<cld::Lexer::Token> tokens, std::uint64_t id = 0)
+    void macroSubstitute(llvm::ArrayRef<cld::Lexer::PPToken> tokens, std::uint64_t id = 0)
     {
         auto start = tokens.begin();
         for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
@@ -123,7 +107,7 @@ class Preprocessor final
             {
                 continue;
             }
-            auto& name = cld::get<std::string>(iter->getValue());
+            auto& name = iter->getValue();
             auto result = m_defines.find(name);
             if (result == m_defines.end() || (id < m_disabledMacros.size() && m_disabledMacros[id].count(name) > 0))
             {
@@ -146,7 +130,8 @@ class Preprocessor final
                     m_disabledMacros[i].insert(m_disabledMacros[id].begin(), m_disabledMacros[id].end());
                 }
                 macroSubstitute(result->second.replacement, i);
-                m_substitutions.insert({i, {*iter}});
+                m_substitutions.resize(std::max(m_substitutions.size(), i + 1));
+                m_substitutions[i] = cld::Source::Substitution{iter->getOffset(), iter->getLength()};
             }
             else
             {
@@ -163,35 +148,33 @@ class Preprocessor final
     }
 
 public:
-    Preprocessor(llvm::raw_ostream* report, const cld::SourceObject& sourceObject,
-                 const cld::PP::Options& options) noexcept
+    Preprocessor(llvm::raw_ostream* report, const cld::PPSourceObject& sourceObject,
+                 const cld::LanguageOptions& options) noexcept
         : m_report(report), m_sourceObject(sourceObject), m_options(options)
     {
-        auto time = std::time(nullptr);
-        auto tm = std::localtime(&time);
-        std::string date(30, ' ');
-        auto size = std::strftime(date.data(), date.size(), "%b %e %Y", tm);
-        CLD_ASSERT(size > 0);
-        date.resize(size);
-        auto token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::StringLiteral, date, '"' + date + '"');
-        m_defines.insert({"__DATE__", {std::nullopt, std::nullopt, false, {token}}});
-        date.resize(30, ' ');
-        size = std::strftime(date.data(), date.size(), "%H:%M:%S", tm);
-        CLD_ASSERT(size > 0);
-        date.resize(size);
-        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::StringLiteral, date, '"' + date + '"');
-        m_defines.insert({"__TIME__", {std::nullopt, std::nullopt, false, {token}}});
-
-        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "1", "1");
-        m_defines.insert({"__STDC__", {std::nullopt, std::nullopt, false, {token}}});
-        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "0", "0");
-        m_defines.insert({"__STDC_HOSTED__", {std::nullopt, std::nullopt, false, {token}}});
-        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "1", "1");
-        m_defines.insert({"__STDC_MB_MIGHT_NEQ_WC__", {std::nullopt, std::nullopt, false, {token}}});
-        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "19901L", "19901L");
-        m_defines.insert({"__STDC_VERSION__", {std::nullopt, std::nullopt, false, {token}}});
-
-        m_filesInUse.push_back(options.absoluteFilepath.empty() ? "<stdin>" : options.absoluteFilepath);
+        //        auto time = std::time(nullptr);
+        //        auto tm = std::localtime(&time);
+        //        std::string date(30, ' ');
+        //        auto size = std::strftime(date.data(), date.size(), "%b %e %Y", tm);
+        //        CLD_ASSERT(size > 0);
+        //        date.resize(size);
+        //        auto token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::StringLiteral, date, '"' + date +
+        //        '"'); m_defines.insert({"__DATE__", {std::nullopt, std::nullopt, false, {token}}}); date.resize(30, '
+        //        '); size = std::strftime(date.data(), date.size(), "%H:%M:%S", tm); CLD_ASSERT(size > 0);
+        //        date.resize(size);
+        //        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::StringLiteral, date, '"' + date + '"');
+        //        m_defines.insert({"__TIME__", {std::nullopt, std::nullopt, false, {token}}});
+        //
+        //        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "1", "1");
+        //        m_defines.insert({"__STDC__", {std::nullopt, std::nullopt, false, {token}}});
+        //        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "0", "0");
+        //        m_defines.insert({"__STDC_HOSTED__", {std::nullopt, std::nullopt, false, {token}}});
+        //        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "1", "1");
+        //        m_defines.insert({"__STDC_MB_MIGHT_NEQ_WC__", {std::nullopt, std::nullopt, false, {token}}});
+        //        token = cld::Lexer::Token::builtinToken(cld::Lexer::TokenType::PPNumber, "19901L", "19901L");
+        //        m_defines.insert({"__STDC_VERSION__", {std::nullopt, std::nullopt, false, {token}}});
+        //
+        //        m_filesInUse.push_back(options.absoluteFilepath.empty() ? "<stdin>" : options.absoluteFilepath);
     }
 
     Preprocessor(const Preprocessor&) = delete;
@@ -199,12 +182,12 @@ public:
     Preprocessor(Preprocessor&&) noexcept = delete;
     Preprocessor& operator=(Preprocessor&&) noexcept = delete;
 
-    std::vector<cld::Lexer::Token>& getResult() noexcept
+    std::vector<cld::Lexer::PPToken>& getResult() noexcept
     {
         return m_result;
     }
 
-    cld::PPSourceObject::SubstitutionMap& getSubstitutions() noexcept
+    std::vector<cld::Source::Substitution>& getSubstitutions() noexcept
     {
         return m_substitutions;
     }
@@ -235,12 +218,13 @@ public:
         cld::match(groupPart, [this](auto&& value) { this->visit(value); });
     }
 
-    void visit(const std::vector<cld::Lexer::Token>& text)
+    void visit(const std::vector<cld::Lexer::PPToken>& text)
     {
         if (!text.empty())
         {
             m_currentOffset +=
-                text.front().getOffset() - m_sourceObject.getLineStartOffset(text.front().getLine(m_sourceObject));
+                text.front().getOffset()
+                - m_sourceObject.getLineStartOffset(text.front().getFileId(), text.front().getLine(m_sourceObject));
         }
         macroSubstitute(text);
         pushNewline();
@@ -263,14 +247,14 @@ public:
 
     void visit(const cld::PP::ControlLine::PragmaTag& pragmaTag) {}
 
-    void visit(cld::Lexer::TokenIterator undef)
+    void visit(cld::Lexer::PPTokenIterator undef)
     {
         pushNewline();
-        auto name = cld::get<std::string>(undef->getValue());
+        auto& name = undef->getValue();
         if (std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
                         [&name](std::string_view value) { return value == name; }))
         {
-            log({cld::Message::error(
+            log({cld::PPMessage::error(
                 cld::Errors::PP::UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + name + '\''), undef,
                 {cld::Underline(undef)})});
             return;
@@ -283,31 +267,33 @@ public:
         pushNewline();
         auto iter = !defineDirective.hasEllipse ?
                         std::find_if(defineDirective.replacementBegin, defineDirective.replacementEnd,
-                                     [](const cld::Lexer::Token& token) {
+                                     [](const cld::Lexer::PPToken& token) {
                                          if (token.getTokenType() != cld::Lexer::TokenType::Identifier)
                                          {
                                              return false;
                                          }
-                                         return cld::get<std::string>(token.getValue()) == "__VA_ARGS__";
+                                         return token.getValue() == "__VA_ARGS__";
                                      }) :
                         defineDirective.replacementEnd;
         if (iter != defineDirective.replacementEnd)
         {
-            log({cld::Message::error(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, iter,
-                                     {cld::Underline(iter)})});
+            log({cld::PPMessage::error(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, iter,
+                                       {cld::Underline(iter)})});
         }
-        auto& name = cld::get<std::string>(defineDirective.identifierPos->getValue());
+        auto& name = defineDirective.identifierPos->getValue();
         if (name == "defined")
         {
-            log({cld::Message::error(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME,
-                                     defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
+            log({cld::PPMessage::error(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME,
+                                       defineDirective.identifierPos,
+                                       {cld::Underline(defineDirective.identifierPos)})});
             return;
         }
         if (std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
                         [&name](std::string_view value) { return value == name; }))
         {
-            log({cld::Message::error(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + name + '\''),
-                                     defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
+            log({cld::PPMessage::error(
+                cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + name + '\''),
+                defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
             return;
         }
         auto [result, notADuplicate] =
@@ -323,30 +309,30 @@ public:
         CLD_ASSERT(result->second.identifierPos);
         if (equal(defineDirective, result->second))
         {
-            log({cld::Message::warning(cld::Warnings::PP::N_REDEFINED.args('\'' + name + '\''),
-                                       defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)}),
-                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, *result->second.identifierPos,
-                                    {cld::Underline(*result->second.identifierPos)})});
+            log({cld::PPMessage::warning(cld::Warnings::PP::N_REDEFINED.args('\'' + name + '\''),
+                                         defineDirective.identifierPos,
+                                         {cld::Underline(defineDirective.identifierPos)}),
+                 cld::PPMessage::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, *result->second.identifierPos,
+                                      {cld::Underline(*result->second.identifierPos)})});
             return;
         }
-        log({cld::Message::error(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args('\'' + name + '\''),
-                                 defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)}),
-             cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, *result->second.identifierPos,
-                                {cld::Underline(*result->second.identifierPos)})});
+        log({cld::PPMessage::error(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args('\'' + name + '\''),
+                                   defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)}),
+             cld::PPMessage::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, *result->second.identifierPos,
+                                  {cld::Underline(*result->second.identifierPos)})});
     }
 };
 } // namespace
 
-cld::PPSourceObject cld::PP::preprocess(const cld::SourceObject& sourceObject, const Options& options,
-                                        llvm::raw_ostream* reporter) noexcept
+cld::PPSourceObject cld::PP::preprocess(const cld::PPSourceObject& sourceObject, llvm::raw_ostream* reporter) noexcept
 {
     auto [tree, ok] = buildTree(sourceObject, reporter);
     if (!ok)
     {
         return cld::PPSourceObject(sourceObject);
     }
-    Preprocessor preprocessor(reporter, sourceObject, options);
+    Preprocessor preprocessor(reporter, sourceObject, sourceObject.getLanguageOptions());
     preprocessor.visit(tree);
-    return PPSourceObject(sourceObject, std::move(preprocessor.getResult()), std::move(preprocessor.getSubstitutions()),
-                          std::move(preprocessor.getPpStarts()));
+    //    return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getSubstitutions()),
+    //                          std::move(preprocessor.getPpStarts()));
 }

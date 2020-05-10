@@ -155,11 +155,11 @@ class LabelStatement;
 
 class Node
 {
-    Lexer::TokenIterator m_begin;
-    Lexer::TokenIterator m_end;
+    Lexer::CTokenIterator m_begin;
+    Lexer::CTokenIterator m_end;
 
 public:
-    Node(Lexer::TokenIterator begin, Lexer::TokenIterator end);
+    Node(Lexer::CTokenIterator begin, Lexer::CTokenIterator end);
 
     ~Node() = default;
 
@@ -171,9 +171,9 @@ public:
 
     Node& operator=(Node&&) noexcept = default;
 
-    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator begin() const;
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
 
-    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator end() const;
+    [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
 /**
@@ -184,7 +184,7 @@ class Expression final : public Node
     std::vector<AssignmentExpression> m_assignmentExpressions;
 
 public:
-    Expression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                std::vector<AssignmentExpression> assignmentExpressions);
 
     [[nodiscard]] const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
@@ -198,7 +198,7 @@ class PrimaryExpressionIdentifier final : public Node
     std::string m_identifier;
 
 public:
-    PrimaryExpressionIdentifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string identifier);
+    PrimaryExpressionIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
 
     [[nodiscard]] const std::string& getIdentifier() const;
 };
@@ -214,15 +214,15 @@ public:
 
 private:
     variant m_value;
-    Lexer::Token::Type m_type;
+    Lexer::CToken::Type m_type;
 
 public:
-    PrimaryExpressionConstant(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant value,
-                              Lexer::Token::Type type);
+    PrimaryExpressionConstant(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant value,
+                              Lexer::CToken::Type type);
 
     [[nodiscard]] const variant& getValue() const;
 
-    [[nodiscard]] Lexer::Token::Type getType() const;
+    [[nodiscard]] Lexer::CToken::Type getType() const;
 };
 
 /**
@@ -233,7 +233,7 @@ class PrimaryExpressionParenthese final : public Node
     Expression m_expression;
 
 public:
-    PrimaryExpressionParenthese(Lexer::TokenIterator begin, Lexer::TokenIterator end, Expression&& expression);
+    PrimaryExpressionParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression);
 
     [[nodiscard]] const Expression& getExpression() const;
 };
@@ -269,7 +269,7 @@ class PostFixExpressionPrimaryExpression final : public Node
     PrimaryExpression m_primaryExpression;
 
 public:
-    PostFixExpressionPrimaryExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionPrimaryExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                        PrimaryExpression&& primaryExpression);
 
     [[nodiscard]] const PrimaryExpression& getPrimaryExpression() const;
@@ -285,7 +285,7 @@ class PostFixExpressionSubscript final : public Node
     Expression m_expression;
 
 public:
-    PostFixExpressionSubscript(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionSubscript(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression, Expression&& expression);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -301,7 +301,7 @@ class PostFixExpressionIncrement final : public Node
     std::unique_ptr<PostFixExpression> m_postFixExpression;
 
 public:
-    PostFixExpressionIncrement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionIncrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -315,7 +315,7 @@ class PostFixExpressionDecrement final : public Node
     std::unique_ptr<PostFixExpression> m_postFixExpression;
 
 public:
-    PostFixExpressionDecrement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionDecrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -330,7 +330,7 @@ class PostFixExpressionDot final : public Node
     std::string m_identifier;
 
 public:
-    PostFixExpressionDot(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionDot(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                          std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -347,7 +347,7 @@ class PostFixExpressionArrow final : public Node
     std::string m_identifier;
 
 public:
-    PostFixExpressionArrow(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionArrow(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                            std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -366,7 +366,7 @@ class PostFixExpressionFunctionCall final : public Node
     std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmanetExpressions;
 
 public:
-    PostFixExpressionFunctionCall(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    PostFixExpressionFunctionCall(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
                                   std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
 
@@ -386,7 +386,7 @@ class PostFixExpressionTypeInitializer final : public Node
     std::unique_ptr<InitializerList> m_initializerList;
 
 public:
-    PostFixExpressionTypeInitializer(Lexer::TokenIterator begin, Lexer::TokenIterator end, TypeName&& typeName,
+    PostFixExpressionTypeInitializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, TypeName&& typeName,
                                      InitializerList&& initializerList);
 
     [[nodiscard]] const InitializerList& getInitializerList() const;
@@ -411,7 +411,7 @@ class UnaryExpressionPostFixExpression final : public Node
     std::unique_ptr<PostFixExpression> m_postFixExpression;
 
 public:
-    UnaryExpressionPostFixExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    UnaryExpressionPostFixExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                      PostFixExpression&& postFixExpression);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
@@ -447,7 +447,7 @@ private:
     UnaryOperator m_operator;
 
 public:
-    UnaryExpressionUnaryOperator(Lexer::TokenIterator begin, Lexer::TokenIterator end, UnaryOperator anOperator,
+    UnaryExpressionUnaryOperator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryOperator anOperator,
                                  std::unique_ptr<CastExpression>&& unaryExpression);
 
     [[nodiscard]] UnaryOperator getAnOperator() const;
@@ -467,7 +467,7 @@ class UnaryExpressionSizeOf final : public Node
     variant m_variant;
 
 public:
-    UnaryExpressionSizeOf(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant&& variant);
+    UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
 };
@@ -482,8 +482,7 @@ class UnaryExpressionDefined final : public Node
     std::string m_identifier;
 
 public:
-    UnaryExpressionDefined(std::vector<cld::Lexer::Token>::const_iterator begin,
-                           std::vector<cld::Lexer::Token>::const_iterator end, std::string identifier);
+    UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
 
     [[nodiscard]] const std::string& getIdentifier() const;
 };
@@ -505,7 +504,7 @@ private:
     Qualifier m_qualifier;
 
 public:
-    TypeQualifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, Qualifier qualifier);
+    TypeQualifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Qualifier qualifier);
 
     [[nodiscard]] Qualifier getQualifier() const;
 };
@@ -524,7 +523,7 @@ class TypeName final : public Node
     std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
 public:
-    TypeName(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    TypeName(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
              std::vector<SpecifierQualifier>&& specifierQualifiers,
              std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
@@ -544,7 +543,7 @@ class CastExpression final : public Node
     variant m_variant;
 
 public:
-    CastExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant&& variant);
+    CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
 };
@@ -571,7 +570,7 @@ private:
     std::vector<std::pair<BinaryDotOperator, CastExpression>> m_optionalCastExpressions;
 
 public:
-    Term(Lexer::TokenIterator begin, Lexer::TokenIterator end, CastExpression&& castExpressions,
+    Term(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, CastExpression&& castExpressions,
          std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
 
     [[nodiscard]] const CastExpression& getCastExpression() const;
@@ -600,7 +599,7 @@ private:
     std::vector<std::pair<BinaryDashOperator, Term>> m_optionalTerms;
 
 public:
-    AdditiveExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end, Term&& term,
+    AdditiveExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Term&& term,
                        std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
 
     [[nodiscard]] const Term& getTerm() const;
@@ -629,7 +628,7 @@ private:
     std::vector<std::pair<ShiftOperator, AdditiveExpression>> m_optionalAdditiveExpressions;
 
 public:
-    ShiftExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end, AdditiveExpression&& additiveExpression,
+    ShiftExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, AdditiveExpression&& additiveExpression,
                     std::vector<std::pair<ShiftOperator, AdditiveExpression>>&& optionalAdditiveExpressions);
 
     [[nodiscard]] const AdditiveExpression& getAdditiveExpression() const;
@@ -661,7 +660,7 @@ private:
     std::vector<std::pair<RelationalOperator, ShiftExpression>> m_optionalRelationalExpressions;
 
 public:
-    RelationalExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end, ShiftExpression&& shiftExpression,
+    RelationalExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ShiftExpression&& shiftExpression,
                          std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions);
 
     [[nodiscard]] const ShiftExpression& getShiftExpression() const;
@@ -691,7 +690,7 @@ private:
     std::vector<std::pair<EqualityOperator, RelationalExpression>> m_optionalRelationalExpressions;
 
 public:
-    EqualityExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    EqualityExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                        RelationalExpression&& relationalExpression,
                        std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions);
 
@@ -709,7 +708,7 @@ class BitAndExpression final : public Node
     std::vector<EqualityExpression> m_equalityExpressions;
 
 public:
-    BitAndExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    BitAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                      std::vector<EqualityExpression>&& equalityExpressions);
 
     [[nodiscard]] const std::vector<EqualityExpression>& getEqualityExpressions() const;
@@ -723,7 +722,7 @@ class BitXorExpression final : public Node
     std::vector<BitAndExpression> m_bitAndExpressions;
 
 public:
-    BitXorExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    BitXorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                      std::vector<BitAndExpression>&& bitAndExpressions);
 
     [[nodiscard]] const std::vector<BitAndExpression>& getBitAndExpressions() const;
@@ -737,7 +736,7 @@ class BitOrExpression final : public Node
     std::vector<BitXorExpression> m_bitXorExpressions;
 
 public:
-    BitOrExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    BitOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                     std::vector<BitXorExpression>&& bitXorExpressions);
 
     [[nodiscard]] const std::vector<BitXorExpression>& getBitXorExpressions() const;
@@ -751,7 +750,7 @@ class LogicalAndExpression final : public Node
     std::vector<BitOrExpression> m_bitOrExpressions;
 
 public:
-    LogicalAndExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    LogicalAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                          std::vector<BitOrExpression>&& equalityExpressions);
 
     [[nodiscard]] const std::vector<BitOrExpression>& getBitOrExpressions() const;
@@ -765,7 +764,7 @@ class LogicalOrExpression final : public Node
     std::vector<LogicalAndExpression> m_andExpressions;
 
 public:
-    LogicalOrExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    LogicalOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                         std::vector<LogicalAndExpression>&& andExpressions);
 
     [[nodiscard]] const std::vector<LogicalAndExpression>& getAndExpressions() const;
@@ -784,7 +783,7 @@ class ConditionalExpression final : public Node
     std::unique_ptr<ConditionalExpression> m_optionalConditionalExpression;
 
 public:
-    ConditionalExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    ConditionalExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                           LogicalOrExpression&& logicalOrExpression,
                           std::unique_ptr<Expression>&& optionalExpression = nullptr,
                           std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
@@ -833,7 +832,7 @@ private:
     std::vector<std::pair<AssignOperator, ConditionalExpression>> m_assignments;
 
 public:
-    AssignmentExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    AssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                          ConditionalExpression&& conditionalExpression,
                          std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments);
 
@@ -850,7 +849,7 @@ class ReturnStatement final : public Node
     std::unique_ptr<Expression> m_expression;
 
 public:
-    ReturnStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::unique_ptr<Expression>&& expression);
+    ReturnStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<Expression>&& expression);
 
     [[nodiscard]] const Expression* getExpression() const;
 };
@@ -863,7 +862,7 @@ class ExpressionStatement final : public Node
     std::unique_ptr<Expression> m_optionalExpression;
 
 public:
-    ExpressionStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    ExpressionStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                         std::unique_ptr<Expression>&& optionalExpression = nullptr);
 
     [[nodiscard]] const Expression* getOptionalExpression() const;
@@ -902,7 +901,7 @@ class IfStatement final : public Node
     std::unique_ptr<Statement> m_elseBranch;
 
 public:
-    IfStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, Expression&& expression,
+    IfStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression,
                 std::unique_ptr<Statement>&& branch, std::unique_ptr<Statement>&& elseBranch = nullptr);
 
     [[nodiscard]] const Expression& getExpression() const;
@@ -922,7 +921,7 @@ class SwitchStatement final : public Node
     std::unique_ptr<Statement> m_statement;
 
 public:
-    SwitchStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, Expression&& expression,
+    SwitchStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression,
                     std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const Expression& getExpression() const;
@@ -938,7 +937,7 @@ class DefaultStatement final : public Node
     std::unique_ptr<Statement> m_statement;
 
 public:
-    DefaultStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::unique_ptr<Statement>&& statement);
+    DefaultStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const Statement& getStatement() const;
 };
@@ -952,7 +951,7 @@ class CaseStatement final : public Node
     std::unique_ptr<Statement> m_statement;
 
 public:
-    CaseStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, ConstantExpression&& constantExpression,
+    CaseStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ConstantExpression&& constantExpression,
                   std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const ConstantExpression& getConstantExpression() const;
@@ -969,7 +968,8 @@ class LabelStatement final : public Node
     std::unique_ptr<Statement> m_statement;
 
 public:
-    LabelStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string identifier, Statement&& statement);
+    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier,
+                   Statement&& statement);
 
     [[nodiscard]] const Statement& getStatement() const;
 };
@@ -987,7 +987,7 @@ class CompoundStatement final : public Node
     std::vector<CompoundItem> m_blockItems;
 
 public:
-    CompoundStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::vector<CompoundItem>&& blockItems);
+    CompoundStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<CompoundItem>&& blockItems);
 
     [[nodiscard]] const std::vector<CompoundItem>& getBlockItems() const;
 };
@@ -1015,7 +1015,7 @@ private:
     Specifiers m_specifier;
 
 public:
-    StorageClassSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, Specifiers specifier);
+    StorageClassSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Specifiers specifier);
 
     [[nodiscard]] Specifiers getSpecifier() const;
 };
@@ -1026,8 +1026,7 @@ public:
 class FunctionSpecifier final : public Node
 {
 public:
-    FunctionSpecifier(const std::vector<cld::Lexer::Token>::const_iterator& begin,
-                      const std::vector<cld::Lexer::Token>::const_iterator& end);
+    FunctionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end);
 };
 
 /**
@@ -1047,7 +1046,7 @@ class Declaration final : public Node
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> m_initDeclarators;
 
 public:
-    Declaration(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Declaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                 std::vector<DeclarationSpecifier>&& declarationSpecifiers,
                 std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&& initDeclarators);
 
@@ -1071,7 +1070,7 @@ class ForStatement final : public Node
     std::unique_ptr<Expression> m_post;
 
 public:
-    ForStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::unique_ptr<Statement>&& statement,
+    ForStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<Statement>&& statement,
                  std::variant<Declaration, std::unique_ptr<Expression>>&& initial,
                  std::unique_ptr<Expression>&& controlling, std::unique_ptr<Expression>&& post);
 
@@ -1094,7 +1093,7 @@ class HeadWhileStatement final : public Node
     std::unique_ptr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, Expression&& expression,
+    HeadWhileStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression,
                        std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const Expression& getExpression() const;
@@ -1112,7 +1111,7 @@ class FootWhileStatement final : public Node
     Expression m_expression;
 
 public:
-    FootWhileStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::unique_ptr<Statement>&& statement,
+    FootWhileStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<Statement>&& statement,
                        Expression&& expression);
 
     [[nodiscard]] const Statement& getStatement() const;
@@ -1126,7 +1125,7 @@ public:
 class BreakStatement final : public Node
 {
 public:
-    BreakStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end);
+    BreakStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end);
 };
 
 /**
@@ -1135,7 +1134,7 @@ public:
 class ContinueStatement final : public Node
 {
 public:
-    ContinueStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end);
+    ContinueStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end);
 };
 
 /**
@@ -1146,7 +1145,7 @@ class GotoStatement final : public Node
     std::string m_identifier;
 
 public:
-    GotoStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string identifier);
+    GotoStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
 
     [[nodiscard]] const std::string& getIdentifier() const;
 };
@@ -1170,8 +1169,7 @@ class DirectAbstractDeclaratorParenthese final : public Node
     std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
 public:
-    DirectAbstractDeclaratorParenthese(std::vector<cld::Lexer::Token>::const_iterator begin,
-                                       std::vector<cld::Lexer::Token>::const_iterator end,
+    DirectAbstractDeclaratorParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                        std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
     [[nodiscard]] const AbstractDeclarator& getAbstractDeclarator() const;
@@ -1187,7 +1185,7 @@ class DirectAbstractDeclaratorAssignmentExpression final : public Node
     std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
 public:
-    DirectAbstractDeclaratorAssignmentExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectAbstractDeclaratorAssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                  std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
                                                  std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
@@ -1205,8 +1203,7 @@ class DirectAbstractDeclaratorAsterisk final : public Node
     std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
 
 public:
-    DirectAbstractDeclaratorAsterisk(std::vector<cld::Lexer::Token>::const_iterator begin,
-                                     std::vector<cld::Lexer::Token>::const_iterator end,
+    DirectAbstractDeclaratorAsterisk(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                      std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator);
 
     [[nodiscard]] const std::unique_ptr<DirectAbstractDeclarator>& getDirectAbstractDeclarator() const;
@@ -1222,7 +1219,7 @@ class DirectAbstractDeclaratorParameterTypeList final : public Node
     std::unique_ptr<ParameterTypeList> m_parameterTypeList;
 
 public:
-    DirectAbstractDeclaratorParameterTypeList(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectAbstractDeclaratorParameterTypeList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                               std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
                                               std::unique_ptr<ParameterTypeList>&& parameterTypeList);
 
@@ -1241,7 +1238,7 @@ class AbstractDeclarator final : public Node
     std::optional<DirectAbstractDeclarator> m_directAbstractDeclarator;
 
 public:
-    AbstractDeclarator(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::vector<Pointer>&& pointers,
+    AbstractDeclarator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<Pointer>&& pointers,
                        std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator);
 
     [[nodiscard]] const std::vector<Pointer>& getPointers() const;
@@ -1265,7 +1262,7 @@ private:
     std::vector<ParameterDeclaration> m_parameterList;
 
 public:
-    ParameterList(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    ParameterList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                   std::vector<ParameterDeclaration>&& parameterList);
 
     [[nodiscard]] const std::vector<ParameterDeclaration>& getParameterDeclarations() const;
@@ -1280,7 +1277,7 @@ class ParameterTypeList final : public Node
     bool m_hasEllipse;
 
 public:
-    ParameterTypeList(Lexer::TokenIterator begin, Lexer::TokenIterator end, ParameterList&& parameterList,
+    ParameterTypeList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ParameterList&& parameterList,
                       bool hasEllipse);
 
     [[nodiscard]] const ParameterList& getParameterList() const;
@@ -1308,15 +1305,15 @@ using DirectDeclarator =
 class DirectDeclaratorIdentifier final : public Node
 {
     std::string m_identifier;
-    Lexer::TokenIterator m_identifierLoc;
+    Lexer::CTokenIterator m_identifierLoc;
 
 public:
-    DirectDeclaratorIdentifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string identifier,
-                               Lexer::TokenIterator identifierLoc);
+    DirectDeclaratorIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier,
+                               Lexer::CTokenIterator identifierLoc);
 
     [[nodiscard]] const std::string& getIdentifier() const;
 
-    [[nodiscard]] std::vector<cld::Lexer::Token>::const_iterator getIdentifierLoc() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifierLoc() const;
 };
 
 /**
@@ -1327,7 +1324,7 @@ class DirectDeclaratorParenthese final : public Node
     std::unique_ptr<Declarator> m_declarator;
 
 public:
-    DirectDeclaratorParenthese(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectDeclaratorParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<Declarator>&& declarator);
 
     [[nodiscard]] const Declarator& getDeclarator() const;
@@ -1343,7 +1340,7 @@ class DirectDeclaratorParentheseParameters final : public Node
     ParameterTypeList m_parameterTypeList;
 
 public:
-    DirectDeclaratorParentheseParameters(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectDeclaratorParentheseParameters(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                          DirectDeclarator&& directDeclarator, ParameterTypeList&& parameterTypeList);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
@@ -1358,16 +1355,16 @@ public:
 class DirectDeclaratorParentheseIdentifiers final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
-    std::vector<std::pair<std::string, Lexer::TokenIterator>> m_identifiers;
+    std::vector<std::pair<std::string, Lexer::CTokenIterator>> m_identifiers;
 
 public:
-    DirectDeclaratorParentheseIdentifiers(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectDeclaratorParentheseIdentifiers(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           DirectDeclarator&& directDeclarator,
-                                          std::vector<std::pair<std::string, Lexer::TokenIterator>>&& identifiers);
+                                          std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
-    [[nodiscard]] const std::vector<std::pair<std::string, Lexer::TokenIterator>>& getIdentifiers() const;
+    [[nodiscard]] const std::vector<std::pair<std::string, Lexer::CTokenIterator>>& getIdentifiers() const;
 };
 
 /**
@@ -1380,8 +1377,8 @@ class DirectDeclaratorAsterisk final : public Node
     std::vector<TypeQualifier> m_typeQualifiers;
 
 public:
-    DirectDeclaratorAsterisk(Lexer::TokenIterator begin, Lexer::TokenIterator end, DirectDeclarator&& directDeclarator,
-                             std::vector<TypeQualifier>&& typeQualifiers);
+    DirectDeclaratorAsterisk(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                             DirectDeclarator&& directDeclarator, std::vector<TypeQualifier>&& typeQualifiers);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
@@ -1399,7 +1396,7 @@ class DirectDeclaratorNoStaticOrAsterisk final : public Node
     std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
 public:
-    DirectDeclaratorNoStaticOrAsterisk(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectDeclaratorNoStaticOrAsterisk(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                        std::unique_ptr<DirectDeclarator>&& directDeclarator,
                                        std::vector<TypeQualifier>&& typeQualifiers,
                                        std::unique_ptr<AssignmentExpression>&& assignmentExpression);
@@ -1424,7 +1421,7 @@ class DirectDeclaratorStatic final : public Node
     AssignmentExpression m_assignmentExpression;
 
 public:
-    DirectDeclaratorStatic(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    DirectDeclaratorStatic(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                            std::unique_ptr<DirectDeclarator>&& directDeclarator,
                            std::vector<TypeQualifier>&& typeQualifiers, AssignmentExpression&& assignmentExpression);
 
@@ -1444,7 +1441,7 @@ class Declarator final : public Node
     DirectDeclarator m_directDeclarator;
 
 public:
-    Declarator(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::vector<Pointer>&& pointers,
+    Declarator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<Pointer>&& pointers,
                DirectDeclarator&& directDeclarator);
 
     [[nodiscard]] const std::vector<Pointer>& getPointers() const;
@@ -1482,7 +1479,7 @@ private:
     std::vector<StructDeclaration> m_structDeclarations;
 
 public:
-    StructOrUnionSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, bool isUnion, std::string identifier,
+    StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, std::string identifier,
                            std::vector<StructDeclaration>&& structDeclarations);
 
     [[nodiscard]] bool isUnion() const;
@@ -1504,7 +1501,7 @@ class EnumDeclaration final : public Node
     std::vector<std::pair<std::string, std::optional<ConstantExpression>>> m_values;
 
 public:
-    EnumDeclaration(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string name,
+    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string name,
                     std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values);
 
     [[nodiscard]] const std::string& getName() const;
@@ -1522,7 +1519,7 @@ class EnumSpecifier final : public Node
     variant m_variant;
 
 public:
-    EnumSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant&& variant);
+    EnumSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
 };
@@ -1565,7 +1562,7 @@ private:
     variant m_variant;
 
 public:
-    TypeSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant&& variant);
+    TypeSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
 };
@@ -1578,7 +1575,7 @@ class Pointer final : public Node
     std::vector<TypeQualifier> m_typeQualifiers;
 
 public:
-    Pointer(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::vector<TypeQualifier>&& typeQualifiers);
+    Pointer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<TypeQualifier>&& typeQualifiers);
 
     [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
 };
@@ -1608,7 +1605,7 @@ private:
     vector m_nonCommaExpressionsAndBlocks;
 
 public:
-    InitializerList(Lexer::TokenIterator begin, Lexer::TokenIterator end, vector&& nonCommaExpressionsAndBlocks);
+    InitializerList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, vector&& nonCommaExpressionsAndBlocks);
 
     [[nodiscard]] const vector& getNonCommaExpressionsAndBlocks() const;
 };
@@ -1623,7 +1620,7 @@ class Initializer final : public Node
     variant m_variant;
 
 public:
-    Initializer(Lexer::TokenIterator begin, Lexer::TokenIterator end, variant&& variant);
+    Initializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
 };
@@ -1640,7 +1637,7 @@ class FunctionDefinition final : public Node
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    FunctionDefinition(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                        std::vector<DeclarationSpecifier>&& declarationSpecifiers, Declarator&& declarator,
                        std::vector<Declaration>&& declarations, CompoundStatement&& compoundStatement);
 

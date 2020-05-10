@@ -20,15 +20,15 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
-    cld::SourceObject tokens;
-    tokens = cld::Lexer::tokenize(expression, options);
+    auto tokens = cld::Lexer::tokenize(expression, options);
     REQUIRE(!tokens.data().empty());
-    cld::Parser::Context context(tokens, &ss);
-    auto ref = tokens.data().cbegin();
-    auto parsing = cld::Parser::parseConditionalExpression(ref, tokens.data().cend(), context);
+    auto ctokens = cld::Lexer::toCTokens(tokens);
+    cld::Parser::Context context(ctokens, &ss);
+    auto ref = ctokens.data().cbegin();
+    auto parsing = cld::Parser::parseConditionalExpression(ref, ctokens.data().cend(), context);
     INFO(ss.str());
     REQUIRE((ss.str().empty()));
-    cld::Semantics::SemanticAnalysis analysis(tokens, &ss);
+    cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     cld::Semantics::ConstantEvaluator evaluator(
         options,
         [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
@@ -37,23 +37,23 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                 typeName.getAbstractDeclarator());
         },
         {},
-        [&ss, &tokens](std::string message, std::vector<cld::Modifier> modifiers, cld::Message::Severity severity) {
+        [&ss, &ctokens](std::string message, std::vector<cld::Modifier<cld::Lexer::CToken>> modifiers, cld::CMessage::Severity severity) {
             switch (severity)
             {
-                case cld::Message::Error:
-                    cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                case cld::CMessage::Error:
+                    cld::CMessage::error(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                         std::move(modifiers))
-                        .print(ss, tokens);
+                        .print(ss, ctokens);
                     break;
-                case cld::Message::Note:
-                    cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                case cld::CMessage::Note:
+                    cld::CMessage::note(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                        std::move(modifiers))
-                        .print(ss, tokens);
+                        .print(ss, ctokens);
                     break;
-                case cld::Message::Warning:
-                    cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                case cld::CMessage::Warning:
+                    cld::CMessage::warning(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                           std::move(modifiers))
-                        .print(ss, tokens);
+                        .print(ss, ctokens);
                     break;
             }
         },
@@ -70,25 +70,25 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                     typeName.getAbstractDeclarator());
             },
             {},
-            [&tokens](std::string message, std::vector<cld::Modifier> modifiers, cld::Message::Severity severity) {
+            [&ctokens](std::string message, std::vector<cld::Modifier<cld::Lexer::CToken>> modifiers, cld::CMessage::Severity severity) {
                 switch (severity)
                 {
-                    case cld::Message::Error:
-                        cld::Message::error(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                    case cld::CMessage::Error:
+                        cld::CMessage::error(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                             std::move(modifiers))
-                                .print(llvm::errs(), tokens)
+                                .print(llvm::errs(), ctokens)
                             << '\n';
                         break;
-                    case cld::Message::Note:
-                        cld::Message::note(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                    case cld::CMessage::Note:
+                        cld::CMessage::note(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                            std::move(modifiers))
-                                .print(llvm::errs(), tokens)
+                                .print(llvm::errs(), ctokens)
                             << '\n';
                         break;
-                    case cld::Message::Warning:
-                        cld::Message::warning(std::move(message), tokens.data().cbegin(), tokens.data().cend(),
+                    case cld::CMessage::Warning:
+                        cld::CMessage::warning(std::move(message), ctokens.data().cbegin(), ctokens.data().cend(),
                                               std::move(modifiers))
-                                .print(llvm::errs(), tokens)
+                                .print(llvm::errs(), ctokens)
                             << '\n';
                         break;
                 }

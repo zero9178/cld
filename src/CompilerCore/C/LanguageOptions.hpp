@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace cld
 {
@@ -22,6 +24,8 @@ struct LanguageOptions
     std::uint8_t sizeOfLong;
     std::uint8_t sizeOfLongDoubleBits;
     std::uint8_t sizeOfVoidStar;
+    std::vector<std::string> includeDirectories{};
+    std::vector<std::string> includeQuoteDirectories{};
 
     static LanguageOptions native(Language language = Language::C99);
 };

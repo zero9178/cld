@@ -1,85 +1,133 @@
 #pragma once
 
-#include <unordered_map>
+#include <CompilerCore/Common/Util.hpp>
+
+#include <algorithm>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include "LanguageOptions.hpp"
-#include "Lexer.hpp"
 
 namespace cld
 {
+namespace Lexer
+{
+class CToken;
+class PPToken;
+} // namespace Lexer
+
+namespace Source
+{
+struct File
+{
+    std::string path;
+    std::string source;
+    std::vector<std::uint64_t> starts;
+    std::vector<std::uint64_t> afterPPStarts;
+};
+
+struct Substitution
+{
+    std::uint64_t identifierPos;
+    std::uint64_t identifierLength;
+};
+} // namespace Source
+
+template <class T>
 class SourceObject
 {
-    std::string m_source;
-    std::vector<std::uint64_t> m_starts;
+public:
+private:
+    std::vector<T> m_tokens;
+    std::vector<Source::File> m_files;
     LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
-
-protected:
-    std::vector<Lexer::Token> m_tokens;
-
-    SourceObject(const SourceObject& rhs);
-
-    SourceObject& operator=(const SourceObject& rhs);
+    std::vector<Source::Substitution> m_substitutions;
 
 public:
     SourceObject() = default;
 
-    explicit SourceObject(std::string source, std::vector<std::uint64_t> starts, std::vector<Lexer::Token> tokens,
-                          LanguageOptions languageOptions = LanguageOptions::native(LanguageOptions::C99));
-
-    virtual ~SourceObject() = default;
-
-    SourceObject(SourceObject&& rhs) noexcept;
-
-    SourceObject& operator=(SourceObject&& rhs) noexcept;
-
-    [[nodiscard]] std::uint64_t getLineNumber(std::uint64_t offset) const noexcept;
-
-    [[nodiscard]] std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept;
-
-    [[nodiscard]] std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept;
-
-    [[nodiscard]] const std::vector<Lexer::Token>& data() const;
-
-    [[nodiscard]] const LanguageOptions& getLanguageOptions() const;
-
-    [[nodiscard]] virtual bool isPreprocessed() const;
-
-    [[nodiscard]] const std::string& getSource() const;
-};
-
-class PPSourceObject final : public SourceObject
-{
-public:
-    struct Substitution
+    explicit SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
+                          std::vector<Source::Substitution> substitutions)
+        : m_tokens(std::move(tokens)),
+          m_files(files),
+          m_languageOptions(std::move(languageOptions)),
+          m_substitutions(substitutions)
     {
-        Lexer::Token identifier;
-    };
-    using SubstitutionMap = std::unordered_map<std::uint64_t, Substitution>;
+    }
 
-private:
-    SubstitutionMap m_substitutions;
-    std::vector<std::uint64_t> m_starts;
+    [[nodiscard]] std::uint64_t getLineNumber(std::uint64_t fileID, std::uint64_t offset) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        auto result = std::lower_bound(m_files[fileID].starts.begin(), m_files[fileID].starts.end(), offset);
+        return std::distance(m_files[fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
+    }
 
-public:
-    PPSourceObject(const SourceObject& sourceObject, std::vector<Lexer::Token> tokens = {},
-                   SubstitutionMap substitutions = {}, std::vector<uint64_t> ppstarts = {});
+    [[nodiscard]] std::uint64_t getLineStartOffset(std::uint64_t fileID, std::uint64_t line) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return m_files[fileID].starts[line - 1];
+    }
 
-    PPSourceObject(const PPSourceObject&) = delete;
+    [[nodiscard]] std::uint64_t getLineEndOffset(std::uint64_t fileID, std::uint64_t line) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return line == m_files[fileID].starts.size() ? m_tokens.back().getOffset() + m_tokens.back().getLength() :
+                                                       m_files[fileID].starts[line];
+    }
 
-    PPSourceObject& operator=(const PPSourceObject&) = delete;
+    [[nodiscard]] const std::vector<T>& data() const noexcept
+    {
+        return m_tokens;
+    }
 
-    PPSourceObject(PPSourceObject&&) = default;
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept
+    {
+        return m_languageOptions;
+    }
 
-    PPSourceObject& operator=(PPSourceObject&&) = default;
+    [[nodiscard]] std::uint64_t getPPLineNumber(std::uint64_t fileID, std::uint64_t offset) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        auto result =
+            std::lower_bound(m_files[fileID].afterPPStarts.begin(), m_files[fileID].afterPPStarts.end(), offset);
+        return std::distance(m_files[fileID].afterPPStarts.begin(), result) + (*result == offset ? 1 : 0);
+    }
 
-    [[nodiscard]] bool isPreprocessed() const override;
+    [[nodiscard]] std::uint64_t getPPLineStartOffset(std::uint64_t fileID, std::uint64_t line) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].afterPPStarts.size());
+        return m_files[fileID].afterPPStarts[line - 1];
+    }
 
-    [[nodiscard]] std::uint64_t getPPLineNumber(std::uint64_t offset) const noexcept;
+    [[nodiscard]] std::uint64_t getPPLineEndOffset(std::uint64_t fileID, std::uint64_t line) const noexcept
+    {
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].afterPPStarts.size());
+        return line == m_files[fileID].afterPPStarts.size() ?
+                   m_tokens.back().getPPOffset() + m_tokens.back().getLength() :
+                   m_files[fileID].afterPPStarts[line];
+    }
 
-    [[nodiscard]] std::uint64_t getPPLineStartOffset(std::uint64_t line) const noexcept;
+    const std::vector<Source::Substitution>& getSubstitutions() const noexcept
+    {
+        return m_substitutions;
+    }
 
-    [[nodiscard]] std::uint64_t getPPLineEndOffset(std::uint64_t line) const noexcept;
-
-    const SubstitutionMap& getSubstitutions() const;
+    const std::vector<Source::File>& getFiles() const noexcept
+    {
+        return m_files;
+    }
 };
+
+using CSourceObject = SourceObject<Lexer::CToken>;
+using PPSourceObject = SourceObject<Lexer::PPToken>;
+
+extern template class SourceObject<Lexer::CToken>;
+
+extern template class SourceObject<Lexer::PPToken>;
+
 } // namespace cld

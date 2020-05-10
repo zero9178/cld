@@ -24,5 +24,7 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
                                         default: CLD_UNREACHABLE;
                                     }
                                 }(),
-                                sizeof(void*)};
+                                sizeof(void*),
+                                {},
+                                {}};
 }

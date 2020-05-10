@@ -16,13 +16,13 @@ class FatalParserError : public std::exception
 
 class Context final
 {
-    const SourceObject& m_sourceObject;
+    const CSourceObject& m_sourceObject;
     llvm::raw_ostream* m_reporter;
     struct DeclarationLocation
     {
-        Lexer::TokenIterator begin;
-        Lexer::TokenIterator end;
-        Lexer::TokenIterator identifier;
+        Lexer::CTokenIterator begin;
+        Lexer::CTokenIterator end;
+        Lexer::CTokenIterator identifier;
     };
 
     struct Declaration
@@ -76,7 +76,7 @@ public:
     template <class... Args>
     constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-    explicit Context(const SourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+    explicit Context(const CSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
                      bool inPreprocessor = false);
 
     ~Context() = default;
@@ -99,7 +99,7 @@ public:
 
     [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
 
-    void log(std::vector<Message> messages);
+    void log(std::vector<CMessage> messages);
 
     void addToScope(const std::string& name, DeclarationLocation declarator);
 
@@ -111,19 +111,19 @@ public:
 
     [[nodiscard]] std::size_t getCurrentErrorCount() const;
 
-    const SourceObject& getSourceObject() const;
+    const CSourceObject& getSourceObject() const;
 
-    void skipUntil(Lexer::TokenIterator& begin, Lexer::TokenIterator end, TokenBitSet additional = {});
+    void skipUntil(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, TokenBitSet additional = {});
 
-    void parenthesesEntered(Lexer::TokenIterator bracket);
+    void parenthesesEntered(Lexer::CTokenIterator bracket);
 
     void parenthesesLeft();
 
-    void squareBracketEntered(Lexer::TokenIterator bracket);
+    void squareBracketEntered(Lexer::CTokenIterator bracket);
 
     void squareBracketLeft();
 
-    void braceEntered(Lexer::TokenIterator bracket);
+    void braceEntered(Lexer::CTokenIterator bracket);
 
     void braceLeft();
 
@@ -132,130 +132,131 @@ public:
     void setBracketMax(uint64_t bracketMax);
 };
 
-std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const SourceObject& sourceObject,
+std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const CSourceObject& sourceObject,
                                                         llvm::raw_ostream* reporter = &llvm::errs());
 
-cld::Syntax::TranslationUnit parseTranslationUnit(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::TranslationUnit parseTranslationUnit(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                   Context& context);
 
-std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(Lexer::TokenIterator& begin,
-                                                                    Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(Lexer::CTokenIterator& begin,
+                                                                    Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::Declaration> parseDeclaration(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::Declaration> parseDeclaration(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                     Context& context);
 
-std::optional<Syntax::DeclarationSpecifier> parseDeclarationSpecifier(Lexer::TokenIterator& begin,
-                                                                      Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::DeclarationSpecifier> parseDeclarationSpecifier(Lexer::CTokenIterator& begin,
+                                                                      Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                  Context& context);
+std::optional<Syntax::SpecifierQualifier> parseSpecifierQualifier(Lexer::CTokenIterator& begin,
+                                                                  Lexer::CTokenIterator end, Context& context);
 
-std::vector<Syntax::SpecifierQualifier> parseSpecifierQualifierList(Lexer::TokenIterator& begin,
-                                                                    Lexer::TokenIterator end, Context& context);
+std::vector<Syntax::SpecifierQualifier> parseSpecifierQualifierList(Lexer::CTokenIterator& begin,
+                                                                    Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::Declarator> parseDeclarator(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::Declarator> parseDeclarator(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                   Context& context);
 
-std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::DirectDeclarator> parseDirectDeclarator(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                               Context& context);
 
-Syntax::ParameterTypeList parseParameterTypeList(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+Syntax::ParameterTypeList parseParameterTypeList(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                  Context& context);
 
-Syntax::AbstractDeclarator parseAbstractDeclarator(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+Syntax::AbstractDeclarator parseAbstractDeclarator(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                    Context& context);
 
 std::optional<Syntax::DirectAbstractDeclarator>
-    parseDirectAbstractDeclarator(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+    parseDirectAbstractDeclarator(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-Syntax::ParameterList parseParameterList(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+Syntax::ParameterList parseParameterList(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-Syntax::Pointer parsePointer(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+Syntax::Pointer parsePointer(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Lexer::TokenIterator& begin,
-                                                                          Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::StructOrUnionSpecifier> parseStructOrUnionSpecifier(Lexer::CTokenIterator& begin,
+                                                                          Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                         Context& context);
 
-std::optional<Syntax::CompoundStatement> parseCompoundStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::CompoundStatement> parseCompoundStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 cld::Parser::Context& context, bool pushScope = true);
 
-std::optional<Syntax::CompoundItem> parseCompoundItem(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::CompoundItem> parseCompoundItem(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                       Context& context);
 
-std::optional<Syntax::Initializer> parseInitializer(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::Initializer> parseInitializer(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                     Context& context);
 
-std::optional<Syntax::InitializerList> parseInitializerList(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::InitializerList> parseInitializerList(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                             Context& context);
 
-std::optional<Syntax::Statement> parseStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::Statement> parseStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                 Context& context);
 
-Syntax::ReturnStatement parseReturnStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+Syntax::ReturnStatement parseReturnStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::IfStatement> parseIfStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::IfStatement> parseIfStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                     Context& context);
 
-std::optional<Syntax::SwitchStatement> parseSwitchStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::SwitchStatement> parseSwitchStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                             Context& context);
 
-std::optional<Syntax::ForStatement> parseForStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::ForStatement> parseForStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                       Context& context);
 
-std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                  Context& context);
+std::optional<Syntax::HeadWhileStatement> parseHeadWhileStatement(Lexer::CTokenIterator& begin,
+                                                                  Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                  Context& context);
+std::optional<Syntax::FootWhileStatement> parseFootWhileStatement(Lexer::CTokenIterator& begin,
+                                                                  Lexer::CTokenIterator end, Context& context);
 
-Syntax::Expression parseExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+Syntax::Expression parseExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Lexer::TokenIterator& begin,
-                                                                      Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Lexer::CTokenIterator& begin,
+                                                                      Lexer::CTokenIterator end, Context& context);
 
-cld::Syntax::ConditionalExpression parseConditionalExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::ConditionalExpression parseConditionalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                               Context& context);
 
-cld::Syntax::LogicalOrExpression parseLogicalOrExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::LogicalOrExpression parseLogicalOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                           Context& context);
 
-cld::Syntax::LogicalAndExpression parseLogicalAndExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::LogicalAndExpression parseLogicalAndExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                             Context& context);
 
-cld::Syntax::BitOrExpression parseBitOrExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::BitOrExpression parseBitOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                   Context& context);
 
-cld::Syntax::BitXorExpression parseBitXorExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::BitXorExpression parseBitXorExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                     Context& context);
 
-cld::Syntax::BitAndExpression parseBitAndExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::BitAndExpression parseBitAndExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                     Context& context);
 
-std::optional<Syntax::EqualityExpression> parseEqualityExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                  Context& context);
+std::optional<Syntax::EqualityExpression> parseEqualityExpression(Lexer::CTokenIterator& begin,
+                                                                  Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::RelationalExpression> parseRelationalExpression(Lexer::TokenIterator& begin,
-                                                                      Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::RelationalExpression> parseRelationalExpression(Lexer::CTokenIterator& begin,
+                                                                      Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::ShiftExpression> parseShiftExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::ShiftExpression> parseShiftExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                             Context& context);
 
-std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                  Context& context);
+std::optional<Syntax::AdditiveExpression> parseAdditiveExpression(Lexer::CTokenIterator& begin,
+                                                                  Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::Term> parseTerm(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::Term> parseTerm(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::TypeName> parseTypeName(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context);
+std::optional<Syntax::TypeName> parseTypeName(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                              Context& context);
 
-std::optional<Syntax::CastExpression> parseCastExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::CastExpression> parseCastExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                           Context& context);
 
-std::optional<Syntax::UnaryExpression> parseUnaryExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::UnaryExpression> parseUnaryExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                             Context& context);
 
-std::optional<Syntax::PostFixExpression> parsePostFixExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<Syntax::PostFixExpression> parsePostFixExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 Context& context);
 } // namespace cld::Parser
 

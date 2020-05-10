@@ -56,30 +56,36 @@ int main(int argc, char** argv)
     llvm::TimeRegion region(timer);
     if (mode == "lexer")
     {
-        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), false, &llvm::nulls());
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls());
+        cld::Lexer::toCTokens(tokens, &llvm::nulls());
     }
     else if (mode == "parser")
     {
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), false, &llvm::nulls(), &errors);
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
         if (errors || tokens.data().empty())
         {
             return 0;
         }
+        auto ctokens = cld::Lexer::toCTokens(tokens, &llvm::nulls(), &errors);
+        if (errors || ctokens.data().empty())
+        {
+            return 0;
+        }
 
-        cld::Parser::Context context(tokens, &llvm::nulls());
+        cld::Parser::Context context(ctokens, &llvm::nulls());
         context.setBracketMax(64);
-        auto begin = tokens.data().cbegin();
-        parseTranslationUnit(begin, tokens.data().cend(), context);
+        auto begin = ctokens.data().cbegin();
+        parseTranslationUnit(begin, ctokens.data().cend(), context);
     }
     else if (mode == "pplexer")
     {
-        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), true, &llvm::nulls());
+        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls());
     }
     else if (mode == "ppparser")
     {
         bool errors;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), true, &llvm::nulls(), &errors);
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
         if (errors || tokens.data().empty())
         {
             return 0;

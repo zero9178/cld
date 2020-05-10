@@ -8,19 +8,19 @@
 
 namespace
 {
+cld::PPSourceObject sourceObject;
 }
 
 #define treeProduces(source, matches)                                                     \
     []() mutable {                                                                        \
         std::string string;                                                               \
         llvm::raw_string_ostream ss(string);                                              \
-        static cld::SourceObject tokens;                                                  \
-        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss); \
+        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
         ss.flush();                                                                       \
         REQUIRE(string.empty());                                                          \
-        auto tree = cld::PP::buildTree(tokens, &ss);                                      \
+        auto tree = cld::PP::buildTree(sourceObject, &ss);                                \
         CHECK_THAT(string, matches);                                                      \
-        cld::PP::buildTree(tokens);                                                       \
+        cld::PP::buildTree(sourceObject);                                                 \
         if (!string.empty())                                                              \
         {                                                                                 \
             llvm::errs() << '\n';                                                         \
@@ -32,18 +32,17 @@ namespace
     []() mutable {                                                                        \
         std::string string;                                                               \
         llvm::raw_string_ostream ss(string);                                              \
-        static cld::SourceObject tokens;                                                  \
-        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), true, &ss); \
+        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
         ss.flush();                                                                       \
         REQUIRE(string.empty());                                                          \
-        cld::PP::Context context(tokens, &ss);                                            \
-        auto begin = tokens.data().cbegin() + offset;                                     \
-        auto ret = parser(begin, tokens.data().cend(), context);                          \
+        cld::PP::Context context(sourceObject, &ss);                                      \
+        auto begin = sourceObject.data().cbegin() + offset;                               \
+        auto ret = parser(begin, sourceObject.data().cend(), context);                    \
         CHECK_THAT(string, matches);                                                      \
         {                                                                                 \
-            auto begin2 = tokens.data().cbegin() + offset;                                \
-            cld::PP::Context context2(tokens);                                            \
-            parser(begin2, tokens.data().cend(), context2);                               \
+            auto begin2 = sourceObject.data().cbegin() + offset;                          \
+            cld::PP::Context context2(sourceObject);                                      \
+            parser(begin2, sourceObject.data().cend(), context2);                         \
             if (!string.empty())                                                          \
             {                                                                             \
                 llvm::errs() << '\n';                                                     \
@@ -64,11 +63,11 @@ TEST_CASE("Parse Preprocessor Group", "[PPParse]")
         auto ret = functionProduces(parseGroup, "a line", 0, ProducesNothing());
         REQUIRE(ret.groupPart.size() == 1);
         const auto& part = ret.groupPart[0];
-        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::Token>>(part));
-        const auto& vector = std::get<std::vector<cld::Lexer::Token>>(part);
+        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::PPToken>>(part));
+        const auto& vector = std::get<std::vector<cld::Lexer::PPToken>>(part);
         REQUIRE(vector.size() == 2);
-        REQUIRE(vector[0].getRepresentation() == "a");
-        REQUIRE(vector[1].getRepresentation() == "line");
+        REQUIRE(vector[0].getRepresentation(sourceObject) == "a");
+        REQUIRE(vector[1].getRepresentation(sourceObject) == "line");
     }
     SECTION("Only #")
     {
@@ -102,7 +101,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& include = std::get<cld::PP::ControlLine::IncludeTag>(ret.variant);
             REQUIRE(std::distance(include.begin, include.end) == 1);
             auto begin = include.begin;
-            CHECK(begin->getRepresentation() == "<String>");
+            CHECK(begin->getRepresentation(sourceObject) == "<String>");
             CHECK(begin->getTokenType() == cld::Lexer::TokenType::StringLiteral);
         }
         SECTION("Empty")
@@ -120,7 +119,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& include = std::get<cld::PP::ControlLine::LineTag>(ret.variant);
             REQUIRE(std::distance(include.begin, include.end) == 1);
             auto begin = include.begin;
-            CHECK(begin->getRepresentation() == "5");
+            CHECK(begin->getRepresentation(sourceObject) == "5");
             CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
@@ -138,7 +137,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
             REQUIRE(std::distance(include.begin, include.end) == 1);
             auto begin = include.begin;
-            CHECK(begin->getRepresentation() == "5");
+            CHECK(begin->getRepresentation(sourceObject) == "5");
             CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
@@ -160,7 +159,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
             REQUIRE(std::distance(include.begin, include.end) == 1);
             auto begin = include.begin;
-            CHECK(begin->getRepresentation() == "5");
+            CHECK(begin->getRepresentation(sourceObject) == "5");
             CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
@@ -178,9 +177,9 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         {
             treeProduces("#undef ID", ProducesNothing());
             const auto& ret = functionProduces(parseControlLine, "#undef ID", 1, ProducesNothing());
-            REQUIRE(std::holds_alternative<cld::Lexer::TokenIterator>(ret.variant));
-            const auto& iter = std::get<cld::Lexer::TokenIterator>(ret.variant);
-            CHECK(cld::get<std::string>(iter->getValue()) == "ID");
+            REQUIRE(std::holds_alternative<cld::Lexer::PPTokenIterator>(ret.variant));
+            const auto& iter = std::get<cld::Lexer::PPTokenIterator>(ret.variant);
+            CHECK(iter->getValue() == "ID");
         }
         SECTION("Errors")
         {
@@ -202,7 +201,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.identifierList);
         CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation() == "5");
+        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
         CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         ret = functionProduces(parseDefineDirective, "#define ID", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
@@ -215,13 +214,13 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(!ret.identifierList);
         CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 3);
         auto begin = ret.replacementBegin;
-        CHECK(begin->getRepresentation() == "(");
+        CHECK(begin->getRepresentation(sourceObject) == "(");
         CHECK(begin->getTokenType() == cld::Lexer::TokenType::OpenParentheses);
         begin++;
-        CHECK(begin->getRepresentation() == "a");
+        CHECK(begin->getRepresentation(sourceObject) == "a");
         CHECK(begin->getTokenType() == cld::Lexer::TokenType::Identifier);
         begin++;
-        CHECK(begin->getRepresentation() == ")");
+        CHECK(begin->getRepresentation(sourceObject) == ")");
         CHECK(begin->getTokenType() == cld::Lexer::TokenType::CloseParentheses);
         functionProduces(parseDefineDirective, "#define ID+", 1,
                          ProducesError(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION));
@@ -238,7 +237,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         REQUIRE(ret.identifierList);
         CHECK(ret.identifierList->empty());
         REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation() == "5");
+        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
         CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(", 1,
                          ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
@@ -255,7 +254,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         REQUIRE(ret.identifierList);
         CHECK(ret.identifierList->empty());
         REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation() == "5");
+        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
         CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(...", 1,
                          ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
@@ -274,7 +273,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         REQUIRE(ret.identifierList->size() == 1);
         CHECK(ret.identifierList.value()[0] == "a");
         REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation() == "5");
+        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
         CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(5", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
@@ -302,7 +301,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.identifierList.value()[0] == "a");
         REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
         CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
-        CHECK(ret.replacementBegin->getRepresentation() == "5");
+        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
         ret = functionProduces(parseDefineDirective, "#define ID(a,b,c,...)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
         REQUIRE(ret.identifierList);
@@ -324,11 +323,11 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n5\n#endif", ProducesNothing());
         auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNothing());
         CHECK(ret.optionalGroup);
-        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::Token>>(ret.ifs));
-        const auto& tokens = std::get<std::vector<cld::Lexer::Token>>(ret.ifs);
+        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::PPToken>>(ret.ifs));
+        const auto& tokens = std::get<std::vector<cld::Lexer::PPToken>>(ret.ifs);
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        CHECK(tokens[0].getRepresentation() == "0");
+        CHECK(tokens[0].getRepresentation(sourceObject) == "0");
         functionProduces(parseIfGroup, "#if\n5", 1, ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'if'")));
     }
     SECTION("ifdef")
@@ -363,7 +362,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         const auto& tokens = elif.constantExpression;
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        CHECK(tokens[0].getRepresentation() == "1");
+        CHECK(tokens[0].getRepresentation(sourceObject) == "1");
         functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif", 1,
                          ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'elif'")));
     }
@@ -409,8 +408,8 @@ void parse(std::string_view source)
 {
     std::string string;
     llvm::raw_string_ostream ss(string);
-    cld::SourceObject tokens;
-    tokens = cld::Lexer::tokenize(std::string(source.begin(), source.end()), cld::LanguageOptions::native(), true, &ss);
+    cld::PPSourceObject tokens;
+    tokens = cld::Lexer::tokenize(std::string(source.begin(), source.end()), cld::LanguageOptions::native(), &ss);
     ss.flush();
     if (!string.empty() || tokens.data().empty())
     {

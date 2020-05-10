@@ -11,7 +11,7 @@
 
 using namespace cld::Syntax;
 
-cld::Syntax::Expression cld::Parser::parseExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::Expression cld::Parser::parseExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                      Context& context)
 {
     auto start = begin;
@@ -40,7 +40,7 @@ cld::Syntax::Expression cld::Parser::parseExpression(Lexer::TokenIterator& begin
 }
 
 std::optional<cld::Syntax::AssignmentExpression>
-    cld::Parser::parseAssignmentExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseAssignmentExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     auto start = begin;
     auto result = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
@@ -97,8 +97,8 @@ enum class EndState : std::uint8_t
     LogicalOr
 };
 
-StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Token>::const_iterator& begin,
-                                  std::vector<cld::Lexer::Token>::const_iterator end, cld::Parser::Context& context)
+StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator& begin, cld::Lexer::CTokenIterator end,
+                                  cld::Parser::Context& context)
 {
     StateVariant state;
     auto start = begin;
@@ -462,8 +462,8 @@ StateVariant parseBinaryOperators(EndState endState, std::vector<cld::Lexer::Tok
 
 } // namespace
 
-cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer::TokenIterator& begin,
-                                                                           Lexer::TokenIterator end, Context& context)
+cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer::CTokenIterator& begin,
+                                                                           Lexer::CTokenIterator end, Context& context)
 {
     auto start = begin;
     auto logicalOrExpression = cld::get<LogicalOrExpression>(
@@ -476,8 +476,8 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
         if (!expect(Lexer::TokenType::Colon, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'?'"), questionMarkpos,
-                                   {PointAt(questionMarkpos, questionMarkpos + 1)})}))
+                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'?'"), questionMarkpos,
+                                    {PointAt(questionMarkpos, questionMarkpos + 1)})}))
         {
             context.skipUntil(begin, end, firstExpressionSet);
         }
@@ -488,68 +488,68 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
     return ConditionalExpression(start, begin, std::move(logicalOrExpression));
 }
 
-cld::Syntax::LogicalOrExpression cld::Parser::parseLogicalOrExpression(Lexer::TokenIterator& begin,
-                                                                       Lexer::TokenIterator end, Context& context)
+cld::Syntax::LogicalOrExpression cld::Parser::parseLogicalOrExpression(Lexer::CTokenIterator& begin,
+                                                                       Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
-cld::Syntax::LogicalAndExpression cld::Parser::parseLogicalAndExpression(Lexer::TokenIterator& begin,
-                                                                         Lexer::TokenIterator end, Context& context)
+cld::Syntax::LogicalAndExpression cld::Parser::parseLogicalAndExpression(Lexer::CTokenIterator& begin,
+                                                                         Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
-cld::Syntax::BitOrExpression cld::Parser::parseBitOrExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+cld::Syntax::BitOrExpression cld::Parser::parseBitOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                Context& context)
 {
     return cld::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
-cld::Syntax::BitXorExpression cld::Parser::parseBitXorExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                 Context& context)
+cld::Syntax::BitXorExpression cld::Parser::parseBitXorExpression(Lexer::CTokenIterator& begin,
+                                                                 Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
-cld::Syntax::BitAndExpression cld::Parser::parseBitAndExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
-                                                                 Context& context)
+cld::Syntax::BitAndExpression cld::Parser::parseBitAndExpression(Lexer::CTokenIterator& begin,
+                                                                 Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
 std::optional<cld::Syntax::EqualityExpression>
-    cld::Parser::parseEqualityExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseEqualityExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<std::optional<EqualityExpression>>(parseBinaryOperators(EndState::Equality, begin, end, context));
 }
 
 std::optional<cld::Syntax::RelationalExpression>
-    cld::Parser::parseRelationalExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseRelationalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<std::optional<RelationalExpression>>(
         parseBinaryOperators(EndState::Relational, begin, end, context));
 }
 
 std::optional<cld::Syntax::ShiftExpression>
-    cld::Parser::parseShiftExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseShiftExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<std::optional<ShiftExpression>>(parseBinaryOperators(EndState::Shift, begin, end, context));
 }
 
 std::optional<cld::Syntax::AdditiveExpression>
-    cld::Parser::parseAdditiveExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseAdditiveExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     return cld::get<std::optional<AdditiveExpression>>(parseBinaryOperators(EndState::Additive, begin, end, context));
 }
 
-std::optional<cld::Syntax::Term> cld::Parser::parseTerm(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<cld::Syntax::Term> cld::Parser::parseTerm(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                         Context& context)
 {
     return cld::get<std::optional<Term>>(parseBinaryOperators(EndState::Term, begin, end, context));
 }
 
-std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIterator& begin, Lexer::TokenIterator end,
+std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 Context& context)
 {
     auto start = begin;
@@ -559,13 +559,15 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIter
     {
         if (begin < end)
         {
-            context.log({Message::error(Errors::Parser::EXPECTED_N_BEFORE_N.args(
-                                            "typename", '\'' + to_string(begin->getRepresentation()) + '\''),
-                                        start, begin, {PointAt(begin, begin + 1)})});
+            context.log({CMessage::error(
+                Errors::Parser::EXPECTED_N_BEFORE_N.args(
+                    "typename", '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
+                start, begin, {PointAt(begin, begin + 1)})});
         }
         else
         {
-            context.log({Message::error(Errors::Parser::EXPECTED_N.args("typename"), start, {InsertAfter(begin - 1)})});
+            context.log(
+                {CMessage::error(Errors::Parser::EXPECTED_N.args("typename"), start, {InsertAfter(begin - 1)})});
         }
     }
 
@@ -580,7 +582,7 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::TokenIter
 
 namespace
 {
-bool isPostFixOperator(const cld::Lexer::Token& token)
+bool isPostFixOperator(const cld::Lexer::CToken& token)
 {
     switch (token.getTokenType())
     {
@@ -595,10 +597,9 @@ bool isPostFixOperator(const cld::Lexer::Token& token)
     return false;
 }
 
-void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator start,
-                                  std::vector<cld::Lexer::Token>::const_iterator& begin,
-                                  std::vector<cld::Lexer::Token>::const_iterator end,
-                                  std::unique_ptr<PostFixExpression>& current, cld::Parser::Context& context)
+void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::CTokenIterator& begin,
+                                  cld::Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>& current,
+                                  cld::Parser::Context& context)
 {
     while (begin != end && isPostFixOperator(*begin))
     {
@@ -639,8 +640,8 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
             }
 
             if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context,
-                        {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
-                                            {cld::PointAt(openPpos, openPpos + 1)})}))
+                        {cld::CMessage::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
+                                             {cld::PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -661,8 +662,8 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
 
             if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                        {cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
-                                            {cld::PointAt(openPpos, openPpos + 1)})}))
+                        {cld::CMessage::note(cld::Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
+                                             {cld::PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -723,8 +724,8 @@ void parsePostFixExpressionSuffix(std::vector<cld::Lexer::Token>::const_iterator
 }
 } // namespace
 
-std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexer::TokenIterator& begin,
-                                                                            Lexer::TokenIterator end, Context& context)
+std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexer::CTokenIterator& begin,
+                                                                            Lexer::CTokenIterator end, Context& context)
 {
     auto start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParentheses || begin + 1 == end
@@ -741,7 +742,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, {PointAt(start, start + 1)})}))
+                {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), start, {PointAt(start, start + 1)})}))
     {
         context.skipUntil(begin, end, firstExpressionSet);
     }
@@ -756,7 +757,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
                               std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
     }
 
-    std::optional<Lexer::TokenIterator> openBrace;
+    std::optional<Lexer::CTokenIterator> openBrace;
     if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
     {
         context.skipUntil(begin, end, firstInitializerListSet);
@@ -776,8 +777,8 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     if (openBrace)
     {
         if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
-                                   {PointAt(*openBrace, *openBrace + 1)})}))
+                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
+                                    {PointAt(*openBrace, *openBrace + 1)})}))
         {
             context.skipUntil(begin, end, firstPostfixSet);
         }
@@ -804,7 +805,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
 }
 
 std::optional<cld::Syntax::UnaryExpression>
-    cld::Parser::parseUnaryExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parseUnaryExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     auto start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SizeofKeyword)
@@ -818,8 +819,8 @@ std::optional<cld::Syntax::UnaryExpression>
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
-                                       {PointAt(openPpos, openPpos + 1)})}))
+                        {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), start, openPpos,
+                                        {PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end);
             }
@@ -844,7 +845,7 @@ std::optional<cld::Syntax::UnaryExpression>
              && cld::get<std::string>(begin->getValue()) == "defined")
     {
         begin++;
-        std::optional<Lexer::TokenIterator> openP;
+        std::optional<Lexer::CTokenIterator> openP;
         if (begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {
             openP = begin;
@@ -861,7 +862,7 @@ std::optional<cld::Syntax::UnaryExpression>
         {
             if (!expect(
                     Lexer::TokenType::CloseParentheses, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, *openP, {PointAt(*openP, *openP + 1)})}))
+                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), start, *openP, {PointAt(*openP, *openP + 1)})}))
             {
                 context.skipUntil(begin, end);
             }
@@ -911,7 +912,7 @@ std::optional<cld::Syntax::UnaryExpression>
 }
 
 std::optional<cld::Syntax::PostFixExpression>
-    cld::Parser::parsePostFixExpression(Lexer::TokenIterator& begin, Lexer::TokenIterator end, Context& context)
+    cld::Parser::parsePostFixExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     std::unique_ptr<PostFixExpression> current;
 
@@ -1062,7 +1063,7 @@ std::optional<cld::Syntax::PostFixExpression>
                     literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return str; },
                     [](const Lexer::NonCharString& str) -> PrimaryExpressionConstant::variant { return str; },
                     [](const auto&) -> PrimaryExpressionConstant::variant { CLD_UNREACHABLE; }),
-                Lexer::Token::Type::None));
+                Lexer::CToken::Type::None));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {
@@ -1072,7 +1073,7 @@ std::optional<cld::Syntax::PostFixExpression>
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(
                     Lexer::TokenType::CloseParentheses, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
+                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
             {
                 context.skipUntil(begin, end);
             }
@@ -1083,16 +1084,17 @@ std::optional<cld::Syntax::PostFixExpression>
         {
             if (begin == end)
             {
-                context.log({Message::error(
+                context.log({CMessage::error(
                     Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "literal", "identifier", "'('")),
                     begin, {InsertAfter(begin - 1)})});
             }
             else
             {
-                context.log({Message::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                                cld::Format::List(", ", " or ", "literal", "identifier", "'('"),
-                                                '\'' + to_string(begin->getRepresentation()) + '\''),
-                                            begin, {PointAt(begin, begin + 1)})});
+                context.log(
+                    {CMessage::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                         cld::Format::List(", ", " or ", "literal", "identifier", "'('"),
+                                         '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
+                                     begin, {PointAt(begin, begin + 1)})});
             }
             context.skipUntil(begin, end);
         }
@@ -1107,12 +1109,12 @@ std::optional<cld::Syntax::PostFixExpression>
         begin++;
         auto type = parseTypeName(begin, end, context);
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start, {PointAt(start, start + 1)})}))
+                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), start, start, {PointAt(start, start + 1)})}))
         {
             context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBrace));
         }
 
-        std::optional<Lexer::TokenIterator> openBrace;
+        std::optional<Lexer::CTokenIterator> openBrace;
         if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
         {
             context.skipUntil(begin, end, firstInitializerListSet);
@@ -1130,8 +1132,8 @@ std::optional<cld::Syntax::PostFixExpression>
         if (openBrace)
         {
             if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
-                        {Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
-                                       {PointAt(*openBrace, *openBrace + 1)})}))
+                        {CMessage::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, *openBrace,
+                                        {PointAt(*openBrace, *openBrace + 1)})}))
             {
                 context.skipUntil(begin, end, firstPostfixSet);
             }

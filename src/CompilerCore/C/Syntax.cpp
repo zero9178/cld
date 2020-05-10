@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-cld::Syntax::Expression::Expression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::Expression::Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                     std::vector<cld::Syntax::AssignmentExpression> assignmentExpressions)
     : Node(begin, end), m_assignmentExpressions(std::move(assignmentExpressions))
 {
@@ -15,8 +15,8 @@ const std::vector<cld::Syntax::AssignmentExpression>& cld::Syntax::Expression::g
     return m_assignmentExpressions;
 }
 
-cld::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(Lexer::TokenIterator begin,
-                                                                      Lexer::TokenIterator end, std::string identifier)
+cld::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(Lexer::CTokenIterator begin,
+                                                                      Lexer::CTokenIterator end, std::string identifier)
     : Node(begin, end), m_identifier(std::move(identifier))
 {
 }
@@ -26,9 +26,10 @@ const std::string& cld::Syntax::PrimaryExpressionIdentifier::getIdentifier() con
     return m_identifier;
 }
 
-cld::Syntax::PrimaryExpressionConstant::PrimaryExpressionConstant(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::PrimaryExpressionConstant::PrimaryExpressionConstant(Lexer::CTokenIterator begin,
+                                                                  Lexer::CTokenIterator end,
                                                                   cld::Syntax::PrimaryExpressionConstant::variant value,
-                                                                  Lexer::Token::Type type)
+                                                                  Lexer::CToken::Type type)
     : Node(begin, end), m_value(std::move(value)), m_type(type)
 {
 }
@@ -38,13 +39,13 @@ const cld::Syntax::PrimaryExpressionConstant::variant& cld::Syntax::PrimaryExpre
     return m_value;
 }
 
-cld::Lexer::Token::Type cld::Syntax::PrimaryExpressionConstant::getType() const
+cld::Lexer::CToken::Type cld::Syntax::PrimaryExpressionConstant::getType() const
 {
     return m_type;
 }
 
-cld::Syntax::PrimaryExpressionParenthese::PrimaryExpressionParenthese(Lexer::TokenIterator begin,
-                                                                      Lexer::TokenIterator end,
+cld::Syntax::PrimaryExpressionParenthese::PrimaryExpressionParenthese(Lexer::CTokenIterator begin,
+                                                                      Lexer::CTokenIterator end,
                                                                       cld::Syntax::Expression&& expression)
     : Node(begin, end), m_expression(std::move(expression))
 {
@@ -56,7 +57,7 @@ const cld::Syntax::Expression& cld::Syntax::PrimaryExpressionParenthese::getExpr
 }
 
 cld::Syntax::PostFixExpressionPrimaryExpression::PostFixExpressionPrimaryExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::PrimaryExpression&& primaryExpression)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::PrimaryExpression&& primaryExpression)
     : Node(begin, end), m_primaryExpression(std::move(primaryExpression))
 {
 }
@@ -67,7 +68,7 @@ const cld::Syntax::PrimaryExpression& cld::Syntax::PostFixExpressionPrimaryExpre
 }
 
 cld::Syntax::PostFixExpressionSubscript::PostFixExpressionSubscript(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, cld::Syntax::Expression&& expression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
 {
@@ -84,7 +85,7 @@ const cld::Syntax::Expression& cld::Syntax::PostFixExpressionSubscript::getExpre
 }
 
 cld::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
@@ -96,7 +97,7 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionIncrement::g
 }
 
 cld::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression))
 {
@@ -108,7 +109,7 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionDecrement::g
 }
 
 cld::Syntax::PostFixExpressionDot::PostFixExpressionDot(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, std::string identifier)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {
@@ -125,7 +126,7 @@ const std::string& cld::Syntax::PostFixExpressionDot::getIdentifier() const
 }
 
 cld::Syntax::PostFixExpressionArrow::PostFixExpressionArrow(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, std::string identifier)
     : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
 {
@@ -142,7 +143,7 @@ const std::string& cld::Syntax::PostFixExpressionArrow::getIdentifier() const
 }
 
 cld::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression,
     std::vector<std::unique_ptr<cld::Syntax::AssignmentExpression>>&& optionalAssignmanetExpressions)
     : Node(begin, end),
@@ -152,7 +153,7 @@ cld::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
 }
 
 cld::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, TypeName&& typeName,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, TypeName&& typeName,
     cld::Syntax::InitializerList&& initializerList)
     : Node(begin, end),
       m_typeName(std::make_unique<TypeName>(std::move(typeName))),
@@ -171,7 +172,7 @@ const cld::Syntax::TypeName& cld::Syntax::PostFixExpressionTypeInitializer::getT
 }
 
 cld::Syntax::UnaryExpressionPostFixExpression::UnaryExpressionPostFixExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::PostFixExpression&& postFixExpression)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::PostFixExpression&& postFixExpression)
     : Node(begin, end), m_postFixExpression(std::make_unique<PostFixExpression>(std::move(postFixExpression)))
 {
 }
@@ -182,7 +183,7 @@ const cld::Syntax::PostFixExpression& cld::Syntax::UnaryExpressionPostFixExpress
 }
 
 cld::Syntax::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     cld::Syntax::UnaryExpressionUnaryOperator::UnaryOperator anOperator,
     std::unique_ptr<cld::Syntax::CastExpression>&& unaryExpression)
     : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator)
@@ -200,7 +201,7 @@ const cld::Syntax::CastExpression& cld::Syntax::UnaryExpressionUnaryOperator::ge
     return *m_castExpression;
 }
 
-cld::Syntax::UnaryExpressionSizeOf::UnaryExpressionSizeOf(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::UnaryExpressionSizeOf::UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                           cld::Syntax::UnaryExpressionSizeOf::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
@@ -211,7 +212,7 @@ const cld::Syntax::UnaryExpressionSizeOf::variant& cld::Syntax::UnaryExpressionS
     return m_variant;
 }
 
-cld::Syntax::CastExpression::CastExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::CastExpression::CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                             cld::Syntax::CastExpression::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
@@ -223,7 +224,7 @@ const cld::Syntax::CastExpression::variant& cld::Syntax::CastExpression::getVari
 }
 
 cld::Syntax::Term::Term(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::CastExpression&& castExpressions,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::CastExpression&& castExpressions,
     std::vector<std::pair<cld::Syntax::Term::BinaryDotOperator, cld::Syntax::CastExpression>>&& optionalCastExpressions)
     : Node(begin, end),
       m_castExpression(std::move(castExpressions)),
@@ -243,7 +244,7 @@ const std::vector<std::pair<cld::Syntax::Term::BinaryDotOperator, cld::Syntax::C
 }
 
 cld::Syntax::AdditiveExpression::AdditiveExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::Term&& term,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::Term&& term,
     std::vector<std::pair<cld::Syntax::AdditiveExpression::BinaryDashOperator, cld::Syntax::Term>>&& optionalTerms)
     : Node(begin, end), m_term(std::move(term)), m_optionalTerms(std::move(optionalTerms))
 {
@@ -261,7 +262,7 @@ const std::vector<std::pair<cld::Syntax::AdditiveExpression::BinaryDashOperator,
 }
 
 cld::Syntax::ShiftExpression::ShiftExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::AdditiveExpression&& additiveExpression,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::AdditiveExpression&& additiveExpression,
     std::vector<std::pair<cld::Syntax::ShiftExpression::ShiftOperator, cld::Syntax::AdditiveExpression>>&&
         optionalAdditiveExpressions)
     : Node(begin, end),
@@ -280,13 +281,13 @@ const cld::Syntax::Expression* cld::Syntax::ReturnStatement::getExpression() con
     return m_expression.get();
 }
 
-cld::Syntax::ReturnStatement::ReturnStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::ReturnStatement::ReturnStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                               std::unique_ptr<Expression>&& expression)
     : Node(begin, end), m_expression(std::move(expression))
 {
 }
 
-cld::Syntax::ExpressionStatement::ExpressionStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::ExpressionStatement::ExpressionStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                       std::unique_ptr<Expression>&& optionalExpression)
     : Node(begin, end), m_optionalExpression(std::move(optionalExpression))
 {
@@ -302,7 +303,7 @@ std::unique_ptr<cld::Syntax::Expression> cld::Syntax::ExpressionStatement::moveO
     return std::move(m_optionalExpression);
 }
 
-cld::Syntax::IfStatement::IfStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, Expression&& expression,
+cld::Syntax::IfStatement::IfStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression,
                                       std::unique_ptr<Statement>&& branch, std::unique_ptr<Statement>&& elseBranch)
     : Node(begin, end),
       m_expression(std::move(expression)),
@@ -312,7 +313,7 @@ cld::Syntax::IfStatement::IfStatement(Lexer::TokenIterator begin, Lexer::TokenIt
     CLD_ASSERT(m_branch);
 }
 
-cld::Syntax::ContinueStatement::ContinueStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end)
+cld::Syntax::ContinueStatement::ContinueStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
     : Node(begin, end)
 {
 }
@@ -332,7 +333,7 @@ const cld::Syntax::Statement* cld::Syntax::IfStatement::getElseBranch() const
     return m_elseBranch.get();
 }
 
-cld::Syntax::CompoundStatement::CompoundStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::CompoundStatement::CompoundStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                   std::vector<CompoundItem>&& blockItems)
     : Node(begin, end), m_blockItems(std::move(blockItems))
 {
@@ -343,7 +344,7 @@ const std::vector<cld::Syntax::CompoundItem>& cld::Syntax::CompoundStatement::ge
     return m_blockItems;
 }
 
-cld::Syntax::ForStatement::ForStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::ForStatement::ForStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                         std::unique_ptr<Statement>&& statement,
                                         std::variant<Declaration, std::unique_ptr<Expression>>&& initial,
                                         std::unique_ptr<Expression>&& controlling, std::unique_ptr<Expression>&& post)
@@ -372,7 +373,7 @@ const cld::Syntax::Expression* cld::Syntax::ForStatement::getPost() const
     return m_post.get();
 }
 
-cld::Syntax::HeadWhileStatement::HeadWhileStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::HeadWhileStatement::HeadWhileStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                     Expression&& expression, std::unique_ptr<Statement>&& statement)
     : Node(begin, end), m_expression(std::move(expression)), m_statement(std::move(statement))
 {
@@ -389,7 +390,7 @@ const cld::Syntax::Statement& cld::Syntax::HeadWhileStatement::getStatement() co
     return *m_statement;
 }
 
-cld::Syntax::FootWhileStatement::FootWhileStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::FootWhileStatement::FootWhileStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                     std::unique_ptr<Statement>&& statement, Expression&& expression)
     : Node(begin, end), m_statement(std::move(statement)), m_expression(std::move(expression))
 {
@@ -413,7 +414,7 @@ const std::vector<std::pair<cld::Syntax::ShiftExpression::ShiftOperator, cld::Sy
 }
 
 cld::Syntax::RelationalExpression::RelationalExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, ShiftExpression&& shiftExpression,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ShiftExpression&& shiftExpression,
     std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions)
     : Node(begin, end),
       m_shiftExpression(std::move(shiftExpression)),
@@ -433,7 +434,7 @@ const std::vector<std::pair<cld::Syntax::RelationalExpression::RelationalOperato
 }
 
 cld::Syntax::EqualityExpression::EqualityExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, RelationalExpression&& relationalExpression,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, RelationalExpression&& relationalExpression,
     std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions)
     : Node(begin, end),
       m_relationalExpression(std::move(relationalExpression)),
@@ -452,7 +453,7 @@ const std::vector<std::pair<cld::Syntax::EqualityExpression::EqualityOperator, c
     return m_optionalRelationalExpressions;
 }
 
-cld::Syntax::LogicalAndExpression::LogicalAndExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::LogicalAndExpression::LogicalAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                         std::vector<BitOrExpression>&& equalityExpressions)
     : Node(begin, end), m_bitOrExpressions(std::move(equalityExpressions))
 {
@@ -464,7 +465,7 @@ const std::vector<cld::Syntax::BitOrExpression>& cld::Syntax::LogicalAndExpressi
     return m_bitOrExpressions;
 }
 
-cld::Syntax::LogicalOrExpression::LogicalOrExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::LogicalOrExpression::LogicalOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                       std::vector<LogicalAndExpression>&& andExpressions)
     : Node(begin, end), m_andExpressions(std::move(andExpressions))
 {
@@ -476,7 +477,7 @@ const std::vector<cld::Syntax::LogicalAndExpression>& cld::Syntax::LogicalOrExpr
 }
 
 cld::Syntax::ConditionalExpression::ConditionalExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, LogicalOrExpression&& logicalOrExpression,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, LogicalOrExpression&& logicalOrExpression,
     std::unique_ptr<Expression>&& optionalExpression,
     std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression)
     : Node(begin, end),
@@ -506,7 +507,7 @@ const cld::Syntax::Statement& cld::Syntax::ForStatement::getStatement() const
     return *m_statement;
 }
 
-cld::Syntax::BitAndExpression::BitAndExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::BitAndExpression::BitAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                 std::vector<EqualityExpression>&& equalityExpressions)
     : Node(begin, end), m_equalityExpressions(std::move(equalityExpressions))
 {
@@ -517,7 +518,7 @@ const std::vector<cld::Syntax::EqualityExpression>& cld::Syntax::BitAndExpressio
     return m_equalityExpressions;
 }
 
-cld::Syntax::BitXorExpression::BitXorExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::BitXorExpression::BitXorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                 std::vector<BitAndExpression>&& bitAndExpressions)
     : Node(begin, end), m_bitAndExpressions(std::move(bitAndExpressions))
 {
@@ -528,7 +529,7 @@ const std::vector<cld::Syntax::BitAndExpression>& cld::Syntax::BitXorExpression:
     return m_bitAndExpressions;
 }
 
-cld::Syntax::BitOrExpression::BitOrExpression(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::BitOrExpression::BitOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                               std::vector<BitXorExpression>&& bitXorExpressions)
     : Node(begin, end), m_bitXorExpressions(std::move(bitXorExpressions))
 {
@@ -550,7 +551,7 @@ const std::vector<std::unique_ptr<cld::Syntax::AssignmentExpression>>&
     return m_optionalAssignmanetExpressions;
 }
 
-cld::Syntax::SwitchStatement::SwitchStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::SwitchStatement::SwitchStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                               Expression&& expression, std::unique_ptr<Statement>&& statement)
     : Node(begin, end), m_expression(std::move(expression)), m_statement(std::move(statement))
 {
@@ -567,7 +568,7 @@ const cld::Syntax::Statement& cld::Syntax::SwitchStatement::getStatement() const
     return *m_statement;
 }
 
-cld::Syntax::DefaultStatement::DefaultStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::DefaultStatement::DefaultStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                 std::unique_ptr<Statement>&& statement)
     : Node(begin, end), m_statement(std::move(statement))
 {
@@ -579,7 +580,7 @@ const cld::Syntax::Statement& cld::Syntax::DefaultStatement::getStatement() cons
     return *m_statement;
 }
 
-cld::Syntax::CaseStatement::CaseStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::CaseStatement::CaseStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           ConstantExpression&& constantExpression,
                                           std::unique_ptr<Statement>&& statement)
     : Node(begin, end), m_constantExpression(std::move(constantExpression)), m_statement(std::move(statement))
@@ -596,7 +597,7 @@ const cld::Syntax::ConstantExpression& cld::Syntax::CaseStatement::getConstantEx
     return m_constantExpression;
 }
 
-cld::Syntax::InitializerList::InitializerList(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::InitializerList::InitializerList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                               vector&& nonCommaExpressionsAndBlocks)
     : Node(begin, end), m_nonCommaExpressionsAndBlocks(std::move(nonCommaExpressionsAndBlocks))
 {
@@ -609,7 +610,7 @@ const typename cld::Syntax::InitializerList::vector&
 }
 
 cld::Syntax::EnumDeclaration::EnumDeclaration(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string name,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string name,
     std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values)
     : Node(begin, end), m_name(std::move(name)), m_values(std::move(values))
 {
@@ -626,7 +627,7 @@ const std::vector<std::pair<std::string, std::optional<cld::Syntax::ConstantExpr
     return m_values;
 }
 
-cld::Syntax::Initializer::Initializer(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::Initializer::Initializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                       cld::Syntax::Initializer::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
@@ -637,9 +638,11 @@ const cld::Syntax::Initializer::variant& cld::Syntax::Initializer::getVariant() 
     return m_variant;
 }
 
-cld::Syntax::BreakStatement::BreakStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end) : Node(begin, end) {}
+cld::Syntax::BreakStatement::BreakStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end) : Node(begin, end)
+{
+}
 
-cld::Syntax::EnumSpecifier::EnumSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::EnumSpecifier::EnumSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           cld::Syntax::EnumSpecifier::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
@@ -650,7 +653,7 @@ const cld::Syntax::EnumSpecifier::variant& cld::Syntax::EnumSpecifier::getVarian
     return m_variant;
 }
 
-cld::Syntax::TypeSpecifier::TypeSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::TypeSpecifier::TypeSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           cld::Syntax::TypeSpecifier::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
@@ -662,7 +665,7 @@ const cld::Syntax::TypeSpecifier::variant& cld::Syntax::TypeSpecifier::getVarian
 }
 
 cld::Syntax::Declaration::Declaration(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers,
     std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::unique_ptr<cld::Syntax::Initializer>>>&&
         initDeclarators)
@@ -686,7 +689,7 @@ const std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::uniqu
 }
 
 cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, bool isUnion, std::string identifier,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, std::string identifier,
     std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&& structDeclarations)
     : Node(begin, end),
       m_isUnion(isUnion),
@@ -711,7 +714,7 @@ const std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&
     return m_structDeclarations;
 }
 
-cld::Syntax::ParameterList::ParameterList(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::ParameterList::ParameterList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           std::vector<cld::Syntax::ParameterDeclaration>&& parameterList)
     : Node(begin, end), m_parameterList(std::move(parameterList))
 {
@@ -722,7 +725,7 @@ const std::vector<cld::Syntax::ParameterDeclaration>& cld::Syntax::ParameterList
     return m_parameterList;
 }
 
-cld::Syntax::ParameterTypeList::ParameterTypeList(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::ParameterTypeList::ParameterTypeList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                   cld::Syntax::ParameterList&& parameterList, bool hasEllipse)
     : Node(begin, end), m_parameterList(std::move(parameterList)), m_hasEllipse(hasEllipse)
 {
@@ -738,7 +741,7 @@ bool cld::Syntax::ParameterTypeList::hasEllipse() const
     return m_hasEllipse;
 }
 
-cld::Syntax::Pointer::Pointer(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::Pointer::Pointer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                               std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers)
     : Node(begin, end), m_typeQualifiers(std::move(typeQualifiers))
 {
@@ -750,7 +753,7 @@ const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::Pointer::getTypeQual
 }
 
 cld::Syntax::DirectDeclaratorNoStaticOrAsterisk::DirectDeclaratorNoStaticOrAsterisk(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::DirectDeclarator>&& directDeclarator,
     std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers,
     std::unique_ptr<cld::Syntax::AssignmentExpression>&& assignmentExpression)
@@ -780,7 +783,7 @@ const std::unique_ptr<cld::Syntax::AssignmentExpression>&
 }
 
 cld::Syntax::DirectDeclaratorStatic::DirectDeclaratorStatic(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::DirectDeclarator>&& directDeclarator,
     std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers, cld::Syntax::AssignmentExpression&& assignmentExpression)
     : Node(begin, end),
@@ -807,7 +810,7 @@ const cld::Syntax::AssignmentExpression& cld::Syntax::DirectDeclaratorStatic::ge
 }
 
 cld::Syntax::DirectDeclaratorAsterisk::DirectDeclaratorAsterisk(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
     std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
@@ -826,7 +829,7 @@ const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::DirectDeclaratorAste
 }
 
 cld::Syntax::DirectDeclaratorParentheseParameters::DirectDeclaratorParentheseParameters(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
     cld::Syntax::ParameterTypeList&& parameterTypeList)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
@@ -845,8 +848,8 @@ const cld::Syntax::ParameterTypeList& cld::Syntax::DirectDeclaratorParenthesePar
 }
 
 cld::Syntax::DirectDeclaratorParentheseIdentifiers::DirectDeclaratorParentheseIdentifiers(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
-    std::vector<std::pair<std::string, Lexer::TokenIterator>>&& identifiers)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
+    std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
       m_identifiers(std::move(identifiers))
@@ -858,13 +861,13 @@ const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParentheseIden
     return *m_directDeclarator;
 }
 
-const std::vector<std::pair<std::string, std::vector<cld::Lexer::Token>::const_iterator>>&
+const std::vector<std::pair<std::string, cld::Lexer::CTokenIterator>>&
     cld::Syntax::DirectDeclaratorParentheseIdentifiers::getIdentifiers() const
 {
     return m_identifiers;
 }
 
-cld::Syntax::Declarator::Declarator(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::Declarator::Declarator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                     std::vector<cld::Syntax::Pointer>&& pointers,
                                     cld::Syntax::DirectDeclarator&& directDeclarator)
     : Node(begin, end), m_pointers(std::move(pointers)), m_directDeclarator(std::move(directDeclarator))
@@ -882,7 +885,7 @@ const cld::Syntax::DirectDeclarator& cld::Syntax::Declarator::getDirectDeclarato
 }
 
 cld::Syntax::DirectAbstractDeclaratorAssignmentExpression::DirectAbstractDeclaratorAssignmentExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&& directAbstractDeclarator,
     std::unique_ptr<cld::Syntax::AssignmentExpression>&& assignmentExpression)
     : Node(begin, end),
@@ -904,7 +907,7 @@ const cld::Syntax::AssignmentExpression*
 }
 
 cld::Syntax::DirectAbstractDeclaratorParameterTypeList::DirectAbstractDeclaratorParameterTypeList(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&& directAbstractDeclarator,
     std::unique_ptr<cld::Syntax::ParameterTypeList>&& parameterTypeList)
     : Node(begin, end),
@@ -925,7 +928,7 @@ const cld::Syntax::ParameterTypeList*
     return m_parameterTypeList.get();
 }
 
-cld::Syntax::AbstractDeclarator::AbstractDeclarator(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::AbstractDeclarator::AbstractDeclarator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                     std::vector<cld::Syntax::Pointer>&& pointers,
                                                     std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator)
     : Node(begin, end), m_pointers(std::move(pointers)), m_directAbstractDeclarator(std::move(directAbstractDeclarator))
@@ -942,7 +945,7 @@ const cld::Syntax::DirectAbstractDeclarator* cld::Syntax::AbstractDeclarator::ge
     return m_directAbstractDeclarator ? &*m_directAbstractDeclarator : nullptr;
 }
 
-cld::Syntax::TypeName::TypeName(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::TypeName::TypeName(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                 std::vector<cld::Syntax::SpecifierQualifier>&& specifierQualifiers,
                                 std::unique_ptr<cld::Syntax::AbstractDeclarator>&& abstractDeclarator)
     : Node(begin, end),
@@ -961,7 +964,8 @@ const cld::Syntax::AbstractDeclarator* cld::Syntax::TypeName::getAbstractDeclara
     return m_abstractDeclarator.get();
 }
 
-cld::Syntax::GotoStatement::GotoStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string identifier)
+cld::Syntax::GotoStatement::GotoStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                          std::string identifier)
     : Node(begin, end), m_identifier(std::move(identifier))
 {
 }
@@ -971,7 +975,7 @@ const std::string& cld::Syntax::GotoStatement::getIdentifier() const
     return m_identifier;
 }
 
-cld::Syntax::LabelStatement::LabelStatement(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::LabelStatement::LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                             std::string identifier, Statement&& statement)
     : Node(begin, end),
       m_identifier(std::move(identifier)),
@@ -995,7 +999,7 @@ const std::vector<cld::Syntax::ExternalDeclaration>& cld::Syntax::TranslationUni
 }
 
 cld::Syntax::FunctionDefinition::FunctionDefinition(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers, cld::Syntax::Declarator&& declarator,
     std::vector<cld::Syntax::Declaration>&& declarations, cld::Syntax::CompoundStatement&& compoundStatement)
     : Node(begin, end),
@@ -1026,23 +1030,19 @@ const cld::Syntax::CompoundStatement& cld::Syntax::FunctionDefinition::getCompou
     return m_compoundStatement;
 }
 
-cld::Syntax::Node::Node(std::vector<cld::Lexer::Token>::const_iterator begin,
-                        std::vector<cld::Lexer::Token>::const_iterator end)
-    : m_begin(begin), m_end(end)
-{
-}
+cld::Syntax::Node::Node(Lexer::CTokenIterator begin, Lexer::CTokenIterator end) : m_begin(begin), m_end(end) {}
 
-std::vector<cld::Lexer::Token>::const_iterator cld::Syntax::Node::begin() const
+cld::Lexer::CTokenIterator cld::Syntax::Node::begin() const
 {
     return m_begin;
 }
 
-std::vector<cld::Lexer::Token>::const_iterator cld::Syntax::Node::end() const
+cld::Lexer::CTokenIterator cld::Syntax::Node::end() const
 {
     return m_end;
 }
 
-cld::Syntax::TypeQualifier::TypeQualifier(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::TypeQualifier::TypeQualifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                           cld::Syntax::TypeQualifier::Qualifier qualifier)
     : Node(begin, end), m_qualifier(qualifier)
 {
@@ -1053,7 +1053,7 @@ cld::Syntax::TypeQualifier::Qualifier cld::Syntax::TypeQualifier::getQualifier()
     return m_qualifier;
 }
 
-cld::Syntax::StorageClassSpecifier::StorageClassSpecifier(Lexer::TokenIterator begin, Lexer::TokenIterator end,
+cld::Syntax::StorageClassSpecifier::StorageClassSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                           cld::Syntax::StorageClassSpecifier::Specifiers specifier)
     : Node(begin, end), m_specifier(specifier)
 {
@@ -1064,15 +1064,14 @@ cld::Syntax::StorageClassSpecifier::Specifiers cld::Syntax::StorageClassSpecifie
     return m_specifier;
 }
 
-cld::Syntax::FunctionSpecifier::FunctionSpecifier(const std::vector<cld::Lexer::Token>::const_iterator& begin,
-                                                  const std::vector<cld::Lexer::Token>::const_iterator& end)
+cld::Syntax::FunctionSpecifier::FunctionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
     : Node(begin, end)
 {
 }
 
-cld::Syntax::DirectDeclaratorIdentifier::DirectDeclaratorIdentifier(Lexer::TokenIterator begin,
-                                                                    Lexer::TokenIterator end, std::string identifier,
-                                                                    Lexer::TokenIterator identifierLoc)
+cld::Syntax::DirectDeclaratorIdentifier::DirectDeclaratorIdentifier(Lexer::CTokenIterator begin,
+                                                                    Lexer::CTokenIterator end, std::string identifier,
+                                                                    Lexer::CTokenIterator identifierLoc)
     : Node(begin, end), m_identifier(std::move(identifier)), m_identifierLoc(identifierLoc)
 {
 }
@@ -1082,13 +1081,13 @@ const std::string& cld::Syntax::DirectDeclaratorIdentifier::getIdentifier() cons
     return m_identifier;
 }
 
-std::vector<cld::Lexer::Token>::const_iterator cld::Syntax::DirectDeclaratorIdentifier::getIdentifierLoc() const
+cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorIdentifier::getIdentifierLoc() const
 {
     return m_identifierLoc;
 }
 
-cld::Syntax::DirectDeclaratorParenthese::DirectDeclaratorParenthese(Lexer::TokenIterator begin,
-                                                                    Lexer::TokenIterator end,
+cld::Syntax::DirectDeclaratorParenthese::DirectDeclaratorParenthese(Lexer::CTokenIterator begin,
+                                                                    Lexer::CTokenIterator end,
                                                                     std::unique_ptr<Declarator>&& declarator)
     : Node(begin, end), m_declarator(std::move(declarator))
 {
@@ -1101,8 +1100,7 @@ const cld::Syntax::Declarator& cld::Syntax::DirectDeclaratorParenthese::getDecla
 }
 
 cld::Syntax::DirectAbstractDeclaratorParenthese::DirectAbstractDeclaratorParenthese(
-    std::vector<cld::Lexer::Token>::const_iterator begin, std::vector<cld::Lexer::Token>::const_iterator end,
-    std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
     : Node(begin, end), m_abstractDeclarator(std::move(abstractDeclarator))
 {
 }
@@ -1113,7 +1111,7 @@ const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorPare
 }
 
 cld::Syntax::DirectAbstractDeclaratorAsterisk::DirectAbstractDeclaratorAsterisk(
-    std::vector<cld::Lexer::Token>::const_iterator begin, std::vector<cld::Lexer::Token>::const_iterator end,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator)
     : Node(begin, end), m_directAbstractDeclarator(std::move(directAbstractDeclarator))
 {
@@ -1125,7 +1123,7 @@ const std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&
     return m_directAbstractDeclarator;
 }
 cld::Syntax::AssignmentExpression::AssignmentExpression(
-    Lexer::TokenIterator begin, Lexer::TokenIterator end, cld::Syntax::ConditionalExpression&& conditionalExpression,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::ConditionalExpression&& conditionalExpression,
     std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments)
     : Node(begin, end), m_conditionalExpression(std::move(conditionalExpression)), m_assignments(std::move(assignments))
 {
@@ -1140,8 +1138,7 @@ const std::vector<std::pair<cld::Syntax::AssignmentExpression::AssignOperator, c
     return m_assignments;
 }
 
-cld::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(std::vector<cld::Lexer::Token>::const_iterator begin,
-                                                            std::vector<cld::Lexer::Token>::const_iterator end,
+cld::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                             std::string identifier)
     : Node(begin, end), m_identifier(std::move(identifier))
 {
