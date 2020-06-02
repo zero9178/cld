@@ -136,10 +136,12 @@ cld::Semantics::ConstRetType
     switch (node.getAnOperator())
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'++'"),
+                     {PointAt(node.begin(), node.begin() + 1)});
+            return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
-            // TODO:            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-            //                         '\'' + to_string(node.begin()->getRepresentation()) + '\''),
-            //                     {PointAt(node.begin(), node.begin() + 1)});
+            logError(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args("'--'"),
+                     {PointAt(node.begin(), node.begin() + 1)});
             return {};
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand: CLD_ASSERT(false && "Not supported yet");
@@ -980,8 +982,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstantEvaluator::ConstantEvaluator(
     const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback,
     std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback,
-    std::function<void(std::string, std::vector<Modifier<Lexer::CToken>>, CMessage::Severity)> loggerCallback,
-    Mode mode)
+    std::function<void(std::string, std::vector<Modifier>, Message::Severity)> loggerCallback, Mode mode)
     : m_languageOptions(languageOptions),
       m_typeCallback(std::move(typeCallback)),
       m_declarationCallback(std::move(declarationCallback)),
@@ -990,27 +991,27 @@ cld::Semantics::ConstantEvaluator::ConstantEvaluator(
 {
 }
 
-void cld::Semantics::ConstantEvaluator::logError(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
+void cld::Semantics::ConstantEvaluator::logError(std::string message, std::vector<Modifier> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Error);
+        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Error);
     }
 }
 
-void cld::Semantics::ConstantEvaluator::logWarning(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
+void cld::Semantics::ConstantEvaluator::logWarning(std::string message, std::vector<Modifier> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Warning);
+        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Warning);
     }
 }
 
-void cld::Semantics::ConstantEvaluator::logNote(std::string message, std::vector<Modifier<Lexer::CToken>> modifiers)
+void cld::Semantics::ConstantEvaluator::logNote(std::string message, std::vector<Modifier> modifiers)
 {
     if (m_loggerCallback)
     {
-        m_loggerCallback(std::move(message), std::move(modifiers), CMessage::Severity::Note);
+        m_loggerCallback(std::move(message), std::move(modifiers), Message::Severity::Note);
     }
 }
 

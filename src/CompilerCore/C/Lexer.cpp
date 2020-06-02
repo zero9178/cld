@@ -11,10 +11,8 @@
 #include <CompilerCore/Common/Text.hpp>
 
 #include <algorithm>
-#include <map>
 #include <numeric>
 #include <optional>
-#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -25,11 +23,9 @@
 
 using namespace cld::Lexer;
 
-using IntervalMap = std::map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>>;
-
 namespace
 {
-bool isKeyword(const std::string& characters)
+bool isKeyword(std::string_view characters)
 {
     return characters == "auto" || characters == "double" || characters == "int" || characters == "struct"
            || characters == "break" || characters == "else" || characters == "long" || characters == "switch"
@@ -42,7 +38,7 @@ bool isKeyword(const std::string& characters)
            || characters == "while" || characters == "inline" || characters == "_Bool";
 }
 
-TokenType charactersToKeyword(const std::string& characters)
+TokenType charactersToKeyword(std::string_view characters)
 {
     using namespace cld::Lexer;
     if (characters == "auto")
@@ -606,6 +602,184 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
     return os;
 }
 
+std::pair<std::uint64_t, std::uint64_t> map(const IntervalMap& intervalMap, std::uint64_t offset)
+{
+    auto result = std::lower_bound(intervalMap.begin(), intervalMap.end(), offset,
+                                   [](auto&& lhs, auto&& rhs) { return std::get<0>(lhs) < rhs; });
+    CLD_ASSERT(result != intervalMap.end());
+    if (std::get<0>(*result) > offset)
+    {
+        result--;
+    }
+    const auto next = result + 1;
+    CLD_ASSERT(next != intervalMap.end());
+    const auto denominator = std::get<0>(*next) - std::get<0>(*result);
+    CLD_ASSERT(denominator != 0);
+    const auto nominatorRange = std::get<2>(*result) - std::get<1>(*result);
+    const auto lowBound = (offset - std::get<0>(*result)) * nominatorRange / denominator + std::get<1>(*result);
+    const auto highBound = (offset + 1 - std::get<0>(*result)) * nominatorRange / denominator + std::get<1>(*result);
+    return {lowBound, highBound};
+}
+
+void report(llvm::raw_ostream& reporter, std::string_view source, const IntervalMap& intervalMap, std::string_view type,
+            llvm::raw_ostream::Colors colour, std::string_view message, std::uint64_t location, ArrowRange&& arrows,
+            std::uint64_t underlineStart, std::uint64_t underlineEnd,
+            llvm::function_ref<std::uint64_t(std::uint64_t)> lineNumberF,
+            llvm::function_ref<std::uint64_t(std::uint64_t)> lineStartOffsetF,
+            llvm::function_ref<std::uint64_t(std::uint64_t)> lineEndOffsetF)
+{
+    CLD_ASSERT(underlineStart < underlineEnd);
+
+    // Convert from character space to source space
+    location = map(intervalMap, location).first;
+    underlineStart = map(intervalMap, underlineStart).first;
+    underlineEnd = map(intervalMap, underlineEnd - 1).second;
+    for (auto& [lower, upper] : arrows)
+    {
+        lower = map(intervalMap, lower).first;
+        upper = map(intervalMap, upper - 1).second;
+    }
+
+    const auto startLine = lineNumberF(underlineStart);
+    const auto endLine = lineNumberF(underlineEnd);
+    const auto lineNumber = lineNumberF(location);
+    reporter << lineNumber << ':' << location - lineStartOffsetF(lineNumber) + 1 << ": ";
+    llvm::WithColor(reporter, colour, true).get() << type << ": ";
+    llvm::WithColor(reporter, llvm::raw_ostream::SAVEDCOLOR, true).get() << message << '\n';
+
+    auto textStartOffset = lineStartOffsetF(startLine);
+    std::vector<std::int64_t> mapping(lineEndOffsetF(endLine) - textStartOffset + 1);
+    llvm::SmallString<128> safeUTF8;
+    safeUTF8.reserve(mapping.size() - 1);
+    cld::toSafeUTF8(source.substr(textStartOffset, mapping.size() - 1), std::back_inserter(safeUTF8), mapping.begin());
+
+    llvm::SmallVector<std::string_view, 2> lines;
+    lines.reserve(endLine - startLine + 1);
+    {
+        auto view = std::string_view(safeUTF8.data(), safeUTF8.size());
+        std::size_t result = 0;
+        while (true)
+        {
+            auto newline = view.find('\n', result);
+            if (newline == std::string_view::npos)
+            {
+                lines.emplace_back(view.substr(result));
+                break;
+            }
+            lines.emplace_back(view.substr(result, newline - result));
+            result = newline + 1;
+        }
+    }
+
+    underlineStart += mapping[underlineStart - textStartOffset];
+    underlineEnd += mapping[underlineEnd - textStartOffset];
+    for (auto& iter : arrows)
+    {
+        iter.first += mapping[iter.first - textStartOffset];
+        iter.second += mapping[iter.second - textStartOffset];
+        CLD_ASSERT(iter.first >= underlineStart && iter.second <= underlineEnd);
+    }
+
+    auto numSize = 1 + (std::size_t)std::floor(log10f(endLine));
+    const auto remainder = numSize % 4;
+    if (remainder)
+    {
+        numSize += 4 - remainder;
+    }
+
+    llvm::SmallString<128> underline;
+    llvm::SmallString<128> space;
+    for (auto i = startLine; i <= endLine; i++)
+    {
+        // Text
+        reporter << llvm::format_decimal(i, numSize) << " | ";
+
+        auto string = lines[i - startLine];
+        std::int64_t lineStartOffset = lineStartOffsetF(i);
+        lineStartOffset += mapping[lineStartOffset - textStartOffset];
+        if (i != startLine && i != endLine)
+        {
+            // The token spans multiple lines and we are neither at the first nor last line. Therefore
+            // this line consist only of the token
+            llvm::WithColor(reporter, colour).get() << string;
+        }
+        else if (i == startLine && i == endLine)
+        {
+            // The token does not span lines and starts as well as ends here
+            auto column = underlineStart - lineStartOffset;
+            reporter << string.substr(0, column);
+            llvm::WithColor(reporter, colour).get() << string.substr(column, underlineEnd - underlineStart);
+            reporter << string.substr(column + underlineEnd - underlineStart);
+        }
+        else if (i == startLine)
+        {
+            // The token starts here and does not end here
+            auto column = underlineStart - lineStartOffset;
+            reporter << string.substr(0, column);
+            llvm::WithColor(reporter, colour).get() << string.substr(column);
+        }
+        else
+        {
+            // The token ends here and did not start here
+            auto endColumn = underlineEnd - lineStartOffset;
+            llvm::WithColor(reporter, colour).get() << string.substr(0, endColumn);
+            reporter << string.substr(endColumn);
+        }
+        reporter << '\n';
+
+        // Underline + Arrows
+        underline.clear();
+        space.clear();
+        reporter.indent(numSize) << " | ";
+        if (i != startLine && i != endLine)
+        {
+            // The token spans multiple lines and we are neither at the first nor last line. Therefore
+            // this line consist only of the token
+            cld::stringOfSameWidth(string, '~', std::back_inserter(underline));
+        }
+        else if (i == startLine && i == endLine)
+        {
+            // The token does not span lines and starts as well as ends here
+            auto column = underlineStart - lineStartOffset;
+            cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
+            underline += space;
+            cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~',
+                                   std::back_inserter(underline));
+        }
+        else if (i == startLine)
+        {
+            // The token starts here and does not end here
+            auto column = underlineStart - lineStartOffset;
+            cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
+            underline += space;
+            cld::stringOfSameWidth(string.substr(column), '~', std::back_inserter(underline));
+        }
+        else
+        {
+            // The token ends here and did not start here
+            auto endColumn = underlineEnd - lineStartOffset;
+            cld::stringOfSameWidth(string.substr(0, endColumn), '~', std::back_inserter(underline));
+        }
+
+        for (auto [begin, end] : arrows)
+        {
+            if ((std::int64_t)end <= lineStartOffset || begin >= lineStartOffset + string.size())
+            {
+                continue;
+            }
+            auto startIndex = std::max<std::int64_t>((std::int64_t)begin - lineStartOffset, 0);
+            auto endIndex =
+                std::min<std::int64_t>((std::int64_t)end - lineStartOffset, lineStartOffset + string.size());
+            auto toHighlightView = string.substr(startIndex, endIndex - startIndex);
+            auto prefix = string.substr(0, startIndex);
+            auto pos = cld::unsafeColumnWidth(prefix);
+            std::fill(underline.begin() + pos, underline.begin() + pos + cld::unsafeColumnWidth(toHighlightView), '^');
+        }
+        llvm::WithColor(reporter, colour) << underline << '\n';
+    }
+    reporter.flush();
+}
+
 class Context
 {
     llvm::raw_ostream* m_reporter;
@@ -646,7 +820,7 @@ class Context
         return line == m_lineStarts.size() ? m_sourceSpace.size() : m_lineStarts[line];
     }
 
-    void report(const std::string& type, llvm::raw_ostream::Colors colour, const std::string& message,
+    void report(std::string_view type, llvm::raw_ostream::Colors colour, std::string_view message,
                 std::uint64_t location, ArrowRange&& arrows, std::uint64_t underlineStart,
                 std::uint64_t underlineEnd) const
     {
@@ -654,176 +828,11 @@ class Context
         {
             return;
         }
-        CLD_ASSERT(underlineStart < underlineEnd);
-
-        // Convert from character space to source space
-        location = map(location).first;
-        underlineStart = map(underlineStart).first;
-        underlineEnd = map(underlineEnd - 1).second;
-        for (auto& [lower, upper] : arrows)
-        {
-            lower = map(lower).first;
-            upper = map(upper - 1).second;
-        }
-
-        const auto startLine = getLineNumber(underlineStart);
-        const auto endLine = getLineNumber(underlineEnd);
-        const auto lineNumber = getLineNumber(location);
-        *m_reporter << lineNumber << ':' << location - getLineStartOffset(lineNumber) + 1 << ": ";
-        llvm::WithColor(*m_reporter, colour, true) << type << ": ";
-        llvm::WithColor(*m_reporter, llvm::raw_ostream::SAVEDCOLOR, true) << message << '\n';
-
-        auto textStartOffset = getLineStartOffset(startLine);
-        std::vector<std::int64_t> mapping(getLineEndOffset(endLine) - textStartOffset + 1);
-        llvm::SmallString<128> safeUTF8;
-        safeUTF8.reserve(mapping.size() - 1);
-        cld::toSafeUTF8(m_sourceSpace.substr(textStartOffset, mapping.size() - 1), std::back_inserter(safeUTF8),
-                        mapping.begin());
-
-        llvm::SmallVector<std::string_view, 2> lines;
-        lines.reserve(endLine - startLine + 1);
-        {
-            auto view = std::string_view(safeUTF8.data(), safeUTF8.size());
-            std::size_t result = 0;
-            while (true)
-            {
-                auto newline = view.find('\n', result);
-                if (newline == std::string_view::npos)
-                {
-                    lines.emplace_back(view.substr(result));
-                    break;
-                }
-                lines.emplace_back(view.substr(result, newline - result));
-                result = newline + 1;
-            }
-        }
-
-        underlineStart += mapping[underlineStart - textStartOffset];
-        underlineEnd += mapping[underlineEnd - textStartOffset];
-        for (auto& iter : arrows)
-        {
-            iter.first += mapping[iter.first - textStartOffset];
-            iter.second += mapping[iter.second - textStartOffset];
-            CLD_ASSERT(iter.first >= underlineStart && iter.second <= underlineEnd);
-        }
-
-        auto numSize = 1 + (std::size_t)std::floor(log10f(endLine));
-        const auto remainder = numSize % 4;
-        if (remainder)
-        {
-            numSize += 4 - remainder;
-        }
-
-        llvm::SmallString<128> underline;
-        llvm::SmallString<128> space;
-        for (auto i = startLine; i <= endLine; i++)
-        {
-            // Text
-            *m_reporter << llvm::format_decimal(i, numSize) << " | ";
-
-            auto string = lines[i - startLine];
-            std::int64_t lineStartOffset = getLineStartOffset(i);
-            lineStartOffset += mapping[lineStartOffset - textStartOffset];
-            if (i != startLine && i != endLine)
-            {
-                // The token spans multiple lines and we are neither at the first nor last line. Therefore
-                // this line consist only of the token
-                llvm::WithColor(*m_reporter, colour).get() << string;
-            }
-            else if (i == startLine && i == endLine)
-            {
-                // The token does not span lines and starts as well as ends here
-                auto column = underlineStart - lineStartOffset;
-                *m_reporter << string.substr(0, column);
-                llvm::WithColor(*m_reporter, colour).get() << string.substr(column, underlineEnd - underlineStart);
-                *m_reporter << string.substr(column + underlineEnd - underlineStart);
-            }
-            else if (i == startLine)
-            {
-                // The token starts here and does not end here
-                auto column = underlineStart - lineStartOffset;
-                *m_reporter << string.substr(0, column);
-                llvm::WithColor(*m_reporter, colour).get() << string.substr(column);
-            }
-            else
-            {
-                // The token ends here and did not start here
-                auto endColumn = underlineEnd - lineStartOffset;
-                llvm::WithColor(*m_reporter, colour).get() << string.substr(0, endColumn);
-                *m_reporter << string.substr(endColumn);
-            }
-            *m_reporter << '\n';
-
-            // Underline + Arrows
-            underline.clear();
-            space.clear();
-            m_reporter->indent(numSize) << " | ";
-            if (i != startLine && i != endLine)
-            {
-                // The token spans multiple lines and we are neither at the first nor last line. Therefore
-                // this line consist only of the token
-                cld::stringOfSameWidth(string, '~', std::back_inserter(underline));
-            }
-            else if (i == startLine && i == endLine)
-            {
-                // The token does not span lines and starts as well as ends here
-                auto column = underlineStart - lineStartOffset;
-                cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
-                underline += space;
-                cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~',
-                                       std::back_inserter(underline));
-            }
-            else if (i == startLine)
-            {
-                // The token starts here and does not end here
-                auto column = underlineStart - lineStartOffset;
-                cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
-                underline += space;
-                cld::stringOfSameWidth(string.substr(column), '~', std::back_inserter(underline));
-            }
-            else
-            {
-                // The token ends here and did not start here
-                auto endColumn = underlineEnd - lineStartOffset;
-                cld::stringOfSameWidth(string.substr(0, endColumn), '~', std::back_inserter(underline));
-            }
-            for (auto [begin, end] : arrows)
-            {
-                if ((std::int64_t)end <= lineStartOffset || begin >= lineStartOffset + string.size())
-                {
-                    continue;
-                }
-                auto startIndex = std::max<std::int64_t>((std::int64_t)begin - lineStartOffset, 0);
-                auto endIndex =
-                    std::min<std::int64_t>((std::int64_t)end - lineStartOffset, lineStartOffset + string.size());
-                auto toHighlightView = string.substr(startIndex, endIndex - startIndex);
-                auto prefix = string.substr(0, startIndex);
-                auto pos = cld::unsafeColumnWidth(prefix);
-                std::fill(underline.begin() + pos, underline.begin() + pos + cld::unsafeColumnWidth(toHighlightView),
-                          '^');
-            }
-            llvm::WithColor(*m_reporter, colour) << underline << '\n';
-        }
-        m_reporter->flush();
-    }
-
-    std::pair<std::uint64_t, std::uint64_t> map(std::uint64_t offset) const
-    {
-        auto result = m_characterToSourceSpace.lower_bound(offset);
-        CLD_ASSERT(result != m_characterToSourceSpace.end());
-        if (result->first > offset)
-        {
-            result--;
-        }
-        auto next = result;
-        next++;
-        CLD_ASSERT(next != m_characterToSourceSpace.begin());
-        auto denominator = next->first - result->first;
-        CLD_ASSERT(denominator != 0);
-        auto nominatorRange = result->second.second - result->second.first;
-        auto lowBound = (offset - result->first) * nominatorRange / denominator + result->second.first;
-        auto highBound = (offset + 1 - result->first) * nominatorRange / denominator + result->second.first;
-        return {lowBound, highBound};
+        ::report(
+            *m_reporter, m_sourceSpace, m_characterToSourceSpace, type, colour, message, location, std::move(arrows),
+            underlineStart, underlineEnd, [this](std::uint64_t value) { return getLineNumber(value); },
+            [this](std::uint64_t value) { return getLineStartOffset(value); },
+            [this](std::uint64_t value) { return getLineEndOffset(value); });
     }
 
 public:
@@ -888,22 +897,41 @@ public:
         std::forward<F>(f)();
     }
 
-    [[nodiscard]] const std::vector<cld::Lexer::PPToken>& getResult() const& noexcept
+    [[nodiscard]] const std::vector<cld::Lexer::PPToken>& getResult() const noexcept
     {
         return m_result;
     }
 
-    [[nodiscard]] std::vector<cld::Lexer::PPToken> getResult() && noexcept
+    [[nodiscard]] std::vector<cld::Lexer::PPToken>& getResult() noexcept
     {
         return m_result;
     }
 
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, std::string_view value = {})
     {
-        auto sourceStart = map(start).first;
-        auto sourceEnd = map(end - 1).second;
-
-        m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, value);
+        auto sourceStart = map(m_characterToSourceSpace, start).first;
+        auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
+        if (tokenType != TokenType::PPNumber && tokenType != TokenType::StringLiteral
+            && tokenType != TokenType::Literal)
+        {
+            m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, end - start, start, FileID(0),
+                                  MacroID(0), value);
+        }
+        else
+        {
+            auto result = std::lower_bound(m_characterToSourceSpace.begin(), m_characterToSourceSpace.end(), start,
+                                           [](auto&& lhs, auto&& rhs) { return std::get<0>(lhs) < rhs; });
+            CLD_ASSERT(result != m_characterToSourceSpace.end());
+            if (std::get<0>(*result) > start)
+            {
+                result--;
+            }
+            auto endInterval = std::find_if(result, m_characterToSourceSpace.end(),
+                                            [end](auto&& value) { return std::get<0>(value) > end; });
+            m_result.emplace_back(
+                tokenType, sourceStart, sourceEnd - sourceStart, end - start, start, FileID(0), MacroID(0), value,
+                std::vector(result, endInterval != m_characterToSourceSpace.end() ? endInterval + 1 : endInterval));
+        }
     }
 
     void push(TokenType tokenType, std::string_view value = {})
@@ -932,14 +960,6 @@ public:
     }
 };
 
-std::uint32_t octalToValue(const std::string& value)
-{
-    char* end = const_cast<char*>(value.data() + value.size());
-    auto result = std::strtoul(value.data(), &end, 8);
-    CLD_ASSERT(*end == '\0');
-    return result;
-}
-
 std::uint32_t hexToValue(const std::string& value)
 {
     char* end = const_cast<char*>(value.data() + value.size());
@@ -955,8 +975,9 @@ constexpr auto UTF32_MAX = 0x10FFFF;
  * @param value string that either consist of 4 or 8 hex digits
  * @return Unicode value
  */
+template <class T>
 std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t startOffset,
-                                                       std::uint64_t endOffset, Context& context)
+                                                       std::uint64_t endOffset, T& context)
 {
     CLD_ASSERT(value.size() == 4 || value.size() == 8);
     auto result = hexToValue(std::string(value.begin(), value.end()));
@@ -981,564 +1002,6 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     }
     return result;
 }
-
-// std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, Context& context)
-//{
-//    switch (escape)
-//    {
-//        case '\'': return '\'';
-//        case '"': return '"';
-//        case 'b': return '\b';
-//        case 't': return '\t';
-//        case '\\': return '\\';
-//        case 'f': return '\f';
-//        case 'v': return '\v';
-//        case '?': return '\?';
-//        case 'n': return '\n';
-//        case 'a': return '\a';
-//        case 'r': return '\r';
-//        case ' ':
-//        {
-//            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
-//                                {{backslash, backslash + 2}});
-//            return {};
-//        }
-//        default:
-//        {
-//            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
-//                                backslash + 1, {{backslash, backslash + 2}});
-//            return {};
-//        }
-//    }
-//}
-//
-// enum class Literal
-//{
-//    CharLiteral,
-//    StringLiteral,
-//};
-//
-// std::pair<std::vector<llvm::UTF32>, bool> processCharacters(const std::string& characters, Context& context, bool
-// wide,
-//                                                            Literal literalType)
-//{
-//    std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
-//        return wide ? 0xFFFFFFFFu >> (32 - 8 * context.getLanguageOptions().sizeOfWChar) : 0x7F;
-//    }();
-//    std::vector<llvm::UTF32> result;
-//    result.resize(characters.size());
-//    auto* resultStart = result.data();
-//    auto* resultEnd = result.data() + result.size();
-//
-//    const auto* end = characters.data() + characters.size();
-//    bool errorOccured = false;
-//    for (const auto* iter = characters.data(); iter != end;)
-//    {
-//        auto offset = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data());
-//        if (*iter == '\n')
-//        {
-//            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
-//                                    literalType == Literal::CharLiteral ? cld::Errors::Lexer::CHARACTER_LITERAL :
-//                                                                          cld::Errors::Lexer::STRING_LITERAL),
-//                                context.tokenStartOffset, {{offset, offset + 2}});
-//            iter++;
-//            errorOccured = true;
-//            continue;
-//        }
-//        if (*iter != '\\')
-//        {
-//            const auto* start = iter;
-//            iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
-//
-//            auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
-//                                                reinterpret_cast<const llvm::UTF8*>(iter), &resultStart, resultEnd,
-//                                                llvm::strictConversion);
-//            if (res != llvm::conversionOK)
-//            {
-//                auto invalid = context.tokenStartOffset + (wide ? 2 : 1) + (start - characters.data());
-//                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, context.tokenStartOffset,
-//                                    {{invalid, invalid + 1}});
-//                errorOccured = true;
-//            }
-//            continue;
-//        }
-//        // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
-//        // iter + 1 == end the last character would be '\\' and following that '\'' or '\"'.
-//        // Therefore the character literal wouldn't have ended and we wouldn't be here.
-//        if (iter[1] == 'u' || iter[1] == 'U')
-//        {
-//            bool big = iter[1] == 'U';
-//            iter += 2;
-//            if (iter == end
-//                || (!(*iter >= '0' || *iter <= '9') && !(*iter >= 'a' && *iter <= 'f')
-//                    && !(*iter >= 'A' && *iter <= 'F')))
-//            {
-//                // First character followed after \u or \U is not a hex digit or its the end of string
-//                // Let's assume the user thought \u might be an escape character
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
-//                                    {{start, start + 2}});
-//                errorOccured = true;
-//                continue;
-//            }
-//            else
-//            {
-//                auto hexStart = iter;
-//                auto hexEnd = std::find_if(
-//                    hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4), [](char c)
-//                    {
-//                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-//                    });
-//                if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
-//                {
-//                    auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                    context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-//                                            std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-//                                        start, {{start, start + std::distance(hexStart, hexEnd)}});
-//                    errorOccured = true;
-//                    iter = hexEnd;
-//                    continue;
-//                }
-//                auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
-//                                                    offset + 2 + (big ? 8 : 4), context);
-//                if (uc)
-//                {
-//                    *resultStart = *uc;
-//                    resultStart++;
-//                }
-//                else
-//                {
-//                    errorOccured = true;
-//                }
-//                iter = hexEnd;
-//                continue;
-//            }
-//        }
-//        else if (iter[1] == 'x')
-//        {
-//            iter += 2;
-//            auto lastHex = std::find_if(iter, end, [](char c) {
-//                return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-//            });
-//            if (lastHex == iter)
-//            {
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
-//                                    {{start, start + 2}});
-//                errorOccured = true;
-//                continue;
-//            }
-//
-//            llvm::APInt input;
-//            llvm::StringRef(iter, static_cast<std::size_t>(lastHex - iter)).getAsInteger(16, input);
-//            auto rhs = llvm::APInt(input.getBitWidth(), UTF32_MAX);
-//            if (input.getBitWidth() >= 21 && input.ugt(rhs))
-//            {
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
-//                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
-//                errorOccured = true;
-//                iter = lastHex;
-//                continue;
-//            }
-//            auto value = input.getZExtValue();
-//            if (value >= 0xD800 && value <= 0xDFFF)
-//            {
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
-//                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-//                                    start, start, start + 2 + lastHex - iter,
-//                                    {{start + 2, start + 2 + lastHex - iter}});
-//                errorOccured = true;
-//                iter = lastHex;
-//                continue;
-//            }
-//            if (value > largestCharacter)
-//            {
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
-//                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
-//                errorOccured = true;
-//                iter = lastHex;
-//                continue;
-//            }
-//            *resultStart = value;
-//            resultStart++;
-//
-//            iter = lastHex;
-//        }
-//        else if (iter[1] >= '0' && iter[1] <= '9')
-//        {
-//            // We take 8 and 9 here as well to tell the user its an invalid octal instead of an invalid simple
-//            // escape sequence
-//            iter++;
-//            auto lastOctal = std::find_if(iter, iter + std::min<std::size_t>(3, std::distance(iter, end)),
-//                                          [](char c) { return c < '0' || c > '7'; });
-//            if (lastOctal == iter)
-//            {
-//                // First character is 8 or 9. That's why we didn't encounter a single octal digit.
-//                // Also since there must be at least one character after \, lastOctal is definitely not end
-//                // here.
-//                context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
-//                                    offset, {{offset, offset + 2}});
-//                errorOccured = true;
-//                continue;
-//            }
-//
-//            auto value = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
-//            if (value > largestCharacter)
-//            {
-//                auto start = context.tokenStartOffset + (wide ? 2 : 1) + (iter - characters.data() - 2);
-//                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
-//                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal - iter}});
-//                errorOccured = true;
-//                iter = lastOctal;
-//                continue;
-//            }
-//            *resultStart = value;
-//            resultStart++;
-//
-//            iter = lastOctal;
-//        }
-//        else
-//        {
-//            // Escape sequence or illegal escape
-//            auto character = escapeCharToValue(iter[1], offset, context);
-//            if (character)
-//            {
-//                *resultStart = *character;
-//                resultStart++;
-//            }
-//            else
-//            {
-//                errorOccured = true;
-//            }
-//            iter += 2;
-//        }
-//    }
-//
-//    if (literalType == Literal::CharLiteral)
-//    {
-//        for (auto iter = result.data(); iter != resultStart; iter++)
-//        {
-//            if (*iter > largestCharacter)
-//            {
-//                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-//                context.tokenStartOffset); errorOccured = true;
-//            }
-//        }
-//    }
-//    result.resize(std::distance(result.data(), resultStart));
-//    return {result, errorOccured};
-//}
-//
-// template <class T, class... Args>
-// std::pair<CToken::ValueType, CToken::Type> castInteger(std::uint64_t integer,
-//                                                       std::array<CToken::Type, sizeof...(Args) + 1> types)
-//{
-//    // Clang
-//#pragma clang diagnostic push
-//#pragma clang diagnostic ignored "-Wsign-compare"
-//    // GCC
-//#pragma GCC diagnostic push
-//#pragma GCC diagnostic ignored "-Wsign-compare"
-//    // MSVC
-//#pragma warning(push)
-//#pragma warning(disable : 4018)
-//#pragma warning(disable : 4389)
-//    if constexpr (std::is_signed_v<T>)
-//    {
-//        if (llvm::APInt::getSignedMaxValue(sizeof(T) * 8).uge(integer))
-//        {
-//            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
-//        }
-//    }
-//    else
-//    {
-//        if (llvm::APInt::getMaxValue(sizeof(T) * 8).uge(integer))
-//        {
-//            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
-//        }
-//    }
-//    if constexpr (sizeof...(Args) != 0)
-//    {
-//        std::array<CToken::Type, sizeof...(Args)> second;
-//        std::copy(types.begin(), types.end() - 1, second.begin());
-//        return castInteger<Args...>(integer, second);
-//    }
-//    else
-//    {
-//        CLD_UNREACHABLE;
-//    }
-//#pragma GCC diagnostic pop
-//#pragma clang diagnostic pop
-//#pragma warning(pop)
-//}
-//
-// std::optional<std::pair<CToken::ValueType, CToken::Type>> processNumber(const char* begin, const char* end,
-//                                                                        std::uint64_t beginLocation, Context& context)
-//{
-//    CLD_ASSERT(std::distance(begin, end) >= 1);
-//    // If the number is just "0x", treat the x as a suffix instead of as a hex prefix
-//    bool isHex = std::distance(begin, end) > 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X')
-//                 && ((*(begin + 2) >= '0' && *(begin + 2) <= '9') || (*(begin + 2) >= 'a' && *(begin + 2) <= 'f')
-//                     || (*(begin + 2) >= 'A' && *(begin + 2) <= 'F'));
-//    llvm::SmallVector<char, 22> legalValues(10);
-//    std::iota(legalValues.begin(), legalValues.end(), '0');
-//    if (isHex)
-//    {
-//        legalValues.resize(10 + 12);
-//        std::iota(legalValues.begin() + 10, legalValues.end(), 'A');
-//        std::iota(legalValues.begin() + 10 + 6, legalValues.end(), 'a');
-//    }
-//    bool isFloat = false;
-//    auto searchFunction = [&legalValues, &isFloat](char c) mutable {
-//        if (c == '.' && !isFloat)
-//        {
-//            isFloat = true;
-//            return false;
-//        }
-//        return std::none_of(legalValues.begin(), legalValues.end(), [c](char allowed) { return allowed == c; });
-//    };
-//    auto suffixBegin = std::find_if(begin + (isHex ? 2 : 0), end, searchFunction);
-//    // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
-//    // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
-//    // then continue our search
-//    constexpr unsigned toLower = 32;
-//    bool errorsOccurred = false;
-//    if (suffixBegin != end && (*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
-//    {
-//        isFloat = true;
-//        suffixBegin++;
-//        if (suffixBegin != end && (*suffixBegin == '+' || *suffixBegin == '-'))
-//        {
-//            suffixBegin++;
-//        }
-//        auto prev = suffixBegin;
-//        suffixBegin = std::find_if(suffixBegin, end, searchFunction);
-//        if (prev == suffixBegin)
-//        {
-//            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
-//                                beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
-//                                context.getOffset() - 1);
-//            errorsOccurred = true;
-//        }
-//    }
-//    else if (isHex && isFloat)
-//    {
-//        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT, context.getOffset() - 1,
-//                            context.tokenStartOffset, context.getOffset() - 1);
-//        errorsOccurred = true;
-//    }
-//
-//    bool isHexOrOctal = isHex;
-//    if (!isHex && !isFloat && *begin == '0')
-//    {
-//        isHexOrOctal = true;
-//        auto result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
-//        while (result != suffixBegin)
-//        {
-//            errorsOccurred = true;
-//            auto arrowBegin = beginLocation + std::distance(begin, result);
-//            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
-//                                beginLocation + std::distance(begin, result), context.tokenStartOffset,
-//                                context.getOffset() - 1, {{arrowBegin, arrowBegin + 1}});
-//            result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
-//        }
-//    }
-//
-//    auto suffix = std::string(suffixBegin, std::distance(suffixBegin, end));
-//    std::unordered_set<std::string_view> set;
-//    if (!isFloat)
-//    {
-//        set = {"u", "U", "ul", "Ul", "uL", "UL", "uLL", "ULL", "ull", "Ull", "l", "L", "ll", "LL", ""};
-//    }
-//    else
-//    {
-//        set = {"f", "l", "F", "L", ""};
-//    }
-//    if (set.count(suffix) == 0)
-//    {
-//        auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
-//        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-//                            beginLocation + std::distance(begin, suffixBegin), context.tokenStartOffset,
-//                            context.getOffset() - 1, {{arrowBegin, arrowBegin + suffix.size()}});
-//        return {};
-//    }
-//
-//    if (errorsOccurred)
-//    {
-//        return {};
-//    }
-//    if (!isFloat)
-//    {
-//        std::string number(begin, suffixBegin);
-//        llvm::APInt test;
-//        llvm::StringRef(number).getAsInteger(0, test);
-//        if (test.getBitWidth() > 64)
-//        {
-//            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
-//                                context.tokenStartOffset, context.getOffset() - 1);
-//            return {};
-//        }
-//        char* endPtr;
-//        auto integer = std::strtoull(number.data(), &endPtr, 0);
-//        CLD_ASSERT(*endPtr == '\0');
-//        if (suffix.empty())
-//        {
-//            switch (context.getLanguageOptions().sizeOfInt)
-//            {
-//                case 2:
-//                    if (isHexOrOctal)
-//                    {
-//                        if (context.getLanguageOptions().sizeOfLong == 4)
-//                        {
-//                            return castInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
-//                                               std::uint64_t>(integer,
-//                                                              {CToken::Type::Int, CToken::Type::UnsignedInt,
-//                                                               CToken::Type::Long, CToken::Type::UnsignedLong,
-//                                                               CToken::Type::LongLong,
-//                                                               CToken::Type::UnsignedLongLong});
-//                        }
-//                        return castInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
-//                            integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::Long,
-//                                      CToken::Type::UnsignedLong});
-//                    }
-//                    if (context.getLanguageOptions().sizeOfLong == 4)
-//                    {
-//                        return castInteger<std::int16_t, std::int32_t, std::int64_t>(
-//                            integer, {CToken::Type::Int, CToken::Type::Long, CToken::Type::LongLong});
-//                    }
-//                    return castInteger<std::int16_t, std::int64_t>(integer, {CToken::Type::Int, CToken::Type::Long});
-//                case 4:
-//                    if (isHexOrOctal)
-//                    {
-//                        if (context.getLanguageOptions().sizeOfLong == 4)
-//                        {
-//                            return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
-//                                integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::LongLong,
-//                                          CToken::Type::UnsignedLongLong});
-//                        }
-//                        return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
-//                            integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::Long,
-//                                      CToken::Type::UnsignedLong});
-//                    }
-//                    if (context.getLanguageOptions().sizeOfLong == 4)
-//                    {
-//                        return castInteger<std::int32_t, std::int64_t>(integer,
-//                                                                       {CToken::Type::Int, CToken::Type::LongLong});
-//                    }
-//                    return castInteger<std::int32_t, std::int64_t>(integer, {CToken::Type::Int, CToken::Type::Long});
-//                case 8:
-//                    if (isHexOrOctal)
-//                    {
-//                        return castInteger<std::int64_t, std::uint64_t>(integer,
-//                                                                        {CToken::Type::Int,
-//                                                                        CToken::Type::UnsignedInt});
-//                    }
-//                    return castInteger<std::int64_t>(integer, {CToken::Type::Int});
-//                default: CLD_UNREACHABLE;
-//            }
-//        }
-//        else if (suffix == "u" || suffix == "U")
-//        {
-//            switch (context.getLanguageOptions().sizeOfInt)
-//            {
-//                case 2:
-//                    if (context.getLanguageOptions().sizeOfLong == 4)
-//                    {
-//                        return castInteger<std::uint16_t, std::uint32_t, std::uint64_t>(
-//                            integer,
-//                            {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong, CToken::Type::UnsignedLongLong});
-//                    }
-//                    return castInteger<std::uint16_t, std::uint64_t>(
-//                        integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong});
-//                case 4:
-//                    if (context.getLanguageOptions().sizeOfLong == 4)
-//                    {
-//                        return castInteger<std::uint32_t, std::uint64_t>(
-//                            integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLongLong});
-//                    }
-//                    return castInteger<std::uint32_t, std::uint64_t>(
-//                        integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong});
-//                case 8: return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedInt});
-//                default: CLD_UNREACHABLE;
-//            }
-//        }
-//        else if (suffix == "L" || suffix == "l")
-//        {
-//            if (isHexOrOctal)
-//            {
-//                if (context.getLanguageOptions().sizeOfLong == 4)
-//                {
-//                    return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
-//                        integer, {CToken::Type::Long, CToken::Type::UnsignedLong, CToken::Type::LongLong,
-//                                  CToken::Type::UnsignedLongLong});
-//                }
-//                return castInteger<std::int64_t, std::uint64_t>(integer,
-//                                                                {CToken::Type::Long, CToken::Type::UnsignedLong});
-//            }
-//            if (context.getLanguageOptions().sizeOfLong == 4)
-//            {
-//                return castInteger<std::int32_t, std::int64_t>(integer, {CToken::Type::Long, CToken::Type::LongLong});
-//            }
-//            return castInteger<std::int64_t>(integer, {CToken::Type::Long});
-//        }
-//        else if (suffix.size() == 2
-//                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
-//                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
-//        {
-//            if (context.getLanguageOptions().sizeOfLong == 4)
-//            {
-//                return castInteger<std::uint32_t, std::uint64_t>(
-//                    integer, {CToken::Type::UnsignedLong, CToken::Type::UnsignedLongLong});
-//            }
-//            return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedLong});
-//        }
-//        else if (suffix == "ll" || suffix == "LL")
-//        {
-//            if (isHexOrOctal)
-//            {
-//                return castInteger<std::int64_t, std::uint64_t>(
-//                    integer, {CToken::Type::LongLong, CToken::Type::UnsignedLongLong});
-//            }
-//            return castInteger<std::int64_t>(integer, {CToken::Type::LongLong});
-//        }
-//        else if (suffix.size() == 3
-//                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
-//                 && (suffix.find("LL") != std::string_view::npos || suffix.find("ll") != std::string_view::npos))
-//        {
-//            return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedLongLong});
-//        }
-//        else
-//        {
-//            CLD_UNREACHABLE;
-//        }
-//    }
-//    else
-//    {
-//        auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
-//        if (suffix.empty())
-//        {
-//            return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::Double}};
-//        }
-//        else if (suffix == "f" || suffix == "F")
-//        {
-//            return {{llvm::APFloat(llvm::APFloat::IEEEsingle(), input), CToken::Type::Float}};
-//        }
-//        else if (suffix == "l" || suffix == "L")
-//        {
-//            switch (context.getLanguageOptions().sizeOfLongDoubleBits)
-//            {
-//                case 64: return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::LongDouble}};
-//                case 80: return {{llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input),
-//                CToken::Type::LongDouble}}; case 128: return {{llvm::APFloat(llvm::APFloat::IEEEquad(), input),
-//                CToken::Type::LongDouble}}; default: CLD_UNREACHABLE;
-//            }
-//        }
-//    }
-//    CLD_UNREACHABLE;
-//}
 
 struct Start final
 {
@@ -1745,132 +1208,33 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
 
 std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context)
 {
-    if ((c == '\n' || c == '\r'))
-    {
-        context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::CHARACTER_LITERAL),
-                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                            {{context.tokenStartOffset, context.getOffset() - 1}});
-        context.push(1, TokenType::Literal, characters);
-        return {Start{}, false};
-    }
     if (c == '\'' && (characters.empty() || characters.back() != '\\'))
     {
         context.push(TokenType::Literal, characters);
         return {Start{}, true};
-        //        auto [result, errorOccured] = processCharacters(characters, context, wide, Literal::CharLiteral);
-        //        if (result.empty())
-        //        {
-        //            if (!errorOccured)
-        //            {
-        //                std::vector<std::uint64_t> arrows(context.getOffset() - context.tokenStartOffset);
-        //                std::iota(arrows.begin(), arrows.end(), context.tokenStartOffset);
-        //                context.reportError(cld::Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
-        //                context.tokenStartOffset,
-        //                                    {{context.tokenStartOffset, context.getOffset()}});
-        //            }
-        //            return {Start{}, true};
-        //        }
-        //        else if (result.size() > 1)
-        //        {
-        //            context.reportWarning(cld::Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
-        //            context.tokenStartOffset,
-        //                                  {{context.tokenStartOffset, context.getOffset()}});
-        //        }
-        //
-        //        if (wide)
-        //        {
-        //            context.push(TokenType::Literal,
-        //                         llvm::APSInt(llvm::APInt(context.getLanguageOptions().sizeOfWChar * 8, result[0]),
-        //                                      !context.getLanguageOptions().wcharIsSigned));
-        //        }
-        //        else
-        //        {
-        //            context.push(TokenType::Literal,
-        //                         llvm::APSInt(llvm::APInt(32, static_cast<std::uint8_t>(result[0]), true), false));
-        //        }
-        //        return {Start{}, true};
     }
     characters += c;
+    if ((c == '\n' || c == '\r'))
+    {
+        context.push(TokenType::Literal, characters);
+        return {Start{}, false};
+    }
     return {std::move(*this), true};
 }
 
 std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
 {
-    if ((c == '\n' || c == '\r'))
-    {
-        context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::STRING_LITERAL),
-                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                            {{context.tokenStartOffset, context.getOffset() - 1}});
-        context.push(1, TokenType::StringLiteral, characters);
-        return {Start{}, false};
-    }
     if (c == '"' && (characters.empty() || characters.back() != '\\'))
     {
         context.push(TokenType::StringLiteral, characters);
         return {Start{}, true};
-        //        auto [result, errorOccured] = processCharacters(characters, context, wide, Literal::StringLiteral);
-        //        if (errorOccured)
-        //        {
-        //            return {Start{}, true};
-        //        }
-        //        if (!wide || context.getLanguageOptions().sizeOfWChar == 1)
-        //        {
-        //            const auto* start = result.data();
-        //            std::vector<llvm::UTF8> utf8(result.size() * 5);
-        //            auto* dest = utf8.data();
-        //            auto conversion = llvm::ConvertUTF32toUTF8(&start, start + result.size(), &dest, dest +
-        //            utf8.size(),
-        //                                                       llvm::strictConversion);
-        //            if (conversion != llvm::conversionOK)
-        //            {
-        //                // Due to errorOccurred being true at failed utf8 to utf 32 conversion this
-        //                // code can't be reached
-        //                CLD_UNREACHABLE;
-        //            }
-        //            else if (wide)
-        //            {
-        //                context.push(TokenType::StringLiteral, NonCharString{{utf8.data(), dest},
-        //                NonCharString::Wide});
-        //            }
-        //            else
-        //            {
-        //                context.push(TokenType::StringLiteral, std::string{utf8.data(), dest});
-        //            }
-        //        }
-        //        else
-        //        {
-        //            switch (context.getLanguageOptions().sizeOfWChar)
-        //            {
-        //                case 2:
-        //                {
-        //                    const auto* start = result.data();
-        //                    std::vector<llvm::UTF16> utf16(result.size() * 3);
-        //                    auto* dest = utf16.data();
-        //                    auto conversion = llvm::ConvertUTF32toUTF16(&start, start + result.size(), &dest,
-        //                                                                dest + utf16.size(), llvm::strictConversion);
-        //                    if (conversion != llvm::conversionOK)
-        //                    {
-        //                        CLD_UNREACHABLE; // While error occurred is true due to failed utf8 to utf 32
-        //                                         // conversion this code can't be reached
-        //                    }
-        //                    else
-        //                    {
-        //                        context.push(TokenType::StringLiteral,
-        //                                     NonCharString{{utf16.data(), dest}, NonCharString::Wide});
-        //                    }
-        //                    break;
-        //                }
-        //                case 4:
-        //                {
-        //                    context.push(TokenType::StringLiteral, NonCharString{result, NonCharString::Wide});
-        //                    break;
-        //                }
-        //                default: CLD_UNREACHABLE;
-        //            }
-        //        }
-        //        return {Start{}, true};
     }
     characters += c;
+    if ((c == '\n' || c == '\r'))
+    {
+        context.push(TokenType::StringLiteral, characters);
+        return {Start{}, false};
+    }
     return {std::move(*this), true};
 }
 
@@ -1900,8 +1264,9 @@ std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
     {
         return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
     }
-    else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
-             && !C99AllowedIDChar.contains(c))
+
+    if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_'
+        && !C99AllowedIDChar.contains(c))
     {
         context.push(getNumUTF8ForUTF32(c), TokenType::Identifier, std::move(characters));
         return {Start{}, false};
@@ -1920,10 +1285,10 @@ std::pair<StateMachine, bool> PreprocessingNumber::advance(std::uint32_t c, Cont
     {
         return {MaybeUC{std::make_unique<StateMachine>(std::move(*this))}, true};
     }
-    else if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_' && c != '.'
-             && (((characters.back() | toLower) != 'e' && (characters.back() | toLower) != 'p')
-                 || (c != '+' && c != '-'))
-             && !C99AllowedIDChar.contains(c))
+
+    if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '_' && c != '.'
+        && (((characters.back() | toLower) != 'e' && (characters.back() | toLower) != 'p') || (c != '+' && c != '-'))
+        && !C99AllowedIDChar.contains(c))
     {
         context.push(1, TokenType::PPNumber, std::move(characters));
         return {Start{}, false};
@@ -2048,31 +1413,6 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
                               - std::distance(start, newText.characters.data() + newText.characters.size()));
     return {std::move(newText), true};
 }
-
-// std::pair<StateMachine, bool> Number::advance(std::uint32_t c, Context& context)
-//{
-//    CLD_ASSERT(!context.isInPreprocessor());
-//    // Consuming all characters first before then doing a proper parse
-//    if ((c >= '0' && c <= '9') || c == '.' || C99AllowedIDChar.contains(c) || (c >= 'a' && c <= 'z')
-//        || (c >= 'A' && c <= 'Z')
-//        || (!numberChars.empty() && (c == '+' || c == '-')
-//            && (numberChars.back() == 'e' || numberChars.back() == 'E' || numberChars.back() == 'p'
-//                || numberChars.back() == 'P')))
-//    {
-//        numberChars.resize(numberChars.size() + 4);
-//        auto start = numberChars.data() + numberChars.size() - 4;
-//        llvm::ConvertCodePointToUTF8(c, start);
-//        numberChars.resize(numberChars.size() - std::distance(start, numberChars.data() + numberChars.size()));
-//        return {*this, true};
-//    }
-//    auto result =
-//        processNumber(numberChars.data(), numberChars.data() + numberChars.size(), context.tokenStartOffset, context);
-//    if (result)
-//    {
-//        context.push(1, TokenType::Literal, std::move(result->first), result->second);
-//    }
-//    return {Start{}, false};
-//}
 
 std::pair<StateMachine, bool> Dot::advance(char c, Context& context)
 {
@@ -2254,9 +1594,17 @@ std::pair<StateMachine, bool> AfterInclude::advance(char c, Context& context)
         return {Start{}, true};
     }
 
-    context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
-                        context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                        {{context.tokenStartOffset, context.getOffset() - 1}});
+    if (delimiter == '"')
+    {
+        // If the delimiter is a " it means that the whole token would otherwise be interpreted as a string literal
+        // if there wasn't a include directive in front. Therefore no macro expansion could make this a valid include
+        // directive
+        context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
+                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+                            {{context.tokenStartOffset, context.getOffset() - 1}});
+        // if the delimiter is a < however then subsequent tokens will later be retokenized in the preprocessor
+        // which might form a valid include after macro substitution
+    }
     context.push(1, TokenType::StringLiteral, std::move(characters));
     return {Start{}, false};
 }
@@ -2350,7 +1698,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
             auto prefix = stringView.substr(0, view.data() - stringView.data());
             if (prefix.length() != 0)
             {
-                characterToSourceSpace.emplace(charactersSpace.size(), std::pair{pos - prefix.size(), pos});
+                characterToSourceSpace.emplace_back(charactersSpace.size(), pos - prefix.size(), pos);
             }
             charactersSpace += prefix;
             if (!iter.get<1>())
@@ -2363,23 +1711,23 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
                     {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
                 auto result = mapping.find(view);
                 CLD_ASSERT(result != mapping.end());
-                characterToSourceSpace.emplace(charactersSpace.size(), std::pair{pos, pos + view.size()});
+                characterToSourceSpace.emplace_back(charactersSpace.size(), pos, pos + view.size());
                 charactersSpace += result->second;
             }
             stringView.remove_prefix(prefix.size() + view.size());
         }
         if (!stringView.empty())
         {
-            characterToSourceSpace.emplace(charactersSpace.size(),
-                                           std::pair{source.size() - stringView.size(), source.size()});
+            characterToSourceSpace.emplace_back(charactersSpace.size(), source.size() - stringView.size(),
+                                                source.size());
             charactersSpace += stringView;
         }
         if (charactersSpace.empty() || charactersSpace.back() != '\n')
         {
-            characterToSourceSpace.emplace(charactersSpace.size(), std::pair{source.size(), source.size()});
+            characterToSourceSpace.emplace_back(charactersSpace.size(), source.size(), source.size());
             charactersSpace += '\n';
         }
-        characterToSourceSpace.insert({charactersSpace.size(), {}});
+        characterToSourceSpace.emplace_back(charactersSpace.size(), 0, 0);
     }
 
     Context context(source, std::move(characterToSourceSpace), charactersSpace, offset, starts, reporter);
@@ -2388,7 +1736,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
     {
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;
-        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) mutable -> bool {
+        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) -> bool {
             using T = std::decay_t<decltype(state)>;
             constexpr bool needsCodepoint =
                 std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
@@ -2477,17 +1825,691 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
         *errorsOccured = context.isErrorsOccured();
     }
 
-    return PPSourceObject(std::move(context).getResult(),
-                          {Source::File{to_string(sourceFile), to_string(source), starts, std::move(starts)}},
-                          languageOptions, {});
+    return PPSourceObject(
+        context.getResult(),
+        {Source::File{to_string(sourceFile), to_string(source), std::move(starts), context.getResult()}},
+        languageOptions, {});
 }
+
+[[nodiscard]] std::string_view cld::Lexer::TokenBase::getRepresentation(const SourceInterface& sourceObject) const
+{
+    return std::string_view(sourceObject.getFiles()[(std::uint64_t)m_fileID].source).substr(m_offset, m_length);
+}
+
+[[nodiscard]] std::uint64_t cld::Lexer::TokenBase::getLine(const SourceInterface& sourceObject) const noexcept
+{
+    return sourceObject.getLineNumber(m_fileID, m_offset);
+}
+
+[[nodiscard]] std::uint64_t cld::Lexer::TokenBase::getPPLine(const SourceInterface& sourceObject) const noexcept
+{
+    return sourceObject.getPPLineNumber(m_afterPPOffset);
+}
+
+[[nodiscard]] std::uint64_t cld::Lexer::TokenBase::getColumn(const SourceInterface& sourceObject) const noexcept
+{
+    auto line = sourceObject.getLineNumber(m_fileID, m_offset);
+    return m_offset - sourceObject.getLineStartOffset(m_fileID, line) + 1;
+}
+
+[[nodiscard]] std::uint64_t cld::Lexer::TokenBase::getPPColumn(const SourceInterface& sourceObject) const noexcept
+{
+    auto line = sourceObject.getPPLineNumber(m_afterPPOffset);
+    return m_afterPPOffset - sourceObject.getPPLineStartOffset(line) + 1;
+}
+
+namespace
+{
+void report(llvm::raw_ostream* reporter, const cld::PPSourceObject& sourceObject, const cld::Lexer::PPToken& token,
+            std::string_view type, llvm::raw_ostream::Colors colour, std::string_view message, std::uint64_t location,
+            ArrowRange&& arrows, std::uint64_t underlineStart, std::uint64_t underlineEnd)
+{
+    if (!reporter)
+    {
+        return;
+    }
+    report(
+        *reporter, sourceObject.getFiles()[(std::uint64_t)token.getFileId()].source, token.getIntervalMap(), type,
+        colour, message, location, std::move(arrows), underlineStart, underlineEnd,
+        [&sourceObject, &token](std::uint64_t value) { return sourceObject.getLineNumber(token.getFileId(), value); },
+        [&sourceObject, &token](std::uint64_t value) {
+            return sourceObject.getLineStartOffset(token.getFileId(), value);
+        },
+        [&sourceObject, &token](std::uint64_t value) {
+            return sourceObject.getLineEndOffset(token.getFileId(), value);
+        });
+}
+
+struct ConversionContext
+{
+    llvm::raw_ostream* reporter;
+    const cld::PPSourceObject& sourceObject;
+    const cld::Lexer::PPToken& token;
+    bool* errorsOccured;
+
+    void reportError(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
+    {
+        if (errorsOccured)
+        {
+            *errorsOccured = true;
+        }
+        ::report(reporter, sourceObject, token, "error", llvm::raw_ostream::RED, message, location, std::move(arrows),
+                 token.getPPOffset(), token.getPPOffset() + token.getCharSpaceLength());
+    }
+
+    void reportNote(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
+    {
+        ::report(reporter, sourceObject, token, "note", llvm::raw_ostream::CYAN, message, location, std::move(arrows),
+                 token.getPPOffset(), token.getPPOffset() + token.getCharSpaceLength());
+    }
+
+    void reportWarning(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
+    {
+        ::report(reporter, sourceObject, token, "warning", llvm::raw_ostream::MAGENTA, message, location,
+                 std::move(arrows), token.getPPOffset(), token.getPPOffset() + token.getCharSpaceLength());
+    }
+
+    void reportError(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                     ArrowRange&& arrows = {})
+    {
+        if (errorsOccured)
+        {
+            *errorsOccured = true;
+        }
+        ::report(reporter, sourceObject, token, "error", llvm::raw_ostream::RED, message, location, std::move(arrows),
+                 start, end);
+    }
+
+    void reportNote(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                    ArrowRange&& arrows = {})
+    {
+        ::report(reporter, sourceObject, token, "note", llvm::raw_ostream::CYAN, message, location, std::move(arrows),
+                 start, end);
+    }
+
+    void reportWarning(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
+                       ArrowRange&& arrows = {})
+    {
+        ::report(reporter, sourceObject, token, "warning", llvm::raw_ostream::MAGENTA, message, location,
+                 std::move(arrows), start, end);
+    }
+};
+
+std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backslash, ConversionContext& context)
+{
+    switch (escape)
+    {
+        case '\'': return '\'';
+        case '"': return '"';
+        case 'b': return '\b';
+        case 't': return '\t';
+        case '\\': return '\\';
+        case 'f': return '\f';
+        case 'v': return '\v';
+        case '?': return '\?';
+        case 'n': return '\n';
+        case 'a': return '\a';
+        case 'r': return '\r';
+        case ' ':
+        {
+            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
+                                {{backslash, backslash + 2}});
+            return {};
+        }
+        default:
+        {
+            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
+                                backslash + 1, {{backslash, backslash + 2}});
+            return {};
+        }
+    }
+}
+
+std::uint32_t octalToValue(const std::string& value)
+{
+    char* end = const_cast<char*>(value.data() + value.size());
+    auto result = std::strtoul(value.data(), &end, 8);
+    CLD_ASSERT(*end == '\0');
+    return result;
+}
+
+enum class Literal
+{
+    CharLiteral,
+    StringLiteral,
+};
+
+std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view characters, ConversionContext& context,
+                                                            bool wide, Literal literalType)
+{
+    std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
+        return wide ? 0xFFFFFFFFu >> (32 - 8 * context.sourceObject.getLanguageOptions().sizeOfWChar) : 0x7F;
+    }();
+    std::vector<llvm::UTF32> result;
+    result.resize(characters.size());
+    auto* resultStart = result.data();
+    auto* resultEnd = result.data() + result.size();
+
+    const auto* end = characters.data() + characters.size();
+    bool errorOccured = false;
+    for (const auto* iter = characters.data(); iter != end;)
+    {
+        auto offset = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data());
+        if (*iter == '\n')
+        {
+            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
+                                    literalType == Literal::CharLiteral ? cld::Errors::Lexer::CHARACTER_LITERAL :
+                                                                          cld::Errors::Lexer::STRING_LITERAL),
+                                offset, {{offset, offset + 1}});
+            iter++;
+            errorOccured = true;
+            continue;
+        }
+        if (*iter != '\\')
+        {
+            const auto* start = iter;
+            iter = std::find_if(iter, end, [](char c) { return c == '\\' || c == '\n'; });
+
+            auto res = llvm::ConvertUTF8toUTF32(reinterpret_cast<const llvm::UTF8**>(&start),
+                                                reinterpret_cast<const llvm::UTF8*>(iter), &resultStart, resultEnd,
+                                                llvm::strictConversion);
+            if (res != llvm::conversionOK)
+            {
+                auto invalid = context.token.getPPOffset() + (wide ? 2 : 1) + (start - characters.data());
+                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, context.token.getPPOffset(),
+                                    {{invalid, invalid + 1}});
+                errorOccured = true;
+            }
+            continue;
+        }
+        // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
+        // iter + 1 == end the last character would be '\\' and following that '\'' or '\"'.
+        // Therefore the character literal wouldn't have ended and we wouldn't be here.
+        if (iter[1] == 'u' || iter[1] == 'U')
+        {
+            bool big = iter[1] == 'U';
+            iter += 2;
+            if (iter == end
+                || (!(*iter >= '0' || *iter <= '9') && !(*iter >= 'a' && *iter <= 'f')
+                    && !(*iter >= 'A' && *iter <= 'F')))
+            {
+                // First character followed after \u or \U is not a hex digit or its the end of string
+                // Let's assume the user thought \u might be an escape character
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
+                                    {{start, start + 2}});
+                errorOccured = true;
+                continue;
+            }
+            else
+            {
+                auto hexStart = iter;
+                auto hexEnd = std::find_if(
+                    hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4), [](char c) {
+                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+                    });
+                if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
+                {
+                    auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                    context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                                            std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
+                                        start, {{start, start + std::distance(hexStart, hexEnd)}});
+                    errorOccured = true;
+                    iter = hexEnd;
+                    continue;
+                }
+                auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
+                                                    offset + 2 + (big ? 8 : 4), context);
+                if (uc)
+                {
+                    *resultStart = *uc;
+                    resultStart++;
+                }
+                else
+                {
+                    errorOccured = true;
+                }
+                iter = hexEnd;
+                continue;
+            }
+        }
+        else if (iter[1] == 'x')
+        {
+            iter += 2;
+            auto lastHex = std::find_if(iter, end, [](char c) {
+                return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
+            });
+            if (lastHex == iter)
+            {
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
+                                    {{start, start + 2}});
+                errorOccured = true;
+                continue;
+            }
+
+            llvm::APInt input;
+            llvm::StringRef(iter, static_cast<std::size_t>(lastHex - iter)).getAsInteger(16, input);
+            auto rhs = llvm::APInt(input.getBitWidth(), UTF32_MAX);
+            if (input.getBitWidth() >= 21 && input.ugt(rhs))
+            {
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
+                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            auto value = input.getZExtValue();
+            if (value >= 0xD800 && value <= 0xDFFF)
+            {
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
+                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                                    start, start, start + 2 + lastHex - iter,
+                                    {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            if (value > largestCharacter)
+            {
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                errorOccured = true;
+                iter = lastHex;
+                continue;
+            }
+            *resultStart = value;
+            resultStart++;
+
+            iter = lastHex;
+        }
+        else if (iter[1] >= '0' && iter[1] <= '9')
+        {
+            // We take 8 and 9 here as well to tell the user its an invalid octal instead of an invalid simple
+            // escape sequence
+            iter++;
+            auto lastOctal = std::find_if(iter, iter + std::min<std::size_t>(3, std::distance(iter, end)),
+                                          [](char c) { return c < '0' || c > '7'; });
+            if (lastOctal == iter)
+            {
+                // First character is 8 or 9. That's why we didn't encounter a single octal digit.
+                // Also since there must be at least one character after \, lastOctal is definitely not end
+                // here.
+                context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
+                                    offset, {{offset, offset + 2}});
+                errorOccured = true;
+                continue;
+            }
+
+            auto value = octalToValue({iter, static_cast<std::size_t>(lastOctal - iter)});
+            if (value > largestCharacter)
+            {
+                auto start = context.token.getPPOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
+                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal - iter}});
+                errorOccured = true;
+                iter = lastOctal;
+                continue;
+            }
+            *resultStart = value;
+            resultStart++;
+
+            iter = lastOctal;
+        }
+        else
+        {
+            // Escape sequence or illegal escape
+            auto character = escapeCharToValue(iter[1], offset, context);
+            if (character)
+            {
+                *resultStart = *character;
+                resultStart++;
+            }
+            else
+            {
+                errorOccured = true;
+            }
+            iter += 2;
+        }
+    }
+
+    if (literalType == Literal::CharLiteral)
+    {
+        for (auto iter = result.data(); iter != resultStart; iter++)
+        {
+            if (*iter > largestCharacter)
+            {
+                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                                    context.token.getPPOffset());
+                errorOccured = true;
+            }
+        }
+    }
+    result.resize(std::distance(result.data(), resultStart));
+    return {result, errorOccured};
+}
+
+template <class T, class... Args>
+std::pair<CToken::ValueType, CToken::Type> castInteger(std::uint64_t integer,
+                                                       std::array<CToken::Type, sizeof...(Args) + 1> types)
+{
+    // Clang
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+    // GCC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+    // MSVC
+#pragma warning(push)
+#pragma warning(disable : 4018)
+#pragma warning(disable : 4389)
+    if constexpr (std::is_signed_v<T>)
+    {
+        if (llvm::APInt::getSignedMaxValue(sizeof(T) * 8).uge(integer))
+        {
+            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
+        }
+    }
+    else
+    {
+        if (llvm::APInt::getMaxValue(sizeof(T) * 8).uge(integer))
+        {
+            return {{llvm::APSInt(llvm::APInt(sizeof(T) * 8, integer), !std::is_signed_v<T>)}, types[0]};
+        }
+    }
+    if constexpr (sizeof...(Args) != 0)
+    {
+        std::array<CToken::Type, sizeof...(Args)> second;
+        std::copy(types.begin(), types.end() - 1, second.begin());
+        return castInteger<Args...>(integer, second);
+    }
+    else
+    {
+        CLD_UNREACHABLE;
+    }
+#pragma GCC diagnostic pop
+#pragma clang diagnostic pop
+#pragma warning(pop)
+}
+
+std::optional<std::pair<CToken::ValueType, CToken::Type>>
+    processNumber(const char* begin, const char* end, std::uint64_t beginLocation, ConversionContext& context)
+{
+    CLD_ASSERT(std::distance(begin, end) >= 1);
+    // If the number is just "0x", treat the x as a suffix instead of as a hex prefix
+    bool isHex = std::distance(begin, end) > 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X')
+                 && ((*(begin + 2) >= '0' && *(begin + 2) <= '9') || (*(begin + 2) >= 'a' && *(begin + 2) <= 'f')
+                     || (*(begin + 2) >= 'A' && *(begin + 2) <= 'F'));
+    llvm::SmallVector<char, 22> legalValues(10);
+    std::iota(legalValues.begin(), legalValues.end(), '0');
+    if (isHex)
+    {
+        legalValues.resize(10 + 12);
+        std::iota(legalValues.begin() + 10, legalValues.end(), 'A');
+        std::iota(legalValues.begin() + 10 + 6, legalValues.end(), 'a');
+    }
+    bool isFloat = false;
+    auto searchFunction = [&legalValues, &isFloat](char c) mutable {
+        if (c == '.' && !isFloat)
+        {
+            isFloat = true;
+            return false;
+        }
+        return std::none_of(legalValues.begin(), legalValues.end(), [c](char allowed) { return allowed == c; });
+    };
+    auto suffixBegin = std::find_if(begin + (isHex ? 2 : 0), end, searchFunction);
+    // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
+    // again followed by digits. If it's a hex then its p [optional + or -]. We check if it's either an
+    // then continue our search
+    constexpr unsigned toLower = 32;
+    bool errorsOccurred = false;
+    if (suffixBegin != end && (*suffixBegin | toLower) == (isHex ? 'p' : 'e'))
+    {
+        isFloat = true;
+        suffixBegin++;
+        if (suffixBegin != end && (*suffixBegin == '+' || *suffixBegin == '-'))
+        {
+            suffixBegin++;
+        }
+        auto prev = suffixBegin;
+        suffixBegin = std::find_if(suffixBegin, end, searchFunction);
+        if (prev == suffixBegin)
+        {
+            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+                                beginLocation + std::distance(begin, suffixBegin), context.token.getPPOffset(),
+                                context.token.getPPOffset() + context.token.getCharSpaceLength());
+            errorsOccurred = true;
+        }
+    }
+    else if (isHex && isFloat)
+    {
+        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+                            context.token.getPPOffset() + context.token.getCharSpaceLength(),
+                            context.token.getPPOffset(),
+                            context.token.getPPOffset() + context.token.getCharSpaceLength());
+        errorsOccurred = true;
+    }
+
+    bool isHexOrOctal = isHex;
+    if (!isHex && !isFloat && *begin == '0')
+    {
+        isHexOrOctal = true;
+        auto result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
+        while (result != suffixBegin)
+        {
+            errorsOccurred = true;
+            auto arrowBegin = beginLocation + std::distance(begin, result);
+            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
+                                beginLocation + std::distance(begin, result), context.token.getPPOffset(),
+                                context.token.getPPOffset() + context.token.getCharSpaceLength() /*-1*/,
+                                {{arrowBegin, arrowBegin + 1}});
+            result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
+        }
+    }
+
+    auto suffix = std::string(suffixBegin, std::distance(suffixBegin, end));
+    std::unordered_set<std::string_view> set;
+    if (!isFloat)
+    {
+        set = {"u", "U", "ul", "Ul", "uL", "UL", "uLL", "ULL", "ull", "Ull", "l", "L", "ll", "LL", ""};
+    }
+    else
+    {
+        set = {"f", "l", "F", "L", ""};
+    }
+    if (set.count(suffix) == 0)
+    {
+        auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
+        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+                            beginLocation + std::distance(begin, suffixBegin), context.token.getPPOffset(),
+                            context.token.getPPOffset() + context.token.getCharSpaceLength() /*-1*/,
+                            {{arrowBegin, arrowBegin + suffix.size()}});
+        return {};
+    }
+
+    if (errorsOccurred)
+    {
+        return {};
+    }
+    if (!isFloat)
+    {
+        std::string number(begin, suffixBegin);
+        llvm::APInt test;
+        llvm::StringRef(number).getAsInteger(0, test);
+        if (test.getBitWidth() > 64)
+        {
+            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
+                                context.token.getPPOffset(),
+                                context.token.getPPOffset() + context.token.getCharSpaceLength() /*-1*/);
+            return {};
+        }
+        char* endPtr;
+        auto integer = std::strtoull(number.data(), &endPtr, 0);
+        CLD_ASSERT(*endPtr == '\0');
+        if (suffix.empty())
+        {
+            switch (context.sourceObject.getLanguageOptions().sizeOfInt)
+            {
+                case 2:
+                    if (isHexOrOctal)
+                    {
+                        if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                        {
+                            return castInteger<std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t,
+                                               std::uint64_t>(integer,
+                                                              {CToken::Type::Int, CToken::Type::UnsignedInt,
+                                                               CToken::Type::Long, CToken::Type::UnsignedLong,
+                                                               CToken::Type::LongLong, CToken::Type::UnsignedLongLong});
+                        }
+                        return castInteger<std::int16_t, std::uint16_t, std::int64_t, std::uint64_t>(
+                            integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::Long,
+                                      CToken::Type::UnsignedLong});
+                    }
+                    if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                    {
+                        return castInteger<std::int16_t, std::int32_t, std::int64_t>(
+                            integer, {CToken::Type::Int, CToken::Type::Long, CToken::Type::LongLong});
+                    }
+                    return castInteger<std::int16_t, std::int64_t>(integer, {CToken::Type::Int, CToken::Type::Long});
+                case 4:
+                    if (isHexOrOctal)
+                    {
+                        if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                        {
+                            return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                                integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::LongLong,
+                                          CToken::Type::UnsignedLongLong});
+                        }
+                        return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                            integer, {CToken::Type::Int, CToken::Type::UnsignedInt, CToken::Type::Long,
+                                      CToken::Type::UnsignedLong});
+                    }
+                    if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                    {
+                        return castInteger<std::int32_t, std::int64_t>(integer,
+                                                                       {CToken::Type::Int, CToken::Type::LongLong});
+                    }
+                    return castInteger<std::int32_t, std::int64_t>(integer, {CToken::Type::Int, CToken::Type::Long});
+                case 8:
+                    if (isHexOrOctal)
+                    {
+                        return castInteger<std::int64_t, std::uint64_t>(integer,
+                                                                        {CToken::Type::Int, CToken::Type::UnsignedInt});
+                    }
+                    return castInteger<std::int64_t>(integer, {CToken::Type::Int});
+                default: CLD_UNREACHABLE;
+            }
+        }
+        else if (suffix == "u" || suffix == "U")
+        {
+            switch (context.sourceObject.getLanguageOptions().sizeOfInt)
+            {
+                case 2:
+                    if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                    {
+                        return castInteger<std::uint16_t, std::uint32_t, std::uint64_t>(
+                            integer,
+                            {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong, CToken::Type::UnsignedLongLong});
+                    }
+                    return castInteger<std::uint16_t, std::uint64_t>(
+                        integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong});
+                case 4:
+                    if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                    {
+                        return castInteger<std::uint32_t, std::uint64_t>(
+                            integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLongLong});
+                    }
+                    return castInteger<std::uint32_t, std::uint64_t>(
+                        integer, {CToken::Type::UnsignedInt, CToken::Type::UnsignedLong});
+                case 8: return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedInt});
+                default: CLD_UNREACHABLE;
+            }
+        }
+        else if (suffix == "L" || suffix == "l")
+        {
+            if (isHexOrOctal)
+            {
+                if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+                {
+                    return castInteger<std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>(
+                        integer, {CToken::Type::Long, CToken::Type::UnsignedLong, CToken::Type::LongLong,
+                                  CToken::Type::UnsignedLongLong});
+                }
+                return castInteger<std::int64_t, std::uint64_t>(integer,
+                                                                {CToken::Type::Long, CToken::Type::UnsignedLong});
+            }
+            if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+            {
+                return castInteger<std::int32_t, std::int64_t>(integer, {CToken::Type::Long, CToken::Type::LongLong});
+            }
+            return castInteger<std::int64_t>(integer, {CToken::Type::Long});
+        }
+        else if (suffix.size() == 2
+                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
+                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'l' || c == 'L'; }))
+        {
+            if (context.sourceObject.getLanguageOptions().sizeOfLong == 4)
+            {
+                return castInteger<std::uint32_t, std::uint64_t>(
+                    integer, {CToken::Type::UnsignedLong, CToken::Type::UnsignedLongLong});
+            }
+            return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedLong});
+        }
+        else if (suffix == "ll" || suffix == "LL")
+        {
+            if (isHexOrOctal)
+            {
+                return castInteger<std::int64_t, std::uint64_t>(
+                    integer, {CToken::Type::LongLong, CToken::Type::UnsignedLongLong});
+            }
+            return castInteger<std::int64_t>(integer, {CToken::Type::LongLong});
+        }
+        else if (suffix.size() == 3
+                 && std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; })
+                 && (suffix.find("LL") != std::string_view::npos || suffix.find("ll") != std::string_view::npos))
+        {
+            return castInteger<std::uint64_t>(integer, {CToken::Type::UnsignedLongLong});
+        }
+        else
+        {
+            CLD_UNREACHABLE;
+        }
+    }
+    else
+    {
+        auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
+        if (suffix.empty())
+        {
+            return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::Double}};
+        }
+        else if (suffix == "f" || suffix == "F")
+        {
+            return {{llvm::APFloat(llvm::APFloat::IEEEsingle(), input), CToken::Type::Float}};
+        }
+        else if (suffix == "l" || suffix == "L")
+        {
+            switch (context.sourceObject.getLanguageOptions().sizeOfLongDoubleBits)
+            {
+                case 64: return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::LongDouble}};
+                case 80: return {{llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input), CToken::Type::LongDouble}};
+                case 128: return {{llvm::APFloat(llvm::APFloat::IEEEquad(), input), CToken::Type::LongDouble}};
+                default: CLD_UNREACHABLE;
+            }
+        }
+    }
+    CLD_UNREACHABLE;
+}
+} // namespace
 
 cld::CSourceObject cld::Lexer::toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter,
                                          bool* errorsOccured)
 {
-    return CSourceObject(
-        toCTokens(sourceObject.data().begin(), sourceObject.data().end(), sourceObject, reporter, errorsOccured),
-        sourceObject.getFiles(), sourceObject.getLanguageOptions(), sourceObject.getSubstitutions());
+    return CSourceObject(toCTokens(sourceObject.data().data(), sourceObject.data().data() + sourceObject.data().size(),
+                                   sourceObject, reporter, errorsOccured),
+                         sourceObject.getFiles(), sourceObject.getLanguageOptions(), sourceObject.getSubstitutions());
 }
 
 std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPTokenIterator end,
@@ -2510,7 +2532,7 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    cld::PPMessage::error(cld::Errors::Lexer::UNEXPECTED_CHARACTER, iter, {PointAt(iter)})
+                    cld::Message::error(cld::Errors::Lexer::UNEXPECTED_CHARACTER, iter, {PointAt(iter)})
                         .print(*reporter, sourceObject);
                 }
                 break;
@@ -2523,8 +2545,8 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    cld::PPMessage::error(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args(tokenValue(iter->getTokenType())),
-                                          iter, {PointAt(iter)})
+                    cld::Message::error(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args(tokenValue(iter->getTokenType())),
+                                        iter, {PointAt(iter)})
                         .print(*reporter, sourceObject);
                 }
                 break;
@@ -2533,15 +2555,130 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 // Identifiers need to always be valid
                 if (isKeyword(iter->getValue()))
                 {
-                    result.emplace_back(charactersToKeyword(iter->getValue()), iter->getOffset(), iter->getLength());
+                    result.emplace_back(charactersToKeyword(iter->getValue()), iter->getOffset(), iter->getLength(),
+                                        iter->getFileId(), iter->getMacroId());
                     break;
                 }
-                result.emplace_back(TokenType::Identifier, iter->getOffset(), iter->getLength(), iter->getValue());
+                result.emplace_back(TokenType::Identifier, iter->getOffset(), iter->getLength(), iter->getFileId(),
+                                    iter->getMacroId(), cld::to_string(iter->getValue()));
                 break;
-            case TokenType::PPNumber: break;
-            case TokenType::StringLiteral: break;
-            case TokenType::Literal: break;
-            default: result.emplace_back(iter->getTokenType(), iter->getOffset(), iter->getLength());
+            case TokenType::PPNumber:
+            {
+                ConversionContext context{reporter, sourceObject, *iter, errorsOccured};
+                auto number = processNumber(iter->getValue().data(), iter->getValue().data() + iter->getValue().size(),
+                                            iter->getPPOffset(), context);
+                if (number)
+                {
+                    result.emplace_back(TokenType::Literal, iter->getOffset(), iter->getLength(), iter->getFileId(),
+                                        iter->getMacroId(), std::move(number->first), number->second);
+                }
+                break;
+            }
+            case TokenType::StringLiteral:
+            {
+                ConversionContext context{reporter, sourceObject, *iter, errorsOccured};
+                bool wide = iter->getRepresentation(sourceObject)[0] == 'L';
+                auto [chars, errorOccured] = processCharacters(iter->getValue(), context, wide, Literal::StringLiteral);
+                if (errorOccured)
+                {
+                    break;
+                }
+                if (!wide || sourceObject.getLanguageOptions().sizeOfWChar == 1)
+                {
+                    const auto* start = chars.data();
+                    std::vector<llvm::UTF8> utf8(chars.size() * 4);
+                    auto* dest = utf8.data();
+                    if (llvm::ConvertUTF32toUTF8(&start, start + chars.size(), &dest, dest + utf8.size(),
+                                                 llvm::strictConversion)
+                        != llvm::conversionOK)
+                    {
+                        CLD_UNREACHABLE;
+                    }
+
+                    if (wide)
+                    {
+                        result.emplace_back(TokenType::StringLiteral, iter->getOffset(), iter->getLength(),
+                                            iter->getFileId(), iter->getMacroId(),
+                                            NonCharString{{utf8.data(), dest}, NonCharString::Wide});
+                        break;
+                    }
+                    result.emplace_back(TokenType::StringLiteral, iter->getOffset(), iter->getLength(),
+                                        iter->getFileId(), iter->getMacroId(), std::string(utf8.data(), dest));
+                    break;
+                }
+
+                switch (sourceObject.getLanguageOptions().sizeOfWChar)
+                {
+                    case 4:
+                    {
+                        result.emplace_back(TokenType::StringLiteral, iter->getOffset(), iter->getLength(),
+                                            iter->getFileId(), iter->getMacroId(),
+                                            NonCharString{chars, NonCharString::Wide});
+                        break;
+                    }
+                    case 2:
+                    {
+                        const auto* start = chars.data();
+                        std::vector<llvm::UTF16> utf16(chars.size() * 2);
+                        auto* dest = utf16.data();
+                        if (llvm::ConvertUTF32toUTF16(&start, start + chars.size(), &dest, dest + utf16.size(),
+                                                      llvm::strictConversion)
+                            != llvm::conversionOK)
+                        {
+                            CLD_UNREACHABLE;
+                        }
+                        result.emplace_back(TokenType::StringLiteral, iter->getOffset(), iter->getLength(),
+                                            iter->getFileId(), iter->getMacroId(),
+                                            NonCharString{{utf16.data(), dest}, NonCharString::Wide});
+                        break;
+                    }
+                    default: CLD_UNREACHABLE;
+                }
+                break;
+            }
+            case TokenType::Literal:
+            {
+                ConversionContext context{reporter, sourceObject, *iter, errorsOccured};
+                bool wide = iter->getRepresentation(sourceObject)[0] == 'L';
+                auto [chars, errorOccured] = processCharacters(iter->getValue(), context, wide, Literal::CharLiteral);
+                if (chars.empty())
+                {
+                    if (!errorOccured)
+                    {
+                        std::vector<std::uint64_t> arrows(iter->getCharSpaceLength());
+                        std::iota(arrows.begin(), arrows.end(), iter->getPPOffset());
+                        context.reportError(Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY, iter->getPPOffset(),
+                                            {{iter->getPPOffset(), iter->getPPOffset() + iter->getCharSpaceLength()}});
+                    }
+                    break;
+                }
+
+                if (chars.size() > 1)
+                {
+                    context.reportWarning(Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER, iter->getPPOffset(),
+                                          {{iter->getPPOffset(), iter->getPPOffset() + iter->getCharSpaceLength()}});
+                }
+
+                if (wide)
+                {
+                    result.emplace_back(
+                        TokenType::Literal, iter->getOffset(), iter->getLength(), iter->getFileId(), iter->getMacroId(),
+                        llvm::APSInt(llvm::APInt(sourceObject.getLanguageOptions().sizeOfWChar * 8, chars[0]),
+                                     !sourceObject.getLanguageOptions().wcharIsSigned));
+                }
+                else
+                {
+                    result.emplace_back(TokenType::Literal, iter->getOffset(), iter->getLength(), iter->getFileId(),
+                                        iter->getMacroId(),
+                                        llvm::APSInt(llvm::APInt(sourceObject.getLanguageOptions().sizeOfInt * 8,
+                                                                 static_cast<std::uint8_t>(chars[0]), true),
+                                                     false));
+                }
+                break;
+            }
+            default:
+                result.emplace_back(iter->getTokenType(), iter->getOffset(), iter->getLength(), iter->getFileId(),
+                                    iter->getMacroId());
         }
     }
     return result;
@@ -2743,29 +2880,15 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     CLD_UNREACHABLE;
 }
 
-cld::Lexer::PPToken::PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length,
-                             std::uint64_t charSpaceOffset, std::uint64_t charSpaceLength, std::string_view value)
-    : TokenBase(length, offset, offset, tokenType),
-      m_value(value.begin(), value.end()),
-      m_charSpaceOffset(charSpaceOffset),
-      m_charSpaceLength(charSpaceLength)
-{
-}
-
-cld::Lexer::CToken::CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, variant value, Type type)
-    : TokenBase(length, offset, offset, tokenType), m_value(std::move(value)), m_type(type)
-{
-}
-
 std::string cld::Lexer::constructPP(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end)
 {
     if (begin == end)
     {
         return {};
     }
-    auto lineNumber = sourceObject.getPPLineNumber(begin->getFileId(), begin->getPPOffset());
+    auto lineNumber = sourceObject.getPPLineNumber(begin->getPPOffset());
     return std::string(lineNumber - 1, '\n')
-           + std::string(begin->getPPOffset() - sourceObject.getPPLineStartOffset(begin->getFileId(), lineNumber), ' ')
+           + std::string(begin->getPPOffset() - sourceObject.getPPLineStartOffset(lineNumber), ' ')
            + constructPPTrimmed(sourceObject, begin, end);
 }
 
@@ -2781,31 +2904,23 @@ std::string cld::Lexer::constructPPTrimmed(const PPSourceObject& sourceObject, P
     {
         if (curr != begin)
         {
-            auto prev = curr - 1;
-            if (curr->getFileId() != prev->getFileId())
+            const auto prev = curr - 1;
+            const auto currLineNumber = curr->getPPLine(sourceObject);
+            const auto prevLineNumber = sourceObject.getPPLineNumber(prev->getPPOffset() + prev->getCharSpaceLength());
+            if (currLineNumber == prevLineNumber)
             {
-                CLD_UNREACHABLE;
+                result.resize(result.size() + curr->getPPOffset() - (prev->getPPOffset() + prev->getCharSpaceLength()),
+                              ' ');
             }
             else
             {
-                auto currLineNumber = curr->getLine(sourceObject);
-                auto prevLineNumber =
-                    sourceObject.getPPLineNumber(prev->getFileId(), prev->getPPOffset() + prev->getCharSpaceLength());
-                if (currLineNumber == prevLineNumber)
-                {
-                    result.resize(
-                        result.size() + curr->getPPOffset() - (prev->getPPOffset() + prev->getCharSpaceLength()), ' ');
-                }
-                else
-                {
-                    result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
-                    result.resize(result.size() + curr->getPPOffset()
-                                      - sourceObject.getPPLineStartOffset(curr->getFileId(), currLineNumber),
-                                  ' ');
-                }
+                result.resize(result.size() + currLineNumber - prevLineNumber, '\n');
+                result.resize(result.size() + curr->getPPOffset() - sourceObject.getPPLineStartOffset(currLineNumber),
+                              ' ');
             }
         }
-        auto sizeBefore = result.size();
+
+        const auto sizeBefore = result.size();
         auto stringView = curr->getRepresentation(sourceObject);
         for (auto& iter : ctre::range<pattern>(stringView))
         {

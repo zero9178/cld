@@ -2,7 +2,6 @@
 
 #include <bitset2.hpp>
 #include <map>
-#include <tl/function_ref.hpp>
 
 #include "Limits.hpp"
 #include "Message.hpp"
@@ -99,7 +98,7 @@ public:
 
     [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
 
-    void log(std::vector<CMessage> messages);
+    void log(std::vector<Message> messages);
 
     void addToScope(const std::string& name, DeclarationLocation declarator);
 

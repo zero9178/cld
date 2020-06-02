@@ -1273,7 +1273,7 @@ TEST_CASE("Lexing positions", "[lexer]")
 TEST_CASE("Lexing digraphs", "[lexer]")
 {
     auto result = pplexes("<: :> <% %> %: %:%:");
-    REQUIRE(result.data().size() == 6);
+    REQUIRE(result.data().size() == 7);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::OpenSquareBracket);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::CloseSquareBracket);
     CHECK(result.data().at(2).getTokenType() == cld::Lexer::TokenType::OpenBrace);
@@ -1288,7 +1288,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(5).getRepresentation(result) == "%:%:");
 
     result = pplexes("%: %: #%: %:# # %: %: #");
-    REQUIRE(result.data().size() == 8);
+    REQUIRE(result.data().size() == 9);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(2).getTokenType() == cld::Lexer::TokenType::DoublePound);
@@ -1307,7 +1307,7 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(7).getRepresentation(result) == "#");
 
     result = pplexes("#%");
-    REQUIRE(result.data().size() == 2);
+    REQUIRE(result.data().size() == 3);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
     CHECK(result.data().at(0).getOffset() == 0);
@@ -1316,28 +1316,28 @@ TEST_CASE("Lexing digraphs", "[lexer]")
     CHECK(result.data().at(1).getRepresentation(result) == "%");
 
     result = pplexes("%:\\\n%");
-    REQUIRE(result.data().size() == 2);
+    REQUIRE(result.data().size() == 3);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
     CHECK(result.data().at(0).getRepresentation(result) == "%:");
     CHECK(result.data().at(1).getRepresentation(result) == "%");
 
     result = pplexes("#\\\n%");
-    REQUIRE(result.data().size() == 2);
+    REQUIRE(result.data().size() == 3);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Percent);
     CHECK(result.data().at(0).getRepresentation(result) == "#");
     CHECK(result.data().at(1).getRepresentation(result) == "%");
 
     result = pplexes("%:\\\n:");
-    REQUIRE(result.data().size() == 2);
+    REQUIRE(result.data().size() == 3);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data().at(1).getTokenType() == cld::Lexer::TokenType::Colon);
     CHECK(result.data().at(0).getRepresentation(result) == "%:");
     CHECK(result.data().at(1).getRepresentation(result) == ":");
 
     result = pplexes("%:\\\n%:");
-    REQUIRE(result.data().size() == 1);
+    REQUIRE(result.data().size() == 2);
     CHECK(result.data().at(0).getTokenType() == cld::Lexer::TokenType::DoublePound);
     CHECK(result.data().at(0).getRepresentation(result) == "%:\\\n%:");
 }
@@ -1458,13 +1458,6 @@ TEST_CASE("Lexing Comments", "[lexer]")
     }
 }
 
-TEST_CASE("Lexing unterminated tokens", "[lexer]")
-{
-    LEXER_OUTPUTS_WITH("ad\n\"test", Catch::Contains(UNTERMINATED_N.args(STRING_LITERAL)));
-    LEXER_OUTPUTS_WITH("ad\n'test", Catch::Contains(UNTERMINATED_N.args(CHARACTER_LITERAL)));
-    LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
-}
-
 TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
 {
     SECTION("Simple")
@@ -1569,11 +1562,11 @@ TEST_CASE("Lexing Preprocessor universal characters", "[lexer]")
 
 TEST_CASE("Lexing Preprocessor unterminated characters", "[lexer]")
 {
-    PP_LEXER_OUTPUTS_WITH("ad\n'test", Catch::Contains(UNTERMINATED_N.args(CHARACTER_LITERAL)));
-    PP_LEXER_OUTPUTS_WITH("ad\n\"test", Catch::Contains(UNTERMINATED_N.args(STRING_LITERAL)));
+    PP_LEXER_OUTPUTS_WITH("ad\n'test", ProducesNothing());
+    PP_LEXER_OUTPUTS_WITH("ad\n\"test", ProducesNothing());
     PP_LEXER_OUTPUTS_WITH("ad\n/*test", Catch::Contains(UNTERMINATED_N.args(BLOCK_COMMENT)));
     PP_LEXER_OUTPUTS_WITH("ad\n#include \"test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
-    PP_LEXER_OUTPUTS_WITH("ad\n#include <test", Catch::Contains(UNTERMINATED_N.args(INCLUDE_DIRECTIVE)));
+    PP_LEXER_OUTPUTS_WITH("ad\n#include <test", ProducesNothing());
 }
 
 TEST_CASE("Lexing Preprocessor Miscellaneous")
@@ -1722,3 +1715,6 @@ TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
     cld::Lexer::tokenize("h\"&u20U^58v\\u .L<bF\".A !< G\x0a"
                          "30bG\x0a0G\x0a:::!\x0a<0");
 }
+
+#undef LEXRE_OUTPUTS_WITH
+#undef PP_LEXER_OUTPUTS_WITH

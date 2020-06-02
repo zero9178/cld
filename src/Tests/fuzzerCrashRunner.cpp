@@ -75,8 +75,8 @@ int main(int argc, char** argv)
 
         cld::Parser::Context context(ctokens, &llvm::nulls());
         context.setBracketMax(64);
-        auto begin = ctokens.data().cbegin();
-        parseTranslationUnit(begin, ctokens.data().cend(), context);
+        auto begin = std::as_const(ctokens).data().data();
+        parseTranslationUnit(begin, ctokens.data().data() + ctokens.data().size(), context);
     }
     else if (mode == "pplexer")
     {

@@ -1,22 +1,22 @@
 #include "ParserUtil.hpp"
 
 bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CTokenIterator end,
-                         Context& context, std::vector<CMessage> additional)
+                         Context& context, std::vector<Message> additional)
 {
     if (curr == end || curr->getTokenType() != expected)
     {
         if (curr == end)
         {
-            context.log({CMessage::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)), curr,
-                                         {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
+            context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
+                                        Message::after, end - 1, {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
         }
         else
         {
             context.log(
-                {CMessage::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                     Lexer::tokenName(expected),
-                                     '\'' + to_string(curr->getRepresentation(context.getSourceObject())) + '\''),
-                                 curr, {PointAt(curr, curr + 1)})});
+                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                    Lexer::tokenName(expected),
+                                    '\'' + to_string(curr->getRepresentation(context.getSourceObject())) + '\''),
+                                curr, {PointAt(curr, curr + 1)})});
         }
         context.log(std::move(additional));
         return false;

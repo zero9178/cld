@@ -9,17 +9,17 @@
 
 namespace cld
 {
-class Format
+class Format final
 {
     const char* m_format;
 
     template <class From, class To, class = void>
-    struct canStaticCast : std::false_type
+    struct canStaticCast final : std::false_type
     {
     };
 
     template <class From, class To>
-    struct canStaticCast<From, To, std::void_t<decltype(static_cast<To>(std::declval<From>()))>> : std::true_type
+    struct canStaticCast<From, To, std::void_t<decltype(static_cast<To>(std::declval<From>()))>> final : std::true_type
     {
     };
 
@@ -52,7 +52,7 @@ class Format
     }
 
 public:
-    class List
+    class List final
     {
         std::string m_delimiter;
         std::string m_lastInbetween;
@@ -100,146 +100,116 @@ public:
     }
 };
 
-template <class T>
 class Underline final
 {
-    Lexer::TokenIterator<T> m_begin;
-    Lexer::TokenIterator<T> m_end;
+    Lexer::TokenIterator m_begin;
+    std::optional<Lexer::TokenIterator> m_maybeEnd;
     char m_character;
 
 public:
-    template <class Iter>
-    Underline(Iter begin, char character = '~') : m_begin(begin), m_end(m_begin + 1), m_character(character)
+    Underline(Lexer::TokenIterator begin, char character = '~')
+        : m_begin(begin), m_maybeEnd(std::nullopt), m_character(character)
     {
     }
 
-    template <class Iter>
-    Underline(Iter begin, Iter end, char character = '~') : m_begin(begin), m_end(end), m_character(character)
+    Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end, char character = '~')
+        : m_begin(begin), m_maybeEnd(end), m_character(character)
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator<T> begin() const;
+    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
+    {
+        return m_begin;
+    }
 
-    [[nodiscard]] Lexer::TokenIterator<T> end() const;
+    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
+    {
+        return m_maybeEnd;
+    }
 
-    [[nodiscard]] char getCharacter() const;
+    [[nodiscard]] char getCharacter() const noexcept
+    {
+        return m_character;
+    }
 };
 
-template <class Iter>
-Underline(Iter, char) -> Underline<typename Iter::value_type>;
-
-template <class Iter>
-Underline(Iter, Iter, char) -> Underline<typename Iter::value_type>;
-
-template <class Iter>
-Underline(Iter) -> Underline<typename Iter::value_type>;
-
-template <class Iter>
-Underline(Iter, Iter) -> Underline<typename Iter::value_type>;
-
-extern template class Underline<Lexer::CToken>;
-
-extern template class Underline<Lexer::PPToken>;
-
-template <class T>
 class PointAt final
 {
-    Lexer::TokenIterator<T> m_begin;
-    Lexer::TokenIterator<T> m_end;
+    Lexer::TokenIterator m_begin;
+    std::optional<Lexer::TokenIterator> m_maybeEnd;
 
 public:
-    template <class Iter>
-    PointAt(Iter begin) : m_begin(begin), m_end(m_begin + 1)
+    PointAt(Lexer::TokenIterator begin) : m_begin(begin), m_maybeEnd(std::nullopt) {}
+
+    PointAt(Lexer::TokenIterator begin, Lexer::TokenIterator end) : m_begin(begin), m_maybeEnd(end) {}
+
+    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
     {
+        return m_begin;
     }
 
-    template <class Iter>
-    PointAt(Iter begin, Iter end) : m_begin(begin), m_end(end)
+    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
     {
+        return m_maybeEnd;
     }
-
-    [[nodiscard]] Lexer::TokenIterator<T> begin() const;
-
-    [[nodiscard]] Lexer::TokenIterator<T> end() const;
 };
 
-template <class Iter>
-PointAt(Iter) -> PointAt<typename Iter::value_type>;
-
-template <class Iter>
-PointAt(Iter, Iter) -> PointAt<typename Iter::value_type>;
-
-extern template class PointAt<Lexer::CToken>;
-
-extern template class PointAt<Lexer::PPToken>;
-
-template <class T>
 class InsertAfter final
 {
-    Lexer::TokenIterator<T> m_insertAfter;
+    Lexer::TokenIterator m_insertAfter;
     std::string m_argument;
 
 public:
-    template <class Iter>
-    explicit InsertAfter(Iter insertAfter, std::string_view argument = {})
+    explicit InsertAfter(Lexer::TokenIterator insertAfter, std::string_view argument = {})
         : m_insertAfter(insertAfter), m_argument(argument.begin(), argument.end())
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator<T> getInsertAfter() const noexcept;
+    [[nodiscard]] Lexer::TokenIterator getInsertAfter() const noexcept
+    {
+        return m_insertAfter;
+    }
 
-    [[nodiscard]] const std::string& getArgument() const noexcept;
+    [[nodiscard]] const std::string& getArgument() const noexcept
+    {
+        return m_argument;
+    }
 };
 
-template <class Iter>
-InsertAfter(Iter) -> InsertAfter<typename Iter::value_type>;
-
-template <class Iter>
-InsertAfter(Iter, std::string_view) -> InsertAfter<typename Iter::value_type>;
-
-extern template class InsertAfter<Lexer::CToken>;
-
-extern template class InsertAfter<Lexer::PPToken>;
-
-template <class T>
 class Annotate final
 {
-    Lexer::TokenIterator<T> m_begin;
-    Lexer::TokenIterator<T> m_end;
+    Lexer::TokenIterator m_begin;
+    std::optional<Lexer::TokenIterator> m_maybeEnd;
     std::string m_argument;
 
 public:
-    template <class Iter>
-    Annotate(Iter begin, std::string_view argument)
-        : m_begin(begin), m_end(begin + 1), m_argument(argument.begin(), argument.end())
+    Annotate(Lexer::TokenIterator begin, std::string_view argument)
+        : m_begin(begin), m_maybeEnd(std::nullopt), m_argument(argument.begin(), argument.end())
     {
     }
 
-    template <class Iter>
-    Annotate(Iter begin, Iter end, std::string_view argument)
-        : m_begin(begin), m_end(end), m_argument(argument.begin(), argument.end())
+    Annotate(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string_view argument)
+        : m_begin(begin), m_maybeEnd(end), m_argument(argument.begin(), argument.end())
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator<T> begin() const;
+    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
+    {
+        return m_begin;
+    }
 
-    [[nodiscard]] Lexer::TokenIterator<T> end() const;
+    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
+    {
+        return m_maybeEnd;
+    }
 
-    [[nodiscard]] const std::string& getArgument() const;
+    [[nodiscard]] const std::string& getArgument() const noexcept
+    {
+        return m_argument;
+    }
 };
 
-template <class Iter>
-Annotate(Iter, std::string_view) -> Annotate<typename Iter::value_type>;
-
-template <class Iter>
-Annotate(Iter, Iter, std::string_view) -> Annotate<typename Iter::value_type>;
-
-extern template class Annotate<Lexer::CToken>;
-
-extern template class Annotate<Lexer::PPToken>;
-
-template <class T>
-using Modifier = std::variant<Underline<T>, PointAt<T>, InsertAfter<T>, Annotate<T>>;
+using Modifier = std::variant<Underline, PointAt, InsertAfter, Annotate>;
 
 /**
  * Class used to present Messages from various components of the compiler, eg. Parser or Semantics.
@@ -248,7 +218,6 @@ using Modifier = std::variant<Underline<T>, PointAt<T>, InsertAfter<T>, Annotate
  *
  * By passing modifiers one can also add effects to the outputted message
  */
-template <class T>
 class Message final
 {
 public:
@@ -263,25 +232,167 @@ public:
     };
 
 private:
-    std::vector<Modifier<T>> m_modifiers;
+    class TypeErasedTokenBaseIterator
+    {
+        Lexer::TokenIterator m_ptr{};
+        using UnaryFn = Lexer::TokenIterator (*)(Lexer::TokenIterator, std::ptrdiff_t number);
+        UnaryFn m_increment{};
+
+        template <class T>
+        static Lexer::TokenIterator increment(Lexer::TokenIterator ptr, std::ptrdiff_t number)
+        {
+            return static_cast<const T*>(ptr) + number;
+        }
+
+    public:
+        using value_type = Lexer::TokenBase;
+        using difference_type = std::ptrdiff_t;
+        using reference = const Lexer::TokenBase&;
+        using pointer = Lexer::TokenIterator;
+        using iterator_category = std::forward_iterator_tag;
+
+        TypeErasedTokenBaseIterator() = default;
+
+        template <class T>
+        explicit TypeErasedTokenBaseIterator(const T* ptr) noexcept : m_ptr(ptr), m_increment(increment<T>)
+        {
+            static_assert(std::is_base_of_v<Lexer::TokenBase, T>);
+        }
+
+        reference operator*() const noexcept
+        {
+            return *m_ptr;
+        }
+
+        pointer operator->() const noexcept
+        {
+            return m_ptr;
+        }
+
+        TypeErasedTokenBaseIterator& operator++(int) noexcept
+        {
+            m_ptr = m_increment(m_ptr, 1);
+            return *this;
+        }
+
+        TypeErasedTokenBaseIterator operator++() noexcept
+        {
+            auto copy = *this;
+            m_ptr = m_increment(m_ptr, 1);
+            return copy;
+        }
+
+        TypeErasedTokenBaseIterator& operator--(int) noexcept
+        {
+            m_ptr = m_increment(m_ptr, -1);
+            return *this;
+        }
+
+        TypeErasedTokenBaseIterator operator--() noexcept
+        {
+            auto copy = *this;
+            m_ptr = m_increment(m_ptr, -1);
+            return copy;
+        }
+
+        LLVM_READONLY TypeErasedTokenBaseIterator operator-(std::ptrdiff_t number) const noexcept
+        {
+            auto copy = *this;
+            copy.m_ptr = copy.m_increment(copy.m_ptr, -number);
+            return copy;
+        }
+
+        LLVM_READONLY TypeErasedTokenBaseIterator operator+(std::ptrdiff_t number) const noexcept
+        {
+            auto copy = *this;
+            copy.m_ptr = copy.m_increment(copy.m_ptr, number);
+            return copy;
+        }
+
+        bool operator==(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr == rhs.m_ptr;
+        }
+
+        bool operator!=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr != rhs.m_ptr;
+        }
+
+        bool operator<(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr < rhs.m_ptr;
+        }
+
+        bool operator>(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr > rhs.m_ptr;
+        }
+
+        bool operator<=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr <= rhs.m_ptr;
+        }
+
+        bool operator>=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+        {
+            return m_ptr >= rhs.m_ptr;
+        }
+    };
+
+    std::vector<Modifier> m_modifiers;
     std::string m_message;
-    Lexer::TokenIterator<T> m_begin;
-    std::optional<Lexer::TokenIterator<T>> m_end;
+    bool m_after;
+    TypeErasedTokenBaseIterator m_begin;
+    std::optional<TypeErasedTokenBaseIterator> m_maybeEnd;
     Severity m_severity;
 
-    Message(Severity severity, std::string message, Lexer::TokenIterator<T> begin,
-            std::optional<Lexer::TokenIterator<T>> end, std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    Message(Severity severity, std::string message, bool showAfter, const T* begin, std::optional<const T*> end,
+            std::vector<Modifier> modifiers = {})
+        : m_modifiers(std::move(modifiers)),
+          m_message(std::move(message)),
+          m_after(showAfter),
+          m_begin(begin),
+          m_maybeEnd(end),
+          m_severity(severity)
+    {
+    }
+
+    struct After
+    {
+    };
 
 public:
+    constexpr static After after{};
+
     /**
      * Generates an error Message
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
-     * guaranteed to display all lines that this token is contained in. Can be end
+     * guaranteed to display all lines that this token is contained in. Can't be end
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message error(std::string message, Lexer::TokenIterator<T> token, std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message error(std::string message, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Error, std::move(message), false, token, {}, std::move(modifiers));
+    }
+
+    /**
+     * Generates an error Message
+     * @param message Message to be printed
+     * @param token Token that is used for the source location to be printed. The source code displayed is
+     * guaranteed to display all lines that this token is contained in. Can't be end
+     * @param modifiers optional modifier to apply
+     * @return Message object
+     */
+    template <class T>
+    static Message error(std::string message, After, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Error, std::move(message), false, token, {}, std::move(modifiers));
+    }
 
     /**
      * Generates an error Message
@@ -292,18 +403,39 @@ public:
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message error(std::string message, Lexer::TokenIterator<T> begin, Lexer::TokenIterator<T> end,
-                         std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message error(std::string message, const T* begin, const T* end, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Error, std::move(message), false, begin, std::optional{end}, modifiers);
+    }
 
     /**
      * Generates a note Message
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
-     * guaranteed to display all lines that this token is contained in. Can be end
+     * guaranteed to display all lines that this token is contained in. Can't be end
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message note(std::string message, Lexer::TokenIterator<T> token, std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message note(std::string message, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Note, std::move(message), false, token, {}, std::move(modifiers));
+    }
+
+    /**
+     * Generates a note Message
+     * @param message Message to be printed
+     * @param token Token that is used for the source location to be printed. The source code displayed is
+     * guaranteed to display all lines that this token is contained in. Can't be end
+     * @param modifiers optional modifier to apply
+     * @return Message object
+     */
+    template <class T>
+    static Message note(std::string message, After, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Note, std::move(message), true, token, {}, std::move(modifiers));
+    }
 
     /**
      * Generates a note Message
@@ -314,18 +446,39 @@ public:
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message note(std::string message, Lexer::TokenIterator<T> begin, Lexer::TokenIterator<T> end,
-                        std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message note(std::string message, const T* begin, const T* end, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Note, std::move(message), false, begin, std::optional{end}, modifiers);
+    }
 
     /**
      * Generates a warning Message
      * @param message Message to be printed
      * @param token Token that is used for the source location to be printed. The source code displayed is
-     * guaranteed to display all lines that this token is contained in. Can be end
+     * guaranteed to display all lines that this token is contained in. Can't be end
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message warning(std::string message, Lexer::TokenIterator<T> token, std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message warning(std::string message, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Warning, std::move(message), false, token, {}, std::move(modifiers));
+    }
+
+    /**
+     * Generates a warning Message
+     * @param message Message to be printed
+     * @param token Token that is used for the source location to be printed. The source code displayed is
+     * guaranteed to display all lines that this token is contained in. Can't be end
+     * @param modifiers optional modifier to apply
+     * @return Message object
+     */
+    template <class T>
+    static Message warning(std::string message, After, const T* token, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Warning, std::move(message), true, token, {}, std::move(modifiers));
+    }
 
     /**
      * Generates a warning Message
@@ -336,18 +489,14 @@ public:
      * @param modifiers optional modifier to apply
      * @return Message object
      */
-    static Message warning(std::string message, Lexer::TokenIterator<T> begin, Lexer::TokenIterator<T> end,
-                           std::vector<Modifier<T>> modifiers = {});
+    template <class T>
+    static Message warning(std::string message, const T* begin, const T* end, std::vector<Modifier> modifiers = {})
+    {
+        return Message(Warning, std::move(message), false, begin, std::optional{end}, modifiers);
+    }
 
     [[nodiscard]] Severity getSeverity() const;
 
-    llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceObject<T>& sourceObject) const;
+    llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceInterface& sourceObject) const;
 };
-
-using CMessage = Message<Lexer::CToken>;
-using PPMessage = Message<Lexer::PPToken>;
-
-extern template class Message<Lexer::CToken>;
-
-extern template class Message<Lexer::PPToken>;
 } // namespace cld

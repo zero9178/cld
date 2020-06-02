@@ -108,7 +108,17 @@ inline std::string to_string(std::string_view stringView)
     return std::string(stringView.begin(), stringView.end());
 }
 
-template <class T, class = std::enable_if_t<std::is_invocable_v<std::to_string, T>>>
+template <class T, class = void>
+struct ToString : std::false_type
+{
+};
+
+template <class T>
+struct ToString<T, std::void_t<decltype(std::to_string(std::declval<T>()))>> : std::true_type
+{
+};
+
+template <class T, class = std::enable_if_t<ToString<T>{}>>
 std::string to_string(T value)
 {
     return std::to_string(value);

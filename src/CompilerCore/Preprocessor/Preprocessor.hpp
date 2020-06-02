@@ -13,6 +13,6 @@ struct LanguageOptions;
 
 namespace PP
 {
-PPSourceObject preprocess(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs()) noexcept;
+PPSourceObject preprocess(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter = &llvm::errs()) noexcept;
 } // namespace PP
 } // namespace cld

@@ -10,12 +10,6 @@
 
 namespace cld::PP
 {
-struct Node
-{
-    Lexer::PPTokenIterator begin;
-    Lexer::PPTokenIterator end;
-};
-
 struct Group;
 
 /**
@@ -23,15 +17,15 @@ struct Group;
  *             | <TokenType::Pound> <Identifier=ifdef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
  *             | <TokenType::Pound> <Identifier=ifndef> <TokenType::Identifier> <TokenType::Newline> [ <Group> ]
  */
-struct IfGroup final : Node
+struct IfGroup final
 {
     struct IfnDefTag final
     {
-        std::string identifier;
+        std::string_view identifier;
     };
     struct IfDefTag final
     {
-        std::string identifier;
+        std::string_view identifier;
     };
     using variant = std::variant<IfnDefTag, IfDefTag, std::vector<Lexer::PPToken>>;
     variant ifs;
@@ -41,7 +35,7 @@ struct IfGroup final : Node
 /**
  * <ElIfGroup> ::= <TokenType::Pound> <Identifier=elif> <TOKENS> <TokenType::Newline> [ <Group> ]
  */
-struct ElIfGroup final : Node
+struct ElIfGroup final
 {
     std::vector<Lexer::PPToken> constantExpression;
     std::unique_ptr<Group> optionalGroup;
@@ -50,7 +44,7 @@ struct ElIfGroup final : Node
 /**
  * <ElseGroup> ::= <TokenType::Pound> <Identifier=else> <TokenType::Newline> [<Group>]
  */
-struct ElseGroup final : Node
+struct ElseGroup final
 {
     std::unique_ptr<Group> optionalGroup;
 };
@@ -58,7 +52,7 @@ struct ElseGroup final : Node
 /**
  * <IfSection> ::= <IfGroup> {<ElIfGroup>} [<ElseGroup>] <TokenType::Pound> <Identifier=endif> <TokenType::Newline>
  */
-struct IfSection final : Node
+struct IfSection final
 {
     IfGroup ifGroup;
     std::vector<ElIfGroup> elifGroups;
@@ -80,13 +74,13 @@ struct IfSection final : Node
  *                         [ <TokenType::Identifier { <TokenType::Comma> <TokenType::Identifier> } ] <TokenType::Comma>
  *                         <TokenType::Ellipse> <TokenType::CloseParentheses> [ <TOKENS> ] <TokenType::Newline>
  */
-struct DefineDirective final : Node
+struct DefineDirective final
 {
     Lexer::PPTokenIterator identifierPos;
     /**
      * Its an optional to differentiate between an empty identifier list and no identifier list
      */
-    std::optional<std::vector<std::string>> identifierList;
+    std::optional<std::vector<std::string_view>> identifierList;
     bool hasEllipse;
     Lexer::PPTokenIterator replacementBegin;
     Lexer::PPTokenIterator replacementEnd;
@@ -101,7 +95,7 @@ struct DefineDirective final : Node
  *                 | <TokenType::Pound> <Identifier=error> [<TOKENS>] <TokenType::Newline>
  *                 | <TokenType::Pound> <Identifier=pragma> [<TOKENS>] <TokenType::Newline>
  */
-struct ControlLine final : Node
+struct ControlLine final
 {
     struct IncludeTag final
     {
@@ -133,21 +127,30 @@ struct ControlLine final : Node
 /**
  * <NonDirective> ::= <TokenType::Pound> <TOKEN> { <TOKEN> } <TokenType::Newline>
  */
-struct NonDirective final : Node
+struct NonDirective final
 {
     Lexer::PPTokenIterator begin;
     Lexer::PPTokenIterator end;
 };
 
 /**
+ * <TextBlock> ::= <TOKEN> <TokenType::Newline> { <TOKEN> <TokenType::Newline> }
+ */
+struct TextBlock final
+{
+    std::vector<Lexer::PPToken> tokens;
+    std::vector<std::uint64_t> ends;
+};
+
+/**
  * <GroupPart> ::= <IfSection> | <ControlLine> | <TextLine> | <NonDirective>
  */
-using GroupPart = std::variant<IfSection, ControlLine, std::vector<Lexer::PPToken>, NonDirective>;
+using GroupPart = std::variant<IfSection, ControlLine, TextBlock, NonDirective>;
 
 /**
  * <Group> ::= <GroupPart> { <GroupPart> }
  */
-struct Group final : Node
+struct Group final
 {
     std::vector<GroupPart> groupPart;
 };
@@ -155,22 +158,9 @@ struct Group final : Node
 /**
  * <File> := { <Group> }
  */
-struct File final : Node
+struct File final
 {
     std::vector<Group> groups;
 };
 
-template <template <class...> class Variant, class... Args>
-Node& getNode(Variant<Args...>& variant)
-{
-    static_assert((std::is_base_of_v<Node, Args> && ...));
-    return cld::match(variant, [](auto&& value) -> Node& { return value; });
-}
-
-template <template <class...> class Variant, class... Args>
-const Node& getNode(const Variant<Args...>& variant)
-{
-    static_assert((std::is_base_of_v<Node, Args> && ...));
-    return cld::match(variant, [](auto&& value) -> Node& { return value; });
-}
 } // namespace cld::PP

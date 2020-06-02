@@ -28,27 +28,27 @@ cld::PPSourceObject sourceObject;
         return std::move(tree.first);                                                     \
     }()
 
-#define functionProduces(parser, source, offset, matches)                                 \
-    []() mutable {                                                                        \
-        std::string string;                                                               \
-        llvm::raw_string_ostream ss(string);                                              \
-        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
-        ss.flush();                                                                       \
-        REQUIRE(string.empty());                                                          \
-        cld::PP::Context context(sourceObject, &ss);                                      \
-        auto begin = sourceObject.data().cbegin() + offset;                               \
-        auto ret = parser(begin, sourceObject.data().cend(), context);                    \
-        CHECK_THAT(string, matches);                                                      \
-        {                                                                                 \
-            auto begin2 = sourceObject.data().cbegin() + offset;                          \
-            cld::PP::Context context2(sourceObject);                                      \
-            parser(begin2, sourceObject.data().cend(), context2);                         \
-            if (!string.empty())                                                          \
-            {                                                                             \
-                llvm::errs() << '\n';                                                     \
-            }                                                                             \
-        }                                                                                 \
-        return ret;                                                                       \
+#define functionProduces(parser, source, offset, matches)                                           \
+    []() mutable {                                                                                  \
+        std::string string;                                                                         \
+        llvm::raw_string_ostream ss(string);                                                        \
+        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);           \
+        ss.flush();                                                                                 \
+        REQUIRE(string.empty());                                                                    \
+        cld::PP::Context context(sourceObject, &ss);                                                \
+        auto begin = std::as_const(sourceObject).data().data() + offset;                            \
+        auto ret = parser(begin, sourceObject.data().data() + sourceObject.data().size(), context); \
+        CHECK_THAT(string, matches);                                                                \
+        {                                                                                           \
+            auto begin2 = std::as_const(sourceObject).data().data() + offset;                       \
+            cld::PP::Context context2(sourceObject);                                                \
+            parser(begin2, sourceObject.data().data() + sourceObject.data().size(), context2);      \
+            if (!string.empty())                                                                    \
+            {                                                                                       \
+                llvm::errs() << '\n';                                                               \
+            }                                                                                       \
+        }                                                                                           \
+        return ret;                                                                                 \
     }()
 
 using namespace cld::Errors;
@@ -58,16 +58,17 @@ using namespace cld::Errors::PP;
 
 TEST_CASE("Parse Preprocessor Group", "[PPParse]")
 {
-    SECTION("Text line")
+    SECTION("Text block")
     {
         auto ret = functionProduces(parseGroup, "a line", 0, ProducesNothing());
         REQUIRE(ret.groupPart.size() == 1);
         const auto& part = ret.groupPart[0];
-        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::PPToken>>(part));
-        const auto& vector = std::get<std::vector<cld::Lexer::PPToken>>(part);
-        REQUIRE(vector.size() == 2);
-        REQUIRE(vector[0].getRepresentation(sourceObject) == "a");
-        REQUIRE(vector[1].getRepresentation(sourceObject) == "line");
+        REQUIRE(std::holds_alternative<cld::PP::TextBlock>(part));
+        const auto& block = std::get<cld::PP::TextBlock>(part);
+        REQUIRE(block.ends.size() == 1);
+        REQUIRE(block.tokens.size() == 2);
+        REQUIRE(block.tokens[0].getRepresentation(sourceObject) == "a");
+        REQUIRE(block.tokens[1].getRepresentation(sourceObject) == "line");
     }
     SECTION("Only #")
     {
@@ -457,3 +458,6 @@ TEST_CASE("Parse Preprocessor Fuzzer discoveries", "[PPParse]")
           "%");
     parse("#elif");
 }
+
+#undef treeProduces
+#undef functionProduces

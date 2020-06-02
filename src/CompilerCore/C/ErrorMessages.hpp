@@ -134,15 +134,13 @@ constexpr auto INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS =
     Format("Invalid universal character. Expected {} more hex digits");
 
 constexpr auto INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N =
-    Format("Invalid universal character. Illegal value of {} ({})");
+    Format("Invalid universal character. Illegal value of 0x{} ({})");
 
 constexpr auto VALUE_MUSTNT_BE_LESS_THAN_A0 = "Value mustn't be less than 0x00A0";
 
 constexpr auto VALUE_MUSTNT_BE_IN_RANGE = "Value mustn't be in range of 0xD800 to 0xDFFF";
 
 constexpr auto INVALID_HEX_ESCAPE_SEQUENCE_N = Format("Invalid hex escape sequence {}");
-
-constexpr auto INVALID_OCTAL_ESCAPE_SEQUENCE_N = Format("Invalid hex escape sequence {}");
 
 constexpr auto VALUE_MUST_FIT_IN_UTF32 = "Value must fit in UTF32";
 
@@ -199,9 +197,14 @@ constexpr auto DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED = Format("Defining builti
 
 constexpr auto UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED = Format("Undefining builtin macro {} is not allowed");
 
-constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N = Format("Not enough arguments for macro {}");
+constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N =
+    Format("Not enough arguments for macro {}. Expected {} got {}");
 
-constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N = Format("Too many arguments for macro {}");
+constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N =
+    Format("Not enough arguments for macro {}. Expected at least {} got {}");
+
+constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N =
+    Format("Too many arguments for macro {}. Expected {} got {}");
 } // namespace PP
 } // namespace ErrorMessages
 

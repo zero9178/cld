@@ -7,17 +7,17 @@
 
 #include "TestConfig.hpp"
 
-#define preprocessResult(source)                                                      \
-    [](const std::string& str) {                                                      \
-        std::string storage;                                                          \
-        llvm::raw_string_ostream ss(storage);                                         \
-        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss); \
-        INFO(ss.str());                                                               \
-        REQUIRE(ss.str().empty());                                                    \
-        auto ret = cld::PP::preprocess(tokens, &ss);                                  \
-        INFO(ss.str());                                                               \
-        REQUIRE(ss.str().empty());                                                    \
-        return cld::Lexer::constructPP(ret, ret.data().begin(), ret.data().end());    \
+#define preprocessResult(source)                                                                       \
+    [](const std::string& str) {                                                                       \
+        std::string storage;                                                                           \
+        llvm::raw_string_ostream ss(storage);                                                          \
+        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss);                  \
+        INFO(ss.str());                                                                                \
+        REQUIRE(ss.str().empty());                                                                     \
+        auto ret = cld::PP::preprocess(std::move(tokens), &ss);                                        \
+        INFO(ss.str());                                                                                \
+        REQUIRE(ss.str().empty());                                                                     \
+        return cld::Lexer::constructPP(ret, ret.data().data(), ret.data().data() + ret.data().size()); \
     }(source)
 
 #define preprocessTest(source)                                                        \
@@ -27,7 +27,7 @@
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss); \
         INFO(ss.str());                                                               \
         REQUIRE(ss.str().empty());                                                    \
-        auto ret = cld::PP::preprocess(tokens, &ss);                                  \
+        auto ret = cld::PP::preprocess(std::move(tokens), &ss);                       \
         return ret;                                                                   \
     }(source)
 
@@ -39,11 +39,12 @@
         auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
         INFO(ss.str());                                                                 \
         REQUIRE(ss.str().empty());                                                      \
-        cld::PP::preprocess(tokens, &ss);                                               \
+        cld::PP::preprocess(std::move(tokens), &ss);                                    \
         CHECK_THAT(s, match);                                                           \
         if (!s.empty())                                                                 \
         {                                                                               \
-            cld::PP::preprocess(tokens);                                                \
+            tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss);  \
+            cld::PP::preprocess(std::move(tokens));                                     \
         }                                                                               \
     } while (0)
 
@@ -55,7 +56,6 @@ TEST_CASE("C99 Standard examples", "[PP]")
 {
     SECTION("6.10.3.5 'Scope of macro definitions'")
     {
-        return;
         SECTION("Example 1")
         {
             auto ret = preprocessResult("#define TABSIZE 100\nint table[TABSIZE];");
@@ -78,8 +78,13 @@ TEST_CASE("C99 Standard examples", "[PP]")
                                             "#define z z[0]\n"
                                             "#define t(a) a\n"
                                             "% t(t(g)(0) + t)(1);");
+                //% t(t(g)(0) + t)(1);  Finds macro t
+                //% t(f(0) + t)(1);     After macro substitution of the arguments
+                //% f(0) + t(1);        After argument substitution
+                //% f(2 * (0)) + t(1);  After rescanning
                 CHECK(ret == "\n\n\n\n\n\n\n% f(2 * (0)) + t(1);");
             }
+            return;
             SECTION("Complete")
             {
                 auto ret = preprocessResult("#define x 3\n"
@@ -108,6 +113,7 @@ TEST_CASE("C99 Standard examples", "[PP]")
                          "char c[2][6] = { \"hello\", \"\" };");
             }
         }
+        return;
         SECTION("Example 5")
         {
             auto ret = preprocessResult("#define t(x,y,z) x ## y ## z\n"
@@ -119,10 +125,10 @@ TEST_CASE("C99 Standard examples", "[PP]")
         }
         SECTION("Example 7")
         {
-            auto ret = preprocessResult("#define debug(...) fprintf(stderr, _ _VA_ARGS_ _)\n"
-                                        "#define showlist(...) puts(#_ _VA_ARGS_ _)\n"
+            auto ret = preprocessResult("#define debug(...) fprintf(stderr, __VA_ARGS__)\n"
+                                        "#define showlist(...) puts(#__VA_ARGS__)\n"
                                         "#define report(test, ...) ((test)?puts(#test):\\\n"
-                                        "printf(_ _VA_ARGS_ _))\n"
+                                        "printf(__VA_ARGS__))\n"
                                         "debug(\"Flag\");\n"
                                         "debug(\"X = %d\\n\", x);\n"
                                         "showlist(The first, second, and third items.);\n"
@@ -235,11 +241,12 @@ TEST_CASE("Object like Macros", "[PP]")
         CHECK(std::all_of(tokens.data().begin(), tokens.data().begin() + 7,
                           [](auto&& token) { return !token.macroInserted(); }));
         CHECK(std::all_of(tokens.data().begin() + 7, tokens.data().begin() + 12,
-                          [](auto&& token) { return token.getMacroId() == 1; }));
+                          [](auto&& token) { return token.getMacroId() == cld::Lexer::MacroID(1); }));
         CHECK(std::all_of(tokens.data().begin() + 13, tokens.data().end(),
                           [](auto&& token) { return !token.macroInserted(); }));
-        REQUIRE(tokens.getSubstitutions().size() == 2);
-        //TODO: CHECK(tokens.getSubstitutions().at(1).identifier.getRepresentation() == "FUNC");
+        REQUIRE(tokens.getSubstitutions().size() == 1);
+        CHECK(tokens.getSubstitutions()[0].macroIdentifier.getOffset() == 8);
+        CHECK(tokens.getSubstitutions()[0].macroIdentifier.getLength() == 4);
     }
     SECTION("Empty")
     {
@@ -264,17 +271,13 @@ int main(void) {
         CHECK(std::all_of(tokens.data().begin(), tokens.data().begin() + 7,
                           [](auto&& token) { return !token.macroInserted(); }));
         CHECK(std::all_of(tokens.data().begin() + 7, tokens.data().begin() + 12,
-                          [](auto&& token) { return token.getMacroId() == 2; }));
+                          [](auto&& token) { return token.getMacroId() == cld::Lexer::MacroID(2); }));
         CHECK(std::all_of(tokens.data().begin() + 12, tokens.data().begin() + 13,
-                          [](auto&& token) { return token.getMacroId() == 1; }));
+                          [](auto&& token) { return token.getMacroId() == cld::Lexer::MacroID(1); }));
         CHECK(std::all_of(tokens.data().begin() + 13, tokens.data().begin() + 18,
-                          [](auto&& token) { return token.getMacroId() == 3; }));
+                          [](auto&& token) { return token.getMacroId() == cld::Lexer::MacroID(3); }));
         CHECK(std::all_of(tokens.data().begin() + 18, tokens.data().end(),
                           [](auto&& token) { return !token.macroInserted(); }));
-//TODO:        REQUIRE(tokens.getSubstitutions().size() == 4);
-//        CHECK(tokens.getSubstitutions()[1].offset);
-//        CHECK(tokens.getSubstitutions().at(2).identifier.getRepresentation() == "FUNC");
-//        CHECK(tokens.getSubstitutions().at(3).identifier.getRepresentation() == "FUNC");
     }
     SECTION("At beginning of line")
     {
@@ -285,6 +288,11 @@ int main(void) {
     {
         auto ret = preprocessResult("#define LONG long\nLONG LONG table[100];");
         CHECK_THAT(ret, ProducesLines("\nlong long table[100];"));
+    }
+    SECTION("Yielding __LINE__")
+    {
+        auto ret = preprocessResult("#define VALUE __LINE__\nlong table[VALUE];");
+        CHECK_THAT(ret, ProducesLines("\nlong table[2];"));
     }
     SECTION("Recursive")
     {
@@ -307,37 +315,192 @@ int main(void) {
         ret = preprocessResult("#define TABSIZE 100\nint table?\?(TABSIZE?\?);");
         CHECK_THAT(ret, ProducesLines("\nint table[100];"));
     }
+    SECTION("Rescanning behaviour")
+    {
+        auto ret = preprocessResult("#define A B\n"
+                                    "#define B(a) a\n"
+                                    "A\n"
+                                    "(0)");
+        CHECK_THAT(ret, ProducesLines("\n\n0"));
+    }
 }
 
-TEST_CASE("Builtin macros")
+TEST_CASE("Builtin macros", "[PP]")
 {
     SECTION("Date")
     {
-        auto time = std::time(nullptr);
-        auto tm = std::localtime(&time);
-        std::string date(30, ' ');
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat"
-        auto size = std::strftime(date.data(), date.size(), "%b %e %Y", tm);
-#pragma GCC diagnostic pop
-        CLD_ASSERT(size > 0);
-        date.resize(size);
-        auto ret = preprocessResult("const char* date(){ return __DATE__; }");
-        CHECK(ret == "const char* date(){ return \"" + date + "\"; }");
+        auto ret = preprocessResult("__DATE__");
+        // Make sure to change regex in the year 10000
+        CHECK_THAT(ret, Catch::Matchers::Matches("\"\\w+ \\d{1,2} \\d{4}\""));
     }
     SECTION("Time")
     {
-        auto time = std::time(nullptr);
-        auto tm = std::localtime(&time);
-        std::string timeString(30, ' ');
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat"
-        auto size = std::strftime(timeString.data(), timeString.size(), "%H:%M:%S", tm);
-#pragma GCC diagnostic pop
-        CLD_ASSERT(size > 0);
-        timeString.resize(size);
-        auto ret = preprocessResult("const char* time(){ return __TIME__; }");
-        CHECK_THAT(ret,
-                   Catch::Matchers::Matches("const char\\* time\\(\\)\\{ return \"\\d{1,2}:\\d{1,2}:\\d{1,2}\"; \\}"));
+        auto ret = preprocessResult("__TIME__");
+        CHECK_THAT(ret, Catch::Matchers::Matches("\"\\d{1,2}:\\d{1,2}:\\d{1,2}\""));
+    }
+    SECTION("__STDC__")
+    {
+        auto ret = preprocessResult("__STDC__");
+        CHECK(ret == "1");
+    }
+    SECTION("__STDC_HOSTED__")
+    {
+        auto ret = preprocessResult("__STDC_HOSTED__");
+        CHECK(ret == "0");
+    }
+    SECTION("__STDC_MB_MIGHT_NEQ_WC__")
+    {
+        auto ret = preprocessResult("__STDC_MB_MIGHT_NEQ_WC__");
+        CHECK(ret == "1");
+    }
+    SECTION("__STDC_VERSION__")
+    {
+        auto ret = preprocessResult("__STDC_VERSION__");
+        CHECK(ret == "199901L");
+    }
+    SECTION("__FILE__")
+    {
+        auto ret = preprocessResult("__FILE__");
+        CHECK(ret == "\"<stdin>\"");
+    }
+    SECTION("__LINE__")
+    {
+        auto ret = preprocessResult("__LINE__\n\n__LINE__");
+        CHECK(ret == "1\n\n3");
     }
 }
+
+TEST_CASE("Function like Macros", "[PP]")
+{
+    SECTION("Normal")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max(5,7);");
+        CHECK(ret == "\nint i = ((5) > (7) ? (5) : (7));");
+    }
+    SECTION("Argument count")
+    {
+        PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max(5);",
+                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args("\"max\"", 2, 1)));
+        PP_OUTPUTS_WITH(
+            "#define max(a, b,...) ((a) > (b) ? (a) : (b))\n"
+            "int i = max(5);",
+            ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N.args("\"max\"", 2, 1)));
+        PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max(5,7,10);",
+                        ProducesError(TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args("\"max\"", 2, 3)));
+    }
+    SECTION("No closing )")
+    {
+        PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max(5",
+                        ProducesError(cld::Errors::Parser::EXPECTED_N.args("1 ')'")));
+        PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max((5,",
+                        ProducesError(cld::Errors::Parser::EXPECTED_N.args("2 ')'")));
+        PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max((5,)",
+                        ProducesError(cld::Errors::Parser::EXPECTED_N.args("1 ')'")));
+    }
+    SECTION("Must be a call")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max+(5,7);");
+        CHECK(ret == "\nint i = max+(5,7);");
+    }
+    SECTION("Whitespace between opening parentheses")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max           (5,7);");
+        CHECK(ret == "\nint i = ((5) > (7) ? (5) : (7));");
+    }
+    SECTION("Multi line")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max(5,\n"
+                                    "7);end");
+        CHECK(ret == "\nint i = ((5) > (7) ? (5) : (7));end");
+    }
+    SECTION("No arguments")
+    {
+        auto ret = preprocessResult("#define max() ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max();");
+        CHECK(ret == "\nint i = ((a) > (b) ? (a) : (b));");
+    }
+    SECTION("Empty arguments")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max(,);");
+        CHECK(ret == "\nint i = (() > () ? () : ());");
+    }
+    SECTION("Nested arguments")
+    {
+        auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max((5,7),7);");
+        CHECK(ret == "\nint i = (((5,7)) > (7) ? ((5,7)) : (7));");
+    }
+    SECTION("Macro replacement in argument")
+    {
+        auto ret = preprocessResult("#define VALUE 5\n"
+                                    "#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                                    "int i = max(VALUE,7);");
+        CHECK(ret == "\n\nint i = ((5) > (7) ? (5) : (7));");
+        PP_OUTPUTS_WITH("#define VALUE 5,7\n"
+                        "#define max(a, b) ((a) > (b) ? (a) : (b))\n"
+                        "int i = max(VALUE);",
+                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args("\"max\"", 2, 1)));
+    }
+    SECTION("Empty result")
+    {
+        auto ret = preprocessResult("#define VALUE 5\n"
+                                    "#define max(a, b)\n"
+                                    "int i = max(VALUE,7);");
+        CHECK(ret == "\n\nint i = ;");
+    }
+    SECTION("__VA_ARGS__")
+    {
+        auto ret = preprocessResult("#define max(a,...) ((a) > (__VA_ARGS__) ? (a) : (__VA_ARGS__))\n"
+                                    "int i = max(5,7,645,,3);");
+        CHECK(ret == "\nint i = ((5) > (7,645,,3) ? (5) : (7,645,,3));");
+    }
+    SECTION("Empty __VA_ARGS__")
+    {
+        auto ret = preprocessResult("#define max(a,...) ((a) > (__VA_ARGS__) ? (a) : (__VA_ARGS__))\n"
+                                    "int i = max(5);");
+        CHECK(ret == "\nint i = ((5) > () ? (5) : ());");
+    }
+    SECTION("Only __VA_ARGS__")
+    {
+        auto ret = preprocessResult("#define max(...) ((a) > (__VA_ARGS__) ? (a) : (__VA_ARGS__))\n"
+                                    "int i = max(5);");
+        CHECK(ret == "\nint i = ((a) > (5) ? (a) : (5));");
+    }
+    SECTION("Macro replacement in replacement list")
+    {
+        auto ret = preprocessResult("#define OP >\n"
+                                    "#define max(a, b) ((a) OP (b) ? (a) : (b))\n"
+                                    "int i = max(5,7);");
+        CHECK(ret == "\n\nint i = ((5) > (7) ? (5) : (7));");
+    }
+    SECTION("Macro replacement in replacement list doesn't create arguments")
+    {
+        auto ret = preprocessResult("#define OP a\n"
+                                    "#define max(a, b) ((a) OP (b) ? (a) : (b))\n"
+                                    "int i = max(5,7);");
+        CHECK(ret == "\n\nint i = ((5) a (7) ? (5) : (7));");
+    }
+    SECTION("__LINE__ position")
+    {
+        // This behaviour here is implementation defined
+        // Clang does it on the ). GCC does it on the identifier. We follow Clang's behaviour
+        auto ret = preprocessResult("#define func() __LINE__\n"
+                                    "int i = func(\n"
+                                    ");");
+        CHECK(ret == "\nint i = 3;");
+    }
+}
+
+#undef PP_OUTPUTS_WITH
+#undef preprocessResult
+#undef preprocessTest

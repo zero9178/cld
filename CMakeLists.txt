@@ -46,7 +46,7 @@ include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)
 include_directories(src)
 message(STATUS ${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
+add_definitions("${LLVM_DEFINITIONS}")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (NOT LLVM_ENABLE_RTTI)

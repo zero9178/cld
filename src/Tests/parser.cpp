@@ -25,33 +25,33 @@
         }                                                                           \
     } while (0)
 
-#define functionProduces(parser, source, matches)                                   \
-    do                                                                              \
-    {                                                                               \
-        std::string string;                                                         \
-        llvm::raw_string_ostream ss(string);                                        \
-        cld::PPSourceObject tokens;                                                 \
-        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
-        REQUIRE(string.empty());                                                    \
-        auto ctokens = cld::Lexer::toCTokens(tokens, &ss);                          \
-        REQUIRE(string.empty());                                                    \
-        cld::Parser::Context context(ctokens, &ss);                                 \
-        auto begin = ctokens.data().cbegin();                                       \
-        parser(begin, ctokens.data().cend(), context);                              \
-        {                                                                           \
-            INFO("Function " #parser " with source " << source);                    \
-            CHECK((!string.empty() || begin == ctokens.data().cend()));             \
-        }                                                                           \
-        CHECK_THAT(string, matches);                                                \
-        {                                                                           \
-            auto begin2 = ctokens.data().cbegin();                                  \
-            cld::Parser::Context context2(ctokens);                                 \
-            parser(begin2, ctokens.data().cend(), context2);                        \
-            if (!string.empty())                                                    \
-            {                                                                       \
-                llvm::errs() << '\n';                                               \
-            }                                                                       \
-        }                                                                           \
+#define functionProduces(parser, source, matches)                                               \
+    do                                                                                          \
+    {                                                                                           \
+        std::string string;                                                                     \
+        llvm::raw_string_ostream ss(string);                                                    \
+        cld::PPSourceObject tokens;                                                             \
+        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);             \
+        REQUIRE(string.empty());                                                                \
+        auto ctokens = cld::Lexer::toCTokens(tokens, &ss);                                      \
+        REQUIRE(string.empty());                                                                \
+        cld::Parser::Context context(ctokens, &ss);                                             \
+        auto begin = std::as_const(ctokens).data().data();                                      \
+        parser(begin, ctokens.data().data() + ctokens.data().size(), context);                  \
+        {                                                                                       \
+            INFO("Function " #parser " with source " << source);                                \
+            CHECK((!string.empty() || begin == ctokens.data().data() + ctokens.data().size())); \
+        }                                                                                       \
+        CHECK_THAT(string, matches);                                                            \
+        {                                                                                       \
+            auto begin2 = std::as_const(ctokens).data().data();                                 \
+            cld::Parser::Context context2(ctokens);                                             \
+            parser(begin2, ctokens.data().data() + ctokens.data().size(), context2);            \
+            if (!string.empty())                                                                \
+            {                                                                                   \
+                llvm::errs() << '\n';                                                           \
+            }                                                                                   \
+        }                                                                                       \
     } while (0)
 
 using namespace cld::Notes;
@@ -1088,3 +1088,6 @@ I=')");
 #endif
     parse("V=V==L+E");
 }
+
+#undef treeProduces
+#undef functionProduces

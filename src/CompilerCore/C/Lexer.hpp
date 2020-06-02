@@ -7,15 +7,31 @@
 #include <CompilerCore/Common/Util.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <variant>
 #include <vector>
 
 #include "LanguageOptions.hpp"
-#include "SourceObject.hpp"
+#include "SourceInterface.hpp"
 
 namespace cld
 {
+namespace Lexer
+{
+class TokenBase;
+class CToken;
+class PPToken;
+} // namespace Lexer
+
+template <class T>
+class SourceObject;
+
+using CSourceObject = SourceObject<Lexer::CToken>;
+using PPSourceObject = SourceObject<Lexer::PPToken>;
+
 namespace Lexer
 {
 enum class TokenType : std::uint8_t
@@ -113,71 +129,66 @@ enum class TokenType : std::uint8_t
     TOKEN_MAX_VALUE = Miscellaneous,
 };
 
-template <class T>
-using TokenIterator = typename std::vector<T>::const_iterator;
-using CTokenIterator = TokenIterator<CToken>;
-using PPTokenIterator = TokenIterator<PPToken>;
+using TokenIterator = const TokenBase*;
+using CTokenIterator = const CToken*;
+using PPTokenIterator = const PPToken*;
 
+enum class FileID : std::uint64_t
+{
+};
+
+enum class MacroID : std::uint64_t
+{
+};
 
 PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
-                        llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,std::string_view sourceFile = "<stdin>");
+                        llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,
+                        std::string_view sourceFile = "<stdin>");
 
 CSourceObject toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
                         bool* errorsOccured = nullptr);
 
-std::vector<CToken> toCTokens(PPTokenIterator begin,PPTokenIterator end, const PPSourceObject& sourceObject,
+std::vector<CToken> toCTokens(PPTokenIterator begin, PPTokenIterator end, const PPSourceObject& sourceObject,
                               llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr);
 
-template <class Derived>
 class TokenBase
 {
 protected:
+    TokenType m_tokenType; ///< Type of the token
     std::uint64_t m_length;
-    std::uint64_t m_macroId = 0;   /**< MacroID. All tokens with the same ID have been inserted by the same macro
-                                      substitution. ID of 0 means the the token originated from the Lexer*/
+    MacroID m_macroId;             /**< MacroID. All tokens with the same ID have been inserted by the same macro
+                                                substitution. ID of 0 means the the token originated from the Lexer*/
     std::uint64_t m_offset;        /**< Offset of the token. That is bytes offset to the first character of the
                                         token from the beginning of the file of the very original source code passed
                                         from the user. This value is not unique as after preprocessing all inserted
                                         tokens have the offset of the original position in the replacement list*/
     std::uint64_t m_afterPPOffset; /**< Effective offset of the token after preprocessing. Must be equal to m_offset if
                             m_macroId == 0. This value changes during pre processing and is therefore mutable.*/
-    std::uint64_t m_fileID = 0;
-    TokenType m_tokenType; ///< Type of the token
+    FileID m_fileID;
 
     TokenBase() = default;
 
-    TokenBase(std::uint64_t length, std::uint64_t offset, std::uint64_t afterPPOffset, TokenType tokenType)
-        : m_length(length), m_offset(offset), m_afterPPOffset(afterPPOffset), m_tokenType(tokenType)
+    TokenBase(TokenType tokenType, std::uint64_t length, std::uint64_t offset, std::uint64_t afterPPOffset,
+              FileID fileID, MacroID macroID)
+        : m_tokenType(tokenType),
+          m_length(length),
+          m_macroId(macroID),
+          m_offset(offset),
+          m_afterPPOffset(afterPPOffset),
+          m_fileID(fileID)
     {
     }
 
 public:
-    [[nodiscard]] std::string_view getRepresentation(const SourceObject<Derived>& sourceObject) const
-    {
-        return std::string_view(sourceObject.getFiles()[m_fileID].source).substr(m_offset, m_length);
-    }
+    [[nodiscard]] std::string_view getRepresentation(const SourceInterface& sourceObject) const;
 
-    [[nodiscard]] std::uint64_t getLine(const SourceObject<Derived>& sourceObject) const noexcept
-    {
-        return sourceObject.getLineNumber(m_fileID, m_offset);
-    }
+    [[nodiscard]] std::uint64_t getLine(const SourceInterface& sourceObject) const noexcept;
 
-    [[nodiscard]] std::uint64_t getPPLine(const SourceObject<Derived>& sourceObject) const noexcept
-    {
-        return sourceObject.getPPLineNumber(m_fileID, m_afterPPOffset);
-    }
+    [[nodiscard]] std::uint64_t getPPLine(const SourceInterface& sourceObject) const noexcept;
 
-    [[nodiscard]] std::uint64_t getColumn(const SourceObject<Derived>& sourceObject) const noexcept
-    {
-        auto line = sourceObject.getLineNumber(m_fileID, m_offset);
-        return m_offset - sourceObject.getLineStartOffset(m_fileID, line) + 1;
-    }
+    [[nodiscard]] std::uint64_t getColumn(const SourceInterface& sourceObject) const noexcept;
 
-    [[nodiscard]] std::uint64_t getPPColumn(const SourceObject<Derived>& sourceObject) const noexcept
-    {
-        auto line = sourceObject.getPPLineNumber(m_fileID, m_afterPPOffset);
-        return m_afterPPOffset - sourceObject.getPPLineStartOffset(m_fileID, line) + 1;
-    }
+    [[nodiscard]] std::uint64_t getPPColumn(const SourceInterface& sourceObject) const noexcept;
 
     [[nodiscard]] TokenType getTokenType() const noexcept
     {
@@ -186,7 +197,7 @@ public:
 
     [[nodiscard]] bool macroInserted() const noexcept
     {
-        return m_macroId;
+        return static_cast<bool>(m_macroId);
     }
 
     [[nodiscard]] std::uint64_t getOffset() const noexcept
@@ -199,61 +210,79 @@ public:
         return m_afterPPOffset;
     }
 
-    void setPPOffset(std::uint64_t ppOffset) noexcept
-    {
-        m_afterPPOffset = ppOffset;
-    }
-
     [[nodiscard]] std::size_t getLength() const noexcept
     {
         return m_length;
     }
 
-    [[nodiscard]] std::uint64_t getMacroId() const noexcept
+    [[nodiscard]] MacroID getMacroId() const noexcept
     {
         return m_macroId;
     }
 
-    void setMacroId(std::uint64_t macroId) noexcept
-    {
-        m_macroId = macroId;
-    }
-
-    [[nodiscard]] std::uint64_t getFileId() const
+    [[nodiscard]] FileID getFileId() const
     {
         return m_fileID;
     }
-
-    void setFileId(std::uint64_t fileId)
-    {
-        m_fileID = fileId;
-    }
 };
 
-class PPToken : public TokenBase<PPToken>
+using IntervalMap = std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>;
+
+class PPToken final : public TokenBase
 {
     std::string m_value;
-    std::uint64_t m_charSpaceOffset; /**< Offset to the token in bytes after trigraphs have been replaced and
-                                      Backslash Newline pairs have been spliced*/
-    std::uint64_t m_charSpaceLength; /**< Length of the token if any trigraphs and Backslash Newline pairs in it's
+    IntervalMap
+        m_intervalMap; /// Slice of intervalmap of the Lexer for this token. Only populated for Literals and PPNumber
+    std::uint64_t m_charSpaceLength; /**< Length of the token after trigraphs and Backslash Newline pairs in it's
                                       representation have been removed*/
 public:
-    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
-            std::uint64_t charSpaceLength, std::string_view value = {});
+    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceLength,
+            std::uint64_t afterPPOffset, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {},
+            IntervalMap intervalMap = {})
+        : TokenBase(tokenType, length, offset, afterPPOffset, fileID, macroID),
+          m_value(value.begin(), value.end()),
+          m_intervalMap(std::move(intervalMap)),
+          m_charSpaceLength(charSpaceLength)
+    {
+    }
+
+    PPToken copy(std::optional<TokenType> tokenType = {}, std::optional<std::uint64_t> offset = {},
+                 std::optional<std::uint64_t> length = {}, std::optional<std::uint64_t> charSpaceLength = {},
+                 std::optional<std::uint64_t> afterPPOffset = {}, std::optional<FileID> fileID = {},
+                 std::optional<MacroID> macroID = {}, std::optional<std::string_view> value = {},
+                 std::optional<IntervalMap> intervalMap = {}) const
+    {
+        return PPToken(tokenType.value_or(m_tokenType), offset.value_or(m_offset), length.value_or(m_length),
+                       charSpaceLength.value_or(m_charSpaceLength), afterPPOffset.value_or(m_afterPPOffset),
+                       fileID.value_or(m_fileID), macroID.value_or(m_macroId), value.value_or(m_value),
+                       std::move(intervalMap).value_or(m_intervalMap));
+    }
+
+    PPToken move(std::optional<TokenType> tokenType = {}, std::optional<std::uint64_t> offset = {},
+                 std::optional<std::uint64_t> length = {}, std::optional<std::uint64_t> charSpaceLength = {},
+                 std::optional<std::uint64_t> afterPPOffset = {}, std::optional<FileID> fileID = {},
+                 std::optional<MacroID> macroID = {}, std::optional<std::string_view> value = {},
+                 std::optional<IntervalMap> intervalMap = {}) &&
+    {
+        return PPToken(tokenType.value_or(m_tokenType), offset.value_or(m_offset), length.value_or(m_length),
+                       charSpaceLength.value_or(m_charSpaceLength), afterPPOffset.value_or(m_afterPPOffset),
+                       fileID.value_or(m_fileID), macroID.value_or(m_macroId), value.value_or(m_value),
+                       std::move(intervalMap).value_or(std::move(m_intervalMap)));
+    }
 
     [[nodiscard]] std::uint64_t getCharSpaceLength() const
     {
         return m_charSpaceLength;
     }
 
-    [[nodiscard]] std::uint64_t getCharSpaceOffset() const
-    {
-        return m_charSpaceOffset;
-    }
-
-    [[nodiscard]] const std::string& getValue() const noexcept
+    [[nodiscard]] std::string_view getValue() const noexcept
     {
         return m_value;
+    }
+
+    [[nodiscard]] const IntervalMap& getIntervalMap() const
+    {
+        return m_intervalMap;
     }
 };
 
@@ -286,7 +315,7 @@ struct NonCharString
     }
 };
 
-class CToken : public TokenBase<CToken>
+class CToken final : public TokenBase
 {
     using variant = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, std::string, NonCharString>;
     variant m_value; ///< Optional value of the token
@@ -312,8 +341,11 @@ private:
 public:
     using ValueType = variant;
 
-    CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, variant value = std::monostate{},
-           Type type = Type::None);
+    CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileId, MacroID macroId,
+           variant value = std::monostate{}, Type type = Type::None)
+        : TokenBase(tokenType, length, offset, offset, fileId, macroId), m_value(std::move(value)), m_type(type)
+    {
+    }
 
     [[nodiscard]] const variant& getValue() const noexcept
     {

@@ -6,30 +6,29 @@
 
 namespace cld
 {
-template <class T>
 class Message;
 
 namespace PP
 {
 class Context final
 {
-    const PPSourceObject& m_sourceObject;
+    const SourceInterface& m_sourceInterface;
     llvm::raw_ostream* m_reporter;
     std::size_t m_errorCount = 0;
 
 public:
-    Context(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+    Context(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs());
 
     Context(const Context&) = delete;
     Context& operator=(const Context&) = delete;
     Context(Context&&) = delete;
     Context& operator=(Context&&) = delete;
 
-    void log(std::vector<Message<Lexer::PPToken>> messages);
+    void log(std::vector<Message> messages);
 
     std::size_t getErrorCount() const;
 
-    const PPSourceObject& getSourceObject() const;
+    const SourceInterface& getSourceInterface() const;
 };
 
 std::pair<File, bool> buildTree(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());

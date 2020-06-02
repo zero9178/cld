@@ -205,14 +205,14 @@ std::optional<cld::Syntax::ExternalDeclaration>
                         if (addedByParameters.count(*identifier))
                         {
                             auto* loc = context.getLocationOf(*identifier);
-                            std::vector<CMessage> messages;
-                            messages.push_back(CMessage::error(
+                            std::vector<Message> messages;
+                            messages.push_back(Message::error(
                                 Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args("typename", '\'' + *identifier + '\''),
                                 typeSpecifier->begin(), typeSpecifier->end(),
                                 {PointAt(typeSpecifier->begin(), typeSpecifier->end())}));
                             if (loc)
                             {
-                                messages.push_back(CMessage::note(
+                                messages.push_back(Message::note(
                                     Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args('\'' + *identifier + '\''),
                                     loc->begin, loc->end, {PointAt(loc->identifier, loc->identifier + 1)}));
                             }
@@ -226,7 +226,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                         {
                             continue;
                         }
-                        std::vector<CMessage> notes;
+                        std::vector<Message> notes;
                         if (specifiers.size() == 1 && std::holds_alternative<TypeSpecifier>(specifiers[0])
                             && std::holds_alternative<std::string>(cld::get<TypeSpecifier>(specifiers[0]).getVariant()))
                         {
@@ -235,14 +235,14 @@ std::optional<cld::Syntax::ExternalDeclaration>
                             auto* loc = context.getLocationOf(name);
                             if (loc)
                             {
-                                notes.push_back(CMessage::note(Notes::IDENTIFIER_IS_TYPEDEF.args('\'' + name + '\''),
-                                                               loc->begin, loc->end,
-                                                               {Underline(loc->identifier, loc->identifier + 1)}));
+                                notes.push_back(Message::note(Notes::IDENTIFIER_IS_TYPEDEF.args('\'' + name + '\''),
+                                                              loc->begin, loc->end,
+                                                              {Underline(loc->identifier, loc->identifier + 1)}));
                             }
                         }
                         notes.insert(
                             notes.begin(),
-                            CMessage::error(
+                            Message::error(
                                 Errors::Parser::MISSING_PARAMETER_NAME, start, begin,
                                 {Underline(nodeFromNodeDerivedVariant(specifiers.back()).begin(),
                                            *abstractDecl ? (*abstractDecl)->end() :
@@ -448,12 +448,12 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
         auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
-        std::vector<CMessage> notes;
+        std::vector<Message> notes;
         if (loc)
         {
-            notes.push_back(CMessage::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                                               '\'' + Semantics::declaratorToName(*initDeclarators[0].first) + '\''),
-                                           loc->begin, loc->end, {Underline(loc->identifier, loc->identifier + 1)}));
+            notes.push_back(Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                                              '\'' + Semantics::declaratorToName(*initDeclarators[0].first) + '\''),
+                                          loc->begin, loc->end, {Underline(loc->identifier, loc->identifier + 1)}));
         }
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context, std::move(notes)))
         {
@@ -595,17 +595,17 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             default: break;
         }
     }
-    if (begin < end)
+    if (begin != end)
     {
-        context.log({CMessage::error(Errors::Parser::EXPECTED_N_BEFORE_N.args(
-                                         "storage specifier or typename",
-                                         '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
-                                     begin, {PointAt(begin, begin + 1)})});
+        context.log({Message::error(Errors::Parser::EXPECTED_N_BEFORE_N.args(
+                                        "storage specifier or typename",
+                                        '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
+                                    begin, {PointAt(begin, begin + 1)})});
     }
     else
     {
-        context.log({CMessage::error(Errors::Parser::EXPECTED_N.args("storage specifier or typename"), begin,
-                                     {PointAt(begin - 1, begin)})});
+        context.log({Message::error(Errors::Parser::EXPECTED_N.args("storage specifier or typename"), Message::after,
+                                    begin - 1, {PointAt(begin - 1, begin)})});
     }
     context.skipUntil(begin, end);
     return {};
@@ -628,17 +628,17 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     }
     else
     {
-        context.log({CMessage::error(Errors::Parser::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
-                                     start, begin + 1, {PointAt(begin, begin + 1)})});
+        context.log({Message::error(Errors::Parser::EXPECTED_N.args(Format::List(", ", " or ", "struct", "union")),
+                                    start, begin + 1, {PointAt(begin, begin + 1)})});
         context.skipUntil(begin, end);
         return {};
     }
 
     if (begin == end)
     {
-        context.log({CMessage::error(Errors::Parser::EXPECTED_N_AFTER_N.args(
-                                         Format::List(", ", " or ", "identifier", "'{'"), isUnion ? "union" : "struct"),
-                                     start, end, {PointAt(end - 1, end)})});
+        context.log({Message::error(Errors::Parser::EXPECTED_N_AFTER_N.args(
+                                        Format::List(", ", " or ", "identifier", "'{'"), isUnion ? "union" : "struct"),
+                                    start, end, {PointAt(end - 1, end)})});
         return {};
     }
 
@@ -729,8 +729,8 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     if (structDeclarations.empty())
     {
         context.log(
-            {CMessage::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args(isUnion ? "union" : "struct", "field"),
-                             start, begin, {Underline(openBrace, begin)})});
+            {Message::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args(isUnion ? "union" : "struct", "field"),
+                            start, begin, {Underline(openBrace, begin)})});
         return {};
     }
     return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations));
@@ -827,12 +827,12 @@ std::optional<cld::Syntax::SpecifierQualifier>
                 else if (context.isTypedef(name))
                 {
                     auto* loc = context.getLocationOf(cld::get<std::string>(begin->getValue()));
-                    context.log({CMessage::error(
+                    context.log({Message::error(
                                      Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                          "typename",
                                          '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
                                      start, {PointAt(begin, begin + 1)}),
-                                 CMessage::note(
+                                 Message::note(
                                      Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
                                          '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
                                      loc->begin, loc->end, {Underline(loc->identifier, loc->identifier + 1)})});
@@ -846,7 +846,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
     }
     if (begin < end)
     {
-        context.log({CMessage::error(
+        context.log({Message::error(
             Errors::Parser::EXPECTED_N_BEFORE_N.args(
                 "typename", '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
             begin, {PointAt(begin, begin + 1)})});
@@ -854,7 +854,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
     else
     {
         context.log(
-            {CMessage::error(Errors::Parser::EXPECTED_N.args("typename"), begin - 1, {PointAt(begin - 1, begin)})});
+            {Message::error(Errors::Parser::EXPECTED_N.args("typename"), begin - 1, {PointAt(begin - 1, begin)})});
     }
     context.skipUntil(begin, end);
     return {};
@@ -904,7 +904,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                 DirectDeclaratorParenthese(start, begin, std::make_unique<Declarator>(std::move(*declarator))));
         }
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
         {
             context.skipUntil(
                 begin, end,
@@ -917,16 +917,16 @@ std::optional<cld::Syntax::DirectDeclarator>
         if (begin == end)
         {
             context.log(
-                {CMessage::error(Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "identifier")),
-                                 begin, {InsertAfter(begin - 1)})});
+                {Message::error(Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "identifier")),
+                                begin - 1, {InsertAfter(begin - 1)})});
         }
         else
         {
             context.log(
-                {CMessage::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                     cld::Format::List(", ", " or ", "'('", "identifier"),
-                                     '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
-                                 begin, {PointAt(begin, begin + 1)})});
+                {Message::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                    cld::Format::List(", ", " or ", "'('", "identifier"),
+                                    '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
+                                begin, {PointAt(begin, begin + 1)})});
         }
         context.skipUntil(
             begin, end,
@@ -983,12 +983,12 @@ std::optional<cld::Syntax::DirectDeclarator>
                             {
                                 if (context.isTypedef(name))
                                 {
-                                    std::vector<CMessage> notes = {CMessage::error(
+                                    std::vector<Message> notes = {Message::error(
                                         Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args("identifier", "typename"), start,
                                         begin, {Underline(begin - 1, begin)})};
                                     if (auto* loc = context.getLocationOf(name))
                                     {
-                                        notes.push_back(CMessage::note(
+                                        notes.push_back(Message::note(
                                             Notes::IDENTIFIER_IS_TYPEDEF.args('\'' + name + '\''), loc->begin, loc->end,
                                             {Underline(loc->identifier, loc->identifier + 1)}));
                                     }
@@ -1008,8 +1008,8 @@ std::optional<cld::Syntax::DirectDeclarator>
                     }
                 }
                 if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                            {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos,
-                                            {PointAt(openPpos, openPpos + 1)})}))
+                            {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos,
+                                           {PointAt(openPpos, openPpos + 1)})}))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1026,8 +1026,8 @@ std::optional<cld::Syntax::DirectDeclarator>
                 if (begin == end)
                 {
                     expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                           {CMessage::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
-                                           {PointAt(openPpos, openPpos + 1)})});
+                           {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
+                                          {PointAt(openPpos, openPpos + 1)})});
                     context.squareBracketLeft();
                     return {};
                 }
@@ -1137,8 +1137,8 @@ std::optional<cld::Syntax::DirectDeclarator>
                 }
 
                 if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            {CMessage::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
-                                            {PointAt(openPpos, openPpos + 1)})}))
+                            {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
+                                           {PointAt(openPpos, openPpos + 1)})}))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1176,8 +1176,8 @@ cld::Syntax::ParameterTypeList cld::Parser::parseParameterTypeList(Lexer::CToken
         begin++;
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Ellipse)
         {
-            context.log({CMessage::error(Errors::Parser::EXPECTED_N_AFTER_N.args("parameter", "','"), start,
-                                         {PointAt(begin - 1, begin)})});
+            context.log({Message::error(Errors::Parser::EXPECTED_N_AFTER_N.args("parameter", "','"), start,
+                                        {PointAt(begin - 1, begin)})});
         }
         else
         {
@@ -1296,8 +1296,8 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
     }
     if (first)
     {
-        context.log({CMessage::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args("parameter list", "parameter"),
-                                     begin, {PointAt(begin, end)})});
+        context.log({Message::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args("parameter list", "parameter"),
+                                    begin, {PointAt(begin, end)})});
     }
     return ParameterList(start, begin, std::move(parameterDeclarations));
 }
@@ -1397,8 +1397,8 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                             start, begin, std::move(directAbstractDeclarator), nullptr));
                 }
                 if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                            {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos,
-                                            {PointAt(openPpos, openPpos + 1)})}))
+                            {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos,
+                                           {PointAt(openPpos, openPpos + 1)})}))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1442,8 +1442,8 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 }
 
                 if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            {CMessage::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
-                                            {PointAt(openPpos, openPpos + 1)})}))
+                            {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
+                                           {PointAt(openPpos, openPpos + 1)})}))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1460,16 +1460,16 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
     {
         if (begin == end)
         {
-            context.log({CMessage::error(Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "'['")),
-                                         begin, {InsertAfter(begin - 1)})});
+            context.log({Message::error(Errors::Parser::EXPECTED_N.args(cld::Format::List(", ", " or ", "'('", "'['")),
+                                        begin, {InsertAfter(begin - 1)})});
         }
         else
         {
             context.log(
-                {CMessage::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                     cld::Format::List(", ", " or ", "'('", "'['"),
-                                     '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
-                                 start, {InsertAfter(begin)})});
+                {Message::error(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                                    cld::Format::List(", ", " or ", "'('", "'['"),
+                                    '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
+                                start, {InsertAfter(begin)})});
         }
         context.skipUntil(begin, end);
         return {};
@@ -1498,8 +1498,8 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
     }
     else if (begin == end)
     {
-        context.log({CMessage::error(Errors::Parser::EXPECTED_N_AFTER_N.args("identifier", "enum"), start, begin,
-                                     {InsertAfter(begin - 1)})});
+        context.log({Message::error(Errors::Parser::EXPECTED_N_AFTER_N.args("identifier", "enum"), start, begin,
+                                    {InsertAfter(begin - 1)})});
         context.skipUntil(begin, end);
         return {};
     }
@@ -1566,12 +1566,12 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
             if (begin == end)
             {
                 context.log(
-                    {CMessage::error(Errors::Parser::EXPECTED_N.args("'}'"), start, begin, {InsertAfter(begin - 1)})});
+                    {Message::error(Errors::Parser::EXPECTED_N.args("'}'"), start, begin, {InsertAfter(begin - 1)})});
                 return {};
             }
             else
             {
-                context.log({CMessage::error(
+                context.log({Message::error(
                     Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                         "','", '\'' + to_string(begin->getRepresentation(context.getSourceObject())) + '\''),
                     start, begin, {PointAt(begin, begin + 1)})});
@@ -1591,8 +1591,8 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
     }
     if (!inLoop)
     {
-        context.log({CMessage::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args("enum", "value"), start, begin,
-                                     {Underline(openPpos, begin)})});
+        context.log({Message::error(Errors::Parser::N_REQUIRES_AT_LEAST_ONE_N.args("enum", "value"), start, begin,
+                                    {Underline(openPpos, begin)})});
     }
     return EnumSpecifier(start, begin, EnumDeclaration(start, begin, std::move(name), std::move(values)));
 }
@@ -1630,8 +1630,8 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
         context.popScope();
     }
     auto additional =
-        std::vector{CMessage::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, begin,
-                                   {PointAt(start == end ? start - 1 : start, start == end ? start : start + 1)})};
+        std::vector{Message::note(Notes::TO_MATCH_N_HERE.args("'{'"), start, begin,
+                                  {PointAt(start == end ? start - 1 : start, start == end ? start : start + 1)})};
     if (!braceSeen)
     {
         additional.clear();
@@ -1740,8 +1740,8 @@ std::optional<cld::Syntax::InitializerList>
                     context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
                 designation.emplace_back(std::move(constant));
                 if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            {CMessage::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
-                                            {PointAt(openPpos, openPpos + 1)})}))
+                            {Message::note(Notes::TO_MATCH_N_HERE.args("'['"), openPpos,
+                                           {PointAt(openPpos, openPpos + 1)})}))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::Assignment,
@@ -1948,7 +1948,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
     {
         auto expression = parseExpression(
             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon)));
-        std::vector<CMessage> notes;
+        std::vector<Message> notes;
         if (start + 1 == begin && start->getTokenType() == Lexer::TokenType::Identifier
             && context.isTypedef(cld::get<std::string>(start->getValue()))
             && begin->getTokenType() == Lexer::TokenType::Identifier)
@@ -1957,9 +1957,9 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             if (loc)
             {
                 notes.push_back(
-                    CMessage::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                                       '\'' + to_string(start->getRepresentation(context.getSourceObject())) + '\''),
-                                   loc->begin, loc->end, {Underline(loc->identifier, loc->identifier + 1)}));
+                    Message::note(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                                      '\'' + to_string(start->getRepresentation(context.getSourceObject())) + '\''),
+                                  loc->begin, loc->end, {Underline(loc->identifier, loc->identifier + 1)}));
             }
         }
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context, std::move(notes)))
@@ -1997,10 +1997,10 @@ std::optional<cld::Syntax::HeadWhileStatement>
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::vector<CMessage> note;
+    std::vector<Message> note;
     if (openPpos)
     {
-        note = {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
+        note = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
     }
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
     {
@@ -2026,7 +2026,7 @@ std::optional<cld::Syntax::FootWhileStatement>
     auto statement =
         parseStatement(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::WhileKeyword)));
     if (!expect(Lexer::TokenType::WhileKeyword, begin, end, context,
-                {CMessage::note(Notes::TO_MATCH_N_HERE.args("'do'"), doPos, {PointAt(doPos, doPos + 1)})}))
+                {Message::note(Notes::TO_MATCH_N_HERE.args("'do'"), doPos, {PointAt(doPos, doPos + 1)})}))
     {
         context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
     }
@@ -2041,10 +2041,10 @@ std::optional<cld::Syntax::FootWhileStatement>
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::vector<CMessage> notes;
+    std::vector<Message> notes;
     if (openPpos)
     {
-        notes = {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
+        notes = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
     }
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(notes)))
     {
@@ -2109,10 +2109,10 @@ std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(Lexer::CTo
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::vector<CMessage> note;
+    std::vector<Message> note;
     if (openPpos)
     {
-        note = {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
+        note = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
     }
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
     {
@@ -2161,10 +2161,10 @@ std::optional<cld::Syntax::SwitchStatement>
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::vector<CMessage> note;
+    std::vector<Message> note;
     if (openPpos)
     {
-        note = {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
+        note = {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), *openPpos, {PointAt(*openPpos, *openPpos + 1)})};
     }
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
     {
@@ -2196,8 +2196,8 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
     if (begin == end)
     {
         context.log(
-            {CMessage::error(Errors::Parser::EXPECTED_N.args(Format::List(", ", " or ", "expression", "declaration")),
-                             start, begin, {InsertAfter(begin - 1)})});
+            {Message::error(Errors::Parser::EXPECTED_N.args(Format::List(", ", " or ", "expression", "declaration")),
+                            start, begin, {InsertAfter(begin - 1)})});
         return {};
     }
 
@@ -2232,7 +2232,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
     if (begin == end)
     {
         context.log(
-            {CMessage::error(Errors::Parser::EXPECTED_N.args("expression"), start, begin, {InsertAfter(begin - 1)})});
+            {Message::error(Errors::Parser::EXPECTED_N.args("expression"), start, begin, {InsertAfter(begin - 1)})});
         return {};
     }
     else if (begin->getTokenType() != Lexer::TokenType::SemiColon)
@@ -2256,7 +2256,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
     if (begin == end)
     {
         context.log(
-            {CMessage::error(Errors::Parser::EXPECTED_N.args("expression"), start, begin, {InsertAfter(begin - 1)})});
+            {Message::error(Errors::Parser::EXPECTED_N.args("expression"), start, begin, {InsertAfter(begin - 1)})});
         return {};
     }
     else if (begin->getTokenType() != Lexer::TokenType::CloseParentheses)
@@ -2264,7 +2264,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
         auto exp = parseExpression(begin, end, context);
         post = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    {CMessage::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
+                    {Message::note(Notes::TO_MATCH_N_HERE.args("'('"), openPpos, {PointAt(openPpos, openPpos + 1)})}))
         {
             context.skipUntil(begin, end, firstStatementSet);
         }

@@ -2,6 +2,7 @@
 
 #include <CompilerCore/C/Lexer.hpp>
 #include <CompilerCore/C/Parser.hpp>
+#include <CompilerCore/C/SourceObject.hpp>
 
 #include <cstdint>
 #include <string>
@@ -21,7 +22,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     {
         return 0;
     }
-    auto ctokens = cld::Lexer::toCTokens(tokens,&llvm::nulls(),&errors);
+    auto ctokens = cld::Lexer::toCTokens(tokens, &llvm::nulls(), &errors);
     if (errors || tokens.data().empty())
     {
         return 0;
@@ -29,8 +30,8 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
     cld::Parser::Context context(ctokens, &llvm::nulls());
     context.setBracketMax(64);
-    auto begin = ctokens.data().cbegin();
-    parseTranslationUnit(begin, ctokens.data().cend(), context);
+    auto begin = std::as_const(ctokens).data().data();
+    parseTranslationUnit(begin, ctokens.data().data() + ctokens.data().size(), context);
 
     return 0;
 }
