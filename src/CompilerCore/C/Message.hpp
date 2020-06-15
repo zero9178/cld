@@ -14,12 +14,12 @@ class Format final
     const char* m_format;
 
     template <class From, class To, class = void>
-    struct canStaticCast final : std::false_type
+    struct CanStaticCast final : std::false_type
     {
     };
 
     template <class From, class To>
-    struct canStaticCast<From, To, std::void_t<decltype(static_cast<To>(std::declval<From>()))>> final : std::true_type
+    struct CanStaticCast<From, To, std::void_t<decltype(static_cast<To>(std::declval<From>()))>> final : std::true_type
     {
     };
 
@@ -33,7 +33,7 @@ class Format final
         {
             return value;
         }
-        else if constexpr (canStaticCast<U, std::string>{})
+        else if constexpr (CanStaticCast<U, std::string>{})
         {
             return static_cast<std::string>(value);
         }
@@ -100,29 +100,141 @@ public:
     }
 };
 
+namespace detail
+{
+class TypeErasedTokenBaseIterator
+{
+    Lexer::TokenIterator m_ptr{};
+    using UnaryFn = Lexer::TokenIterator (*)(Lexer::TokenIterator, std::ptrdiff_t number);
+    UnaryFn m_increment{};
+
+    template <class T>
+    static Lexer::TokenIterator increment(Lexer::TokenIterator ptr, std::ptrdiff_t number)
+    {
+        return static_cast<const T*>(ptr) + number;
+    }
+
+public:
+    using value_type = Lexer::TokenBase;
+    using difference_type = std::ptrdiff_t;
+    using reference = const Lexer::TokenBase&;
+    using pointer = Lexer::TokenIterator;
+    using iterator_category = std::forward_iterator_tag;
+
+    TypeErasedTokenBaseIterator() = default;
+
+    template <class T>
+    explicit TypeErasedTokenBaseIterator(const T* ptr) noexcept : m_ptr(ptr), m_increment(increment<T>)
+    {
+        static_assert(std::is_base_of_v<Lexer::TokenBase, T>);
+    }
+
+    reference operator*() const noexcept
+    {
+        return *m_ptr;
+    }
+
+    pointer operator->() const noexcept
+    {
+        return m_ptr;
+    }
+
+    TypeErasedTokenBaseIterator& operator++(int) noexcept
+    {
+        m_ptr = m_increment(m_ptr, 1);
+        return *this;
+    }
+
+    TypeErasedTokenBaseIterator operator++() noexcept
+    {
+        auto copy = *this;
+        m_ptr = m_increment(m_ptr, 1);
+        return copy;
+    }
+
+    TypeErasedTokenBaseIterator& operator--(int) noexcept
+    {
+        m_ptr = m_increment(m_ptr, -1);
+        return *this;
+    }
+
+    TypeErasedTokenBaseIterator operator--() noexcept
+    {
+        auto copy = *this;
+        m_ptr = m_increment(m_ptr, -1);
+        return copy;
+    }
+
+    LLVM_READONLY TypeErasedTokenBaseIterator operator-(std::ptrdiff_t number) const noexcept
+    {
+        auto copy = *this;
+        copy.m_ptr = copy.m_increment(copy.m_ptr, -number);
+        return copy;
+    }
+
+    LLVM_READONLY TypeErasedTokenBaseIterator operator+(std::ptrdiff_t number) const noexcept
+    {
+        auto copy = *this;
+        copy.m_ptr = copy.m_increment(copy.m_ptr, number);
+        return copy;
+    }
+
+    bool operator==(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr == rhs.m_ptr;
+    }
+
+    bool operator!=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr != rhs.m_ptr;
+    }
+
+    bool operator<(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr < rhs.m_ptr;
+    }
+
+    bool operator>(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr > rhs.m_ptr;
+    }
+
+    bool operator<=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr <= rhs.m_ptr;
+    }
+
+    bool operator>=(const TypeErasedTokenBaseIterator& rhs) const noexcept
+    {
+        return m_ptr >= rhs.m_ptr;
+    }
+};
+} // namespace detail
+
 class Underline final
 {
-    Lexer::TokenIterator m_begin;
-    std::optional<Lexer::TokenIterator> m_maybeEnd;
+    detail::TypeErasedTokenBaseIterator m_begin;
+    std::optional<detail::TypeErasedTokenBaseIterator> m_maybeEnd;
     char m_character;
 
 public:
-    Underline(Lexer::TokenIterator begin, char character = '~')
-        : m_begin(begin), m_maybeEnd(std::nullopt), m_character(character)
+    template <class T>
+    Underline(const T* begin, char character = '~') : m_begin(begin), m_maybeEnd(std::nullopt), m_character(character)
     {
     }
 
-    Underline(Lexer::TokenIterator begin, Lexer::TokenIterator end, char character = '~')
+    template <class T>
+    Underline(const T* begin, const T* end, char character = '~')
         : m_begin(begin), m_maybeEnd(end), m_character(character)
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
+    [[nodiscard]] const detail::TypeErasedTokenBaseIterator& begin() const noexcept
     {
         return m_begin;
     }
 
-    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
+    [[nodiscard]] const std::optional<detail::TypeErasedTokenBaseIterator>& maybeEnd() const noexcept
     {
         return m_maybeEnd;
     }
@@ -135,20 +247,26 @@ public:
 
 class PointAt final
 {
-    Lexer::TokenIterator m_begin;
-    std::optional<Lexer::TokenIterator> m_maybeEnd;
+    detail::TypeErasedTokenBaseIterator m_begin;
+    std::optional<detail::TypeErasedTokenBaseIterator> m_maybeEnd;
 
 public:
-    PointAt(Lexer::TokenIterator begin) : m_begin(begin), m_maybeEnd(std::nullopt) {}
+    template <class T>
+    PointAt(const T* begin) : m_begin(begin), m_maybeEnd(std::nullopt)
+    {
+    }
 
-    PointAt(Lexer::TokenIterator begin, Lexer::TokenIterator end) : m_begin(begin), m_maybeEnd(end) {}
+    template <class T>
+    PointAt(const T* begin, const T* end) : m_begin(begin), m_maybeEnd(end)
+    {
+    }
 
-    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
+    [[nodiscard]] const detail::TypeErasedTokenBaseIterator& begin() const noexcept
     {
         return m_begin;
     }
 
-    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
+    [[nodiscard]] const std::optional<detail::TypeErasedTokenBaseIterator>& maybeEnd() const noexcept
     {
         return m_maybeEnd;
     }
@@ -156,16 +274,17 @@ public:
 
 class InsertAfter final
 {
-    Lexer::TokenIterator m_insertAfter;
+    detail::TypeErasedTokenBaseIterator m_insertAfter;
     std::string m_argument;
 
 public:
-    explicit InsertAfter(Lexer::TokenIterator insertAfter, std::string_view argument = {})
+    template <class T>
+    explicit InsertAfter(const T* insertAfter, std::string_view argument = {})
         : m_insertAfter(insertAfter), m_argument(argument.begin(), argument.end())
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator getInsertAfter() const noexcept
+    [[nodiscard]] const detail::TypeErasedTokenBaseIterator& getInsertAfter() const noexcept
     {
         return m_insertAfter;
     }
@@ -178,27 +297,29 @@ public:
 
 class Annotate final
 {
-    Lexer::TokenIterator m_begin;
-    std::optional<Lexer::TokenIterator> m_maybeEnd;
+    detail::TypeErasedTokenBaseIterator m_begin;
+    std::optional<detail::TypeErasedTokenBaseIterator> m_maybeEnd;
     std::string m_argument;
 
 public:
-    Annotate(Lexer::TokenIterator begin, std::string_view argument)
+    template <class T>
+    Annotate(const T* begin, std::string_view argument)
         : m_begin(begin), m_maybeEnd(std::nullopt), m_argument(argument.begin(), argument.end())
     {
     }
 
-    Annotate(Lexer::TokenIterator begin, Lexer::TokenIterator end, std::string_view argument)
+    template <class T>
+    Annotate(const T* begin, const T* end, std::string_view argument)
         : m_begin(begin), m_maybeEnd(end), m_argument(argument.begin(), argument.end())
     {
     }
 
-    [[nodiscard]] Lexer::TokenIterator begin() const noexcept
+    [[nodiscard]] const detail::TypeErasedTokenBaseIterator& begin() const noexcept
     {
         return m_begin;
     }
 
-    [[nodiscard]] const std::optional<Lexer::TokenIterator>& maybeEnd() const noexcept
+    [[nodiscard]] const std::optional<detail::TypeErasedTokenBaseIterator>& maybeEnd() const noexcept
     {
         return m_maybeEnd;
     }
@@ -232,119 +353,11 @@ public:
     };
 
 private:
-    class TypeErasedTokenBaseIterator
-    {
-        Lexer::TokenIterator m_ptr{};
-        using UnaryFn = Lexer::TokenIterator (*)(Lexer::TokenIterator, std::ptrdiff_t number);
-        UnaryFn m_increment{};
-
-        template <class T>
-        static Lexer::TokenIterator increment(Lexer::TokenIterator ptr, std::ptrdiff_t number)
-        {
-            return static_cast<const T*>(ptr) + number;
-        }
-
-    public:
-        using value_type = Lexer::TokenBase;
-        using difference_type = std::ptrdiff_t;
-        using reference = const Lexer::TokenBase&;
-        using pointer = Lexer::TokenIterator;
-        using iterator_category = std::forward_iterator_tag;
-
-        TypeErasedTokenBaseIterator() = default;
-
-        template <class T>
-        explicit TypeErasedTokenBaseIterator(const T* ptr) noexcept : m_ptr(ptr), m_increment(increment<T>)
-        {
-            static_assert(std::is_base_of_v<Lexer::TokenBase, T>);
-        }
-
-        reference operator*() const noexcept
-        {
-            return *m_ptr;
-        }
-
-        pointer operator->() const noexcept
-        {
-            return m_ptr;
-        }
-
-        TypeErasedTokenBaseIterator& operator++(int) noexcept
-        {
-            m_ptr = m_increment(m_ptr, 1);
-            return *this;
-        }
-
-        TypeErasedTokenBaseIterator operator++() noexcept
-        {
-            auto copy = *this;
-            m_ptr = m_increment(m_ptr, 1);
-            return copy;
-        }
-
-        TypeErasedTokenBaseIterator& operator--(int) noexcept
-        {
-            m_ptr = m_increment(m_ptr, -1);
-            return *this;
-        }
-
-        TypeErasedTokenBaseIterator operator--() noexcept
-        {
-            auto copy = *this;
-            m_ptr = m_increment(m_ptr, -1);
-            return copy;
-        }
-
-        LLVM_READONLY TypeErasedTokenBaseIterator operator-(std::ptrdiff_t number) const noexcept
-        {
-            auto copy = *this;
-            copy.m_ptr = copy.m_increment(copy.m_ptr, -number);
-            return copy;
-        }
-
-        LLVM_READONLY TypeErasedTokenBaseIterator operator+(std::ptrdiff_t number) const noexcept
-        {
-            auto copy = *this;
-            copy.m_ptr = copy.m_increment(copy.m_ptr, number);
-            return copy;
-        }
-
-        bool operator==(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr == rhs.m_ptr;
-        }
-
-        bool operator!=(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr != rhs.m_ptr;
-        }
-
-        bool operator<(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr < rhs.m_ptr;
-        }
-
-        bool operator>(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr > rhs.m_ptr;
-        }
-
-        bool operator<=(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr <= rhs.m_ptr;
-        }
-
-        bool operator>=(const TypeErasedTokenBaseIterator& rhs) const noexcept
-        {
-            return m_ptr >= rhs.m_ptr;
-        }
-    };
-
     std::vector<Modifier> m_modifiers;
     std::string m_message;
     bool m_after;
-    TypeErasedTokenBaseIterator m_begin;
-    std::optional<TypeErasedTokenBaseIterator> m_maybeEnd;
+    detail::TypeErasedTokenBaseIterator m_begin;
+    std::optional<detail::TypeErasedTokenBaseIterator> m_maybeEnd;
     Severity m_severity;
 
     template <class T>
@@ -391,7 +404,7 @@ public:
     template <class T>
     static Message error(std::string message, After, const T* token, std::vector<Modifier> modifiers = {})
     {
-        return Message(Error, std::move(message), false, token, {}, std::move(modifiers));
+        return Message(Error, std::move(message), true, token, {}, std::move(modifiers));
     }
 
     /**

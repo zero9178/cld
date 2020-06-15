@@ -25,7 +25,17 @@ struct File
 
 struct Substitution
 {
-    Lexer::PPToken macroIdentifier;
+    struct Identifier
+    {
+        std::uint64_t offset;
+        std::uint64_t length;
+        Lexer::FileID fileId;
+        Lexer::MacroID macroId;
+    };
+    Identifier macroIdentifier;
+    Identifier replacedIdentifier;
+    bool empty;
+    bool isArgumentInsertion = false;
 };
 } // namespace Source
 
@@ -37,16 +47,6 @@ class SourceObject final : public SourceInterface
     LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
     std::vector<Source::Substitution> m_substitutions;
     std::vector<std::uint64_t> m_afterPPStarts;
-
-    [[nodiscard]] const Lexer::TokenBase* inc(const Lexer::TokenBase* ptr) const noexcept override
-    {
-        return static_cast<const T*>(ptr) + 1;
-    }
-
-    [[nodiscard]] const Lexer::TokenBase* dec(const Lexer::TokenBase* ptr) const noexcept override
-    {
-        return static_cast<const T*>(ptr) - 1;
-    }
 
 public:
     SourceObject() = default;
@@ -103,27 +103,7 @@ public:
         return m_languageOptions;
     }
 
-    [[nodiscard]] std::uint64_t getPPLineNumber(std::uint64_t offset) const noexcept override
-    {
-        auto result = std::lower_bound(m_afterPPStarts.begin(), m_afterPPStarts.end(), offset);
-        CLD_ASSERT(result != m_afterPPStarts.end());
-        return std::distance(m_afterPPStarts.begin(), result) + (*result == offset ? 1 : 0);
-    }
-
-    [[nodiscard]] std::uint64_t getPPLineStartOffset(std::uint64_t line) const noexcept override
-    {
-        CLD_ASSERT(line - 1 < m_afterPPStarts.size());
-        return m_afterPPStarts[line - 1];
-    }
-
-    [[nodiscard]] std::uint64_t getPPLineEndOffset(std::uint64_t line) const noexcept override
-    {
-        CLD_ASSERT(line - 1 < m_afterPPStarts.size());
-        return line == m_afterPPStarts.size() ? m_tokens.back().getPPOffset() + m_tokens.back().getLength() :
-                                                m_afterPPStarts[line];
-    }
-
-    [[nodiscard]] const std::vector<Source::Substitution>& getSubstitutions() const noexcept
+    [[nodiscard]] const std::vector<Source::Substitution>& getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }

@@ -86,7 +86,7 @@ TranslationUnit cld::Parser::parseTranslationUnit(Lexer::CTokenIterator& begin, 
 std::optional<cld::Syntax::ExternalDeclaration>
     cld::Parser::parseExternalDeclaration(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
 
     auto declarationSpecifiers = parseDeclarationSpecifierList(
         begin, end,
@@ -364,7 +364,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
 std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTokenIterator& begin,
                                                                       Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
 
     bool declaratorMightActuallyBeTypedef = false;
     auto declarationSpecifiers = parseDeclarationSpecifierList(
@@ -485,7 +485,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
 std::optional<cld::Syntax::DeclarationSpecifier>
     cld::Parser::parseDeclarationSpecifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin < end)
     {
         auto currToken = *begin;
@@ -614,7 +614,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
 std::optional<cld::Syntax::StructOrUnionSpecifier>
     cld::Parser::parseStructOrUnionSpecifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     bool isUnion;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::StructKeyword)
     {
@@ -659,7 +659,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         return StructOrUnionSpecifier(start, begin, isUnion, name, {});
     }
 
-    auto openBrace = begin;
+    const auto* openBrace = begin;
     begin++;
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     while (begin < end
@@ -739,7 +739,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
 std::optional<cld::Syntax::SpecifierQualifier>
     cld::Parser::parseSpecifierQualifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin < end)
     {
         auto currToken = *begin;
@@ -863,7 +863,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
 std::optional<cld::Syntax::Declarator> cld::Parser::parseDeclarator(Lexer::CTokenIterator& begin,
                                                                     Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
     {
@@ -883,10 +883,10 @@ std::optional<cld::Syntax::DirectDeclarator>
 {
     std::unique_ptr<DirectDeclarator> directDeclarator;
 
-    auto start = begin;
+    const auto* start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
     {
-        auto currToken = begin;
+        const auto* currToken = begin;
         begin++;
         directDeclarator = std::make_unique<DirectDeclarator>(
             DirectDeclaratorIdentifier(start, begin, cld::get<std::string>(currToken->getValue()), currToken));
@@ -894,7 +894,7 @@ std::optional<cld::Syntax::DirectDeclarator>
     else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
     {
         context.parenthesesEntered(begin);
-        auto openPpos = begin;
+        const auto* openPpos = begin;
         begin++;
         auto declarator = parseDeclarator(
             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
@@ -942,7 +942,7 @@ std::optional<cld::Syntax::DirectDeclarator>
             case Lexer::TokenType::OpenParentheses:
             {
                 context.parenthesesEntered(begin);
-                auto openPpos = begin;
+                const auto* openPpos = begin;
                 begin++;
                 if (begin < end && firstIsInParameterTypeList(*begin, context))
                 {
@@ -1021,7 +1021,7 @@ std::optional<cld::Syntax::DirectDeclarator>
             case Lexer::TokenType::OpenSquareBracket:
             {
                 context.squareBracketEntered(begin);
-                auto openPpos = begin;
+                const auto* openPpos = begin;
                 begin++;
                 if (begin == end)
                 {
@@ -1167,7 +1167,7 @@ std::optional<cld::Syntax::DirectDeclarator>
 cld::Syntax::ParameterTypeList cld::Parser::parseParameterTypeList(Lexer::CTokenIterator& begin,
                                                                    Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     auto parameterList =
         parseParameterList(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
     bool hasEllipse = false;
@@ -1191,7 +1191,7 @@ cld::Syntax::ParameterTypeList cld::Parser::parseParameterTypeList(Lexer::CToken
 cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                            Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     std::vector<ParameterDeclaration> parameterDeclarations;
     bool first = true;
     while (begin < end)
@@ -1215,7 +1215,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                                        | Context::fromTokenTypes(Lexer::TokenType::Comma)));
 
         // Skip past everything that is part of the pointer declaration inside of the (possibly abstract) declarator
-        auto result = std::find_if(begin, end, [](const Lexer::CToken& token) {
+        const auto* result = std::find_if(begin, end, [](const Lexer::CToken& token) {
             switch (token.getTokenType())
             {
                 case Lexer::TokenType::Asterisk:
@@ -1305,7 +1305,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
 cld::Syntax::Pointer cld::Parser::parsePointer(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::Asterisk, begin, end, context))
     {
         context.skipUntil(begin, end,
@@ -1339,7 +1339,7 @@ cld::Syntax::Pointer cld::Parser::parsePointer(Lexer::CTokenIterator& begin, Lex
 cld::Syntax::AbstractDeclarator cld::Parser::parseAbstractDeclarator(Lexer::CTokenIterator& begin,
                                                                      Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     std::vector<Syntax::Pointer> pointers;
     while (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
     {
@@ -1361,7 +1361,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
 {
     std::unique_ptr<DirectAbstractDeclarator> directAbstractDeclarator;
     bool first = true;
-    auto start = begin;
+    const auto* start = begin;
     while (begin < end
            && (begin->getTokenType() == Lexer::TokenType::OpenParentheses
                || begin->getTokenType() == Lexer::TokenType::OpenSquareBracket))
@@ -1371,7 +1371,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             case Lexer::TokenType::OpenParentheses:
             {
                 context.parenthesesEntered(begin);
-                auto openPpos = begin;
+                const auto* openPpos = begin;
                 begin++;
                 if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
@@ -1410,7 +1410,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             case Lexer::TokenType::OpenSquareBracket:
             {
                 context.squareBracketEntered(begin);
-                auto openPpos = begin;
+                const auto* openPpos = begin;
                 begin++;
                 if (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
@@ -1484,7 +1484,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
 std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer::CTokenIterator& begin,
                                                                           Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::EnumKeyword, begin, end, context))
     {
         context.skipUntil(begin, end,
@@ -1504,7 +1504,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         return {};
     }
 
-    auto openPpos = begin;
+    const auto* openPpos = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
         if (name.empty())
@@ -1527,7 +1527,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         && (begin->getTokenType() == Lexer::TokenType::Identifier || begin->getTokenType() == Lexer::TokenType::Comma))
     {
         inLoop = true;
-        auto thisValueStart = begin;
+        const auto* thisValueStart = begin;
         std::string valueName;
         if (!expect(Lexer::TokenType::Identifier, begin, end, context, valueName))
         {
@@ -1602,7 +1602,7 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
                                                                                   cld::Parser::Context& context,
                                                                                   bool pushScope)
 {
-    auto start = begin;
+    const auto* start = begin;
     context.braceEntered(begin);
     bool braceSeen = true;
     if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
@@ -1672,7 +1672,7 @@ std::optional<cld::Syntax::CompoundItem> cld::Parser::parseCompoundItem(Lexer::C
 std::optional<cld::Syntax::Initializer> cld::Parser::parseInitializer(Lexer::CTokenIterator& begin,
                                                                       Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
         auto assignment = parseAssignmentExpression(begin, end, context);
@@ -1709,7 +1709,7 @@ std::optional<cld::Syntax::Initializer> cld::Parser::parseInitializer(Lexer::CTo
 std::optional<cld::Syntax::InitializerList>
     cld::Parser::parseInitializerList(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     typename InitializerList::vector vector;
     bool first = true;
     do
@@ -1733,7 +1733,7 @@ std::optional<cld::Syntax::InitializerList>
             if (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
             {
                 context.squareBracketEntered(begin);
-                auto openPpos = begin;
+                const auto* openPpos = begin;
                 begin++;
                 auto constant = parseConditionalExpression(
                     begin, end,
@@ -1787,7 +1787,7 @@ std::optional<cld::Syntax::InitializerList>
 std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenIterator& begin,
                                                                   Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin != end)
     {
         switch (begin->getTokenType())
@@ -1981,7 +1981,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
 std::optional<cld::Syntax::HeadWhileStatement>
     cld::Parser::parseHeadWhileStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::WhileKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
@@ -2017,8 +2017,8 @@ std::optional<cld::Syntax::HeadWhileStatement>
 std::optional<cld::Syntax::FootWhileStatement>
     cld::Parser::parseFootWhileStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
-    auto doPos = begin;
+    const auto* start = begin;
+    const auto* doPos = begin;
     if (!expect(Lexer::TokenType::DoKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, firstStatementSet);
@@ -2065,7 +2065,7 @@ std::optional<cld::Syntax::FootWhileStatement>
 cld::Syntax::ReturnStatement cld::Parser::parseReturnStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::ReturnKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, firstExpressionSet | Context::fromTokenTypes(Lexer::TokenType::SemiColon));
@@ -2093,7 +2093,7 @@ cld::Syntax::ReturnStatement cld::Parser::parseReturnStatement(Lexer::CTokenIter
 std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(Lexer::CTokenIterator& begin,
                                                                       Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::IfKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
@@ -2145,7 +2145,7 @@ std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(Lexer::CTo
 std::optional<cld::Syntax::SwitchStatement>
     cld::Parser::parseSwitchStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::SwitchKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
@@ -2181,12 +2181,12 @@ std::optional<cld::Syntax::SwitchStatement>
 std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::CTokenIterator& begin,
                                                                         Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (!expect(Lexer::TokenType::ForKeyword, begin, end, context))
     {
         context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
     }
-    auto openPpos = begin;
+    const auto* openPpos = begin;
     if (!expect(Lexer::TokenType::OpenParentheses, begin, end, context))
     {
         context.skipUntil(begin, end,

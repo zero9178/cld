@@ -9,7 +9,7 @@
 namespace
 {
 cld::PPSourceObject sourceObject;
-}
+} // namespace
 
 #define treeProduces(source, matches)                                                     \
     []() mutable {                                                                        \
@@ -65,7 +65,6 @@ TEST_CASE("Parse Preprocessor Group", "[PPParse]")
         const auto& part = ret.groupPart[0];
         REQUIRE(std::holds_alternative<cld::PP::TextBlock>(part));
         const auto& block = std::get<cld::PP::TextBlock>(part);
-        REQUIRE(block.ends.size() == 1);
         REQUIRE(block.tokens.size() == 2);
         REQUIRE(block.tokens[0].getRepresentation(sourceObject) == "a");
         REQUIRE(block.tokens[1].getRepresentation(sourceObject) == "line");
@@ -100,10 +99,9 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& ret = std::get<cld::PP::ControlLine>(part);
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::IncludeTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::IncludeTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 1);
-            auto begin = include.begin;
-            CHECK(begin->getRepresentation(sourceObject) == "<String>");
-            CHECK(begin->getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            REQUIRE(include.tokens.size() == 1);
+            CHECK(include.tokens[0].getRepresentation(sourceObject) == "<String>");
+            CHECK(include.tokens[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         }
         SECTION("Empty")
         {
@@ -118,10 +116,9 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             auto ret = functionProduces(parseControlLine, "#line 5", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::LineTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::LineTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 1);
-            auto begin = include.begin;
-            CHECK(begin->getRepresentation(sourceObject) == "5");
-            CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+            REQUIRE(include.tokens.size() == 1);
+            CHECK(include.tokens[0].getRepresentation(sourceObject) == "5");
+            CHECK(include.tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
         {
@@ -136,10 +133,9 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& ret = functionProduces(parseControlLine, "#error 5", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 1);
-            auto begin = include.begin;
-            CHECK(begin->getRepresentation(sourceObject) == "5");
-            CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+            REQUIRE(include.tokens.size() == 1);
+            CHECK(include.tokens[0].getRepresentation(sourceObject) == "5");
+            CHECK(include.tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
         {
@@ -147,7 +143,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& ret = functionProduces(parseControlLine, "#error", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 0);
+            REQUIRE(include.tokens.size() == 0);
         }
     }
     SECTION("Pragma")
@@ -158,10 +154,9 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& ret = functionProduces(parseControlLine, "#pragma 5", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 1);
-            auto begin = include.begin;
-            CHECK(begin->getRepresentation(sourceObject) == "5");
-            CHECK(begin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+            REQUIRE(include.tokens.size() == 1);
+            CHECK(include.tokens[0].getRepresentation(sourceObject) == "5");
+            CHECK(include.tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         }
         SECTION("Empty")
         {
@@ -169,7 +164,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
             const auto& ret = functionProduces(parseControlLine, "#pragma", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
-            REQUIRE(std::distance(include.begin, include.end) == 0);
+            CHECK(include.tokens.empty());
         }
     }
     SECTION("undef")
@@ -200,29 +195,26 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
     {
         auto ret = functionProduces(parseDefineDirective, "#define ID 5", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        CHECK(!ret.identifierList);
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
-        CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+        CHECK(!ret.argumentList);
+        CHECK(ret.replacement.size() == 1);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         ret = functionProduces(parseDefineDirective, "#define ID", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        CHECK(!ret.identifierList);
+        CHECK(!ret.argumentList);
         functionProduces(parseDefineDirective, "#define 5", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
         functionProduces(parseDefineDirective, "#define", 1, ProducesError(EXPECTED_N.args("identifier")));
         ret = functionProduces(parseDefineDirective, "#define ID (a)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        CHECK(!ret.identifierList);
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 3);
-        auto begin = ret.replacementBegin;
-        CHECK(begin->getRepresentation(sourceObject) == "(");
-        CHECK(begin->getTokenType() == cld::Lexer::TokenType::OpenParentheses);
-        begin++;
-        CHECK(begin->getRepresentation(sourceObject) == "a");
-        CHECK(begin->getTokenType() == cld::Lexer::TokenType::Identifier);
-        begin++;
-        CHECK(begin->getRepresentation(sourceObject) == ")");
-        CHECK(begin->getTokenType() == cld::Lexer::TokenType::CloseParentheses);
+        CHECK(!ret.argumentList);
+        CHECK(ret.replacement.size() == 3);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "(");
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::OpenParentheses);
+        CHECK(ret.replacement[1].getRepresentation(sourceObject) == "a");
+        CHECK(ret.replacement[1].getTokenType() == cld::Lexer::TokenType::Identifier);
+        CHECK(ret.replacement[2].getRepresentation(sourceObject) == ")");
+        CHECK(ret.replacement[2].getTokenType() == cld::Lexer::TokenType::CloseParentheses);
         functionProduces(parseDefineDirective, "#define ID+", 1,
                          ProducesError(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION));
     }
@@ -230,16 +222,16 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
     {
         auto ret = functionProduces(parseDefineDirective, "#define ID()", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        CHECK(ret.identifierList->empty());
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 0);
+        REQUIRE(ret.argumentList);
+        CHECK(ret.argumentList->empty());
+        CHECK(ret.replacement.empty());
         ret = functionProduces(parseDefineDirective, "#define ID() 5", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        CHECK(ret.identifierList->empty());
-        REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
-        CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(ret.argumentList);
+        CHECK(ret.argumentList->empty());
+        REQUIRE(ret.replacement.size() == 1);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(", 1,
                          ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
     }
@@ -247,16 +239,16 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
     {
         auto ret = functionProduces(parseDefineDirective, "#define ID(...)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
-        REQUIRE(ret.identifierList);
-        CHECK(ret.identifierList->empty());
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 0);
+        REQUIRE(ret.argumentList);
+        CHECK(ret.argumentList->size() == 1);
+        CHECK(ret.replacement.empty());
         ret = functionProduces(parseDefineDirective, "#define ID(...) 5", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
-        REQUIRE(ret.identifierList);
-        CHECK(ret.identifierList->empty());
-        REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
-        CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(ret.argumentList);
+        CHECK(ret.argumentList->size() == 1);
+        REQUIRE(ret.replacement.size() == 1);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(...", 1,
                          ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
     }
@@ -264,18 +256,18 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
     {
         auto ret = functionProduces(parseDefineDirective, "#define ID(a)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        REQUIRE(ret.identifierList->size() == 1);
-        REQUIRE(ret.identifierList.value()[0] == "a");
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 0);
+        REQUIRE(ret.argumentList);
+        REQUIRE(ret.argumentList->size() == 1);
+        REQUIRE(ret.argumentList.value()[0].getValue() == "a");
+        CHECK(ret.replacement.empty());
         ret = functionProduces(parseDefineDirective, "#define ID(a) 5", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        REQUIRE(ret.identifierList->size() == 1);
-        CHECK(ret.identifierList.value()[0] == "a");
-        REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
-        CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
+        REQUIRE(ret.argumentList);
+        REQUIRE(ret.argumentList->size() == 1);
+        CHECK(ret.argumentList.value()[0].getValue() == "a");
+        REQUIRE(ret.replacement.size() == 1);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(5", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
         functionProduces(parseDefineDirective, "#define ID(a", 1,
@@ -285,32 +277,32 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
     {
         auto ret = functionProduces(parseDefineDirective, "#define ID(a,b,c)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        REQUIRE(ret.identifierList->size() == 3);
-        CHECK(ret.identifierList.value()[0] == "a");
-        CHECK(ret.identifierList.value()[1] == "b");
-        CHECK(ret.identifierList.value()[2] == "c");
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 0);
+        REQUIRE(ret.argumentList);
+        REQUIRE(ret.argumentList->size() == 3);
+        CHECK(ret.argumentList.value()[0].getValue() == "a");
+        CHECK(ret.argumentList.value()[1].getValue() == "b");
+        CHECK(ret.argumentList.value()[2].getValue() == "c");
+        CHECK(ret.replacement.empty());
         functionProduces(parseDefineDirective, "#define ID(a,)", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "')'")));
         functionProduces(parseDefineDirective, "#define ID(a,", 1, ProducesError(EXPECTED_N.args("identifier")));
         ret = functionProduces(parseDefineDirective, "#define ID(a,5) 5", 1,
                                ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
         CHECK(ret.hasEllipse == false);
-        REQUIRE(ret.identifierList);
-        REQUIRE(ret.identifierList->size() == 1);
-        CHECK(ret.identifierList.value()[0] == "a");
-        REQUIRE(std::distance(ret.replacementBegin, ret.replacementEnd) == 1);
-        CHECK(ret.replacementBegin->getTokenType() == cld::Lexer::TokenType::PPNumber);
-        CHECK(ret.replacementBegin->getRepresentation(sourceObject) == "5");
+        REQUIRE(ret.argumentList);
+        REQUIRE(ret.argumentList->size() == 1);
+        CHECK(ret.argumentList.value()[0].getValue() == "a");
+        REQUIRE(ret.replacement.size() == 1);
+        CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+        CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         ret = functionProduces(parseDefineDirective, "#define ID(a,b,c,...)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
-        REQUIRE(ret.identifierList);
-        REQUIRE(ret.identifierList->size() == 3);
-        CHECK(ret.identifierList.value()[0] == "a");
-        CHECK(ret.identifierList.value()[1] == "b");
-        CHECK(ret.identifierList.value()[2] == "c");
-        CHECK(std::distance(ret.replacementBegin, ret.replacementEnd) == 0);
+        REQUIRE(ret.argumentList);
+        REQUIRE(ret.argumentList->size() == 4);
+        CHECK(ret.argumentList.value()[0].getValue() == "a");
+        CHECK(ret.argumentList.value()[1].getValue() == "b");
+        CHECK(ret.argumentList.value()[2].getValue() == "c");
+        CHECK(ret.replacement.empty());
         functionProduces(parseDefineDirective, "#define ID(a,b,a)", 1,
                          ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N.args("'a'"))
                              && ProducesNote(PREVIOUSLY_DECLARED_HERE));
@@ -324,8 +316,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n5\n#endif", ProducesNothing());
         auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNothing());
         CHECK(ret.optionalGroup);
-        REQUIRE(std::holds_alternative<std::vector<cld::Lexer::PPToken>>(ret.ifs));
-        const auto& tokens = std::get<std::vector<cld::Lexer::PPToken>>(ret.ifs);
+        REQUIRE(std::holds_alternative<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs));
+        const auto& tokens = std::get<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs);
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "0");

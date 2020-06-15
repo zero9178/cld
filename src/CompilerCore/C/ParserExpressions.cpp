@@ -3,7 +3,6 @@
 #include <llvm/Support/ConvertUTF.h>
 
 #include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Util.hpp>
 
 #include <algorithm>
 
@@ -14,7 +13,7 @@ using namespace cld::Syntax;
 cld::Syntax::Expression cld::Parser::parseExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                      Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     std::vector<AssignmentExpression> expressions;
     auto assignment = parseAssignmentExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
@@ -42,7 +41,7 @@ cld::Syntax::Expression cld::Parser::parseExpression(Lexer::CTokenIterator& begi
 std::optional<cld::Syntax::AssignmentExpression>
     cld::Parser::parseAssignmentExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     auto result = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
 
     std::vector<std::pair<AssignmentExpression::AssignOperator, ConditionalExpression>> list;
@@ -101,7 +100,7 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                                   cld::Parser::Context& context)
 {
     StateVariant state;
-    auto start = begin;
+    const auto* start = begin;
     auto firstSet = [endState, &state]() -> cld::Parser::Context::TokenBitSet {
         cld::Parser::Context::TokenBitSet result;
         switch (endState)
@@ -465,13 +464,13 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
 cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer::CTokenIterator& begin,
                                                                            Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     auto logicalOrExpression = cld::get<LogicalOrExpression>(
         parseBinaryOperators(EndState::LogicalOr, begin, end,
                              context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::QuestionMark))));
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
     {
-        auto questionMarkpos = begin;
+        const auto* questionMarkpos = begin;
         begin++;
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
@@ -552,7 +551,7 @@ std::optional<cld::Syntax::Term> cld::Parser::parseTerm(Lexer::CTokenIterator& b
 std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     auto specifierQualifiers =
         parseSpecifierQualifierList(begin, end, context.withRecoveryTokens(firstAbstractDeclaratorSet));
     if (specifierQualifiers.empty())
@@ -606,7 +605,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
         if (begin->getTokenType() == cld::Lexer::TokenType::OpenParentheses)
         {
             context.parenthesesEntered(begin);
-            auto openPpos = begin;
+            const auto* openPpos = begin;
             begin++;
             std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
             bool first = true;
@@ -655,7 +654,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
         else if (begin->getTokenType() == cld::Lexer::TokenType::OpenSquareBracket)
         {
             context.squareBracketEntered(begin);
-            auto openPpos = begin;
+            const auto* openPpos = begin;
             begin++;
             auto expression = parseExpression(begin, end,
                                               context.withRecoveryTokens(cld::Parser::Context::fromTokenTypes(
@@ -727,7 +726,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
 std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexer::CTokenIterator& begin,
                                                                             Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParentheses || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
@@ -807,14 +806,14 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
 std::optional<cld::Syntax::UnaryExpression>
     cld::Parser::parseUnaryExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    auto start = begin;
+    const auto* start = begin;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::SizeofKeyword)
     {
         begin++;
         if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses
             && (begin + 1 == end || firstIsInTypeName(*(begin + 1), context)))
         {
-            auto openPpos = begin;
+            const auto* openPpos = begin;
             begin++;
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
@@ -916,7 +915,7 @@ std::optional<cld::Syntax::PostFixExpression>
 {
     std::unique_ptr<PostFixExpression> current;
 
-    auto start = begin;
+    const auto* start = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParentheses || begin + 1 == end
         || !firstIsInTypeName(*(begin + 1), context))
     {
@@ -1068,7 +1067,7 @@ std::optional<cld::Syntax::PostFixExpression>
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {
             context.parenthesesEntered(begin);
-            auto openPpos = begin++;
+            const auto* openPpos = begin++;
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(

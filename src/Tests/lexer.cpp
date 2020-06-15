@@ -71,18 +71,18 @@ namespace
 }
 } // namespace
 
-SCENARIO("Lexing Identifiers", "[lexer]")
+TEST_CASE("Lexing Identifiers", "[lexer]")
 {
-    GIVEN("Initial characters")
+    SECTION("Initial characters")
     {
         std::vector<const char*> allowedCharacters = {
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",   "s",
             "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",   "L",
             "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "_", "ª", "µ", "·",   "º",
             "À", "Ö", "ʰ", "Ά", "Є", "Ա", "ՙ", "ա", "ְ",  "ء", "ې", "ँ",  "ঁ",  "ৰ", "ਂ",  "ଁ",  "ஂ",  "ªµ·º"};
-        for (auto c : allowedCharacters)
+        for (const auto* c : allowedCharacters)
         {
-            THEN(c)
+            DYNAMIC_SECTION(c)
             {
                 auto result = lexes(c);
                 REQUIRE_FALSE(result.data().empty());
@@ -92,7 +92,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
                 CHECK(std::get<std::string>(result.data()[0].getValue()) == c);
             }
         }
-        AND_THEN("an universal character")
+        SECTION("Following universal character")
         {
             auto result = lexes("\\u00B5");
             REQUIRE_FALSE(result.data().empty());
@@ -103,7 +103,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             CHECK(result.data()[0].getRepresentation(result) == "\\u00B5");
         }
     }
-    GIVEN("non initial characters")
+    SECTION("Non initial characters")
     {
         std::vector<const char*> allowedCharacters = {
             "_a", "_b", "_c", "_d", "_e", "_f", "_g", "_h", "_i", "_j", "_k", "_l", "_m", "_n", "_o", "_p", "_q",
@@ -111,9 +111,9 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             "_8", "_9", "_A", "_B", "_C", "_D", "_E", "_F", "_G", "_H", "_I", "_J", "_K", "_L", "_M", "_N", "_O",
             "_P", "_Q", "_R", "_S", "_T", "_U", "_V", "_W", "_X", "_Y", "_Z", "__", "_ª", "_µ", "_·", "_º", "_À",
             "_Ö", "_ʰ", "_Ά", "_Є", "_Ա", "_ՙ", "_ա", "_ְ",  "ء_", "ې_", "_ँ",  "_ঁ",  "_ৰ", "_ਂ",  "_ଁ",  "_ஂ",  "_ªµ·º"};
-        for (auto c : allowedCharacters)
+        for (const auto* c : allowedCharacters)
         {
-            THEN(c)
+            DYNAMIC_SECTION(c)
             {
                 auto result = lexes(c);
                 REQUIRE(result.data().size() == 1);
@@ -123,7 +123,7 @@ SCENARIO("Lexing Identifiers", "[lexer]")
                 CHECK(result.data()[0].getRepresentation(result) == c);
             }
         }
-        AND_THEN("an universal character")
+        SECTION("following universal character")
         {
             auto result = lexes("_\\u00B5");
             REQUIRE(result.data().size() == 1);
@@ -133,42 +133,40 @@ SCENARIO("Lexing Identifiers", "[lexer]")
             CHECK(result.data()[0].getRepresentation(result) == "_\\u00B5");
         }
     }
-    GIVEN("A universal character")
+    SECTION("Universal character")
     {
-        WHEN("incomplete")
+        SECTION("Incomplete")
         {
             LEXER_OUTPUTS_WITH("_\\ute", Catch::Contains(STRAY_N_IN_PROGRAM.args("\\")));
         }
-        WHEN("disallowed")
+        SECTION("Disallowed")
         {
             LEXER_OUTPUTS_WITH("_\\u0099", Catch::Contains(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
                                                "0099", VALUE_MUSTNT_BE_LESS_THAN_A0)));
         }
     }
-    GIVEN("Keywords")
+    SECTION("Keywords")
     {
-        {
-            using namespace cld::Lexer;
-            auto result = lexes(
-                "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool");
-            std::vector correct = {TokenType::AutoKeyword,     TokenType::EnumKeyword,     TokenType::RestrictKeyword,
-                                   TokenType::UnsignedKeyword, TokenType::BreakKeyword,    TokenType::ExternKeyword,
-                                   TokenType::ReturnKeyword,   TokenType::VoidKeyword,     TokenType::CaseKeyword,
-                                   TokenType::FloatKeyword,    TokenType::ShortKeyword,    TokenType::VolatileKeyword,
-                                   TokenType::CharKeyword,     TokenType::ForKeyword,      TokenType::SignedKeyword,
-                                   TokenType::WhileKeyword,    TokenType::ConstKeyword,    TokenType::GotoKeyword,
-                                   TokenType::SizeofKeyword,   TokenType::ContinueKeyword, TokenType::IfKeyword,
-                                   TokenType::StaticKeyword,   TokenType::DefaultKeyword,  TokenType::InlineKeyword,
-                                   TokenType::StructKeyword,   TokenType::DoKeyword,       TokenType::IntKeyword,
-                                   TokenType::SwitchKeyword,   TokenType::DoubleKeyword,   TokenType::LongKeyword,
-                                   TokenType::TypedefKeyword,  TokenType::ElseKeyword,     TokenType::RegisterKeyword,
-                                   TokenType::UnionKeyword,    TokenType::UnderlineBool};
-            std::vector<TokenType> tokens;
-            tokens.reserve(result.data().size());
-            std::transform(result.data().begin(), result.data().end(), std::back_inserter(tokens),
-                           [](const CToken& token) { return token.getTokenType(); });
-            CHECK_THAT(tokens, Catch::Equals(correct));
-        }
+        using namespace cld::Lexer;
+        auto result = lexes(
+            "auto enum restrict unsigned break extern return void case float short volatile char for signed while const goto sizeof continue if static default inline struct do int switch double long typedef else register union _Bool");
+        std::vector correct = {TokenType::AutoKeyword,     TokenType::EnumKeyword,     TokenType::RestrictKeyword,
+                               TokenType::UnsignedKeyword, TokenType::BreakKeyword,    TokenType::ExternKeyword,
+                               TokenType::ReturnKeyword,   TokenType::VoidKeyword,     TokenType::CaseKeyword,
+                               TokenType::FloatKeyword,    TokenType::ShortKeyword,    TokenType::VolatileKeyword,
+                               TokenType::CharKeyword,     TokenType::ForKeyword,      TokenType::SignedKeyword,
+                               TokenType::WhileKeyword,    TokenType::ConstKeyword,    TokenType::GotoKeyword,
+                               TokenType::SizeofKeyword,   TokenType::ContinueKeyword, TokenType::IfKeyword,
+                               TokenType::StaticKeyword,   TokenType::DefaultKeyword,  TokenType::InlineKeyword,
+                               TokenType::StructKeyword,   TokenType::DoKeyword,       TokenType::IntKeyword,
+                               TokenType::SwitchKeyword,   TokenType::DoubleKeyword,   TokenType::LongKeyword,
+                               TokenType::TypedefKeyword,  TokenType::ElseKeyword,     TokenType::RegisterKeyword,
+                               TokenType::UnionKeyword,    TokenType::UnderlineBool};
+        std::vector<TokenType> tokens;
+        tokens.reserve(result.data().size());
+        std::transform(result.data().begin(), result.data().end(), std::back_inserter(tokens),
+                       [](const CToken& token) { return token.getTokenType(); });
+        CHECK_THAT(tokens, Catch::Equals(correct));
     }
 }
 

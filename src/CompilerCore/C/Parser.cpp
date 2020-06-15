@@ -3,13 +3,12 @@
 #include <algorithm>
 
 #include "ParserUtil.hpp"
-#include "SourceObject.hpp"
 
 std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const CSourceObject& sourceObject,
                                                                      llvm::raw_ostream* reporter)
 {
     Context context(sourceObject, reporter);
-    auto begin = sourceObject.data().data();
+    const auto* begin = sourceObject.data().data();
     return {parseTranslationUnit(begin, sourceObject.data().data() + sourceObject.data().size(), context),
             context.getCurrentErrorCount() == 0};
 }

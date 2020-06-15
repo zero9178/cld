@@ -58,7 +58,7 @@ std::string messagePrints(cld::Message::Severity severity, Args&&... args)
 
 } // namespace
 
-TEST_CASE("Simple printing", "[MSG]")
+TEST_CASE("Message Simple printing", "[MSG]")
 {
     auto begin = lexes("A series of\n identifiers");
     SECTION("Severities")
@@ -135,7 +135,7 @@ TEST_CASE("Simple printing", "[MSG]")
 
 using Modifiers = std::vector<cld::Modifier>;
 
-TEST_CASE("Underline", "[MSG]")
+TEST_CASE("Message Underline", "[MSG]")
 {
     SECTION("Underline word for word")
     {
@@ -229,7 +229,7 @@ TEST_CASE("Underline", "[MSG]")
     }
 }
 
-TEST_CASE("PointAt", "[MSG]")
+TEST_CASE("Message PointAt", "[MSG]")
 {
     SECTION("Underline word for word")
     {
@@ -341,7 +341,7 @@ TEST_CASE("PointAt", "[MSG]")
     }
 }
 
-TEST_CASE("Insert", "[MSG]")
+TEST_CASE("Message Insert", "[MSG]")
 {
     SECTION("Simple non text insertion")
     {
@@ -492,7 +492,7 @@ TEST_CASE("Insert", "[MSG]")
     }
 }
 
-TEST_CASE("Annotate", "[MSG]")
+TEST_CASE("Message Annotate", "[MSG]")
 {
     SECTION("Simple annotate")
     {

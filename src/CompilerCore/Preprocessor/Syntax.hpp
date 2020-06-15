@@ -27,7 +27,7 @@ struct IfGroup final
     {
         std::string_view identifier;
     };
-    using variant = std::variant<IfnDefTag, IfDefTag, std::vector<Lexer::PPToken>>;
+    using variant = std::variant<IfnDefTag, IfDefTag, llvm::ArrayRef<Lexer::PPToken>>;
     variant ifs;
     std::unique_ptr<Group> optionalGroup;
 };
@@ -37,7 +37,7 @@ struct IfGroup final
  */
 struct ElIfGroup final
 {
-    std::vector<Lexer::PPToken> constantExpression;
+    llvm::ArrayRef<Lexer::PPToken> constantExpression;
     std::unique_ptr<Group> optionalGroup;
 };
 
@@ -78,12 +78,11 @@ struct DefineDirective final
 {
     Lexer::PPTokenIterator identifierPos;
     /**
-     * Its an optional to differentiate between an empty identifier list and no identifier list
+     * Its an optional to differentiate between an empty argument list and no argument list
      */
-    std::optional<std::vector<std::string_view>> identifierList;
+    std::optional<std::vector<Lexer::PPToken>> argumentList;
     bool hasEllipse;
-    Lexer::PPTokenIterator replacementBegin;
-    Lexer::PPTokenIterator replacementEnd;
+    llvm::ArrayRef<Lexer::PPToken> replacement;
 };
 
 /**
@@ -99,26 +98,22 @@ struct ControlLine final
 {
     struct IncludeTag final
     {
-        Lexer::PPTokenIterator begin;
-        Lexer::PPTokenIterator end;
+        llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 
     struct LineTag final
     {
-        Lexer::PPTokenIterator begin;
-        Lexer::PPTokenIterator end;
+        llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 
     struct ErrorTag final
     {
-        Lexer::PPTokenIterator begin;
-        Lexer::PPTokenIterator end;
+        llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 
     struct PragmaTag final
     {
-        Lexer::PPTokenIterator begin;
-        Lexer::PPTokenIterator end;
+        llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 
     std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, Lexer::PPTokenIterator, DefineDirective> variant;
@@ -138,8 +133,7 @@ struct NonDirective final
  */
 struct TextBlock final
 {
-    std::vector<Lexer::PPToken> tokens;
-    std::vector<std::uint64_t> ends;
+    llvm::ArrayRef<Lexer::PPToken> tokens;
 };
 
 /**

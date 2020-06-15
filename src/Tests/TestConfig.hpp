@@ -134,7 +134,7 @@ struct ProducesLines : Catch::MatcherBase<std::string_view>
     {
         std::size_t i = 0;
         std::size_t result = 0;
-        while (true)
+        while (i < m_linesTrimmed.size())
         {
             auto newline = source.find('\n', result);
             if (newline == std::string_view::npos)
@@ -148,6 +148,8 @@ struct ProducesLines : Catch::MatcherBase<std::string_view>
             result = newline + 1;
             i++;
         }
+        auto leftOver = source.substr(result);
+        return std::all_of(leftOver.begin(), leftOver.end(), [](unsigned char c) { return std::isspace(c & 0x7F); });
     }
 
 private:

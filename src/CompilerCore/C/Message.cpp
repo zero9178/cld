@@ -151,8 +151,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 CLD_ASSERT(!underline.maybeEnd() || underline.begin() < *underline.maybeEnd());
                 auto begin = underline.begin()->getOffset();
                 CLD_ASSERT(begin >= startOffset);
-                auto inclusiveEndIter =
-                    sourceObject.dec(underline.maybeEnd().value_or(sourceObject.inc(underline.begin())));
+                auto inclusiveEndIter = underline.maybeEnd().value_or(underline.begin() + 1) - 1;
                 auto end = inclusiveEndIter->getOffset() + inclusiveEndIter->getLength();
                 CLD_ASSERT(end < endOffset);
                 begin += mapping[begin - startOffset];
@@ -160,8 +159,8 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 underlines.push_back({begin, end, underline.getCharacter()});
             },
             [&](const PointAt& pointAt) {
-                auto endIter = pointAt.maybeEnd().value_or(sourceObject.inc(pointAt.begin()));
-                for (auto iter = pointAt.begin(); iter != endIter; iter = sourceObject.inc(iter))
+                auto endIter = pointAt.maybeEnd().value_or(pointAt.begin() + 1);
+                for (auto iter = pointAt.begin(); iter != endIter; iter++)
                 {
                     CLD_ASSERT(pointAt.begin() < endIter);
                     auto begin = iter->getOffset();
@@ -174,11 +173,11 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 }
             },
             [&](const Annotate& annotate) {
-                auto endIter = annotate.maybeEnd().value_or(sourceObject.inc(annotate.begin()));
+                auto endIter = annotate.maybeEnd().value_or(annotate.begin() + 1);
                 CLD_ASSERT(annotate.begin() != endIter);
                 auto begin = annotate.begin()->getOffset();
                 CLD_ASSERT(begin >= startOffset);
-                auto end = sourceObject.dec(endIter)->getOffset() + sourceObject.dec(endIter)->getLength();
+                auto end = (endIter - 1)->getOffset() + (endIter - 1)->getLength();
                 CLD_ASSERT(end < endOffset);
                 auto pos = begin + (end - begin) / 2;
                 begin += mapping[begin - startOffset];
@@ -202,7 +201,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
         std::uint64_t end;
     };
     llvm::SmallVector<HighlightData, 8> highlighting(underlines.size() + pointAts.size());
-    auto next =
+    auto* next =
         std::transform(underlines.begin(), underlines.end(), highlighting.begin(), [](const UnderlineData& underline) {
             return HighlightData{underline.begin, underline.end};
         });
@@ -224,7 +223,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
     std::sort(highlighting.begin(), highlighting.end(),
               [](const HighlightData& lhs, const HighlightData& rhs) { return lhs.begin < rhs.begin; });
 
-    for (auto iter = highlighting.begin(); iter != highlighting.end() && iter + 1 != highlighting.end();)
+    for (auto* iter = highlighting.begin(); iter != highlighting.end() && iter + 1 != highlighting.end();)
     {
         if (iter->end <= (iter + 1)->begin)
         {
