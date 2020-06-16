@@ -790,6 +790,7 @@ class Context
     std::vector<std::uint64_t> m_lineStarts;
     IntervalMap m_characterToSourceSpace;
     bool m_errorsOccured = false;
+    std::optional<std::uint64_t> m_lastBlockCommentEndPos;
 
     std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
     {
@@ -909,13 +910,41 @@ public:
 
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, std::string_view value = {})
     {
+        bool leadingWhitespace = m_lastBlockCommentEndPos == start;
+        if (!leadingWhitespace)
+        {
+            std::int64_t i = start - 1;
+            // Find the first byte of a UTF-8 Sequence
+            // If the UTF8 character is a single byte the one byte will be less than 0b1000 0000
+            // If the UTF8 character is more than a single byte all bytes that aren't the first are less than 0b1100
+            // 0000
+            for (; i >= 0 && (static_cast<std::uint8_t>(m_characterSpace[i]) < 0b1100'0000)
+                   && (static_cast<std::uint8_t>(m_characterSpace[i]) >= 0b1000'0000);
+                 i--)
+                ;
+            if (i >= 0)
+            {
+                std::uint32_t codePoint;
+                auto* sourceStart = m_characterSpace.data() + i;
+                auto result =
+                    llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+                                              reinterpret_cast<const llvm::UTF8*>(m_characterSpace.data() + start),
+                                              &codePoint, llvm::strictConversion);
+                if (result == llvm::conversionOK)
+                {
+                    leadingWhitespace = cld::isWhitespace(codePoint);
+                }
+            }
+        }
         auto sourceStart = map(m_characterToSourceSpace, start).first;
         auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
         if (tokenType != TokenType::PPNumber && tokenType != TokenType::StringLiteral
             && tokenType != TokenType::Literal)
         {
-            m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, end - start, start, FileID(0),
-                                  MacroID(0), value);
+            m_result
+                .emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, FileID(0),
+                              MacroID(0), value)
+                .setLeadingWhitespace(leadingWhitespace);
         }
         else
         {
@@ -928,9 +957,11 @@ public:
             }
             auto endInterval = std::find_if(result, m_characterToSourceSpace.end(),
                                             [end](auto&& value) { return std::get<0>(value) > end; });
-            m_result.emplace_back(
-                tokenType, sourceStart, sourceEnd - sourceStart, end - start, start, FileID(0), MacroID(0), value,
-                std::vector(result, endInterval != m_characterToSourceSpace.end() ? endInterval + 1 : endInterval));
+            m_result
+                .emplace_back(
+                    tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, FileID(0), MacroID(0), value,
+                    std::vector(result, endInterval != m_characterToSourceSpace.end() ? endInterval + 1 : endInterval))
+                .setLeadingWhitespace(leadingWhitespace);
         }
     }
 
@@ -957,6 +988,11 @@ public:
     bool isErrorsOccured() const
     {
         return m_errorsOccured;
+    }
+
+    void setLastBlockCommentEndPos(std::uint64_t lastBlockCommentEndPos)
+    {
+        m_lastBlockCommentEndPos = lastBlockCommentEndPos;
     }
 };
 
@@ -1200,6 +1236,9 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     context.push(context.getOffset() - getNumUTF8ForUTF32(c), context.getOffset(),
                                  TokenType::Miscellaneous);
                 }
+            }
+            else
+            {
             }
             return *this;
         }
@@ -1618,10 +1657,11 @@ std::pair<StateMachine, bool> LineComment::advance(char c, Context&) noexcept
     return {std::move(*this), true};
 }
 
-StateMachine BlockComment::advance(char c, Context&) noexcept
+StateMachine BlockComment::advance(char c, Context& context) noexcept
 {
     if (lastChar && *lastChar == '*' && c == '/')
     {
+        context.setLastBlockCommentEndPos(context.getOffset());
         return Start{};
     }
     lastChar = c;

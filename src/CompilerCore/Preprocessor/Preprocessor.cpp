@@ -487,7 +487,18 @@ class Preprocessor final : private cld::SourceInterface
 
     std::string escapeString(std::string_view input)
     {
-        // TODO:
+        std::string result;
+        result.reserve(input.size());
+        for (auto& iter : input)
+        {
+            switch (iter)
+            {
+                case '"': result += "\\\"";
+                case '\\': result += "\\\\";
+                case '?': result += "\\?";
+                default: result += iter;
+            }
+        }
         return {input.begin(), input.end()};
     }
 

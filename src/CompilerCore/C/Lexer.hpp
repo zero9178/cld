@@ -156,19 +156,15 @@ class TokenBase
 {
 protected:
     TokenType m_tokenType; ///< Type of the token
-    std::uint64_t m_length;
-    std::uint64_t m_offset; /**< Offset of the token. That is bytes offset to the first character of the
-                                         substitution. ID of 0 means the the token originated from the Lexer*/
-    MacroID m_macroId;      /**< MacroID. All tokens with the same ID have been inserted by the same macro
-                                 token from the beginning of the file of the very original source code passed
-                                 from the user. This value is not unique as after preprocessing all inserted
-                                 tokens have the offset of the original position in the replacement list*/
+    MacroID m_macroId;     ///< MacroID. All tokens with the same ID have been inserted by the same macro
     FileID m_fileID;
+    std::uint64_t m_offset; ///< Offset of the token. That is bytes offset to the first character of the
+    std::uint64_t m_length;
 
     TokenBase() = default;
 
-    TokenBase(TokenType tokenType, std::uint64_t length, std::uint64_t offset, FileID fileID, MacroID macroID)
-        : m_tokenType(tokenType), m_length(length), m_offset(offset), m_macroId(macroID), m_fileID(fileID)
+    TokenBase(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileID, MacroID macroID)
+        : m_tokenType(tokenType), m_macroId(macroID), m_fileID(fileID), m_offset(offset), m_length(length)
     {
     }
 
@@ -230,11 +226,13 @@ class PPToken final : public TokenBase
     std::uint64_t m_charSpaceOffset;
     std::uint64_t m_charSpaceLength; /**< Length of the token after trigraphs and Backslash Newline pairs in it's
                                       representation have been removed*/
+    bool m_leadingWhitespace = false;
+
 public:
-    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceLength,
-            std::uint64_t charSpaceOffset, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {},
+    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
+            std::uint64_t charSpaceLength, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {},
             IntervalMap intervalMap = {})
-        : TokenBase(tokenType, length, offset, fileID, macroID),
+        : TokenBase(tokenType, offset, length, fileID, macroID),
           m_value(value.begin(), value.end()),
           m_intervalMap(std::move(intervalMap)),
           m_charSpaceOffset(charSpaceOffset),
@@ -260,6 +258,16 @@ public:
     [[nodiscard]] const IntervalMap& getIntervalMap() const
     {
         return m_intervalMap;
+    }
+
+    [[nodiscard]] bool hasLeadingWhitespace() const noexcept
+    {
+        return m_leadingWhitespace;
+    }
+
+    void setLeadingWhitespace(bool leadingWhitespace) noexcept
+    {
+        m_leadingWhitespace = leadingWhitespace;
     }
 };
 
@@ -320,7 +328,7 @@ public:
 
     CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileId, MacroID macroId,
            variant value = std::monostate{}, Type type = Type::None)
-        : TokenBase(tokenType, length, offset, fileId, macroId), m_value(std::move(value)), m_type(type)
+        : TokenBase(tokenType, offset, length, fileId, macroId), m_value(std::move(value)), m_type(type)
     {
     }
 

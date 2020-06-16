@@ -35,7 +35,6 @@ struct Substitution
     Identifier macroIdentifier;
     Identifier replacedIdentifier;
     bool empty;
-    bool isArgumentInsertion = false;
 };
 } // namespace Source
 

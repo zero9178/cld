@@ -1456,6 +1456,61 @@ TEST_CASE("Lexing Comments", "[lexer]")
     }
 }
 
+TEST_CASE("Lexing Leading whitespace", "[lexer]")
+{
+    SECTION("Simple")
+    {
+        auto result = pplexes("5 5,5");
+        REQUIRE(result.data().size() >= 4);
+        CHECK_FALSE(result.data()[0].hasLeadingWhitespace());
+        CHECK(result.data()[1].hasLeadingWhitespace());
+        CHECK_FALSE(result.data()[2].hasLeadingWhitespace());
+        CHECK_FALSE(result.data()[3].hasLeadingWhitespace());
+    }
+    SECTION("Unicode")
+    {
+        auto result = pplexes("\xE3\x80\x80"
+                              "5"
+                              "\xC2\xA0"
+                              "5");
+        REQUIRE(result.data().size() >= 2);
+        CHECK(result.data()[0].hasLeadingWhitespace());
+        CHECK(result.data()[1].hasLeadingWhitespace());
+    }
+    SECTION("Comments")
+    {
+        SECTION("Line")
+        {
+            auto result = pplexes("5//wdadw\n5");
+            REQUIRE(result.data().size() >= 3);
+            CHECK_FALSE(result.data()[0].hasLeadingWhitespace());
+            CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
+            CHECK(result.data()[2].hasLeadingWhitespace());
+        }
+        SECTION("Block")
+        {
+            auto result = pplexes("5/*wdawd*/5");
+            REQUIRE(result.data().size() >= 2);
+            CHECK_FALSE(result.data()[0].hasLeadingWhitespace());
+            CHECK(result.data()[1].hasLeadingWhitespace());
+            result = pplexes("/*wdawd*/..");
+            REQUIRE(result.data().size() >= 2);
+            CHECK(result.data()[0].hasLeadingWhitespace());
+            CHECK_FALSE(result.data()[1].hasLeadingWhitespace());
+            result = pplexes("/*wdawd*/...");
+            REQUIRE(result.data().size() >= 1);
+            CHECK(result.data()[0].hasLeadingWhitespace());
+            result = pplexes("/*wdawd*/#.");
+            REQUIRE(result.data().size() >= 2);
+            CHECK(result.data()[0].hasLeadingWhitespace());
+            CHECK_FALSE(result.data()[1].hasLeadingWhitespace());
+            result = pplexes("/*wdawd*/#:");
+            REQUIRE(result.data().size() >= 1);
+            CHECK(result.data()[0].hasLeadingWhitespace());
+        }
+    }
+}
+
 TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
 {
     SECTION("Simple")
