@@ -152,14 +152,8 @@ class Preprocessor final : private cld::SourceInterface
             }
             if (iter == replacementList.end() || argumentsInReplacement.count(&*iter) == 0)
             {
-                if (stringify)
-                {
-                    // TODO: Error
-                }
-                else
-                {
-                    iter++;
-                }
+                CLD_ASSERT(!stringify);
+                iter++;
                 continue;
             }
             result.insert(result.end(), std::move_iterator(start), std::move_iterator(iter - (stringify ? 1 : 0)));
@@ -253,6 +247,132 @@ class Preprocessor final : private cld::SourceInterface
         }
         result.insert(result.end(), std::move_iterator(start), std::move_iterator(replacementList.end()));
         return result;
+    }
+
+    template <class F>
+    static TokenSet filterTokens(llvm::ArrayRef<cld::Lexer::PPToken> tokens, cld::Lexer::TokenType type, F&& hasValueFn)
+    {
+        TokenSet result;
+        for (auto& token : tokens)
+        {
+            if (token.getTokenType() != type)
+            {
+                continue;
+            }
+            if (hasValueFn(token.getValue()))
+            {
+                result.insert(&token);
+            }
+        }
+        return result;
+    }
+
+    std::optional<std::vector<llvm::ArrayRef<cld::Lexer::PPToken>>>
+        gatherArguments(const cld::Lexer::PPToken*& begin, const cld::Lexer::PPToken* end,
+                        const cld::Lexer::PPToken* namePos, const Macro& macro, std::uint64_t& line)
+    {
+        std::vector<llvm::ArrayRef<cld::Lexer::PPToken>> arguments;
+        const auto identifierCount = macro.argumentList->size() - (macro.hasEllipse ? 1 : 0);
+        auto* first = begin;
+        const cld::Lexer::PPToken* varargStart = begin;
+        while (true)
+        {
+            auto count = 0;
+            auto* closeParentheseOrComma =
+                std::find_if(first, end, [&count, &line](const cld::Lexer::PPToken& token) mutable -> bool {
+                    if (token.getTokenType() == cld::Lexer::TokenType::Newline)
+                    {
+                        line++;
+                        return false;
+                    }
+                    if (token.getTokenType() == cld::Lexer::TokenType::CloseParentheses)
+                    {
+                        if (count == 0)
+                        {
+                            return true;
+                        }
+                        count--;
+                    }
+                    else if (token.getTokenType() == cld::Lexer::TokenType::OpenParentheses)
+                    {
+                        count++;
+                    }
+                    else if (token.getTokenType() == cld::Lexer::TokenType::Comma && count == 0)
+                    {
+                        return true;
+                    }
+                    return false;
+                });
+            if (closeParentheseOrComma == end)
+            {
+                log({cld::Message::error(cld::Errors::Parser::EXPECTED_N.args(cld::to_string(count + 1) + " ')'"),
+                                         cld::Message::after, closeParentheseOrComma - 1,
+                                         {cld::InsertAfter(closeParentheseOrComma - 1, ")")}),
+                     cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), namePos + 1,
+                                        {cld::PointAt(namePos + 1)})});
+                return {};
+            }
+            if (!macro.hasEllipse || arguments.size() != identifierCount)
+            {
+                if (identifierCount != 0
+                    || closeParentheseOrComma->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
+                {
+                    arguments.emplace_back(first, closeParentheseOrComma);
+                }
+                if (macro.hasEllipse && arguments.size() == identifierCount)
+                {
+                    if (closeParentheseOrComma->getTokenType() == cld::Lexer::TokenType::CloseParentheses)
+                    {
+                        varargStart = closeParentheseOrComma;
+                    }
+                    else
+                    {
+                        varargStart = closeParentheseOrComma + 1;
+                    }
+                }
+            }
+            if (closeParentheseOrComma->getTokenType() == cld::Lexer::TokenType::CloseParentheses)
+            {
+                begin = closeParentheseOrComma;
+                break;
+            }
+            first = closeParentheseOrComma + 1;
+        }
+
+        if (arguments.size() < identifierCount)
+        {
+            auto& format = macro.hasEllipse ?
+                               cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N :
+                               cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N;
+            log({cld::Message::error(
+                     format.args('"' + cld::to_string(namePos->getValue()) + '"', identifierCount, arguments.size()),
+                     namePos, begin + 1, {cld::Underline(namePos)}),
+                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, macro.identifierPos,
+                                    {cld::Underline(macro.identifierPos)})});
+            return {};
+        }
+        else if (arguments.size() > identifierCount && !macro.hasEllipse)
+        {
+            auto firstRedundant = arguments.begin() + identifierCount;
+            std::vector<cld::Modifier> modifiers = {cld::Underline(namePos)};
+            modifiers.reserve(1 + firstRedundant->size());
+            std::transform(
+                firstRedundant, arguments.end(), std::back_inserter(modifiers),
+                [](llvm::ArrayRef<cld::Lexer::PPToken> ref) { return cld::PointAt(ref.begin(), ref.end()); });
+            log({cld::Message::error(
+                     cld::Errors::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
+                         '"' + cld::to_string(namePos->getValue()) + '"', identifierCount, arguments.size()),
+                     namePos, begin + 1, std::move(modifiers)),
+                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, macro.identifierPos,
+                                    {cld::Underline(macro.identifierPos)})});
+            return {};
+        }
+
+        if (macro.hasEllipse)
+        {
+            arguments.emplace_back(varargStart, begin);
+        }
+        return arguments;
     }
 
     void macroSubstitute(std::vector<cld::Lexer::PPToken>&& tokens,
@@ -382,109 +502,13 @@ class Preprocessor final : private cld::SourceInterface
                                     return true;
                                 })
                    + 1;
-            std::vector<llvm::ArrayRef<cld::Lexer::PPToken>> arguments;
-            const auto identifierCount = result->second.argumentList->size() - (result->second.hasEllipse ? 1 : 0);
-            auto* first = iter;
-            const cld::Lexer::PPToken* varargStart = iter;
-            while (true)
+            auto arguments = gatherArguments(const_cast<const cld::Lexer::PPToken*&>(iter),
+                                             tokens.data() + tokens.size(), namePos, result->second, line);
+            if (!arguments)
             {
-                auto count = 0;
-                auto* closeParentheseOrComma =
-                    std::find_if(first, tokens.data() + tokens.size(),
-                                 [&count, &line](const cld::Lexer::PPToken& token) mutable -> bool {
-                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)
-                                     {
-                                         line++;
-                                         return false;
-                                     }
-                                     if (token.getTokenType() == cld::Lexer::TokenType::CloseParentheses)
-                                     {
-                                         if (count == 0)
-                                         {
-                                             return true;
-                                         }
-                                         count--;
-                                     }
-                                     else if (token.getTokenType() == cld::Lexer::TokenType::OpenParentheses)
-                                     {
-                                         count++;
-                                     }
-                                     else if (token.getTokenType() == cld::Lexer::TokenType::Comma && count == 0)
-                                     {
-                                         return true;
-                                     }
-                                     return false;
-                                 });
-                if (closeParentheseOrComma == tokens.data() + tokens.size())
-                {
-                    log({cld::Message::error(cld::Errors::Parser::EXPECTED_N.args(cld::to_string(count + 1) + " ')'"),
-                                             cld::Message::after, closeParentheseOrComma - 1,
-                                             {cld::InsertAfter(closeParentheseOrComma - 1, ")")}),
-                         cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), namePos + 1,
-                                            {cld::PointAt(namePos + 1)})});
-                    return;
-                }
-                if (!result->second.hasEllipse || arguments.size() != identifierCount)
-                {
-                    if (identifierCount != 0
-                        || closeParentheseOrComma->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
-                    {
-                        arguments.emplace_back(first, closeParentheseOrComma);
-                    }
-                    if (result->second.hasEllipse && arguments.size() == identifierCount)
-                    {
-                        if (closeParentheseOrComma->getTokenType() == cld::Lexer::TokenType::CloseParentheses)
-                        {
-                            varargStart = closeParentheseOrComma;
-                        }
-                        else
-                        {
-                            varargStart = closeParentheseOrComma + 1;
-                        }
-                    }
-                }
-                if (closeParentheseOrComma->getTokenType() == cld::Lexer::TokenType::CloseParentheses)
-                {
-                    iter = closeParentheseOrComma;
-                    break;
-                }
-                first = closeParentheseOrComma + 1;
-            }
-
-            if (arguments.size() < identifierCount)
-            {
-                auto& format = result->second.hasEllipse ?
-                                   cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N :
-                                   cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N;
-                log({cld::Message::error(
-                         format.args('"' + cld::to_string(name) + '"', identifierCount, arguments.size()), namePos,
-                         iter + 1, {cld::Underline(namePos)}),
-                     cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
-                                        {cld::Underline(result->second.identifierPos)})});
-                break;
-            }
-            else if (arguments.size() > identifierCount && !result->second.hasEllipse)
-            {
-                auto firstRedundant = arguments.begin() + identifierCount;
-                std::vector<cld::Modifier> modifiers = {cld::Underline(namePos)};
-                modifiers.reserve(1 + firstRedundant->size());
-                std::transform(
-                    firstRedundant, arguments.end(), std::back_inserter(modifiers),
-                    [](llvm::ArrayRef<cld::Lexer::PPToken> ref) { return cld::PointAt(ref.begin(), ref.end()); });
-                log({cld::Message::error(cld::Errors::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
-                                             '"' + cld::to_string(name) + '"', identifierCount, arguments.size()),
-                                         namePos, iter + 1, std::move(modifiers)),
-                     cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
-                                        {cld::Underline(result->second.identifierPos)})});
                 break;
             }
 
-            if (result->second.hasEllipse)
-            {
-                arguments.emplace_back(varargStart, iter);
-            }
-
-            std::vector<cld::Lexer::PPToken> ppToken = result->second.replacement;
             std::unordered_map<std::string_view, std::uint64_t> nameToIndex;
             for (auto identifier = result->second.argumentList->begin();
                  identifier != result->second.argumentList->end(); identifier++)
@@ -493,36 +517,23 @@ class Preprocessor final : private cld::SourceInterface
             }
             if (result->second.hasEllipse)
             {
-                nameToIndex.emplace("__VA_ARGS__", arguments.size() - 1);
+                nameToIndex.emplace("__VA_ARGS__", arguments->size() - 1);
             }
-            TokenSet argumentsInReplacement;
-            for (auto& token : result->second.replacement)
-            {
-                if (token.getTokenType() != cld::Lexer::TokenType::Identifier)
-                {
-                    continue;
-                }
-                if (std::find_if(
-                        result->second.argumentList->begin(), result->second.argumentList->end(),
-                        [&token](const cld::Lexer::PPToken& value) { return value.getValue() == token.getValue(); })
-                    != result->second.argumentList->end())
-                {
-                    argumentsInReplacement.insert(&token);
-                }
-                else if (result->second.hasEllipse && token.getValue() == "__VA_ARGS__")
-                {
-                    argumentsInReplacement.insert(&token);
-                }
-            }
+
+            TokenSet argumentsInReplacement =
+                filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
+                             [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
             m_substitutions.push_back(
                 {{result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
                   result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
                  {namePos->getOffset(), iter->getOffset() + iter->getLength() - namePos->getOffset(),
                   namePos->getFileId(), namePos->getMacroId()},
                  false});
+
+            std::vector<cld::Lexer::PPToken> ppToken = result->second.replacement;
             auto index = m_substitutions.size() - 1;
             auto actualReplacement =
-                argumentSubstitution(i, *result->second.argumentList, std::move(ppToken), std::move(arguments),
+                argumentSubstitution(i, *result->second.argumentList, std::move(ppToken), std::move(*arguments),
                                      std::move(argumentsInReplacement), std::move(nameToIndex));
             if (actualReplacement.empty())
             {
@@ -756,27 +767,69 @@ public:
 
     void visit(const cld::PP::DefineDirective& defineDirective)
     {
-        const auto* iter = !defineDirective.hasEllipse ?
-                               std::find_if(defineDirective.replacement.begin(), defineDirective.replacement.end(),
+        bool errors = false;
+        if (!defineDirective.hasEllipse)
+        {
+            const auto* iter = std::find_if(defineDirective.replacement.begin(), defineDirective.replacement.end(),
                                             [](const cld::Lexer::PPToken& token) {
                                                 if (token.getTokenType() != cld::Lexer::TokenType::Identifier)
                                                 {
                                                     return false;
                                                 }
                                                 return token.getValue() == "__VA_ARGS__";
-                                            }) :
-                               defineDirective.replacement.end();
-        if (iter != defineDirective.replacement.end())
+                                            });
+            if (iter != defineDirective.replacement.end())
+            {
+                log({cld::Message::error(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, iter,
+                                         {cld::Underline(iter)})});
+                errors = true;
+            }
+        }
+        if (defineDirective.argumentList)
         {
-            log({cld::Message::error(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, iter,
-                                     {cld::Underline(iter)})});
+            for (const auto* iter = defineDirective.replacement.begin(); iter != defineDirective.replacement.end();
+                 iter++)
+            {
+                if (iter->getTokenType() == cld::Lexer::TokenType::Pound)
+                {
+                    iter++;
+                    if (iter == defineDirective.replacement.end()
+                        || iter->getTokenType() != cld::Lexer::TokenType::Identifier
+                        || std::none_of(
+                            defineDirective.argumentList->begin(), defineDirective.argumentList->end(),
+                            [&iter](const cld::Lexer::PPToken& token) { return token.getValue() == iter->getValue(); }))
+                    {
+                        log({cld::Message::error(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND, iter,
+                                                 {cld::PointAt(iter - 1), cld::Underline(iter)})});
+                        errors = true;
+                    }
+                }
+            }
+        }
+        if (!defineDirective.replacement.empty())
+        {
+            if (defineDirective.replacement.front().getTokenType() == cld::Lexer::TokenType::DoublePound)
+            {
+                log({cld::Message::error(
+                    cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST,
+                    &defineDirective.replacement.front(), {cld::Underline(&defineDirective.replacement.front())})});
+                errors = true;
+            }
+            if (defineDirective.replacement.size() > 1
+                && defineDirective.replacement.back().getTokenType() == cld::Lexer::TokenType::DoublePound)
+            {
+                log({cld::Message::error(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST,
+                                         &defineDirective.replacement.back(),
+                                         {cld::Underline(&defineDirective.replacement.back())})});
+                errors = true;
+            }
         }
         auto name = defineDirective.identifierPos->getValue();
         if (name == "defined")
         {
             log({cld::Message::error(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME,
                                      defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
-            return;
+            errors = true;
         }
         if (!m_visitingScratchPad
             && std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
@@ -785,6 +838,10 @@ public:
             log({cld::Message::error(
                 cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + cld::to_string(name) + '\''),
                 defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
+            errors = true;
+        }
+        if (errors)
+        {
             return;
         }
         auto [result, notADuplicate] =

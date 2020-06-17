@@ -201,7 +201,7 @@ Normal line)");
     }
 }
 
-TEST_CASE("PP Macros", "[PP]")
+TEST_CASE("PP Define", "[PP]")
 {
     SECTION("6.10.3.2 Duplicates")
     {
@@ -270,6 +270,14 @@ TEST_CASE("PP Macros", "[PP]")
         }
     }
     PP_OUTPUTS_WITH("#define defined", ProducesError(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME));
+    PP_OUTPUTS_WITH("#define A(x) # a x", ProducesError(EXPECTED_AN_ARGUMENT_AFTER_POUND));
+    PP_OUTPUTS_WITH("#define A # a x", ProducesNothing());
+    PP_OUTPUTS_WITH("#define A(x) ## x",
+                    ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST));
+    PP_OUTPUTS_WITH("#define A ## x",
+                    ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST));
+    PP_OUTPUTS_WITH("#define A(x) x ##", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
+    PP_OUTPUTS_WITH("#define A x ##", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
 }
 
 namespace

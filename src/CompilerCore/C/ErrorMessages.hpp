@@ -205,19 +205,28 @@ constexpr auto NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N =
 
 constexpr auto TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N =
     Format("Too many arguments for macro {}. Expected {} got {}");
+
+constexpr auto EXPECTED_AN_ARGUMENT_AFTER_POUND =
+    "Expected an argument after '#' in replacement list of function like macro";
+
+constexpr auto OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST =
+    "Operator '##' not allowed at beginning of replacement list";
+
+constexpr auto OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST =
+    "Operator '##' not allowed at end of replacement list";
 } // namespace PP
-} // namespace ErrorMessages
+} // namespace Errors
 
 namespace Warnings
 {
 namespace Semantics
 {
 constexpr auto VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N = Format("Value of {} is too large for integer type {}");
-}
+} // namespace Semantics
 namespace PP
 {
 constexpr auto N_REDEFINED = Format("{} redefined");
-}
+} // namespace PP
 } // namespace Warnings
 
 namespace Notes
