@@ -59,6 +59,8 @@ class Preprocessor final : private cld::SourceInterface
             return;
         }
         m_result.insert(m_result.end(), tokens.begin(), tokens.end());
+        m_result.insert(m_result.end(),
+                        cld::Lexer::PPToken(cld::Lexer::TokenType::Newline, 0, 0, 0, 0, cld::Lexer::FileID(0)));
     }
 
     void log(std::vector<cld::Message> messages)
@@ -160,7 +162,7 @@ class Preprocessor final : private cld::SourceInterface
                 }
                 continue;
             }
-            result.insert(result.end(), std::move_iterator(start), std::move_iterator(iter));
+            result.insert(result.end(), std::move_iterator(start), std::move_iterator(iter - (stringify ? 1 : 0)));
             auto index = nameToIndex.find(iter->getValue());
             CLD_ASSERT(index != nameToIndex.end());
             std::vector<cld::Lexer::PPToken> copy = arguments[index->second];
@@ -173,14 +175,55 @@ class Preprocessor final : private cld::SourceInterface
             auto prevSize = result.size();
             if (!stringify)
             {
-                macroSubstitute(std::move(copy), [&result](auto&& vector) { append(result, std::move(vector)); });
+                macroSubstitute(std::move(copy), [&result, iter](auto&& vector) {
+                    if (!vector.empty())
+                    {
+                        vector[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
+                    }
+                    append(result, std::move(vector));
+                });
             }
             else
             {
-                std::vector<cld::Lexer::PPToken> temp;
-                macroSubstitute(std::move(copy), [&temp](auto&& vector) { append(temp, std::move(vector)); });
-                auto string = cld::PP::reconstruct(temp.data(), temp.data() + temp.size(), *this,
-                                                   cld::PP::ReconstructionMode::Stringification);
+                std::string text = "\"";
+                bool first = true;
+                for (auto& token : copy)
+                {
+                    if (!first && token.hasLeadingWhitespace())
+                    {
+                        text += ' ';
+                    }
+                    first = false;
+                    if (token.getTokenType() == cld::Lexer::TokenType::StringLiteral
+                        || token.getTokenType() == cld::Lexer::TokenType::Literal)
+                    {
+                        auto temp = cld::Lexer::normalizeSpelling(token.getRepresentation(*this));
+                        for (auto character : temp)
+                        {
+                            switch (character)
+                            {
+                                case '"': text += "\\\""; break;
+                                case '\\': text += "\\\\"; break;
+                                default: text += character; break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        text += cld::Lexer::normalizeSpelling(token.getRepresentation(*this));
+                    }
+                }
+                text += '\"';
+                auto scratchPadPP = cld::Lexer::tokenize(text, m_options, m_report, &m_errorsOccured, "<Strings>");
+                CLD_ASSERT(!m_errorsOccured);
+                CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
+                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
+                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
+                auto file = scratchPadPP.getFiles()[0];
+                file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
+                file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
+                result.insert(result.end(), file.ppTokens[0]);
+                m_files.push_back(std::move(file));
             }
             m_substitutions.push_back(
                 {{identifierList[index->second].getOffset(), identifierList[index->second].getLength(),
@@ -188,6 +231,10 @@ class Preprocessor final : private cld::SourceInterface
                  {iter->getOffset(), iter->getLength(), iter->getFileId(), cld::Lexer::MacroID(parentID)},
                  prevSize == result.size()});
             start = ++iter;
+            if (prevSize == result.size() && start != replacementList.end() && !start->hasLeadingWhitespace())
+            {
+                start->setLeadingWhitespace((iter - 1)->hasLeadingWhitespace());
+            }
         }
         for (auto i = idStart; i <= m_macroID; i++)
         {
@@ -289,9 +336,14 @@ class Preprocessor final : private cld::SourceInterface
                 if (temp.empty())
                 {
                     start = ++iter;
+                    if (start != tokens.data() + tokens.size() && !start->hasLeadingWhitespace())
+                    {
+                        start->setLeadingWhitespace((iter - 1)->hasLeadingWhitespace());
+                    }
                     continue;
                 }
 
+                temp[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
                 for (auto& iter2 : temp)
                 {
                     iter2.setMacroId(cld::Lexer::MacroID(i));
@@ -493,9 +545,9 @@ class Preprocessor final : private cld::SourceInterface
         {
             switch (iter)
             {
-                case '"': result += "\\\"";
-                case '\\': result += "\\\\";
-                case '?': result += "\\?";
+                case '"': result += "\\\""; break;
+                case '\\': result += "\\\\"; break;
+                case '?': result += "\\?"; break;
                 default: result += iter;
             }
         }
@@ -760,69 +812,30 @@ cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm
 }
 
 std::string cld::PP::reconstruct(const cld::Lexer::PPToken* begin, const cld::Lexer::PPToken* end,
-                                 const SourceInterface& sourceInterface, ReconstructionMode reconstructionMode) noexcept
+                                 const SourceInterface& sourceInterface) noexcept
 {
     if (begin == end)
     {
         return {};
     }
     std::string result = Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-    //    std::unordered_set<std::uint64_t> emptyPos;
-    //    for (auto& iter : sourceInterface.getSubstitutions())
-    //    {
-    //        if (!iter.empty)
-    //        {
-    //            continue;
-    //        }
-    //        emptyPos.insert(iter.replacedIdentifier.offset);
-    //        emptyPos.insert(iter.replacedIdentifier.offset + iter.replacedIdentifier.length);
-    //    }
-    //    const auto* prev = begin++;
-    //    while (begin != end)
-    //    {
-    //        Source::Substitution::Identifier first = {prev->getOffset(), prev->getLength(), prev->getFileId(),
-    //                                                  prev->getMacroId()};
-    //        Source::Substitution::Identifier second = {begin->getOffset(), begin->getLength(), begin->getFileId(),
-    //                                                   begin->getMacroId()};
-    //        if (second.macroId > first.macroId)
-    //        {
-    //            while (second.macroId != prev->getMacroId())
-    //            {
-    //                CLD_ASSERT((std::uint64_t)second.macroId < sourceInterface.getSubstitutions().size()
-    //                           && second.macroId != Lexer::MacroID(0));
-    //                const auto& sub = sourceInterface.getSubstitutions()[(std::uint64_t)second.macroId];
-    //                second = sub.replacedIdentifier;
-    //            }
-    //        }
-    //        else if (first.macroId > second.macroId)
-    //        {
-    //            while (first.macroId != begin->getMacroId())
-    //            {
-    //                CLD_ASSERT((std::uint64_t)first.macroId < sourceInterface.getSubstitutions().size()
-    //                           && first.macroId != Lexer::MacroID(0));
-    //                const auto& sub = sourceInterface.getSubstitutions()[(std::uint64_t)first.macroId];
-    //                first = sub.replacedIdentifier;
-    //            }
-    //        }
-    //
-    //        if (sourceInterface.getLineNumber(second.fileId, second.offset)
-    //            != sourceInterface.getLineNumber(first.fileId, first.offset + first.length))
-    //        {
-    //            result += reconstructionMode == ReconstructionMode::SemanticallyEquivalent ? '\n' : ' ';
-    //            result += Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-    //        }
-    //        else if (second.offset == first.offset + first.length
-    //                 || (emptyPos.count(first.offset + first.length) != 0 && emptyPos.count(second.offset) != 0
-    //                     && (reconstructionMode == ReconstructionMode::Stringification
-    //                         || Lexer::needsWhitespaceInBetween(prev->getTokenType(), begin->getTokenType()))))
-    //        {
-    //            result += Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-    //        }
-    //        else
-    //        {
-    //            result += " " + Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-    //        }
-    //        prev = begin++;
-    //    }
+    const auto* prev = begin++;
+    while (begin != end)
+    {
+        if (begin->getTokenType() == cld::Lexer::TokenType::Newline)
+        {
+            result += '\n';
+        }
+        else if (begin->hasLeadingWhitespace()
+                 || Lexer::needsWhitespaceInBetween(prev->getTokenType(), begin->getTokenType()))
+        {
+            result += " " + Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
+        }
+        else
+        {
+            result += Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
+        }
+        prev = begin++;
+    }
     return result;
 }

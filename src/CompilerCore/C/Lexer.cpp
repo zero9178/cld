@@ -932,7 +932,7 @@ public:
                                               &codePoint, llvm::strictConversion);
                 if (result == llvm::conversionOK)
                 {
-                    leadingWhitespace = cld::isWhitespace(codePoint);
+                    leadingWhitespace = codePoint != '\n' && cld::isWhitespace(codePoint);
                 }
             }
         }
@@ -2936,6 +2936,317 @@ std::string cld::Lexer::normalizeSpelling(std::string_view tokenSpelling)
 
 bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexcept
 {
-    // TODO:
+    switch (left)
+    {
+        case TokenType::Identifier:
+        case TokenType::VoidKeyword:
+        case TokenType::CharKeyword:
+        case TokenType::ShortKeyword:
+        case TokenType::IntKeyword:
+        case TokenType::LongKeyword:
+        case TokenType::FloatKeyword:
+        case TokenType::DoubleKeyword:
+        case TokenType::SignedKeyword:
+        case TokenType::UnsignedKeyword:
+        case TokenType::TypedefKeyword:
+        case TokenType::ExternKeyword:
+        case TokenType::StaticKeyword:
+        case TokenType::AutoKeyword:
+        case TokenType::RegisterKeyword:
+        case TokenType::ConstKeyword:
+        case TokenType::RestrictKeyword:
+        case TokenType::SizeofKeyword:
+        case TokenType::VolatileKeyword:
+        case TokenType::InlineKeyword:
+        case TokenType::ReturnKeyword:
+        case TokenType::BreakKeyword:
+        case TokenType::ContinueKeyword:
+        case TokenType::DoKeyword:
+        case TokenType::ElseKeyword:
+        case TokenType::ForKeyword:
+        case TokenType::IfKeyword:
+        case TokenType::WhileKeyword:
+        case TokenType::StructKeyword:
+        case TokenType::SwitchKeyword:
+        case TokenType::CaseKeyword:
+        case TokenType::DefaultKeyword:
+        case TokenType::UnionKeyword:
+        case TokenType::EnumKeyword:
+        case TokenType::GotoKeyword:
+        case TokenType::UnderlineBool:
+            switch (right)
+            {
+                case TokenType::Backslash:
+                case TokenType::Identifier:
+                case TokenType::VoidKeyword:
+                case TokenType::CharKeyword:
+                case TokenType::ShortKeyword:
+                case TokenType::IntKeyword:
+                case TokenType::LongKeyword:
+                case TokenType::FloatKeyword:
+                case TokenType::DoubleKeyword:
+                case TokenType::SignedKeyword:
+                case TokenType::UnsignedKeyword:
+                case TokenType::TypedefKeyword:
+                case TokenType::ExternKeyword:
+                case TokenType::StaticKeyword:
+                case TokenType::AutoKeyword:
+                case TokenType::RegisterKeyword:
+                case TokenType::ConstKeyword:
+                case TokenType::RestrictKeyword:
+                case TokenType::SizeofKeyword:
+                case TokenType::VolatileKeyword:
+                case TokenType::InlineKeyword:
+                case TokenType::ReturnKeyword:
+                case TokenType::BreakKeyword:
+                case TokenType::ContinueKeyword:
+                case TokenType::DoKeyword:
+                case TokenType::ElseKeyword:
+                case TokenType::ForKeyword:
+                case TokenType::IfKeyword:
+                case TokenType::WhileKeyword:
+                case TokenType::StructKeyword:
+                case TokenType::SwitchKeyword:
+                case TokenType::CaseKeyword:
+                case TokenType::DefaultKeyword:
+                case TokenType::UnionKeyword:
+                case TokenType::EnumKeyword:
+                case TokenType::GotoKeyword:
+                case TokenType::UnderlineBool:
+                case TokenType::StringLiteral:
+                case TokenType::Literal:
+                case TokenType::PPNumber: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Minus:
+            switch (right)
+            {
+                case TokenType::Minus:
+                case TokenType::GreaterThan:
+                case TokenType::ShiftRight:
+                case TokenType::Decrement:
+                case TokenType::Arrow:
+                case TokenType::ShiftRightAssign:
+                case TokenType::GreaterThanOrEqual:
+                case TokenType::Equal:
+                case TokenType::Assignment:
+                case TokenType::MinusAssign: return true;
+                default: break;
+            }
+            break;
+        case TokenType::LogicalNegation:
+            switch (right)
+            {
+                case TokenType::Assignment:
+                case TokenType::Equal: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Plus:
+            switch (right)
+            {
+                case TokenType::Plus:
+                case TokenType::Increment:
+                case TokenType::Equal:
+                case TokenType::Assignment:
+                case TokenType::PlusAssign: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Asterisk:
+            switch (right)
+            {
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Division:
+            switch (right)
+            {
+                case TokenType::Division:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Percent:
+            switch (right)
+            {
+                case TokenType::GreaterThan:
+                case TokenType::Colon:
+                case TokenType::GreaterThanOrEqual:
+                case TokenType::ShiftRight:
+                case TokenType::ShiftRightAssign:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Ampersand:
+            switch (right)
+            {
+                case TokenType::Ampersand:
+                case TokenType::LogicAnd:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::BitOr:
+            switch (right)
+            {
+                case TokenType::BitOr:
+                case TokenType::LogicOr:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::BitXor:
+            switch (right)
+            {
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::LessThan:
+            switch (right)
+            {
+                case TokenType::Colon:
+                case TokenType::LessThan:
+                case TokenType::LessThanOrEqual:
+                case TokenType::ShiftLeft:
+                case TokenType::ShiftLeftAssign:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::GreaterThan:
+            switch (right)
+            {
+                case TokenType::GreaterThan:
+                case TokenType::GreaterThanOrEqual:
+                case TokenType::ShiftRight:
+                case TokenType::ShiftRightAssign:
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Assignment:
+            switch (right)
+            {
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::ShiftRight:
+            switch (right)
+            {
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::ShiftLeft:
+            switch (right)
+            {
+                case TokenType::Equal:
+                case TokenType::Assignment: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Colon:
+            switch (right)
+            {
+                case TokenType::GreaterThan:
+                case TokenType::GreaterThanOrEqual:
+                case TokenType::ShiftRight:
+                case TokenType::ShiftRightAssign: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Dot:
+            switch (right)
+            {
+                case TokenType::Ellipse:
+                case TokenType::Dot: return true;
+                default: break;
+            }
+            break;
+        case TokenType::PPNumber:
+            switch (right)
+            {
+                case TokenType::Identifier:
+                case TokenType::VoidKeyword:
+                case TokenType::CharKeyword:
+                case TokenType::ShortKeyword:
+                case TokenType::IntKeyword:
+                case TokenType::LongKeyword:
+                case TokenType::FloatKeyword:
+                case TokenType::DoubleKeyword:
+                case TokenType::SignedKeyword:
+                case TokenType::UnsignedKeyword:
+                case TokenType::TypedefKeyword:
+                case TokenType::ExternKeyword:
+                case TokenType::StaticKeyword:
+                case TokenType::AutoKeyword:
+                case TokenType::RegisterKeyword:
+                case TokenType::ConstKeyword:
+                case TokenType::RestrictKeyword:
+                case TokenType::SizeofKeyword:
+                case TokenType::VolatileKeyword:
+                case TokenType::InlineKeyword:
+                case TokenType::ReturnKeyword:
+                case TokenType::BreakKeyword:
+                case TokenType::ContinueKeyword:
+                case TokenType::DoKeyword:
+                case TokenType::ElseKeyword:
+                case TokenType::ForKeyword:
+                case TokenType::IfKeyword:
+                case TokenType::WhileKeyword:
+                case TokenType::StructKeyword:
+                case TokenType::SwitchKeyword:
+                case TokenType::CaseKeyword:
+                case TokenType::DefaultKeyword:
+                case TokenType::UnionKeyword:
+                case TokenType::EnumKeyword:
+                case TokenType::GotoKeyword:
+                case TokenType::UnderlineBool:
+                case TokenType::Plus:
+                case TokenType::Minus:
+                case TokenType::Increment:
+                case TokenType::Decrement:
+                case TokenType::PlusAssign:
+                case TokenType::MinusAssign:
+                case TokenType::Arrow:
+                case TokenType::PPNumber: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Backslash:
+            switch (right)
+            {
+                case TokenType::Identifier:
+                case TokenType::UnsignedKeyword:
+                case TokenType::UnionKeyword: return true;
+                default: break;
+            }
+            break;
+        case TokenType::Pound:
+            switch (right)
+            {
+                case TokenType::Pound:
+                case TokenType::DoublePound: return true;
+                default: break;
+            }
+            break;
+        default: break;
+    }
     return false;
 }

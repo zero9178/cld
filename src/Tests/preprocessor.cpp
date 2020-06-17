@@ -67,14 +67,13 @@ public:
         bool errors = false;
         auto ret = cld::Lexer::tokenize(m_source, cld::LanguageOptions::native(), nullptr, &errors);
         REQUIRE_FALSE(errors);
-        auto withoutNewline = ret.data();
-        withoutNewline.erase(std::remove_if(withoutNewline.begin(), withoutNewline.end(),
-                                            [](const cld::Lexer::PPToken& token) {
-                                                return token.getTokenType() == cld::Lexer::TokenType::Newline;
-                                            }),
-                             withoutNewline.end());
-        return std::equal(withoutNewline.begin(), withoutNewline.end(), arg.data().begin(), arg.data().end(),
+        return std::equal(ret.data().begin(), ret.data().end(), arg.data().begin(), arg.data().end(),
                           [&](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
+                              if (lhs.getTokenType() == cld::Lexer::TokenType::Newline
+                                  || rhs.getTokenType() == cld::Lexer::TokenType::Newline)
+                              {
+                                  return lhs.getTokenType() == rhs.getTokenType();
+                              }
                               return std::tuple(cld::Lexer::normalizeSpelling(lhs.getRepresentation(ret)),
                                                 lhs.getTokenType(), lhs.getValue())
                                      == std::tuple(cld::Lexer::normalizeSpelling(rhs.getRepresentation(arg)),
@@ -289,10 +288,11 @@ TEST_CASE("PP Object like Macros", "[PP]")
     SECTION("Normal")
     {
         auto ret = preprocessResult("#define FUNC (1 + 3)\nint main(void) {\n    return FUNC;\n}\n");
-        CHECK_THAT(ret, ProducesPP("\nint main(void) {\n    return (1 + 3);\n}"));
-        REQUIRE(ret.data().size() == 14);
-        CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 7, 0));
-        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 12, 1));
+        CHECK_THAT(ret, ProducesPP("int main(void) {\n    return (1 + 3);\n}"));
+        REQUIRE(ret.data().size() == 17);
+        CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 6, 0));
+        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 8, 0));
+        CHECK(haveMacroID(ret.data().begin() + 8, ret.data().begin() + 13, 1));
         CHECK(haveMacroID(ret.data().begin() + 13, ret.data().end(), 0));
         REQUIRE(ret.getSubstitutions().size() == 2);
         CHECK(ret.getSubstitutions()[1].macroIdentifier.offset == 8);
@@ -301,7 +301,7 @@ TEST_CASE("PP Object like Macros", "[PP]")
     SECTION("Empty")
     {
         auto ret = preprocessResult("#define TABSIZE\nint table[TABSIZE];");
-        CHECK_THAT(ret, ProducesPP("\nint table[];"));
+        CHECK_THAT(ret, ProducesPP("int table[];"));
     }
     SECTION("Nested")
     {
@@ -311,28 +311,29 @@ TEST_CASE("PP Object like Macros", "[PP]")
 int main(void) {
     return NESTED;
 })");
-        CHECK_THAT(ret, ProducesPP("\n\nint main(void) {\n    return (1 + 3) * (1 + 3);\n}"));
-        REQUIRE(ret.data().size() == 20);
-        CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 7, 0));
-        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 12, 2));
-        CHECK(haveMacroID(ret.data().begin() + 12, ret.data().begin() + 13, 1));
-        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().begin() + 18, 3));
-        CHECK(haveMacroID(ret.data().begin() + 18, ret.data().end(), 0));
+        CHECK_THAT(ret, ProducesPP("int main(void) {\n    return (1 + 3) * (1 + 3);\n}"));
+        REQUIRE(ret.data().size() == 23);
+        CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 6, 0));
+        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 8, 0));
+        CHECK(haveMacroID(ret.data().begin() + 8, ret.data().begin() + 13, 2));
+        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().begin() + 14, 1));
+        CHECK(haveMacroID(ret.data().begin() + 14, ret.data().begin() + 19, 3));
+        CHECK(haveMacroID(ret.data().begin() + 19, ret.data().end(), 0));
     }
     SECTION("At beginning of line")
     {
         auto ret = preprocessResult("#define INT int\nINT table[100];");
-        CHECK_THAT(ret, ProducesPP("\nint table[100];"));
+        CHECK_THAT(ret, ProducesPP("int table[100];"));
     }
     SECTION("Succeeding macros")
     {
         auto ret = preprocessResult("#define LONG long\nLONG LONG table[100];");
-        CHECK_THAT(ret, ProducesPP("\nlong long table[100];"));
+        CHECK_THAT(ret, ProducesPP("long long table[100];"));
     }
     SECTION("Yielding __LINE__")
     {
         auto ret = preprocessResult("#define VALUE __LINE__\nlong table[VALUE];");
-        CHECK_THAT(ret, ProducesPP("\nlong table[2];"));
+        CHECK_THAT(ret, ProducesPP("long table[2];"));
     }
     SECTION("Recursive")
     {
@@ -342,9 +343,7 @@ int main(void) {
 int main(void) {
     return NESTED;
 })");
-        CHECK_THAT(ret, ProducesPP(R"(
-
-int main(void) {
+        CHECK_THAT(ret, ProducesPP(R"(int main(void) {
     return NESTED * (1 + 3);
 })"));
     }
@@ -362,14 +361,14 @@ TEST_CASE("PP Builtin macros", "[PP]")
     SECTION("Date")
     {
         auto ret = preprocessResult("__DATE__");
-        REQUIRE(ret.data().size() == 1);
+        REQUIRE(ret.data().size() >= 1);
         // Make sure to change regex in the year 10000
         CHECK_THAT(cld::to_string(ret.data()[0].getValue()), Catch::Matchers::Matches("\\w+ \\d{1,2} \\d{4}"));
     }
     SECTION("Time")
     {
         auto ret = preprocessResult("__TIME__");
-        REQUIRE(ret.data().size() == 1);
+        REQUIRE(ret.data().size() >= 1);
         CHECK_THAT(cld::to_string(ret.data()[0].getValue()), Catch::Matchers::Matches("\\d{1,2}:\\d{1,2}:\\d{1,2}"));
     }
     SECTION("__STDC__")
@@ -400,7 +399,7 @@ TEST_CASE("PP Builtin macros", "[PP]")
     SECTION("__LINE__")
     {
         auto ret = preprocessResult("__LINE__\n\n__LINE__");
-        CHECK_THAT(ret, ProducesPP("1 3"));
+        CHECK_THAT(ret, ProducesPP("1\n\n3"));
     }
 }
 
@@ -523,27 +522,6 @@ TEST_CASE("PP Function like Macros", "[PP]")
                                     "#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                                     "int i = max(VALUE,7);");
         CHECK_THAT(ret, ProducesPP("int i = ((5) > (7) ? (5) : (7));"));
-        auto& subs = ret.getSubstitutions();
-        REQUIRE(ret.data().size() >= 21);
-        //        CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 3, 0));
-        //        CHECK(haveMacroID(ret.data().begin() + 3, ret.data().begin() + 5, 1));
-        //        CHECK(haveMacroID(ret.data().begin() + 5, ret.data().begin() + 6, 3)); // a
-        //        CHECK(haveMacroID(ret.data().begin() + 6, ret.data().begin() + 9, 1));
-        //        CHECK(haveMacroID(ret.data().begin() + 9, ret.data().begin() + 10, 4)); // b
-        //        CHECK(haveMacroID(ret.data().begin() + 10, ret.data().begin() + 13, 1));
-        //        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().begin() + 14, 6)); // a
-        //        CHECK(haveMacroID(ret.data().begin() + 14, ret.data().begin() + 17, 1));
-        //        CHECK(haveMacroID(ret.data().begin() + 17, ret.data().begin() + 18, 7)); // b
-        //        CHECK(haveMacroID(ret.data().begin() + 18, ret.data().begin() + 20, 1));
-        //        CHECK(haveMacroID(ret.data().begin() + 20, ret.data().begin() + 21, 0));
-        //        REQUIRE(subs.size() == 8);
-        //        CHECK(subs[1].replacedIdentifier.macroId == cld::Lexer::MacroID(0));
-        //        CHECK(subs[2].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
-        //        CHECK(subs[3].replacedIdentifier.macroId == cld::Lexer::MacroID(2));
-        //        CHECK(subs[4].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
-        //        CHECK(subs[5].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
-        //        CHECK(subs[6].replacedIdentifier.macroId == cld::Lexer::MacroID(5));
-        //        CHECK(subs[7].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
         PP_OUTPUTS_WITH("#define VALUE 5,7\n"
                         "#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(VALUE);",
@@ -572,7 +550,7 @@ TEST_CASE("PP Function like Macros", "[PP]")
     {
         auto ret = preprocessResult("#define max(...) ((a) > (__VA_ARGS__) ? (a) : (__VA_ARGS__))\n"
                                     "int i = max(5);");
-        CHECK_THAT(ret, ProducesPP("\nint i = ((a) > (5) ? (a) : (5));"));
+        CHECK_THAT(ret, ProducesPP("int i = ((a) > (5) ? (a) : (5));"));
     }
     SECTION("Macro replacement in replacement list")
     {
@@ -603,7 +581,7 @@ TEST_CASE("PP Function like Macros", "[PP]")
                                     "#define B(a) a\n"
                                     "A\n"
                                     "(0)");
-        CHECK_THAT(ret, ProducesPP("\n\n0"));
+        CHECK_THAT(ret, ProducesPP("0"));
     }
     SECTION("Macro replacement in argument")
     {
@@ -614,36 +592,12 @@ TEST_CASE("PP Function like Macros", "[PP]")
                                     "t(g)(0)");
         CHECK_THAT(ret, ProducesPP("f(2 * (0))"));
     }
-    SECTION("Identity macro")
-    {
-        auto ret = preprocessResult("#define I(x) x\n"
-                                    "#define A(x) (10+x)\n"
-                                    "I(A(A(40)))");
-        CHECK_THAT(ret, ProducesPP("(10+(10+40))"));
-        auto& subs = ret.getSubstitutions();
-        auto& tokens = ret.data();
-        REQUIRE(tokens.size() == 9);
-        //        CHECK(haveMacroID(tokens.begin(), tokens.begin() + 3, 3));
-        //        CHECK(haveMacroID(tokens.begin() + 3, tokens.begin() + 6, 5));
-        //        CHECK(haveMacroID(tokens.begin() + 6, tokens.begin() + 7, 6));
-        //        CHECK(haveMacroID(tokens.begin() + 7, tokens.begin() + 8, 5));
-        //        CHECK(haveMacroID(tokens.begin() + 8, tokens.begin() + 9, 3));
-        //        REQUIRE(subs.size() == 7);
-        //        CHECK(subs[1].replacedIdentifier.macroId == cld::Lexer::MacroID(0));
-        //        CHECK(subs[2].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
-        //        CHECK(subs[3].replacedIdentifier.macroId == cld::Lexer::MacroID(2));
-        //        CHECK(subs[4].replacedIdentifier.macroId == cld::Lexer::MacroID(3));
-        //        CHECK(subs[5].replacedIdentifier.macroId == cld::Lexer::MacroID(4));
-        //        CHECK(subs[6].replacedIdentifier.macroId == cld::Lexer::MacroID(5));
-    }
     SECTION("Argument substitution after rescan")
     {
         auto ret = preprocessResult("#define I(x) I_(x)\n"
                                     "#define I_(x) 1+x +1\n"
                                     "#define VALUE 5\n"
                                     "I(VALUE)");
-        auto& subs = ret.getSubstitutions();
-        auto& tokens = ret.data();
         CHECK_THAT(ret, ProducesPP("1+5+1"));
     }
 }
@@ -655,6 +609,24 @@ TEST_CASE("PP Operator #", "[PP]")
         auto ret = preprocessResult("#define Q(x) #x\n"
                                     "Q(5)");
         CHECK_THAT(ret, ProducesPP("\"5\""));
+    }
+    SECTION("Whitespace")
+    {
+        auto ret = preprocessResult("#define Q(x) #x\n"
+                                    "Q(5 +            5)");
+        CHECK_THAT(ret, ProducesPP("\"5 + 5\""));
+    }
+    SECTION("Literals")
+    {
+        auto ret = preprocessResult("#define Q(x) #x\n"
+                                    "Q(\"text\")");
+        CHECK_THAT(ret, ProducesPP("\"\\\"text\\\"\""));
+        ret = preprocessResult("#define Q(x) #x\n"
+                               "Q('\"')");
+        CHECK_THAT(ret, ProducesPP("\"'\\\"'\""));
+        ret = preprocessResult("#define Q(x) #x\n"
+                               "Q(\"\\n\")");
+        CHECK_THAT(ret, ProducesPP("\"\\\"\\\\n\\\"\""));
     }
     SECTION("Preprocessed arguments")
     {
@@ -674,6 +646,24 @@ TEST_CASE("PP Operator #", "[PP]")
 
 TEST_CASE("PP Reconstruction", "[PP]")
 {
+    SECTION("Object macro")
+    {
+        preprocessReconstructsTo("#define VALUE 6\n"
+                                 "int i = VALUE;",
+                                 "int i = 6;");
+        preprocessReconstructsTo("#define VALUE 6\n"
+                                 "int i = VALUE ;",
+                                 "int i = 6 ;");
+        preprocessReconstructsTo("#define VALUE 6\n"
+                                 "int i =VALUE;",
+                                 "int i =6;");
+        preprocessReconstructsTo("#define VALUE\n"
+                                 "int i = VALUE;",
+                                 "int i = ;");
+        preprocessReconstructsTo("#define VALUE\n"
+                                 "int i =VALUE;",
+                                 "int i =;");
+    }
     SECTION("Function macro")
     {
         preprocessReconstructsTo("#define max(a, b) ((a) > (b) ? (a) : (b))\n"

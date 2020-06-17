@@ -414,6 +414,7 @@ void parse(std::string_view source)
 
 TEST_CASE("Parse Preprocessor Fuzzer discoveries", "[PPParse]")
 {
+    parse("         R$  \\\x0a i\x0a#ifndef\"#>\x0a");
     parse("#define  u0(fine   : \n"
           "z*z\n"
           "#define   (e.fin,e *z\n"

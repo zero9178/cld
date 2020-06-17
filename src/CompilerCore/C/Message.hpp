@@ -370,6 +370,7 @@ private:
           m_maybeEnd(end),
           m_severity(severity)
     {
+        m_message.erase(std::remove(m_message.begin(), m_message.end(), '\n'), m_message.end());
     }
 
     struct After

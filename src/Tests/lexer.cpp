@@ -1485,7 +1485,7 @@ TEST_CASE("Lexing Leading whitespace", "[lexer]")
             REQUIRE(result.data().size() >= 3);
             CHECK_FALSE(result.data()[0].hasLeadingWhitespace());
             CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
-            CHECK(result.data()[2].hasLeadingWhitespace());
+            CHECK_FALSE(result.data()[2].hasLeadingWhitespace());
         }
         SECTION("Block")
         {

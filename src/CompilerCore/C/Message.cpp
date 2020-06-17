@@ -290,7 +290,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
             llvm::WithColor(os, colour).get() << string.substr(startIndex, endIndex - startIndex);
             result = endIndex;
         }
-        os << string.substr(result) << '\n';
+        os << string.substr(std::min<std::int64_t>(result, string.size())) << '\n';
         if (m_modifiers.empty())
         {
             continue;

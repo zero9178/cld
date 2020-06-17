@@ -21,7 +21,8 @@ bool expect(cld::Lexer::TokenType tokenType, cld::Lexer::PPTokenIterator& begin,
             context.log({cld::Message::error(
                 cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                     cld::Lexer::tokenName(tokenType),
-                    '\'' + cld::to_string(begin->getRepresentation(context.getSourceInterface())) + '\''),
+                    '\'' + cld::Lexer::normalizeSpelling(begin->getRepresentation(context.getSourceInterface()))
+                        + '\''),
                 begin, {cld::PointAt(begin, begin + 1)})});
         }
         context.log(additional);
@@ -433,7 +434,7 @@ cld::PP::IfSection cld::PP::parseIfSection(Lexer::PPTokenIterator& begin, Lexer:
                              Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                                  "'#endif'",
                                  "'#" + to_string((begin + 1)->getRepresentation(context.getSourceInterface())) + "'"),
-                             begin + 1, {Underline(begin, begin + 2)}),
+                             begin, begin + 2, {Underline(begin, begin + 2)}),
                          std::move(additional)});
         }
         else

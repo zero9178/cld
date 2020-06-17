@@ -7,8 +7,6 @@
 #include <CompilerCore/C/SourceObject.hpp>
 #include <CompilerCore/Preprocessor/Parser.hpp>
 
-#include <iostream>
-
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -75,7 +73,7 @@ int main(int argc, char** argv)
 
         cld::Parser::Context context(ctokens, &llvm::nulls());
         context.setBracketMax(64);
-        auto begin = std::as_const(ctokens).data().data();
+        const auto* begin = std::as_const(ctokens).data().data();
         parseTranslationUnit(begin, ctokens.data().data() + ctokens.data().size(), context);
     }
     else if (mode == "pplexer")
