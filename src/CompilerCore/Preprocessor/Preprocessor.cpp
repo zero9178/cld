@@ -166,6 +166,17 @@ class Preprocessor final : private cld::SourceInterface
             auto index = nameToIndex.find(iter->getValue());
             CLD_ASSERT(index != nameToIndex.end());
             std::vector<cld::Lexer::PPToken> copy = arguments[index->second];
+            for (auto tokenIter = copy.begin(); tokenIter != copy.end(); tokenIter++)
+            {
+                if (tokenIter->getTokenType() == cld::Lexer::TokenType::Newline)
+                {
+                    if (tokenIter + 1 != copy.end())
+                    {
+                        (tokenIter + 1)->setLeadingWhitespace(true);
+                    }
+                    tokenIter = copy.erase(tokenIter);
+                }
+            }
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
             for (auto& token : copy)

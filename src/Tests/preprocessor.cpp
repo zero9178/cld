@@ -628,6 +628,13 @@ TEST_CASE("PP Operator #", "[PP]")
                                "Q(\"\\n\")");
         CHECK_THAT(ret, ProducesPP("\"\\\"\\\\n\\\"\""));
     }
+    SECTION("Multiline function argument")
+    {
+        auto ret = preprocessResult("#define Q(x) #x\n"
+                                    "Q(5\n"
+                                    "5)");
+        CHECK_THAT(ret, ProducesPP("\"5 5\""));
+    }
     SECTION("Preprocessed arguments")
     {
         auto ret = preprocessResult("#define Y 20\n"
