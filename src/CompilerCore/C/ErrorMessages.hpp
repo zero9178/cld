@@ -226,6 +226,9 @@ constexpr auto VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N = Format("Value of {} i
 namespace PP
 {
 constexpr auto N_REDEFINED = Format("{} redefined");
+
+constexpr auto TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB =
+    "Token concatenation resulting in an invalid token is undefined behaviour";
 } // namespace PP
 } // namespace Warnings
 
@@ -242,6 +245,10 @@ constexpr auto PREVIOUSLY_DECLARED_HERE = "Previously declared here:";
 
 constexpr auto PREVIOUS_STORAGE_SPECIFIER_HERE = "Previous storage specifier encountered here:";
 
+namespace PP
+{
+constexpr auto WHEN_CONCATENATING_N_AND_N = Format("When concatenating '{}' and '{}'");
+} // namespace PP
 } // namespace Notes
 } // namespace cld
 

@@ -226,7 +226,9 @@ class PPToken final : public TokenBase
     std::uint64_t m_charSpaceOffset;
     std::uint64_t m_charSpaceLength; /**< Length of the token after trigraphs and Backslash Newline pairs in it's
                                       representation have been removed*/
-    bool m_leadingWhitespace = false;
+    bool m_leadingWhitespace : 1;
+    bool m_fromStringification : 1;
+    bool m_fromTokenPasting : 1;
 
 public:
     PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
@@ -236,7 +238,10 @@ public:
           m_value(value.begin(), value.end()),
           m_intervalMap(std::move(intervalMap)),
           m_charSpaceOffset(charSpaceOffset),
-          m_charSpaceLength(charSpaceLength)
+          m_charSpaceLength(charSpaceLength),
+          m_leadingWhitespace(false),
+          m_fromStringification(false),
+          m_fromTokenPasting(false)
     {
     }
 
@@ -268,6 +273,26 @@ public:
     void setLeadingWhitespace(bool leadingWhitespace) noexcept
     {
         m_leadingWhitespace = leadingWhitespace;
+    }
+
+    [[nodiscard]] bool isFromStringification() const noexcept
+    {
+        return m_fromStringification;
+    }
+
+    void setFromStringification(bool fromStringification)
+    {
+        m_fromStringification = fromStringification;
+    }
+
+    [[nodiscard]] bool isFromTokenPasting() const noexcept
+    {
+        return m_fromTokenPasting;
+    }
+
+    void setFromTokenPasting(bool fromTokenPasting)
+    {
+        m_fromTokenPasting = fromTokenPasting;
     }
 };
 

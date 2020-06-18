@@ -45,19 +45,16 @@ class SourceObject final : public SourceInterface
     std::vector<Source::File> m_files;
     LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
     std::vector<Source::Substitution> m_substitutions;
-    std::vector<std::uint64_t> m_afterPPStarts;
 
 public:
     SourceObject() = default;
 
     explicit SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                          std::vector<Source::Substitution> substitutions,
-                          std::vector<std::uint64_t> afterPPStarts = {})
+                          std::vector<Source::Substitution> substitutions)
         : m_tokens(std::move(tokens)),
           m_files(std::move(files)),
           m_languageOptions(std::move(languageOptions)),
-          m_substitutions(substitutions),
-          m_afterPPStarts(std::move(afterPPStarts))
+          m_substitutions(substitutions)
     {
     }
 

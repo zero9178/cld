@@ -92,6 +92,7 @@ protected:
 using namespace cld::Errors::PP;
 using namespace cld::Warnings::PP;
 using namespace cld::Notes;
+using namespace cld::Notes::PP;
 
 TEST_CASE("PP C99 Standard examples", "[PP]")
 {
@@ -656,6 +657,53 @@ TEST_CASE("PP Operator #", "[PP]")
                                "#define Q(x) #x\n"
                                "Q(A(A(40)))");
         CHECK_THAT(ret, ProducesPP("\"A(A(40))\""));
+    }
+}
+
+TEST_CASE("PP Operator ##", "[PP]")
+{
+    SECTION("Simple")
+    {
+        auto ret = preprocessResult("#define Q 5 ## 5\n"
+                                    "Q");
+        CHECK_THAT(ret, ProducesPP("55"));
+    }
+    SECTION("Disabled by substitution")
+    {
+        auto ret = preprocessResult("#define hash_hash # ## #\n"
+                                    "#define Q 5 hash_hash 5\n"
+                                    "Q");
+        CHECK_THAT(ret, ProducesPP("5 ## 5"));
+    }
+    SECTION("Function Macro")
+    {
+        auto ret = preprocessResult("#define Q(x) x ## x\n"
+                                    "Q(5)");
+        CHECK_THAT(ret, ProducesPP("55"));
+    }
+    SECTION("Function macro disabled by substitution")
+    {
+        auto ret = preprocessResult("#define hash_hash # ## #\n"
+                                    "#define Q(x) x hash_hash x\n"
+                                    "#define str_(x) #x\n"
+                                    "#define str(x) str_(x)\n"
+                                    "str(Q(5))");
+        CHECK_THAT(ret, ProducesPP("\"5 ## 5\""));
+    }
+    SECTION("Invalid concat")
+    {
+        // TODO: Enable once Message works with Preprocessor Output aka macros
+        //        PP_OUTPUTS_WITH("#define concat(x,y) x ## y\n"
+        //                        "concat(.,foo)",
+        //                        ProducesWarning(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB)
+        //                            && ProducesNote(WHEN_CONCATENATING_N_AND_N.args(".", "foo")));
+    }
+    SECTION("Placemarkers")
+    {
+        auto ret =
+            preprocessResult("#define t(x,y,z) x ## y ## z\n"
+                             "int j[] = {t(1,2,3), t(,4,5), t(6,,7), t(8,9,), t(10,,), t(,11,), t(,,12), t(,,)};");
+        CHECK_THAT(ret, ProducesPP("int j[] = {123, 45, 67, 89, 10, 11, 12, };"));
     }
 }
 

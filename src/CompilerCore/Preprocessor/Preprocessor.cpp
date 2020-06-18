@@ -38,7 +38,6 @@ class Preprocessor final : private cld::SourceInterface
     std::uint64_t m_currentFile = 0;
     std::vector<cld::Lexer::PPToken> m_result;
     std::vector<cld::Source::Substitution> m_substitutions{1};
-    std::vector<std::uint64_t> m_ppStarts{0};
     struct Macro
     {
         cld::Lexer::PPTokenIterator identifierPos;
@@ -157,6 +156,16 @@ class Preprocessor final : private cld::SourceInterface
                 continue;
             }
             result.insert(result.end(), std::move_iterator(start), std::move_iterator(iter - (stringify ? 1 : 0)));
+            // Token pasting is done if iter is either the right
+            bool doublePoundToTheLeft = !result.empty()
+                                        && result.back().getTokenType() == cld::Lexer::TokenType::DoublePound
+                                        && !result.back().isFromTokenPasting();
+            // Or left hand side of the operator
+            bool doublePoundToTheRight = iter + 1 != replacementList.end()
+                                         && (iter + 1)->getTokenType() == cld::Lexer::TokenType::DoublePound
+                                         && !(iter + 1)->isFromTokenPasting();
+            // But not when the argument is being stringified (then the string needs to be pasted)
+            bool inTokenPasting = (doublePoundToTheLeft || doublePoundToTheRight) && !stringify;
             auto index = nameToIndex.find(iter->getValue());
             CLD_ASSERT(index != nameToIndex.end());
             std::vector<cld::Lexer::PPToken> copy = arguments[index->second];
@@ -180,13 +189,28 @@ class Preprocessor final : private cld::SourceInterface
             auto prevSize = result.size();
             if (!stringify)
             {
-                macroSubstitute(std::move(copy), [&result, iter](auto&& vector) {
-                    if (!vector.empty())
+                if (!inTokenPasting)
+                {
+                    macroSubstitute(std::move(copy), [&result, iter](auto&& vector) {
+                        if (!vector.empty())
+                        {
+                            vector[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
+                        }
+                        append(result, std::move(vector));
+                    });
+                }
+                else
+                {
+                    if (!copy.empty())
                     {
-                        vector[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
+                        copy[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
                     }
-                    append(result, std::move(vector));
-                });
+                    append(result, std::move(copy));
+                    if (result.size() == prevSize && doublePoundToTheLeft)
+                    {
+                        result.pop_back();
+                    }
+                }
             }
             else
             {
@@ -227,7 +251,7 @@ class Preprocessor final : private cld::SourceInterface
                 auto file = scratchPadPP.getFiles()[0];
                 file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
                 file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
-                result.insert(result.end(), file.ppTokens[0]);
+                result.insert(result.end(), file.ppTokens[0])->setFromStringification(true);
                 m_files.push_back(std::move(file));
             }
             m_substitutions.push_back(
@@ -235,6 +259,10 @@ class Preprocessor final : private cld::SourceInterface
                   identifierList[index->second].getFileId(), identifierList[index->second].getMacroId()},
                  {iter->getOffset(), iter->getLength(), iter->getFileId(), cld::Lexer::MacroID(parentID)},
                  prevSize == result.size()});
+            if (prevSize == result.size() && inTokenPasting && doublePoundToTheRight && !doublePoundToTheLeft)
+            {
+                iter++;
+            }
             start = ++iter;
             if (prevSize == result.size() && start != replacementList.end() && !start->hasLeadingWhitespace())
             {
@@ -375,6 +403,58 @@ class Preprocessor final : private cld::SourceInterface
         return arguments;
     }
 
+    void evaluateConcats(std::vector<cld::Lexer::PPToken>& tokens, std::optional<TokenSet> concatOperators = {})
+    {
+        for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
+        {
+            if (iter->getTokenType() != cld::Lexer::TokenType::DoublePound || iter->isFromTokenPasting()
+                || (concatOperators && concatOperators->count(&*iter) == 0))
+            {
+                continue;
+            }
+            CLD_ASSERT(iter != tokens.begin());
+            auto& lhs = *(iter - 1);
+            auto leadingWhitespace = lhs.hasLeadingWhitespace();
+            CLD_ASSERT(iter + 1 != tokens.end());
+            auto& rhs = *(iter + 1);
+            std::string text;
+            {
+                auto lhsView = lhs.getRepresentation(*this);
+                auto rhsView = rhs.getRepresentation(*this);
+                text.resize(lhsView.size() + rhsView.size());
+                std::memcpy(text.data(), lhsView.data(), lhsView.size());
+                std::memcpy(text.data() + lhsView.size(), rhsView.data(), rhsView.size());
+            }
+            bool errors = false;
+            auto scratchPadPP = cld::Lexer::tokenize(text, m_options, &llvm::nulls(), &errors, "<Pastings>");
+            CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
+            if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 2)
+            {
+                log({cld::Message::warning(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB,
+                                           &lhs, &rhs + 1,
+                                           {cld::Underline(&lhs), cld::Underline(&rhs), cld::PointAt(&*iter)}),
+                     cld::Message::note(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(
+                                            cld::Lexer::normalizeSpelling(lhs.getRepresentation(*this)),
+                                            cld::Lexer::normalizeSpelling(rhs.getRepresentation(*this))),
+                                        &lhs, &rhs + 1, {cld::Underline(&lhs), cld::Underline(&rhs)})});
+                iter = tokens.erase(iter - 1, iter + 2) - 1;
+                continue;
+            }
+            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
+            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
+            auto i = ++m_macroID;
+            m_disabledMacros.push_back({});
+            auto file = scratchPadPP.getFiles()[0];
+            file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
+            file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
+            iter = tokens.erase(iter - 1, iter + 1);
+            *iter = file.ppTokens[0];
+            iter->setLeadingWhitespace(leadingWhitespace);
+            iter->setFromTokenPasting(true);
+            m_files.push_back(std::move(file));
+        }
+    }
+
     void macroSubstitute(std::vector<cld::Lexer::PPToken>&& tokens,
                          llvm::function_ref<void(std::vector<cld::Lexer::PPToken>&&)> lineOutput)
     {
@@ -479,6 +559,7 @@ class Preprocessor final : private cld::SourceInterface
                 {
                     iter2.setMacroId(cld::Lexer::MacroID(i));
                 }
+                evaluateConcats(temp);
                 temp.insert(temp.end(), std::move_iterator(iter + 1),
                             std::move_iterator(tokens.data() + tokens.size()));
                 tokens = std::move(temp);
@@ -520,7 +601,7 @@ class Preprocessor final : private cld::SourceInterface
                 nameToIndex.emplace("__VA_ARGS__", arguments->size() - 1);
             }
 
-            TokenSet argumentsInReplacement =
+            auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
                              [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
             m_substitutions.push_back(
@@ -530,6 +611,8 @@ class Preprocessor final : private cld::SourceInterface
                   namePos->getFileId(), namePos->getMacroId()},
                  false});
 
+            auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
+                                          [](auto&&) { return true; });
             std::vector<cld::Lexer::PPToken> ppToken = result->second.replacement;
             auto index = m_substitutions.size() - 1;
             auto actualReplacement =
@@ -541,6 +624,7 @@ class Preprocessor final : private cld::SourceInterface
                 start = ++iter;
                 continue;
             }
+            evaluateConcats(actualReplacement, concatOps);
 
             for (auto& iter2 : actualReplacement)
             {
@@ -669,11 +753,6 @@ public:
     std::vector<cld::Source::Substitution>& getSubstitutions() noexcept
     {
         return m_substitutions;
-    }
-
-    std::vector<std::uint64_t>& getPpStarts() noexcept
-    {
-        return m_ppStarts;
     }
 
     std::vector<cld::Source::File>& getFiles() noexcept
@@ -876,7 +955,7 @@ cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm
     Preprocessor preprocessor(reporter, options);
     preprocessor.include(std::move(sourceObject));
     return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), options,
-                          std::move(preprocessor.getSubstitutions()), std::move(preprocessor.getPpStarts()));
+                          std::move(preprocessor.getSubstitutions()));
 }
 
 std::string cld::PP::reconstruct(const cld::Lexer::PPToken* begin, const cld::Lexer::PPToken* end,
