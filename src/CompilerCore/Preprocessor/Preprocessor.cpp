@@ -403,7 +403,8 @@ class Preprocessor final : private cld::SourceInterface
         return arguments;
     }
 
-    void evaluateConcats(std::vector<cld::Lexer::PPToken>& tokens, std::optional<TokenSet> concatOperators = {})
+    void evaluateConcats(std::uint64_t parentID, std::vector<cld::Lexer::PPToken>& tokens,
+                         std::optional<TokenSet> concatOperators = {})
     {
         for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
         {
@@ -444,6 +445,7 @@ class Preprocessor final : private cld::SourceInterface
             CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
+            m_disabledMacros[i].insert(m_disabledMacros[parentID].begin(), m_disabledMacros[parentID].end());
             auto file = scratchPadPP.getFiles()[0];
             file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
             file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
@@ -559,7 +561,7 @@ class Preprocessor final : private cld::SourceInterface
                 {
                     iter2.setMacroId(cld::Lexer::MacroID(i));
                 }
-                evaluateConcats(temp);
+                evaluateConcats(i, temp);
                 temp.insert(temp.end(), std::move_iterator(iter + 1),
                             std::move_iterator(tokens.data() + tokens.size()));
                 tokens = std::move(temp);
@@ -624,7 +626,7 @@ class Preprocessor final : private cld::SourceInterface
                 start = ++iter;
                 continue;
             }
-            evaluateConcats(actualReplacement, concatOps);
+            evaluateConcats(i, actualReplacement, concatOps);
 
             for (auto& iter2 : actualReplacement)
             {

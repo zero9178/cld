@@ -705,6 +705,19 @@ TEST_CASE("PP Operator ##", "[PP]")
                              "int j[] = {t(1,2,3), t(,4,5), t(6,,7), t(8,9,), t(10,,), t(,11,), t(,,12), t(,,)};");
         CHECK_THAT(ret, ProducesPP("int j[] = {123, 45, 67, 89, 10, 11, 12, };"));
     }
+    SECTION("No recursion")
+    {
+        auto ret = preprocessResult("#define TEXT1 TEXT ## 1\n"
+                                    "TEXT1");
+        CHECK_THAT(ret, ProducesPP("TEXT1"));
+    }
+    SECTION("Up for rescan")
+    {
+        auto ret = preprocessResult("#define TEXT2 5\n"
+                                    "#define TEXT1 TEXT ## 2\n"
+                                    "TEXT1");
+        CHECK_THAT(ret, ProducesPP("5"));
+    }
 }
 
 TEST_CASE("PP Reconstruction", "[PP]")
