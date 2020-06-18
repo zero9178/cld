@@ -67,13 +67,15 @@ public:
         bool errors = false;
         auto ret = cld::Lexer::tokenize(m_source, cld::LanguageOptions::native(), nullptr, &errors);
         REQUIRE_FALSE(errors);
-        return std::equal(ret.data().begin(), ret.data().end(), arg.data().begin(), arg.data().end(),
-                          [&](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
-                              if (lhs.getTokenType() == cld::Lexer::TokenType::Newline
-                                  || rhs.getTokenType() == cld::Lexer::TokenType::Newline)
-                              {
-                                  return lhs.getTokenType() == rhs.getTokenType();
-                              }
+        std::vector<cld::Lexer::PPToken> retWithoutNewline;
+        std::vector<cld::Lexer::PPToken> argWithoutNewline;
+        auto newLineFilter = [](const cld::Lexer::PPToken& token) {
+            return token.getTokenType() == cld::Lexer::TokenType::Newline;
+        };
+        std::remove_copy_if(ret.data().begin(), ret.data().end(), std::back_inserter(retWithoutNewline), newLineFilter);
+        std::remove_copy_if(arg.data().begin(), arg.data().end(), std::back_inserter(argWithoutNewline), newLineFilter);
+        return std::equal(retWithoutNewline.begin(), retWithoutNewline.end(), argWithoutNewline.begin(),
+                          argWithoutNewline.end(), [&](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
                               return std::tuple(cld::Lexer::normalizeSpelling(lhs.getRepresentation(ret)),
                                                 lhs.getTokenType(), lhs.getValue())
                                      == std::tuple(cld::Lexer::normalizeSpelling(rhs.getRepresentation(arg)),
@@ -717,6 +719,208 @@ TEST_CASE("PP Operator ##", "[PP]")
                                     "#define TEXT1 TEXT ## 2\n"
                                     "TEXT1");
         CHECK_THAT(ret, ProducesPP("5"));
+    }
+}
+
+TEST_CASE("PP C Preprocessor tricks", "[PP]")
+{
+    // Some preprocessor tricks taken from https://github.com/pfultz2/Cloak/wiki/C-Preprocessor-tricks,-tips,-and-idioms
+    SECTION("IIF")
+    {
+        auto ret = preprocessResult("#define IIF(cond) IIF_ ## cond\n"
+                                    "#define IIF_0(t, f) f\n"
+                                    "#define IIF_1(t, f) t\n"
+                                    "IIF(1)(true, false)");
+        CHECK_THAT(ret, ProducesPP("true"));
+        ret = preprocessResult("#define IIF(cond) IIF_ ## cond\n"
+                               "#define IIF_0(t, f) f\n"
+                               "#define IIF_1(t, f) t\n"
+                               "#define A() 1\n"
+                               "IIF(A())(true, false)");
+        CHECK_THAT(ret, ProducesPP("IIF_A()(true, false)"));
+        ret = preprocessResult("#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)\n"
+                               "#define PRIMITIVE_CAT(a,...) a ## __VA_ARGS__\n"
+                               "#define IIF(cond) PRIMITIVE_CAT(IIF_, cond)\n"
+                               "#define IIF_0(t, ...) __VA_ARGS__\n"
+                               "#define IIF_1(t, ...) t\n"
+                               "#define A() 1\n"
+                               "IIF(1)(true,false)\n"
+                               "IIF(A())(true, false)");
+        CHECK_THAT(ret, ProducesPP("true\n"
+                                   "true"));
+    }
+    SECTION("Detection")
+    {
+        auto ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                                    "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                                    "#define PROBE(x) x,1,\n"
+                                    "CHECK(PROBE(~))\n"
+                                    "CHECK(xxx)");
+        CHECK_THAT(ret, ProducesPP("1 0"));
+        ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                               "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                               "#define PROBE(x) x,1,\n"
+                               "#define IS_PAREN(x) CHECK(IS_PAREN_PROBE x)\n"
+                               "#define IS_PAREN_PROBE(...) PROBE(~)\n"
+                               "IS_PAREN(())\n"
+                               "IS_PAREN(xxx)");
+        CHECK_THAT(ret, ProducesPP("1 0"));
+        ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                               "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                               "#define PROBE(x) x,1,\n"
+                               "#define NOT(x) CHECK(PRIMITIVE_CAT(NOT_, x))\n"
+                               "#define NOT_0 PROBE(~)\n"
+                               "#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)\n"
+                               "#define PRIMITIVE_CAT(a,...) a ## __VA_ARGS__\n"
+                               "#define IIF(cond) PRIMITIVE_CAT(IIF_, cond)\n"
+                               "#define IIF_0(t, ...) __VA_ARGS__\n"
+                               "#define IIF_1(t, ...) t\n"
+                               "#define BOOL(x) COMPL(NOT(x))\n"
+                               "#define IF(c) IIF(BOOL(c))\n"
+                               "#define COMPL(b) PRIMITIVE_CAT(COMPL_, b)\n"
+                               "#define COMPL_0 1\n"
+                               "#define COMPL_1 0\n"
+                               "#define EAT(...)\n"
+                               "#define EXPAND(...) __VA_ARGS__\n"
+                               "#define WHEN(c) IF(c)(EXPAND, EAT)\n"
+                               "WHEN(1)(5)\n"
+                               "WHEN(0)(4)\n");
+        CHECK_THAT(ret, ProducesPP("5"));
+    }
+    SECTION("Recursion")
+    {
+        auto ret = preprocessResult("#define EMPTY()\n"
+                                    "#define DEFER(id) id EMPTY()\n"
+                                    "#define OBSTRUCT(...) __VA_ARGS__ DEFER(EMPTY)()\n"
+                                    "#define EXPAND(...) __VA_ARGS__\n"
+                                    "#define A() 123\n"
+                                    "A()\n"
+                                    "DEFER(A)()\n"
+                                    "EXPAND(DEFER(A)())");
+        CHECK_THAT(ret, ProducesPP("123 A() 123"));
+        ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                               "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                               "#define PROBE(x) x,1,\n"
+                               "#define NOT(x) CHECK(PRIMITIVE_CAT(NOT_, x))\n"
+                               "#define NOT_0 PROBE(~)\n"
+                               "#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)\n"
+                               "#define PRIMITIVE_CAT(a,...) a ## __VA_ARGS__\n"
+                               "#define IIF(cond) PRIMITIVE_CAT(IIF_, cond)\n"
+                               "#define IIF_0(t, ...) __VA_ARGS__\n"
+                               "#define IIF_1(t, ...) t\n"
+                               "#define BOOL(x) COMPL(NOT(x))\n"
+                               "#define IF(c) IIF(BOOL(c))\n"
+                               "#define COMPL(b) PRIMITIVE_CAT(COMPL_, b)\n"
+                               "#define COMPL_0 1\n"
+                               "#define COMPL_1 0\n"
+                               "#define EAT(...)\n"
+                               "#define EXPAND(...) __VA_ARGS__\n"
+                               "#define WHEN(c) IF(c)(EXPAND, EAT)\n"
+                               "\n"
+                               "#define DEC(x) PRIMITIVE_CAT(DEC_, x)\n"
+                               "#define DEC_0 0\n"
+                               "#define DEC_1 0\n"
+                               "#define DEC_2 1\n"
+                               "#define DEC_3 2\n"
+                               "#define DEC_4 3\n"
+                               "#define DEC_5 4\n"
+                               "#define DEC_6 5\n"
+                               "#define DEC_7 6\n"
+                               "#define DEC_8 7\n"
+                               "#define DEC_9 8\n"
+                               "\n"
+                               "#define EMPTY()\n"
+                               "#define DEFER(id) id EMPTY()\n"
+                               "#define OBSTRUCT(...) __VA_ARGS__ DEFER(EMPTY)()\n"
+                               "\n"
+                               "#define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))\n"
+                               "#define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))\n"
+                               "#define EVAL2(...) EVAL3(EVAL3(EVAL3(__VA_ARGS__)))\n"
+                               "#define EVAL3(...) EVAL4(EVAL4(EVAL4(__VA_ARGS__)))\n"
+                               "#define EVAL4(...) EVAL5(EVAL5(EVAL5(__VA_ARGS__)))\n"
+                               "#define EVAL5(...) __VA_ARGS__\n"
+                               "\n"
+                               "#define REPEAT(count, macro, ...) \\\n"
+                               "    WHEN(count) \\\n"
+                               "    ( \\\n"
+                               "        OBSTRUCT(REPEAT_INDIRECT) () \\\n"
+                               "        ( \\\n"
+                               "            DEC(count), macro, __VA_ARGS__ \\\n"
+                               "        ) \\\n"
+                               "        OBSTRUCT(macro) \\\n"
+                               "        ( \\\n"
+                               "            DEC(count), __VA_ARGS__ \\\n"
+                               "        ) \\\n"
+                               "    )\n"
+                               "#define REPEAT_INDIRECT() REPEAT\n"
+                               "\n"
+                               "#define M(i, _) i\n"
+                               "EVAL(REPEAT(8, M, ~))");
+        CHECK_THAT(ret, ProducesPP("0 1 2 3 4 5 6 7"));
+    }
+    SECTION("Comparison")
+    {
+        auto ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                                    "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                                    "#define PROBE(x) x,1,\n"
+                                    "#define IS_PAREN(x) CHECK(IS_PAREN_PROBE x)\n"
+                                    "#define IS_PAREN_PROBE(...) PROBE(~)\n"
+                                    "\n"
+                                    "#define COMPARE_foo(x) x\n"
+                                    "#define COMPARE_bar(x) x\n"
+                                    "#define PRIMITIVE_COMPARE(x, y) IS_PAREN \\\n"
+                                    "( \\\n"
+                                    "COMPARE_ ## x ( COMPARE_ ## y) (())  \\\n"
+                                    ")\n"
+                                    "PRIMITIVE_COMPARE(foo, bar)\n"
+                                    "PRIMITIVE_COMPARE(foo, foo)\n"
+                                    "PRIMITIVE_COMPARE(foo, unfoo)");
+        CHECK_THAT(ret, ProducesPP("1 0 0"));
+        ret = preprocessResult("#define CHECK_N(x, n, ...) n\n"
+                               "#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)\n"
+                               "#define PROBE(x) x,1,\n"
+                               "#define IS_PAREN(x) CHECK(IS_PAREN_PROBE x)\n"
+                               "#define IS_PAREN_PROBE(...) PROBE(~)\n"
+                               "\n"
+                               "#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)\n"
+                               "#define PRIMITIVE_CAT(a,...) a ## __VA_ARGS__\n"
+                               "#define IIF(cond) PRIMITIVE_CAT(IIF_, cond)\n"
+                               "#define IIF_0(t, ...) __VA_ARGS__\n"
+                               "#define IIF_1(t, ...) t\n"
+                               "#define BOOL(x) COMPL(NOT(x))\n"
+                               "#define IF(c) IIF(BOOL(c))\n"
+                               "#define EAT(...)\n"
+                               "\n"
+                               "#define COMPL(b) PRIMITIVE_CAT(COMPL_, b)\n"
+                               "#define COMPL_0 1\n"
+                               "#define COMPL_1 0\n"
+                               "\n"
+                               "#define BITAND(x) PRIMITIVE_CAT(BITAND_, x)\n"
+                               "#define BITAND_0(y) 0\n"
+                               "#define BITAND_1(y) y"
+                               "\n"
+                               "#define COMPARE_foo(x) x\n"
+                               "#define COMPARE_bar(x) x\n"
+                               "#define PRIMITIVE_COMPARE(x, y) IS_PAREN \\\n"
+                               "( \\\n"
+                               "COMPARE_ ## x ( COMPARE_ ## y) (())  \\\n"
+                               ")\n"
+                               "\n"
+                               "#define IS_COMPARABLE(x) IS_PAREN( CAT(COMPARE_, x) (()) )\n"
+                               "\n"
+                               "#define NOT_EQUAL(x, y) \\\n"
+                               "IIF(BITAND(IS_COMPARABLE(x))(IS_COMPARABLE(y)) ) \\\n"
+                               "( \\\n"
+                               "   PRIMITIVE_COMPARE, \\\n"
+                               "   1 EAT \\\n"
+                               ")(x, y)\n"
+                               "\n"
+                               "#define EQUAL(x, y) COMPL(NOT_EQUAL(x, y))\n"
+                               "\n"
+                               "EQUAL(foo,bar)\n"
+                               "EQUAL(foo,foo)\n"
+                               "EQUAL(foo,unfoo)\n");
+        CHECK_THAT(ret, ProducesPP("0 1 0"));
     }
 }
 

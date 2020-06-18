@@ -5,6 +5,7 @@
 
 #include <CompilerCore/C/LanguageOptions.hpp>
 #include <CompilerCore/C/Semantics.hpp>
+#include <CompilerCore/Preprocessor/Preprocessor.hpp>
 
 #include <numeric>
 
@@ -198,6 +199,18 @@ struct StringMaker<cld::Semantics::Type>
     static std::string convert(const cld::Semantics::Type& type)
     {
         return "'" + type.getFullFormattedTypeName() + "'";
+    }
+};
+
+template <>
+struct StringMaker<cld::PPSourceObject>
+{
+    static std::string convert(const cld::PPSourceObject& sourceObject)
+    {
+        return "'"
+               + cld::PP::reconstruct(sourceObject.data().data(),
+                                      sourceObject.data().data() + sourceObject.data().size(), sourceObject)
+               + "'";
     }
 };
 } // namespace Catch
