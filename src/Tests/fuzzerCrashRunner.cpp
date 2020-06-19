@@ -54,7 +54,12 @@ int main(int argc, char** argv)
     llvm::TimeRegion region(timer);
     if (mode == "lexer")
     {
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls());
+        bool errors = false;
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
+        if (errors)
+        {
+            return 0;
+        }
         cld::Lexer::toCTokens(tokens, &llvm::nulls());
     }
     else if (mode == "parser")

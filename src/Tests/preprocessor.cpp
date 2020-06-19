@@ -100,74 +100,31 @@ TEST_CASE("PP C99 Standard examples", "[PP]")
 {
     SECTION("6.10.3.5 'Scope of macro definitions'")
     {
-        SECTION("Example 1")
-        {
-            auto ret = preprocessResult("#define TABSIZE 100\nint table[TABSIZE];");
-            CHECK_THAT(ret, ProducesPP("int table[100];"));
-        }
-        SECTION("Example 2")
-        {
-            auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))");
-            CHECK(ret.data().empty());
-        }
         SECTION("Example 3")
         {
-            SECTION("Partial")
-            {
-                auto ret = preprocessResult("#define x 3\n"
-                                            "#define f(a) f(x * (a))\n"
-                                            "#undef x\n"
-                                            "#define x 2\n"
-                                            "#define g f\n"
-                                            "#define t(a) a\n"
-                                            "% t(t(g)(0) + t)(1);");
-                // the first t in t(t(g)(0) + t) is found
-                // it's single argument is then preprocessed as if it's the end of the file
-                // therefore we are now pre processing t(g)(0) + t
-                // t(g) turns into g
-                // g turns into f
-                // f(0) + t turns into f(2 * (0)) + t
-                // Now preprocessing of the argument is done
-                // Now argument substitution takes place as if t(f(2 * (0)) + t)(1) was written
-                // after replacement of t we get f(2 * (0)) + t(1) and preprocessing is done
-                CHECK_THAT(ret, ProducesPP("% f(2 * (0)) + t(1);"));
-            }
-            return;
-            SECTION("Complete")
-            {
-                auto ret = preprocessResult("#define x 3\n"
-                                            "#define f(a) f(x * (a))\n"
-                                            "#undef x\n"
-                                            "#define x 2\n"
-                                            "#define g f\n"
-                                            "#define z z[0]\n"
-                                            "#define h g(~\n"
-                                            "#define m(a) a(w)\n"
-                                            "#define w 0,1\n"
-                                            "#define t(a) a\n"
-                                            "#define p() int\n"
-                                            "#define q(x) x\n"
-                                            "#define r(x,y) x ## y\n"
-                                            "#define str(x) # x\n"
-                                            "f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);\n"
-                                            "g(x+(3,4)-w) | h 5) & m\n"
-                                            "(f)^m(m);\n"
-                                            "p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };\n"
-                                            "char c[2][6] = { str(hello), str() };");
-                CHECK_THAT(ret, ProducesPP("f(2* (y+1))+ f(2* (f(2* (z[0])))) % f(2 * (0)) + t(1);\n"
-                                           "f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);\n"
-                                           "int i[] = { 1, 23, 4, 5, };\n"
-                                           "char c[2][6] = { \"hello\", \"\" };"));
-            }
-        }
-        return;
-        SECTION("Example 5")
-        {
-            auto ret = preprocessResult("#define t(x,y,z) x ## y ## z\n"
-                                        "int j[] = { t(1,2,3), t(,4,5), t(6,,7), t(8,9,),\n"
-                                        "t(10,,), t(,11,), t(,,12), t(,,) };");
-            CHECK_THAT(ret, ProducesPP("int j[] = { 123, 45, 67, 89,\n"
-                                       "10, 11, 12, };"));
+            auto ret = preprocessResult("#define x 3\n"
+                                        "#define f(a) f(x * (a))\n"
+                                        "#undef x\n"
+                                        "#define x 2\n"
+                                        "#define g f\n"
+                                        "#define z z[0]\n"
+                                        "#define h g(~\n"
+                                        "#define m(a) a(w)\n"
+                                        "#define w 0,1\n"
+                                        "#define t(a) a\n"
+                                        "#define p() int\n"
+                                        "#define q(x) x\n"
+                                        "#define r(x,y) x ## y\n"
+                                        "#define str(x) # x\n"
+                                        "f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);\n"
+                                        "g(x+(3,4)-w) | h 5) & m\n"
+                                        "(f)^m(m);\n"
+                                        "p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };\n"
+                                        "char c[2][6] = { str(hello), str() };");
+            CHECK_THAT(ret, ProducesPP("f(2* (y+1))+ f(2* (f(2* (z[0])))) % f(2 * (0)) + t(1);\n"
+                                       "f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);\n"
+                                       "int i[] = { 1, 23, 4, 5, };\n"
+                                       "char c[2][6] = { \"hello\", \"\" };"));
         }
         SECTION("Example 7")
         {
@@ -639,6 +596,12 @@ TEST_CASE("PP Operator #", "[PP]")
                                "Q(\"\\n\")");
         CHECK_THAT(ret, ProducesPP("\"\\\"\\\\n\\\"\""));
     }
+    SECTION("__VA_ARGS__")
+    {
+        auto ret = preprocessResult("#define Q(...) #__VA_ARGS__\n"
+                                    "Q(5,56,7)");
+        CHECK_THAT(ret, ProducesPP("\"5,56,7\""));
+    }
     SECTION("Multiline function argument")
     {
         auto ret = preprocessResult("#define Q(x) #x\n"
@@ -719,6 +682,24 @@ TEST_CASE("PP Operator ##", "[PP]")
                                     "#define TEXT1 TEXT ## 2\n"
                                     "TEXT1");
         CHECK_THAT(ret, ProducesPP("5"));
+    }
+    SECTION("Leading whitespace propagation")
+    {
+        auto ret = preprocessResult("#define Q(x,y) 5 x##y\n"
+                                    "#define Q_(...) print(__VA_ARGS__)\n"
+                                    "#define print(...) #__VA_ARGS__\n"
+                                    "Q_(Q(,7))");
+        CHECK_THAT(ret, ProducesPP("\"5 7\""));
+        ret = preprocessResult("#define Q(x,y) 5 x ##y\n"
+                               "#define Q_(...) print(__VA_ARGS__)\n"
+                               "#define print(...) #__VA_ARGS__\n"
+                               "Q_(Q(,7))");
+        CHECK_THAT(ret, ProducesPP("\"5 7\""));
+        ret = preprocessResult("#define Q(x,y) +x##y\n"
+                               "#define Q_(...) print(__VA_ARGS__)\n"
+                               "#define print(...) #__VA_ARGS__\n"
+                               "Q_(Q(,7))");
+        CHECK_THAT(ret, ProducesPP("\"+7\""));
     }
 }
 

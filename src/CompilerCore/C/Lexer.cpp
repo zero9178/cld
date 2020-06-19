@@ -2055,6 +2055,16 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
         // iter + 1 == end the last character would be '\\' and following that '\'' or '\"'.
         // Therefore the character literal wouldn't have ended and we wouldn't be here.
+#ifndef CLD_IN_FUZZER
+        CLD_ASSERT(iter + 1 != end);
+#else
+        // In the fuzzer there might be such invalid occurrences due to #include followed by a string literal
+        // So we don't have to go through the pre preprocessor lets break if this is the case
+        if (iter + 1 == end)
+        {
+            break;
+        }
+#endif
         if (iter[1] == 'u' || iter[1] == 'U')
         {
             bool big = iter[1] == 'U';
@@ -2071,37 +2081,34 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 errorOccured = true;
                 continue;
             }
-            else
+
+            const auto* hexStart = iter;
+            const auto* hexEnd = std::find_if(
+                hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4),
+                [](char c) { return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'); });
+            if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
             {
-                const auto* hexStart = iter;
-                const auto* hexEnd = std::find_if(
-                    hexStart, hexStart + std::min<std::size_t>(std::distance(hexStart, end), big ? 8 : 4), [](char c) {
-                        return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-                    });
-                if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
-                {
-                    auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                    context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-                                            std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-                                        start, {{start, start + std::distance(hexStart, hexEnd)}});
-                    errorOccured = true;
-                    iter = hexEnd;
-                    continue;
-                }
-                auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
-                                                    offset + 2 + (big ? 8 : 4), context);
-                if (uc)
-                {
-                    *resultStart = *uc;
-                    resultStart++;
-                }
-                else
-                {
-                    errorOccured = true;
-                }
+                auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                                        std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
+                                    start, {{start, start + std::distance(hexStart, hexEnd)}});
+                errorOccured = true;
                 iter = hexEnd;
                 continue;
             }
+            auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
+                                                offset + 2 + (big ? 8 : 4), context);
+            if (uc)
+            {
+                *resultStart = *uc;
+                resultStart++;
+            }
+            else
+            {
+                errorOccured = true;
+            }
+            iter = hexEnd;
+            continue;
         }
         else if (iter[1] == 'x')
         {
