@@ -1,6 +1,7 @@
 #include "Preprocessor.hpp"
 
 #include <llvm/ADT/ScopeExit.h>
+#include <llvm/Support/FileSystem.h>
 
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/Common/Text.hpp>
@@ -37,7 +38,7 @@ class Preprocessor final : private cld::SourceInterface
     std::uint64_t m_macroID = 0;
     std::uint64_t m_currentFile = 0;
     std::vector<cld::Lexer::PPToken> m_result;
-    std::vector<cld::Source::Substitution> m_substitutions{1};
+    cld::Source::PPRecord m_substitutions{1};
     struct Macro
     {
         cld::Lexer::PPTokenIterator identifierPos;
@@ -183,6 +184,7 @@ class Preprocessor final : private cld::SourceInterface
             }
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
+            m_substitutions.push_back({});
             for (auto& token : copy)
             {
                 token.setMacroId(cld::Lexer::MacroID(i));
@@ -209,9 +211,15 @@ class Preprocessor final : private cld::SourceInterface
                     append(result, std::move(copy));
                     if (result.size() == prevSize && doublePoundToTheLeft)
                     {
+                        // If it's empty and the ## was to our left delete it by poping the token
                         result.pop_back();
                     }
                 }
+                m_substitutions[i] = cld::Source::Substitution{
+                    {identifierList[index->second].getOffset(), identifierList[index->second].getLength(),
+                     identifierList[index->second].getFileId(), identifierList[index->second].getMacroId()},
+                    {iter->getOffset(), iter->getLength(), iter->getFileId(), cld::Lexer::MacroID(parentID)},
+                    prevSize == result.size()};
             }
             else
             {
@@ -252,12 +260,12 @@ class Preprocessor final : private cld::SourceInterface
                 file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
                 result.insert(result.end(), file.ppTokens[0])->setFromStringification(true);
                 m_files.push_back(std::move(file));
+                m_substitutions.push_back(cld::Source::Stringification{std::move(copy), *iter});
             }
-            m_substitutions.push_back(
-                {{identifierList[index->second].getOffset(), identifierList[index->second].getLength(),
-                  identifierList[index->second].getFileId(), identifierList[index->second].getMacroId()},
-                 {iter->getOffset(), iter->getLength(), iter->getFileId(), cld::Lexer::MacroID(parentID)},
-                 prevSize == result.size()});
+            // If we did token pasting and it was empty and the ## is to the right "delete" it by setting the start
+            // iterator to one past it as not to include it when inserting. Don't do that when there was also a ##
+            // to the left. Otherwise x ## y ## z with y being the empty expansion would result in x z instead of
+            // x ## z
             if (prevSize == result.size() && inTokenPasting && doublePoundToTheRight && !doublePoundToTheLeft)
             {
                 iter++;
@@ -456,6 +464,7 @@ class Preprocessor final : private cld::SourceInterface
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
             m_disabledMacros[i].insert(m_disabledMacros[parentID].begin(), m_disabledMacros[parentID].end());
+            m_substitutions.push_back(cld::Source::TokenConcatenation{lhs, rhs});
             auto file = scratchPadPP.getFiles()[0];
             file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
             file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
@@ -551,11 +560,11 @@ class Preprocessor final : private cld::SourceInterface
                 m_disabledMacros[i].insert(m_disabledMacros[(std::uint64_t)iter->getMacroId()].begin(),
                                            m_disabledMacros[(std::uint64_t)iter->getMacroId()].end());
                 std::vector<cld::Lexer::PPToken> temp = result->second.replacement;
-                m_substitutions.push_back(
-                    {{result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
-                      result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
-                     {iter->getOffset(), iter->getLength(), iter->getFileId(), iter->getMacroId()},
-                     temp.empty()});
+                m_substitutions.push_back(cld::Source::Substitution{
+                    {result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
+                     result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
+                    {iter->getOffset(), iter->getLength(), iter->getFileId(), iter->getMacroId()},
+                    temp.empty()});
                 if (temp.empty())
                 {
                     start = ++iter;
@@ -616,23 +625,22 @@ class Preprocessor final : private cld::SourceInterface
             auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
                              [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
-            m_substitutions.push_back(
-                {{result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
-                  result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
-                 {namePos->getOffset(), iter->getOffset() + iter->getLength() - namePos->getOffset(),
-                  namePos->getFileId(), namePos->getMacroId()},
-                 false});
+            m_substitutions.push_back(cld::Source::Substitution{
+                {result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
+                 result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
+                {namePos->getOffset(), iter->getOffset() + iter->getLength() - namePos->getOffset(),
+                 namePos->getFileId(), namePos->getMacroId()},
+                false});
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
                                           [](auto&&) { return true; });
             std::vector<cld::Lexer::PPToken> ppToken = result->second.replacement;
-            auto index = m_substitutions.size() - 1;
             auto actualReplacement =
                 argumentSubstitution(i, *result->second.argumentList, std::move(ppToken), std::move(*arguments),
                                      std::move(argumentsInReplacement), std::move(nameToIndex));
             if (actualReplacement.empty())
             {
-                m_substitutions[index].empty = true;
+                cld::get<cld::Source::Substitution>(m_substitutions[i]).empty = true;
                 start = ++iter;
                 continue;
             }
@@ -702,7 +710,7 @@ class Preprocessor final : private cld::SourceInterface
         return m_files;
     }
 
-    const std::vector<cld::Source::Substitution>& getSubstitutions() const noexcept override
+    const cld::Source::PPRecord& getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }
@@ -762,7 +770,7 @@ public:
         return m_result;
     }
 
-    std::vector<cld::Source::Substitution>& getSubstitutions() noexcept
+    cld::Source::PPRecord& getSubstitutions() noexcept
     {
         return m_substitutions;
     }
@@ -834,7 +842,68 @@ public:
 
     void visit(const cld::PP::NonDirective&) {}
 
-    void visit(const cld::PP::ControlLine::IncludeTag& includeTag) {}
+    void visit(const cld::PP::ControlLine::IncludeTag& includeTag)
+    {
+        std::string path;
+        if (includeTag.tokens.size() != 2 || includeTag.tokens[0].getTokenType() != cld::Lexer::TokenType::StringLiteral
+            || includeTag.tokens[1].getTokenType() != cld::Lexer::TokenType::Newline)
+        {
+            std::vector<cld::Lexer::PPToken> result;
+            macroSubstitute(includeTag.tokens, [&result](auto&& tokens) {
+                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
+            });
+            path = cld::PP::reconstruct(result.data(), result.data() + result.size(), *this);
+            // TODO: Error handling
+        }
+        else
+        {
+            path = includeTag.tokens[0].getValue();
+        }
+        bool isQuoted = path[0] == '"' && path.back() == '"';
+        CLD_ASSERT(isQuoted || (path[0] == '<' && path.back() == '>'));
+        path = path.substr(1, path.size() - 2);
+        std::vector<std::string> candidates;
+        if (isQuoted)
+        {
+            candidates.push_back("./");
+            candidates = m_options.includeQuoteDirectories;
+        }
+        candidates.insert(candidates.end(), m_options.includeDirectories.begin(), m_options.includeDirectories.end());
+        for (const auto& candidate : candidates)
+        {
+            auto filename = candidate + "/" + path;
+            if (!llvm::sys::fs::exists(filename))
+            {
+                continue;
+            }
+            std::uint64_t size;
+            auto error = llvm::sys::fs::file_size(filename, size);
+            if (!error)
+            {
+                auto handle = llvm::sys::fs::openNativeFileForRead(filename);
+                if (!handle)
+                {
+                    auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*handle); });
+                    llvm::sys::fs::mapped_file_region mapping(*handle, llvm::sys::fs::mapped_file_region::readonly,
+                                                              size, 0, error);
+                    if (!error)
+                    {
+                        std::string_view view(mapping.const_data(), mapping.size());
+                        auto newFile = cld::Lexer::tokenize(view, m_options, m_report, &m_errorsOccured, filename);
+                        if (m_errorsOccured)
+                        {
+                            return;
+                        }
+                        include(std::move(newFile));
+                        return;
+                    }
+                }
+            }
+            // TODO: Error about failure to open
+            break;
+        }
+        // TODO: Error about failure to find
+    }
 
     void visit(const cld::PP::ControlLine::LineTag& lineTag) {}
 
@@ -971,33 +1040,4 @@ cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm
     preprocessor.include(std::move(sourceObject));
     return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), options,
                           std::move(preprocessor.getSubstitutions()));
-}
-
-std::string cld::PP::reconstruct(const cld::Lexer::PPToken* begin, const cld::Lexer::PPToken* end,
-                                 const SourceInterface& sourceInterface) noexcept
-{
-    if (begin == end)
-    {
-        return {};
-    }
-    std::string result = Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-    const auto* prev = begin++;
-    while (begin != end)
-    {
-        if (begin->getTokenType() == cld::Lexer::TokenType::Newline)
-        {
-            result += '\n';
-        }
-        else if (begin->hasLeadingWhitespace()
-                 || Lexer::needsWhitespaceInBetween(prev->getTokenType(), begin->getTokenType()))
-        {
-            result += " " + Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-        }
-        else
-        {
-            result += Lexer::normalizeSpelling(begin->getRepresentation(sourceInterface));
-        }
-        prev = begin++;
-    }
-    return result;
 }

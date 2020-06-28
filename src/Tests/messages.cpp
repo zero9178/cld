@@ -37,6 +37,22 @@ cld::SourceInterface* interface;
     return ppsourceObject.data().data();
 }
 
+[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
+                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    static cld::PPSourceObject ppsourceObject;
+    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    interface = &ppsourceObject;
+    return ppsourceObject.data().data();
+}
+
 template <class... Args>
 std::string messagePrints(cld::Message::Severity severity, Args&&... args)
 {
@@ -60,7 +76,7 @@ std::string messagePrints(cld::Message::Severity severity, Args&&... args)
 
 TEST_CASE("Message Simple printing", "[MSG]")
 {
-    auto begin = lexes("A series of\n identifiers");
+    const auto* begin = lexes("A series of\n identifiers");
     SECTION("Severities")
     {
         CHECK(messagePrints(cld::Message::Error, "Message", begin) == R"(1:1: error: Message
@@ -116,7 +132,7 @@ TEST_CASE("Message Simple printing", "[MSG]")
     }
     SECTION("PP Newlines")
     {
-        auto ppbegin = pplexes("#if 0\n");
+        const auto* ppbegin = pplexes("#if 0\n");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", cld::Message::after, ppbegin + 3),
                    ProducesLines(R"(2:1: error: Message
    1 | #if 0
@@ -139,7 +155,7 @@ TEST_CASE("Message Underline", "[MSG]")
 {
     SECTION("Underline word for word")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Underline(begin)}),
                    ProducesLines(R"(1:1: error: Message
    1 | A series of
@@ -163,7 +179,7 @@ TEST_CASE("Message Underline", "[MSG]")
     }
     SECTION("Ranges")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, begin + 4,
                                  Modifiers{cld::Underline(begin, begin + 4)}),
                    ProducesLines(R"(1:1: error: Message
@@ -183,7 +199,7 @@ TEST_CASE("Message Underline", "[MSG]")
     }
     SECTION("Unicode")
     {
-        auto begin = lexes("\"🍌\" text");
+        const auto* begin = lexes("\"🍌\" text");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Underline(begin)}),
                    ProducesLines(R"(1:1: error: Message
    1 | "🍌" text
@@ -200,7 +216,7 @@ TEST_CASE("Message Underline", "[MSG]")
     }
     SECTION("Overlapping")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, begin + 4,
                                  Modifiers{cld::Underline(begin + 1, begin + 3), cld::Underline(begin, begin + 4)}),
                    ProducesLines(R"(1:1: error: Message
@@ -233,7 +249,7 @@ TEST_CASE("Message PointAt", "[MSG]")
 {
     SECTION("Underline word for word")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::PointAt(begin)}),
                    ProducesLines(R"(1:1: error: Message
    1 | A series of
@@ -257,7 +273,7 @@ TEST_CASE("Message PointAt", "[MSG]")
     }
     SECTION("Ranges")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(
             messagePrints(cld::Message::Error, "Message", begin, begin + 4, Modifiers{cld::PointAt(begin, begin + 4)}),
             ProducesLines(R"(1:1: error: Message
@@ -277,7 +293,7 @@ TEST_CASE("Message PointAt", "[MSG]")
     }
     SECTION("Unicode")
     {
-        auto begin = lexes("\"🍌\" text");
+        const auto* begin = lexes("\"🍌\" text");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::PointAt(begin)}),
                    ProducesLines(R"(1:1: error: Message
    1 | "🍌" text
@@ -294,7 +310,7 @@ TEST_CASE("Message PointAt", "[MSG]")
     }
     SECTION("Overlapping")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, begin + 4,
                                  Modifiers{cld::PointAt(begin + 1, begin + 3), cld::PointAt(begin, begin + 4)}),
                    ProducesLines(R"(1:1: error: Message
@@ -321,7 +337,7 @@ TEST_CASE("Message PointAt", "[MSG]")
     }
     SECTION("With underline")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, begin + 4,
                                  Modifiers{cld::PointAt(begin, begin + 4), cld::Underline(begin, begin + 4)}),
                    ProducesLines(R"(1:1: error: Message
@@ -345,7 +361,7 @@ TEST_CASE("Message Insert", "[MSG]")
 {
     SECTION("Simple non text insertion")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::InsertAfter(begin)}),
                    ProducesLines(R"(1:1: error: Message
    1 | A series of
@@ -369,7 +385,7 @@ TEST_CASE("Message Insert", "[MSG]")
     }
     SECTION("After PP Newline")
     {
-        auto begin = pplexes("A series of\n identifiers");
+        const auto* begin = pplexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin + 3, Modifiers{cld::InsertAfter(begin + 3)}),
                    ProducesLines(R"(1:12: error: Message
    1 | A series of
@@ -379,7 +395,7 @@ TEST_CASE("Message Insert", "[MSG]")
     }
     SECTION("Simple with text insertion")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::InsertAfter(begin, "text")}),
                    ProducesLines(R"(1:1: error: Message
    1 | A series of
@@ -408,7 +424,7 @@ TEST_CASE("Message Insert", "[MSG]")
     }
     SECTION("After PP Newline with text")
     {
-        auto begin = pplexes("A series of\n identifiers");
+        const auto* begin = pplexes("A series of\n identifiers");
         CHECK_THAT(
             messagePrints(cld::Message::Error, "Message", begin + 3, Modifiers{cld::InsertAfter(begin + 3, "text")}),
             ProducesLines(R"(1:12: error: Message
@@ -419,7 +435,7 @@ TEST_CASE("Message Insert", "[MSG]")
     }
     SECTION("Multiple with text insertion")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin,
                                  Modifiers{cld::InsertAfter(begin, "Whitespace 1"),
                                            cld::InsertAfter(begin + 1, "Whitespace 2"),
@@ -442,7 +458,7 @@ TEST_CASE("Message Insert", "[MSG]")
     }
     SECTION("Pointing at non whitespace")
     {
-        auto begin = lexes("5+3=8");
+        const auto* begin = lexes("5+3=8");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::InsertAfter(begin, "2")}),
                    ProducesLines(R"(1:1: error: Message
    1 | 5⍽+3=8
@@ -496,7 +512,7 @@ TEST_CASE("Message Annotate", "[MSG]")
 {
     SECTION("Simple annotate")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Annotate(begin, "text")}),
                    ProducesLines(R"(1:1: error: Message
    1 | A series of
@@ -529,7 +545,7 @@ TEST_CASE("Message Annotate", "[MSG]")
     }
     SECTION("Ranges")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(
             messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Annotate(begin, begin + 3, "text")}),
             ProducesLines(R"(1:1: error: Message
@@ -541,7 +557,7 @@ TEST_CASE("Message Annotate", "[MSG]")
     }
     SECTION("Mixed with others")
     {
-        auto begin = lexes("A series of\n identifiers");
+        const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin,
                                  Modifiers{cld::Annotate(begin, "text"), cld::InsertAfter(begin + 2, "text2")}),
                    ProducesLines(R"(1:1: error: Message

@@ -263,8 +263,9 @@ TEST_CASE("PP Object like Macros", "[PP]")
         CHECK(haveMacroID(ret.data().begin() + 8, ret.data().begin() + 13, 1));
         CHECK(haveMacroID(ret.data().begin() + 13, ret.data().end(), 0));
         REQUIRE(ret.getSubstitutions().size() == 2);
-        CHECK(ret.getSubstitutions()[1].macroIdentifier.offset == 8);
-        CHECK(ret.getSubstitutions()[1].macroIdentifier.length == 4);
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(ret.getSubstitutions()[1]));
+        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).macroIdentifier.offset == 8);
+        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).macroIdentifier.length == 4);
     }
     SECTION("Empty")
     {
@@ -392,35 +393,40 @@ TEST_CASE("PP Function like Macros", "[PP]")
         CHECK(haveMacroID(ret.data().begin() + 20, ret.data().begin() + 21, 0));
         auto& subs = ret.getSubstitutions();
         REQUIRE(subs.size() == 6);
-        CHECK(subs[1].macroIdentifier.offset == 8);
-        CHECK(subs[1].macroIdentifier.length == 3);
-        CHECK(subs[1].replacedIdentifier.offset == 50);
-        CHECK(subs[1].replacedIdentifier.length == 8);
-        CHECK(subs[1].replacedIdentifier.macroId == cld::Lexer::MacroID(0));
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[1]));
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.offset == 8);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.length == 3);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.offset == 50);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.length == 8);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.macroId == cld::Lexer::MacroID(0));
 
-        CHECK(subs[2].macroIdentifier.offset == 12);
-        CHECK(subs[2].macroIdentifier.length == 1);
-        CHECK(subs[2].replacedIdentifier.offset == 20);
-        CHECK(subs[2].replacedIdentifier.length == 1);
-        CHECK(subs[2].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[2]));
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).macroIdentifier.offset == 12);
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).macroIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.offset == 20);
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
 
-        CHECK(subs[3].macroIdentifier.offset == 15);
-        CHECK(subs[3].macroIdentifier.length == 1);
-        CHECK(subs[3].replacedIdentifier.offset == 26);
-        CHECK(subs[3].replacedIdentifier.length == 1);
-        CHECK(subs[3].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[3]));
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).macroIdentifier.offset == 15);
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).macroIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.offset == 26);
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
 
-        CHECK(subs[4].macroIdentifier.offset == 12);
-        CHECK(subs[4].macroIdentifier.length == 1);
-        CHECK(subs[4].replacedIdentifier.offset == 32);
-        CHECK(subs[4].replacedIdentifier.length == 1);
-        CHECK(subs[4].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[4]));
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).macroIdentifier.offset == 12);
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).macroIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.offset == 32);
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
 
-        CHECK(subs[5].macroIdentifier.offset == 15);
-        CHECK(subs[5].macroIdentifier.length == 1);
-        CHECK(subs[5].replacedIdentifier.offset == 38);
-        CHECK(subs[5].replacedIdentifier.length == 1);
-        CHECK(subs[5].replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[5]));
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).macroIdentifier.offset == 15);
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).macroIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.offset == 38);
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.length == 1);
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
     }
     SECTION("Argument count")
     {
@@ -577,6 +583,13 @@ TEST_CASE("PP Operator #", "[PP]")
         auto ret = preprocessResult("#define Q(x) #x\n"
                                     "Q(5)");
         CHECK_THAT(ret, ProducesPP("\"5\""));
+        auto& subs = ret.getSubstitutions();
+        REQUIRE(subs.size() == 4);
+        REQUIRE(std::holds_alternative<cld::Source::Stringification>(subs[3]));
+        auto& stringify = cld::get<cld::Source::Stringification>(subs[3]);
+        CHECK(stringify.replacedIdentifier.getRepresentation(ret) == "x");
+        REQUIRE(stringify.stringified.size() == 1);
+        CHECK(stringify.stringified[0].getRepresentation(ret) == "5");
     }
     SECTION("Whitespace")
     {
@@ -629,9 +642,15 @@ TEST_CASE("PP Operator ##", "[PP]")
 {
     SECTION("Simple")
     {
-        auto ret = preprocessResult("#define Q 5 ## 5\n"
+        auto ret = preprocessResult("#define Q 5 ## 7\n"
                                     "Q");
-        CHECK_THAT(ret, ProducesPP("55"));
+        CHECK_THAT(ret, ProducesPP("57"));
+        auto& subs = ret.getSubstitutions();
+        REQUIRE(subs.size() == 3);
+        REQUIRE(std::holds_alternative<cld::Source::TokenConcatenation>(subs[2]));
+        auto& stringify = cld::get<cld::Source::TokenConcatenation>(subs[2]);
+        CHECK(stringify.leftToken.getRepresentation(ret) == "5");
+        CHECK(stringify.rightToken.getRepresentation(ret) == "7");
     }
     SECTION("Disabled by substitution")
     {

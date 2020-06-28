@@ -16,6 +16,9 @@ namespace Source
 {
 struct File;
 struct Substitution;
+struct Stringification;
+struct TokenConcatenation;
+using PPRecord = std::vector<std::variant<Source::Substitution, Source::Stringification, Source::TokenConcatenation>>;
 } // namespace Source
 
 class SourceInterface
@@ -36,6 +39,6 @@ public:
 
     [[nodiscard]] virtual const std::vector<Source::File>& getFiles() const noexcept = 0;
 
-    [[nodiscard]] virtual const std::vector<Source::Substitution>& getSubstitutions() const noexcept = 0;
+    [[nodiscard]] virtual const Source::PPRecord& getSubstitutions() const noexcept = 0;
 };
 } // namespace cld

@@ -36,22 +36,71 @@ struct Substitution
     Identifier replacedIdentifier;
     bool empty;
 };
+
+struct Stringification
+{
+    std::vector<Lexer::PPToken> stringified;
+    Lexer::PPToken replacedIdentifier;
+};
+
+struct TokenConcatenation
+{
+    Lexer::PPToken leftToken;
+    Lexer::PPToken rightToken;
+};
 } // namespace Source
 
+namespace detail
+{
 template <class T>
-class SourceObject final : public SourceInterface
+class SourceObjectStorage;
+
+template <>
+class SourceObjectStorage<Lexer::CToken>
+{
+};
+
+template <>
+class SourceObjectStorage<Lexer::PPToken>
+{
+    Lexer::IntervalMap m_intervalMap;
+
+public:
+    SourceObjectStorage() = default;
+
+    SourceObjectStorage(Lexer::IntervalMap intervalMap) : m_intervalMap(std::move(intervalMap)) {}
+
+    const Lexer::IntervalMap& getIntervalMap() const
+    {
+        return m_intervalMap;
+    }
+};
+} // namespace detail
+
+template <class T>
+class SourceObject final : public SourceInterface, public detail::SourceObjectStorage<T>
 {
     std::vector<T> m_tokens;
     std::vector<Source::File> m_files;
     LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
-    std::vector<Source::Substitution> m_substitutions;
+    Source::PPRecord m_substitutions;
 
 public:
     SourceObject() = default;
 
-    explicit SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                          std::vector<Source::Substitution> substitutions)
+    SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
+                 Source::PPRecord substitutions)
         : m_tokens(std::move(tokens)),
+          m_files(std::move(files)),
+          m_languageOptions(std::move(languageOptions)),
+          m_substitutions(substitutions)
+    {
+    }
+
+    SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
+                 Source::PPRecord substitutions, detail::SourceObjectStorage<T> storage)
+        : detail::SourceObjectStorage<T>(std::move(storage)),
+          m_tokens(std::move(tokens)),
           m_files(std::move(files)),
           m_languageOptions(std::move(languageOptions)),
           m_substitutions(substitutions)
@@ -99,7 +148,7 @@ public:
         return m_languageOptions;
     }
 
-    [[nodiscard]] const std::vector<Source::Substitution>& getSubstitutions() const noexcept override
+    [[nodiscard]] const Source::PPRecord& getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }

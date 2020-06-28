@@ -155,6 +155,9 @@ std::vector<CToken> toCTokens(PPTokenIterator begin, PPTokenIterator end, const 
 class TokenBase
 {
 protected:
+    bool m_leadingWhitespace : 1;
+    bool m_fromStringification : 1;
+    bool m_fromTokenPasting : 1;
     TokenType m_tokenType; ///< Type of the token
     MacroID m_macroId;     ///< MacroID. All tokens with the same ID have been inserted by the same macro
     FileID m_fileID;
@@ -164,7 +167,14 @@ protected:
     TokenBase() = default;
 
     TokenBase(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileID, MacroID macroID)
-        : m_tokenType(tokenType), m_macroId(macroID), m_fileID(fileID), m_offset(offset), m_length(length)
+        : m_leadingWhitespace(false),
+          m_fromStringification(false),
+          m_fromTokenPasting(false),
+          m_tokenType(tokenType),
+          m_macroId(macroID),
+          m_fileID(fileID),
+          m_offset(offset),
+          m_length(length)
     {
     }
 
@@ -214,56 +224,6 @@ public:
     {
         m_fileID = fileId;
     }
-};
-
-using IntervalMap = std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>;
-
-class PPToken final : public TokenBase
-{
-    std::string m_value;
-    IntervalMap
-        m_intervalMap; /// Slice of intervalmap of the Lexer for this token. Only populated for Literals and PPNumber
-    std::uint64_t m_charSpaceOffset;
-    std::uint64_t m_charSpaceLength; /**< Length of the token after trigraphs and Backslash Newline pairs in it's
-                                      representation have been removed*/
-    bool m_leadingWhitespace : 1;
-    bool m_fromStringification : 1;
-    bool m_fromTokenPasting : 1;
-
-public:
-    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
-            std::uint64_t charSpaceLength, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {},
-            IntervalMap intervalMap = {})
-        : TokenBase(tokenType, offset, length, fileID, macroID),
-          m_value(value.begin(), value.end()),
-          m_intervalMap(std::move(intervalMap)),
-          m_charSpaceOffset(charSpaceOffset),
-          m_charSpaceLength(charSpaceLength),
-          m_leadingWhitespace(false),
-          m_fromStringification(false),
-          m_fromTokenPasting(false)
-    {
-    }
-
-    [[nodiscard]] std::uint64_t getCharSpaceOffset() const noexcept
-    {
-        return m_charSpaceOffset;
-    }
-
-    [[nodiscard]] std::uint64_t getCharSpaceLength() const
-    {
-        return m_charSpaceLength;
-    }
-
-    [[nodiscard]] std::string_view getValue() const noexcept
-    {
-        return m_value;
-    }
-
-    [[nodiscard]] const IntervalMap& getIntervalMap() const
-    {
-        return m_intervalMap;
-    }
 
     [[nodiscard]] bool hasLeadingWhitespace() const noexcept
     {
@@ -293,6 +253,41 @@ public:
     void setFromTokenPasting(bool fromTokenPasting)
     {
         m_fromTokenPasting = fromTokenPasting;
+    }
+};
+
+using IntervalMap = std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>;
+
+class PPToken final : public TokenBase
+{
+    std::string m_value;
+    std::uint64_t m_charSpaceOffset;
+    std::uint64_t m_charSpaceLength; /**< Length of the token after trigraphs and Backslash Newline pairs in it's
+                                      representation have been removed*/
+
+public:
+    PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
+            std::uint64_t charSpaceLength, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {})
+        : TokenBase(tokenType, offset, length, fileID, macroID),
+          m_value(value.begin(), value.end()),
+          m_charSpaceOffset(charSpaceOffset),
+          m_charSpaceLength(charSpaceLength)
+    {
+    }
+
+    [[nodiscard]] std::uint64_t getCharSpaceOffset() const noexcept
+    {
+        return m_charSpaceOffset;
+    }
+
+    [[nodiscard]] std::uint64_t getCharSpaceLength() const
+    {
+        return m_charSpaceLength;
+    }
+
+    [[nodiscard]] std::string_view getValue() const noexcept
+    {
+        return m_value;
     }
 };
 

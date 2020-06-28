@@ -839,7 +839,7 @@ class Context
 public:
     std::uint64_t tokenStartOffset;
 
-    Context(std::string_view sourceSpace, IntervalMap&& characterToSourceSpace, const std::string& characterSpace,
+    Context(std::string_view sourceSpace, IntervalMap characterToSourceSpace, std::string_view characterSpace,
             std::uint64_t& offset, std::vector<std::uint64_t> lineStarts, llvm::raw_ostream* reporter) noexcept
         : m_reporter(reporter),
           m_sourceSpace(sourceSpace),
@@ -938,31 +938,9 @@ public:
         }
         auto sourceStart = map(m_characterToSourceSpace, start).first;
         auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
-        if (tokenType != TokenType::PPNumber && tokenType != TokenType::StringLiteral
-            && tokenType != TokenType::Literal)
-        {
-            m_result
-                .emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, FileID(0),
-                              MacroID(0), value)
-                .setLeadingWhitespace(leadingWhitespace);
-        }
-        else
-        {
-            auto result = std::lower_bound(m_characterToSourceSpace.begin(), m_characterToSourceSpace.end(), start,
-                                           [](auto&& lhs, auto&& rhs) { return std::get<0>(lhs) < rhs; });
-            CLD_ASSERT(result != m_characterToSourceSpace.end());
-            if (std::get<0>(*result) > start)
-            {
-                result--;
-            }
-            auto endInterval = std::find_if(result, m_characterToSourceSpace.end(),
-                                            [end](auto&& value) { return std::get<0>(value) > end; });
-            m_result
-                .emplace_back(
-                    tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, FileID(0), MacroID(0), value,
-                    std::vector(result, endInterval != m_characterToSourceSpace.end() ? endInterval + 1 : endInterval))
-                .setLeadingWhitespace(leadingWhitespace);
-        }
+        auto& newToken = m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start,
+                                               FileID(0), MacroID(0), value);
+        newToken.setLeadingWhitespace(leadingWhitespace);
     }
 
     void push(TokenType tokenType, std::string_view value = {})
@@ -1770,7 +1748,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
         characterToSourceSpace.emplace_back(charactersSpace.size(), 0, 0);
     }
 
-    Context context(source, std::move(characterToSourceSpace), charactersSpace, offset, starts, reporter);
+    Context context(source, characterToSourceSpace, charactersSpace, offset, starts, reporter);
     const auto* end = charactersSpace.data() + charactersSpace.size();
     for (const auto* iter = charactersSpace.data(); iter != end;)
     {
@@ -1868,7 +1846,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
     return PPSourceObject(
         context.getResult(),
         {Source::File{to_string(sourceFile), to_string(source), std::move(starts), context.getResult()}},
-        languageOptions, {});
+        languageOptions, {}, {std::move(characterToSourceSpace)});
 }
 
 [[nodiscard]] std::string_view cld::Lexer::TokenBase::getRepresentation(const SourceInterface& sourceObject) const
@@ -1898,8 +1876,8 @@ void report(llvm::raw_ostream* reporter, const cld::PPSourceObject& sourceObject
         return;
     }
     report(
-        *reporter, sourceObject.getFiles()[(std::uint64_t)token.getFileId()].source, token.getIntervalMap(), type,
-        colour, message, location, std::move(arrows), underlineStart, underlineEnd,
+        *reporter, sourceObject.getFiles()[(std::uint64_t)token.getFileId()].source, sourceObject.getIntervalMap(),
+        type, colour, message, location, std::move(arrows), underlineStart, underlineEnd,
         [&sourceObject, &token](std::uint64_t value) { return sourceObject.getLineNumber(token.getFileId(), value); },
         [&sourceObject, &token](std::uint64_t value) {
             return sourceObject.getLineStartOffset(token.getFileId(), value);
