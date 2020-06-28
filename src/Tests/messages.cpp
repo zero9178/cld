@@ -247,7 +247,7 @@ TEST_CASE("Message Underline", "[MSG]")
 
 TEST_CASE("Message PointAt", "[MSG]")
 {
-    SECTION("Underline word for word")
+    SECTION("Point at word for word")
     {
         const auto* begin = lexes("A series of\n identifiers");
         CHECK_THAT(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::PointAt(begin)}),
@@ -566,5 +566,94 @@ TEST_CASE("Message Annotate", "[MSG]")
      | |          text2
      | text
 )"));
+    }
+}
+
+TEST_CASE("Message Preprocessed Output", "[MSG]")
+{
+    const auto* begin = pp("#define MACRO x y z\n"
+                           "a MACRO b");
+    SECTION("Single target outside of Macro")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin) == R"(2:1: error: Message
+   2 | a MACRO b
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 4) == R"(2:9: error: Message
+   2 | a MACRO b
+)");
+    }
+    SECTION("Single target in Macro")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1) == R"(2:3: error: Message
+   2 | a MACRO b
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 2) == R"(2:3: error: Message
+   2 | a MACRO b
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 3) == R"(2:3: error: Message
+   2 | a MACRO b
+)");
+    }
+    SECTION("Range")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin, begin + 4) == R"(2:1: error: Message
+   2 | a MACRO b
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1, begin + 2) == R"(2:3: error: Message
+   2 | a MACRO b
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin, begin + 2) == R"(2:1: error: Message
+   2 | a MACRO b
+)");
+    }
+    SECTION("Underline")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1, Modifiers{cld::Underline(begin + 1)})
+              == R"(2:3: error: Message
+   2 | a MACRO b
+     |   ~~~~~
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Underline(begin, begin + 2)})
+              == R"(2:1: error: Message
+   2 | a MACRO b
+     | ~~~~~~~
+)");
+    }
+    SECTION("Point At")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1, Modifiers{cld::PointAt(begin + 1)})
+              == R"(2:3: error: Message
+   2 | a MACRO b
+     |   ^^^^^
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::PointAt(begin, begin + 3)})
+              == R"(2:1: error: Message
+   2 | a MACRO b
+     | ^ ^^^^^
+)");
+    }
+    SECTION("Insert")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1, Modifiers{cld::InsertAfter(begin + 1)})
+              == R"(2:3: error: Message
+   2 | a MACRO b
+)");
+    }
+    SECTION("Annotate")
+    {
+        CHECK(messagePrints(cld::Message::Error, "Message", begin + 1, Modifiers{cld::Annotate(begin + 1, "text")})
+              == R"(2:3: error: Message
+   2 | a MACRO b
+     |   ~~~~~
+     |     |
+     |     text
+)");
+        CHECK(messagePrints(cld::Message::Error, "Message", begin, Modifiers{cld::Annotate(begin, begin + 2, "text")})
+              == R"(2:1: error: Message
+   2 | a MACRO b
+     | ~~~~~~~
+     |    |
+     |    text
+)");
     }
 }

@@ -59,8 +59,7 @@ class Preprocessor final : private cld::SourceInterface
             return;
         }
         m_result.insert(m_result.end(), tokens.begin(), tokens.end());
-        m_result.insert(m_result.end(),
-                        cld::Lexer::PPToken(cld::Lexer::TokenType::Newline, 0, 0, 0, 0, cld::Lexer::FileID(0)));
+        m_result.insert(m_result.end(), cld::Lexer::PPToken(cld::Lexer::TokenType::Newline, 0, 0, 0, 0, 0));
     }
 
     void log(std::vector<cld::Message> messages)
@@ -110,8 +109,7 @@ class Preprocessor final : private cld::SourceInterface
     {
         std::size_t operator()(const cld::Lexer::PPToken* ptr) const noexcept
         {
-            return std::hash<std::uint64_t>()(ptr->getOffset())
-                   ^ (std::hash<cld::Lexer::FileID>()(ptr->getFileId()) << 1);
+            return std::hash<std::uint64_t>()(ptr->getOffset()) ^ (std::hash<std::uint32_t>()(ptr->getFileId()) << 1);
         }
     };
 
@@ -119,8 +117,7 @@ class Preprocessor final : private cld::SourceInterface
     {
         bool operator()(const cld::Lexer::PPToken* lhs, const cld::Lexer::PPToken* rhs) const noexcept
         {
-            return std::tuple(lhs->getOffset(), (std::uint64_t)lhs->getFileId())
-                   == std::tuple(rhs->getOffset(), (std::uint64_t)rhs->getFileId());
+            return std::tuple(lhs->getOffset(), lhs->getFileId()) == std::tuple(rhs->getOffset(), rhs->getFileId());
         }
     };
 
@@ -160,11 +157,12 @@ class Preprocessor final : private cld::SourceInterface
             // Token pasting is done if iter is either the right
             bool doublePoundToTheLeft = !result.empty()
                                         && result.back().getTokenType() == cld::Lexer::TokenType::DoublePound
-                                        && !result.back().isFromTokenPasting();
+                                        && !std::holds_alternative<cld::Source::TokenConcatenation>(
+                                            m_substitutions[result.back().getMacroId()]);
             // Or left hand side of the operator
-            bool doublePoundToTheRight = iter + 1 != replacementList.end()
-                                         && (iter + 1)->getTokenType() == cld::Lexer::TokenType::DoublePound
-                                         && !(iter + 1)->isFromTokenPasting();
+            bool doublePoundToTheRight =
+                iter + 1 != replacementList.end() && (iter + 1)->getTokenType() == cld::Lexer::TokenType::DoublePound
+                && !std::holds_alternative<cld::Source::TokenConcatenation>(m_substitutions[(iter + 1)->getMacroId()]);
             // But not when the argument is being stringified (then the string needs to be pasted)
             bool inTokenPasting = (doublePoundToTheLeft || doublePoundToTheRight) && !stringify;
             auto index = nameToIndex.find(iter->getValue());
@@ -187,7 +185,7 @@ class Preprocessor final : private cld::SourceInterface
             m_substitutions.push_back({});
             for (auto& token : copy)
             {
-                token.setMacroId(cld::Lexer::MacroID(i));
+                token.setMacroId(i);
             }
             auto prevSize = result.size();
             if (!stringify)
@@ -215,11 +213,10 @@ class Preprocessor final : private cld::SourceInterface
                         result.pop_back();
                     }
                 }
+                auto temp = *iter;
+                temp.setMacroId(parentID);
                 m_substitutions[i] = cld::Source::Substitution{
-                    {identifierList[index->second].getOffset(), identifierList[index->second].getLength(),
-                     identifierList[index->second].getFileId(), identifierList[index->second].getMacroId()},
-                    {iter->getOffset(), iter->getLength(), iter->getFileId(), cld::Lexer::MacroID(parentID)},
-                    prevSize == result.size()};
+                    identifierList[index->second], std::move(temp), {}, prevSize == result.size()};
             }
             else
             {
@@ -256,9 +253,9 @@ class Preprocessor final : private cld::SourceInterface
                 CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
                 CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
                 auto file = scratchPadPP.getFiles()[0];
-                file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
-                file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
-                result.insert(result.end(), file.ppTokens[0])->setFromStringification(true);
+                file.ppTokens[0].setFileId(m_files.size());
+                file.ppTokens[0].setMacroId(i);
+                result.insert(result.end(), file.ppTokens[0]);
                 m_files.push_back(std::move(file));
                 m_substitutions.push_back(cld::Source::Stringification{std::move(copy), *iter});
             }
@@ -426,7 +423,8 @@ class Preprocessor final : private cld::SourceInterface
     {
         for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
         {
-            if (iter->getTokenType() != cld::Lexer::TokenType::DoublePound || iter->isFromTokenPasting()
+            if (iter->getTokenType() != cld::Lexer::TokenType::DoublePound
+                || std::holds_alternative<cld::Source::TokenConcatenation>(m_substitutions[iter->getMacroId()])
                 || (concatOperators && concatOperators->count(&*iter) == 0))
             {
                 continue;
@@ -466,12 +464,11 @@ class Preprocessor final : private cld::SourceInterface
             m_disabledMacros[i].insert(m_disabledMacros[parentID].begin(), m_disabledMacros[parentID].end());
             m_substitutions.push_back(cld::Source::TokenConcatenation{lhs, rhs});
             auto file = scratchPadPP.getFiles()[0];
-            file.ppTokens[0].setFileId(cld::Lexer::FileID(m_files.size()));
-            file.ppTokens[0].setMacroId(cld::Lexer::MacroID(i));
+            file.ppTokens[0].setFileId(m_files.size());
+            file.ppTokens[0].setMacroId(i);
             iter = tokens.erase(iter - 1, iter + 1);
             *iter = file.ppTokens[0];
             iter->setLeadingWhitespace(leadingWhitespace);
-            iter->setFromTokenPasting(true);
             m_files.push_back(std::move(file));
         }
     }
@@ -485,7 +482,7 @@ class Preprocessor final : private cld::SourceInterface
         }
         std::vector<cld::Lexer::PPToken> output;
         auto line = tokens.front().getLine(*this);
-        std::string_view file = m_files[(std::uint64_t)tokens.front().getFileId()].path;
+        std::string_view file = m_files[tokens.front().getFileId()].path;
         auto* start = tokens.data();
         for (auto* iter = tokens.data(); iter != tokens.data() + tokens.size();)
         {
@@ -531,8 +528,8 @@ class Preprocessor final : private cld::SourceInterface
             }
             auto result = m_defines.find(name);
             if (result == m_defines.end()
-                || ((std::uint64_t)iter->getMacroId() < m_disabledMacros.size()
-                    && m_disabledMacros[(std::uint64_t)iter->getMacroId()].count(cld::to_string(name)) > 0))
+                || (iter->getMacroId() < m_disabledMacros.size()
+                    && m_disabledMacros[iter->getMacroId()].count(cld::to_string(name)) > 0))
             {
                 iter++;
                 continue;
@@ -557,14 +554,11 @@ class Preprocessor final : private cld::SourceInterface
                 // Object like macro
                 auto i = ++m_macroID;
                 m_disabledMacros.push_back({cld::to_string(name)});
-                m_disabledMacros[i].insert(m_disabledMacros[(std::uint64_t)iter->getMacroId()].begin(),
-                                           m_disabledMacros[(std::uint64_t)iter->getMacroId()].end());
+                m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
+                                           m_disabledMacros[iter->getMacroId()].end());
                 std::vector<cld::Lexer::PPToken> temp = result->second.replacement;
-                m_substitutions.push_back(cld::Source::Substitution{
-                    {result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
-                     result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
-                    {iter->getOffset(), iter->getLength(), iter->getFileId(), iter->getMacroId()},
-                    temp.empty()});
+                m_substitutions.push_back(
+                    cld::Source::Substitution{*result->second.identifierPos, *iter, {}, temp.empty()});
                 if (temp.empty())
                 {
                     start = ++iter;
@@ -578,7 +572,7 @@ class Preprocessor final : private cld::SourceInterface
                 temp[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
                 for (auto& iter2 : temp)
                 {
-                    iter2.setMacroId(cld::Lexer::MacroID(i));
+                    iter2.setMacroId(i);
                 }
                 evaluateConcats(i, temp);
                 temp.insert(temp.end(), std::move_iterator(iter + 1),
@@ -592,8 +586,8 @@ class Preprocessor final : private cld::SourceInterface
             auto* namePos = iter;
             auto i = ++m_macroID;
             m_disabledMacros.push_back({cld::to_string(name)});
-            m_disabledMacros[i].insert(m_disabledMacros[(std::uint64_t)iter->getMacroId()].begin(),
-                                       m_disabledMacros[(std::uint64_t)iter->getMacroId()].end());
+            m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
+                                       m_disabledMacros[iter->getMacroId()].end());
             iter = std::find_if(iter + 1, tokens.data() + tokens.size(),
                                 [&line](const cld::Lexer::PPToken& token) {
                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)
@@ -625,12 +619,7 @@ class Preprocessor final : private cld::SourceInterface
             auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
                              [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
-            m_substitutions.push_back(cld::Source::Substitution{
-                {result->second.identifierPos->getOffset(), result->second.identifierPos->getLength(),
-                 result->second.identifierPos->getFileId(), result->second.identifierPos->getMacroId()},
-                {namePos->getOffset(), iter->getOffset() + iter->getLength() - namePos->getOffset(),
-                 namePos->getFileId(), namePos->getMacroId()},
-                false});
+            m_substitutions.push_back(cld::Source::Substitution{*result->second.identifierPos, *namePos, *iter, false});
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
                                           [](auto&&) { return true; });
@@ -644,7 +633,6 @@ class Preprocessor final : private cld::SourceInterface
                 start = ++iter;
                 continue;
             }
-            evaluateConcats(i, actualReplacement, concatOps);
 
             for (auto& iter2 : actualReplacement)
             {
@@ -652,8 +640,9 @@ class Preprocessor final : private cld::SourceInterface
                 {
                     continue;
                 }
-                iter2.setMacroId(cld::Lexer::MacroID(i));
+                iter2.setMacroId(i);
             }
+            evaluateConcats(i, actualReplacement, concatOps);
             actualReplacement.insert(actualReplacement.end(), std::move_iterator(iter + 1),
                                      std::move_iterator(tokens.data() + tokens.size()));
             tokens = std::move(actualReplacement);
@@ -680,29 +669,27 @@ class Preprocessor final : private cld::SourceInterface
         return {input.begin(), input.end()};
     }
 
-    std::uint64_t getLineNumber(cld::Lexer::FileID fileID, std::uint64_t offset) const noexcept override
+    std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        auto result = std::lower_bound(m_files[(std::uint64_t)fileID].starts.begin(),
-                                       m_files[(std::uint64_t)fileID].starts.end(), offset);
-        return std::distance(m_files[(std::uint64_t)fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
+        CLD_ASSERT(fileID < m_files.size());
+        auto result = std::lower_bound(m_files[fileID].starts.begin(), m_files[fileID].starts.end(), offset);
+        return std::distance(m_files[fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
     }
 
-    std::uint64_t getLineStartOffset(cld::Lexer::FileID fileID, std::uint64_t line) const noexcept override
+    std::uint64_t getLineStartOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[(std::uint64_t)fileID].starts.size());
-        return m_files[(std::uint64_t)fileID].starts[line - 1];
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return m_files[fileID].starts[line - 1];
     }
 
-    std::uint64_t getLineEndOffset(cld::Lexer::FileID fileID, std::uint64_t line) const noexcept override
+    std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[(std::uint64_t)fileID].starts.size());
-        return line == m_files[(std::uint64_t)fileID].starts.size() ?
-                   m_files[(std::uint64_t)fileID].ppTokens.back().getOffset()
-                       + m_files[(std::uint64_t)fileID].ppTokens.back().getLength() :
-                   m_files[(std::uint64_t)fileID].starts[line];
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return line == m_files[fileID].starts.size() ?
+                   m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength() :
+                   m_files[fileID].starts[line];
     }
 
     const std::vector<cld::Source::File>& getFiles() const noexcept override
@@ -788,7 +775,7 @@ public:
         {
             for (auto& iter2 : iter.ppTokens)
             {
-                iter2.setFileId(cld::Lexer::FileID(m_files.size()));
+                iter2.setFileId(m_files.size());
             }
             m_files.push_back(
                 {std::move(iter.path), std::move(iter.source), std::move(iter.starts), std::move(iter.ppTokens)});

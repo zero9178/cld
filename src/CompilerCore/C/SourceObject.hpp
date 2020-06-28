@@ -25,15 +25,9 @@ struct File
 
 struct Substitution
 {
-    struct Identifier
-    {
-        std::uint64_t offset;
-        std::uint64_t length;
-        Lexer::FileID fileId;
-        Lexer::MacroID macroId;
-    };
-    Identifier macroIdentifier;
-    Identifier replacedIdentifier;
+    Lexer::PPToken macroIdentifier;
+    Lexer::PPToken replacedIdentifier;
+    std::optional<Lexer::PPToken> closeParentheses;
     bool empty;
 };
 
@@ -107,30 +101,28 @@ public:
     {
     }
 
-    [[nodiscard]] std::uint64_t getLineNumber(Lexer::FileID fileID, std::uint64_t offset) const noexcept override
+    [[nodiscard]] std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {
         CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        auto result = std::lower_bound(m_files[(std::uint64_t)fileID].starts.begin(),
-                                       m_files[(std::uint64_t)fileID].starts.end(), offset);
-        CLD_ASSERT(result != m_files[(std::uint64_t)fileID].starts.end());
-        return std::distance(m_files[(std::uint64_t)fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
+        auto result = std::lower_bound(m_files[fileID].starts.begin(), m_files[fileID].starts.end(), offset);
+        CLD_ASSERT(result != m_files[fileID].starts.end());
+        return std::distance(m_files[fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
     }
 
-    [[nodiscard]] std::uint64_t getLineStartOffset(Lexer::FileID fileID, std::uint64_t line) const noexcept override
+    [[nodiscard]] std::uint64_t getLineStartOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[(std::uint64_t)fileID].starts.size());
-        return m_files[(std::uint64_t)fileID].starts[line - 1];
+        CLD_ASSERT(fileID < m_files.size());
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return m_files[fileID].starts[line - 1];
     }
 
-    [[nodiscard]] std::uint64_t getLineEndOffset(Lexer::FileID fileID, std::uint64_t line) const noexcept override
+    [[nodiscard]] std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT((std::uint64_t)fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[(std::uint64_t)fileID].starts.size());
-        return line == m_files[(std::uint64_t)fileID].starts.size() ?
-                   m_files[(std::uint64_t)fileID].ppTokens.back().getOffset()
-                       + m_files[(std::uint64_t)fileID].ppTokens.back().getLength() :
-                   m_files[(std::uint64_t)fileID].starts[line];
+        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
+        return line == m_files[fileID].starts.size() ?
+                   m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength() :
+                   m_files[fileID].starts[line];
     }
 
     [[nodiscard]] const std::vector<T>& data() const noexcept

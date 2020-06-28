@@ -243,11 +243,10 @@ TEST_CASE("PP Define", "[PP]")
 namespace
 {
 template <class InputIterator>
-bool haveMacroID(InputIterator begin, InputIterator end, std::uint64_t macroId)
+bool haveMacroID(InputIterator begin, InputIterator end, std::uint32_t macroId)
 {
-    return std::all_of(begin, end, [macroId](const cld::Lexer::PPToken& token) {
-        return token.getMacroId() == cld::Lexer::MacroID(macroId);
-    });
+    return std::all_of(begin, end,
+                       [macroId](const cld::Lexer::PPToken& token) { return token.getMacroId() == macroId; });
 }
 } // namespace
 
@@ -264,8 +263,12 @@ TEST_CASE("PP Object like Macros", "[PP]")
         CHECK(haveMacroID(ret.data().begin() + 13, ret.data().end(), 0));
         REQUIRE(ret.getSubstitutions().size() == 2);
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(ret.getSubstitutions()[1]));
-        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).macroIdentifier.offset == 8);
-        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).macroIdentifier.length == 4);
+        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).replacedIdentifier.getRepresentation(ret)
+              == "FUNC");
+        CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).macroIdentifier.getRepresentation(ret)
+              == "FUNC");
+        CHECK(!cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).empty);
+        CHECK(!cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).closeParentheses);
     }
     SECTION("Empty")
     {
@@ -394,39 +397,41 @@ TEST_CASE("PP Function like Macros", "[PP]")
         auto& subs = ret.getSubstitutions();
         REQUIRE(subs.size() == 6);
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[1]));
-        CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.offset == 8);
-        CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.length == 3);
-        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.offset == 50);
-        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.length == 8);
-        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.macroId == cld::Lexer::MacroID(0));
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.getRepresentation(ret) == "max");
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.getRepresentation(ret) == "max");
+        CHECK(!cld::get<cld::Source::Substitution>(subs[1]).empty);
+        REQUIRE(cld::get<cld::Source::Substitution>(subs[1]).closeParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).closeParentheses->getTokenType()
+              == cld::Lexer::TokenType::CloseParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[1]).replacedIdentifier.getMacroId() == 0);
 
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[2]));
-        CHECK(cld::get<cld::Source::Substitution>(subs[2]).macroIdentifier.offset == 12);
-        CHECK(cld::get<cld::Source::Substitution>(subs[2]).macroIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.offset == 20);
-        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).macroIdentifier.getRepresentation(ret) == "a");
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.getRepresentation(ret) == "a");
+        CHECK(!cld::get<cld::Source::Substitution>(subs[2]).empty);
+        CHECK(!cld::get<cld::Source::Substitution>(subs[2]).closeParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[2]).replacedIdentifier.getMacroId() == 1);
 
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[3]));
-        CHECK(cld::get<cld::Source::Substitution>(subs[3]).macroIdentifier.offset == 15);
-        CHECK(cld::get<cld::Source::Substitution>(subs[3]).macroIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.offset == 26);
-        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).macroIdentifier.getRepresentation(ret) == "b");
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.getRepresentation(ret) == "b");
+        CHECK(!cld::get<cld::Source::Substitution>(subs[3]).empty);
+        CHECK(!cld::get<cld::Source::Substitution>(subs[3]).closeParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[3]).replacedIdentifier.getMacroId() == 1);
 
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[4]));
-        CHECK(cld::get<cld::Source::Substitution>(subs[4]).macroIdentifier.offset == 12);
-        CHECK(cld::get<cld::Source::Substitution>(subs[4]).macroIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.offset == 32);
-        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).macroIdentifier.getRepresentation(ret) == "a");
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.getRepresentation(ret) == "a");
+        CHECK(!cld::get<cld::Source::Substitution>(subs[4]).empty);
+        CHECK(!cld::get<cld::Source::Substitution>(subs[4]).closeParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[4]).replacedIdentifier.getMacroId() == 1);
 
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[5]));
-        CHECK(cld::get<cld::Source::Substitution>(subs[5]).macroIdentifier.offset == 15);
-        CHECK(cld::get<cld::Source::Substitution>(subs[5]).macroIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.offset == 38);
-        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.length == 1);
-        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.macroId == cld::Lexer::MacroID(1));
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).macroIdentifier.getRepresentation(ret) == "b");
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.getRepresentation(ret) == "b");
+        CHECK(!cld::get<cld::Source::Substitution>(subs[5]).empty);
+        CHECK(!cld::get<cld::Source::Substitution>(subs[5]).closeParentheses);
+        CHECK(cld::get<cld::Source::Substitution>(subs[5]).replacedIdentifier.getMacroId() == 1);
     }
     SECTION("Argument count")
     {
@@ -676,11 +681,10 @@ TEST_CASE("PP Operator ##", "[PP]")
     }
     SECTION("Invalid concat")
     {
-        // TODO: Enable once Message works with Preprocessor Output aka macros
-        //        PP_OUTPUTS_WITH("#define concat(x,y) x ## y\n"
-        //                        "concat(.,foo)",
-        //                        ProducesWarning(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB)
-        //                            && ProducesNote(WHEN_CONCATENATING_N_AND_N.args(".", "foo")));
+        PP_OUTPUTS_WITH("#define concat(x,y) x ## y\n"
+                        "concat(.,foo)",
+                        ProducesWarning(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB)
+                            && ProducesNote(WHEN_CONCATENATING_N_AND_N.args(".", "foo")));
     }
     SECTION("Placemarkers")
     {

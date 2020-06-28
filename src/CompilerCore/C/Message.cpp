@@ -24,9 +24,30 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
     os.write(sv.data(), sv.size());
     return os;
 }
+
+cld::Lexer::TokenBase toMacroId0(cld::Lexer::TokenBase token, const cld::SourceInterface& sourceInterface)
+{
+    while (token.isMacroInserted())
+    {
+        token = cld::match(
+            sourceInterface.getSubstitutions()[token.getMacroId()],
+            [](std::monostate) -> cld::Lexer::TokenBase { CLD_UNREACHABLE; },
+            [](const cld::Source::Substitution& substitution) -> cld::Lexer::TokenBase {
+                return substitution.replacedIdentifier;
+            },
+            [](const cld::Source::Stringification& stringification) -> cld::Lexer::TokenBase {
+                return stringification.replacedIdentifier;
+            },
+            [](const cld::Source::TokenConcatenation& tokenConcatenation) -> cld::Lexer::TokenBase {
+                // I think it doesn't matter which we return here? Lets do left for now
+                return tokenConcatenation.leftToken;
+            });
+    }
+    return token;
+}
 } // namespace
 
-llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterface& sourceObject) const
+llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterface& sourceInterface) const
 {
     auto [colour, prefix] = [this]() -> std::pair<llvm::raw_ostream::Colors, std::string_view> {
         switch (getSeverity())
@@ -38,34 +59,34 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
         }
     }();
 
-    const auto endIterator = m_maybeEnd.value_or(m_begin + 1);
-    CLD_ASSERT(endIterator > m_begin);
+    Lexer::TokenBase actualBegin = toMacroId0(*m_begin, sourceInterface);
+    CLD_ASSERT(!m_maybeEnd || *m_maybeEnd > m_begin);
+    Lexer::TokenBase actualEnd = toMacroId0(*(m_maybeEnd.value_or(m_begin + 1) - 1), sourceInterface);
 
-    const auto TEST_ME_FILE_ID = m_begin->getFileId();
+    const auto TEST_ME_FILE_ID = actualBegin.getFileId();
 
-    const auto line = m_begin->getLine(sourceObject);
-    const auto startOffset = sourceObject.getLineStartOffset(TEST_ME_FILE_ID, line);
-    const auto endLine =
-        sourceObject.getLineNumber(TEST_ME_FILE_ID, (endIterator - 1)->getOffset() + (endIterator - 1)->getLength());
-    const auto endOffset = sourceObject.getLineEndOffset(TEST_ME_FILE_ID, endLine);
+    const auto line = actualBegin.getLine(sourceInterface);
+    const auto startOffset = sourceInterface.getLineStartOffset(TEST_ME_FILE_ID, line);
+    const auto endLine = sourceInterface.getLineNumber(TEST_ME_FILE_ID, actualEnd.getOffset() + actualEnd.getLength());
+    const auto endOffset = sourceInterface.getLineEndOffset(TEST_ME_FILE_ID, endLine);
 
     if (!m_after)
     {
-        const auto column = m_begin->getColumn(sourceObject);
-        llvm::WithColor(os, os.SAVEDCOLOR, true) << m_begin->getLine(sourceObject) << ':' << column << ": ";
+        const auto column = actualBegin.getColumn(sourceInterface);
+        llvm::WithColor(os, os.SAVEDCOLOR, true) << actualBegin.getLine(sourceInterface) << ':' << column << ": ";
     }
     else
     {
-        const auto endPosTokenOffset = m_begin->getOffset() + m_begin->getLength();
-        const auto endPosLine = sourceObject.getLineNumber(TEST_ME_FILE_ID, endPosTokenOffset);
-        const auto column = endPosTokenOffset - sourceObject.getLineStartOffset(TEST_ME_FILE_ID, endPosLine) + 1;
+        const auto endPosTokenOffset = actualBegin.getOffset() + actualBegin.getLength();
+        const auto endPosLine = sourceInterface.getLineNumber(TEST_ME_FILE_ID, endPosTokenOffset);
+        const auto column = endPosTokenOffset - sourceInterface.getLineStartOffset(TEST_ME_FILE_ID, endPosLine) + 1;
         llvm::WithColor(os, os.SAVEDCOLOR, true) << endPosLine << ':' << column << ": ";
     }
     llvm::WithColor(os, colour, true).get() << prefix;
     llvm::WithColor(os, os.SAVEDCOLOR, true) << m_message;
     os << '\n';
 
-    auto view = std::string_view(sourceObject.getFiles()[(std::uint64_t)TEST_ME_FILE_ID].source)
+    auto view = std::string_view(sourceInterface.getFiles()[(std::uint64_t)TEST_ME_FILE_ID].source)
                     .substr(startOffset, endOffset - startOffset - 1);
     std::vector<std::int64_t> mapping(endOffset - startOffset);
     llvm::SmallString<128> safeUTF8;
@@ -90,6 +111,10 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
         cld::match(
             iter, [](auto&&) {},
             [&](const InsertAfter& insertAfter) {
+                if (insertAfter.getInsertAfter()->isMacroInserted())
+                {
+                    return;
+                }
                 auto begin = insertAfter.getInsertAfter()->getOffset() + insertAfter.getInsertAfter()->getLength();
                 auto oldBegin = begin + oldMapping[begin - startOffset];
                 begin += mapping[begin - startOffset];
@@ -149,10 +174,11 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
             iter,
             [&](const Underline& underline) {
                 CLD_ASSERT(!underline.maybeEnd() || underline.begin() < *underline.maybeEnd());
-                auto begin = underline.begin()->getOffset();
+                auto begin = toMacroId0(*underline.begin(), sourceInterface).getOffset();
                 CLD_ASSERT(begin >= startOffset);
-                auto inclusiveEndIter = underline.maybeEnd().value_or(underline.begin() + 1) - 1;
-                auto end = inclusiveEndIter->getOffset() + inclusiveEndIter->getLength();
+                auto inclusiveEndToken =
+                    toMacroId0(*(underline.maybeEnd().value_or(underline.begin() + 1) - 1), sourceInterface);
+                auto end = inclusiveEndToken.getOffset() + inclusiveEndToken.getLength();
                 CLD_ASSERT(end < endOffset);
                 begin += mapping[begin - startOffset];
                 end += mapping[end - startOffset];
@@ -162,10 +188,11 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 auto endIter = pointAt.maybeEnd().value_or(pointAt.begin() + 1);
                 for (auto iter = pointAt.begin(); iter != endIter; iter++)
                 {
+                    auto token = toMacroId0(*iter, sourceInterface);
                     CLD_ASSERT(pointAt.begin() < endIter);
-                    auto begin = iter->getOffset();
+                    auto begin = token.getOffset();
                     CLD_ASSERT(begin >= startOffset);
-                    auto end = iter->getOffset() + iter->getLength();
+                    auto end = token.getOffset() + token.getLength();
                     CLD_ASSERT(end < endOffset);
                     begin += mapping[begin - startOffset];
                     end += mapping[end - startOffset];
@@ -173,11 +200,11 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 }
             },
             [&](const Annotate& annotate) {
-                auto endIter = annotate.maybeEnd().value_or(annotate.begin() + 1);
-                CLD_ASSERT(annotate.begin() != endIter);
-                auto begin = annotate.begin()->getOffset();
+                auto endToken = toMacroId0(*(annotate.maybeEnd().value_or(annotate.begin() + 1) - 1), sourceInterface);
+                CLD_ASSERT(!annotate.maybeEnd() || *annotate.maybeEnd() > annotate.begin());
+                auto begin = toMacroId0(*annotate.begin(), sourceInterface).getOffset();
                 CLD_ASSERT(begin >= startOffset);
-                auto end = (endIter - 1)->getOffset() + (endIter - 1)->getLength();
+                auto end = endToken.getOffset() + endToken.getLength();
                 CLD_ASSERT(end < endOffset);
                 auto pos = begin + (end - begin) / 2;
                 begin += mapping[begin - startOffset];
@@ -270,7 +297,7 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
         toPaintOn.resize(1);
         os << llvm::format_decimal(line + i, width) << " | ";
         auto string = lines[i];
-        std::int64_t lineStartOffset = sourceObject.getLineStartOffset(TEST_ME_FILE_ID, line + i);
+        std::int64_t lineStartOffset = sourceInterface.getLineStartOffset(TEST_ME_FILE_ID, line + i);
         lineStartOffset += mapping[lineStartOffset - startOffset];
 
         std::int64_t result = 0;

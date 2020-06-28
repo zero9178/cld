@@ -938,8 +938,8 @@ public:
         }
         auto sourceStart = map(m_characterToSourceSpace, start).first;
         auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
-        auto& newToken = m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start,
-                                               FileID(0), MacroID(0), value);
+        auto& newToken =
+            m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, 0, 0, value);
         newToken.setLeadingWhitespace(leadingWhitespace);
     }
 

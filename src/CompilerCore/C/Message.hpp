@@ -511,6 +511,6 @@ public:
 
     [[nodiscard]] Severity getSeverity() const;
 
-    llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceInterface& sourceObject) const;
+    llvm::raw_ostream& print(llvm::raw_ostream& os, const SourceInterface& sourceInterface) const;
 };
 } // namespace cld

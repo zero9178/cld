@@ -133,15 +133,6 @@ using TokenIterator = const TokenBase*;
 using CTokenIterator = const CToken*;
 using PPTokenIterator = const PPToken*;
 
-enum class FileID : std::uint32_t
-{
-};
-
-enum class MacroID : std::uint32_t
-{
-    NotMacroInserted = 0
-};
-
 PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
                         llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,
                         std::string_view sourceFile = "<stdin>");
@@ -156,20 +147,17 @@ class TokenBase
 {
 protected:
     bool m_leadingWhitespace : 1;
-    bool m_fromStringification : 1;
-    bool m_fromTokenPasting : 1;
-    TokenType m_tokenType; ///< Type of the token
-    MacroID m_macroId;     ///< MacroID. All tokens with the same ID have been inserted by the same macro
-    FileID m_fileID;
+    TokenType m_tokenType;   ///< Type of the token
+    std::uint32_t m_macroId; ///< MacroID. All tokens with the same ID have been inserted by the same macro
+    std::uint32_t m_fileID;
     std::uint64_t m_offset; ///< Offset of the token. That is bytes offset to the first character of the
     std::uint64_t m_length;
 
     TokenBase() = default;
 
-    TokenBase(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileID, MacroID macroID)
+    TokenBase(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint32_t fileID,
+              std::uint32_t macroID)
         : m_leadingWhitespace(false),
-          m_fromStringification(false),
-          m_fromTokenPasting(false),
           m_tokenType(tokenType),
           m_macroId(macroID),
           m_fileID(fileID),
@@ -205,22 +193,22 @@ public:
         return m_length;
     }
 
-    [[nodiscard]] MacroID getMacroId() const noexcept
+    [[nodiscard]] std::uint32_t getMacroId() const noexcept
     {
         return m_macroId;
     }
 
-    void setMacroId(MacroID macroId) noexcept
+    void setMacroId(std::uint32_t macroId) noexcept
     {
         m_macroId = macroId;
     }
 
-    [[nodiscard]] FileID getFileId() const
+    [[nodiscard]] std::uint32_t getFileId() const
     {
         return m_fileID;
     }
 
-    void setFileId(FileID fileId) noexcept
+    void setFileId(std::uint32_t fileId) noexcept
     {
         m_fileID = fileId;
     }
@@ -233,26 +221,6 @@ public:
     void setLeadingWhitespace(bool leadingWhitespace) noexcept
     {
         m_leadingWhitespace = leadingWhitespace;
-    }
-
-    [[nodiscard]] bool isFromStringification() const noexcept
-    {
-        return m_fromStringification;
-    }
-
-    void setFromStringification(bool fromStringification)
-    {
-        m_fromStringification = fromStringification;
-    }
-
-    [[nodiscard]] bool isFromTokenPasting() const noexcept
-    {
-        return m_fromTokenPasting;
-    }
-
-    void setFromTokenPasting(bool fromTokenPasting)
-    {
-        m_fromTokenPasting = fromTokenPasting;
     }
 };
 
@@ -267,7 +235,7 @@ class PPToken final : public TokenBase
 
 public:
     PPToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint64_t charSpaceOffset,
-            std::uint64_t charSpaceLength, FileID fileID, MacroID macroID = MacroID(0), std::string_view value = {})
+            std::uint64_t charSpaceLength, std::uint32_t fileID, std::uint32_t macroID = 0, std::string_view value = {})
         : TokenBase(tokenType, offset, length, fileID, macroID),
           m_value(value.begin(), value.end()),
           m_charSpaceOffset(charSpaceOffset),
@@ -346,7 +314,7 @@ private:
 public:
     using ValueType = variant;
 
-    CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, FileID fileId, MacroID macroId,
+    CToken(TokenType tokenType, std::uint64_t offset, std::uint64_t length, std::uint32_t fileId, std::uint32_t macroId,
            variant value = std::monostate{}, Type type = Type::None)
         : TokenBase(tokenType, offset, length, fileId, macroId), m_value(std::move(value)), m_type(type)
     {
