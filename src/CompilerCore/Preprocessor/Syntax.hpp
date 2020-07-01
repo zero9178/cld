@@ -98,6 +98,7 @@ struct ControlLine final
 {
     struct IncludeTag final
     {
+        Lexer::PPTokenIterator includeToken;
         llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 

@@ -928,6 +928,30 @@ TEST_CASE("PP C Preprocessor tricks", "[PP]")
     }
 }
 
+TEST_CASE("PP includes", "[PP]")
+{
+    SECTION("Simple") {}
+    SECTION("Empty")
+    {
+        PP_OUTPUTS_WITH("#include", ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));
+    }
+    SECTION("Computed")
+    {
+        PP_OUTPUTS_WITH("#define EMPTY()\n"
+                        "#include EMPTY()",
+                        ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));
+        PP_OUTPUTS_WITH("#define MACRO <TEST\n"
+                        "#include MACRO",
+                        ProducesError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE)));
+        PP_OUTPUTS_WITH("#define MACRO <TEST> w\n"
+                        "#include MACRO",
+                        ProducesError(EXTRA_TOKENS_AFTER_INCLUDE));
+        PP_OUTPUTS_WITH("#define MACRO \"TEST\" w\n"
+                        "#include MACRO",
+                        ProducesError(EXTRA_TOKENS_AFTER_INCLUDE));
+    }
+}
+
 TEST_CASE("PP Reconstruction", "[PP]")
 {
     SECTION("Object macro")

@@ -2,6 +2,7 @@
 
 #include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Path.h>
 
 #include <CompilerCore/C/ErrorMessages.hpp>
 #include <CompilerCore/Common/Text.hpp>
@@ -454,7 +455,11 @@ class Preprocessor final : private cld::SourceInterface
                                             cld::Lexer::normalizeSpelling(lhs.getRepresentation(*this)),
                                             cld::Lexer::normalizeSpelling(rhs.getRepresentation(*this))),
                                         &lhs, &rhs + 1, {cld::Underline(&lhs), cld::Underline(&rhs)})});
-                iter = tokens.erase(iter - 1, iter + 2) - 1;
+                iter = tokens.erase(iter - 1, iter + 2);
+                if (iter == tokens.end())
+                {
+                    break;
+                }
                 continue;
             }
             CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
@@ -588,6 +593,7 @@ class Preprocessor final : private cld::SourceInterface
             m_disabledMacros.push_back({cld::to_string(name)});
             m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                        m_disabledMacros[iter->getMacroId()].end());
+            m_substitutions.push_back({});
             iter = std::find_if(iter + 1, tokens.data() + tokens.size(),
                                 [&line](const cld::Lexer::PPToken& token) {
                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)
@@ -619,7 +625,7 @@ class Preprocessor final : private cld::SourceInterface
             auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
                              [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
-            m_substitutions.push_back(cld::Source::Substitution{*result->second.identifierPos, *namePos, *iter, false});
+            m_substitutions[i] = cld::Source::Substitution{*result->second.identifierPos, *namePos, *iter, false};
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
                                           [](auto&&) { return true; });
@@ -832,33 +838,113 @@ public:
     void visit(const cld::PP::ControlLine::IncludeTag& includeTag)
     {
         std::string path;
-        if (includeTag.tokens.size() != 2 || includeTag.tokens[0].getTokenType() != cld::Lexer::TokenType::StringLiteral
-            || includeTag.tokens[1].getTokenType() != cld::Lexer::TokenType::Newline)
+        bool isQuoted = false;
+        if (includeTag.tokens.size() != 1
+            || includeTag.tokens[0].getTokenType() != cld::Lexer::TokenType::StringLiteral)
         {
             std::vector<cld::Lexer::PPToken> result;
             macroSubstitute(includeTag.tokens, [&result](auto&& tokens) {
                 result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
             });
-            path = cld::PP::reconstruct(result.data(), result.data() + result.size(), *this);
-            // TODO: Error handling
+            if (result.empty())
+            {
+                if (includeTag.tokens.empty())
+                {
+                    log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE, cld::Message::after,
+                                             includeTag.includeToken, {cld::InsertAfter(includeTag.includeToken)})});
+                }
+                else
+                {
+                    log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE,
+                                             includeTag.includeToken, includeTag.tokens.end(),
+                                             {cld::Underline(includeTag.tokens.begin(), includeTag.tokens.end())})});
+                }
+                return;
+            }
+            if (result[0].getTokenType() != cld::Lexer::TokenType::LessThan
+                && result[0].getTokenType() != cld::Lexer::TokenType::StringLiteral)
+            {
+                log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE, includeTag.includeToken,
+                                         &result.back() + 1, {cld::Underline(&result.front(), &result.back() + 1)})});
+                return;
+            }
+            if (result[0].getTokenType() == cld::Lexer::TokenType::StringLiteral)
+            {
+                isQuoted = true;
+                if (result.size() != 0)
+                {
+                    log({cld::Message::error(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE, includeTag.includeToken,
+                                             &result.back() + 1,
+                                             {cld::Underline(&result.front() + 1, &result.back() + 1)})});
+                }
+                path = result[0].getValue();
+            }
+            else
+            {
+                auto iter = result.begin() + 1;
+                for (; iter != result.end() && iter->getTokenType() != cld::Lexer::TokenType::GreaterThan; iter++)
+                {
+                    if (!path.empty() && iter->hasLeadingWhitespace())
+                    {
+                        path += ' ';
+                    }
+                    path += iter->getRepresentation(*this);
+                }
+                if (iter == result.end())
+                {
+                    log({cld::Message::error(
+                        cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
+                        includeTag.includeToken, &result.back() + 1,
+                        {cld::Underline(&result.front(), &result.back() + 1)})});
+                }
+                else if (iter + 1 != result.end())
+                {
+                    log({cld::Message::error(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE, includeTag.includeToken,
+                                             &result.back() + 1, {cld::Underline(&*iter + 1, &result.back() + 1)})});
+                }
+            }
         }
         else
         {
+            isQuoted = includeTag.tokens[0].getRepresentation(*this)[0] == '"';
             path = includeTag.tokens[0].getValue();
         }
-        bool isQuoted = path[0] == '"' && path.back() == '"';
-        CLD_ASSERT(isQuoted || (path[0] == '<' && path.back() == '>'));
-        path = path.substr(1, path.size() - 2);
         std::vector<std::string> candidates;
+        if (llvm::sys::path::is_absolute(path))
+        {
+            candidates.push_back("");
+        }
+        llvm::SmallString<50> dir(m_files[m_currentFile].path);
+        llvm::sys::path::remove_filename(dir);
+        if (llvm::sys::fs::exists(dir))
+        {
+            candidates.push_back(std::string(dir.begin(), dir.end()));
+        }
         if (isQuoted)
         {
-            candidates.push_back("./");
-            candidates = m_options.includeQuoteDirectories;
+            candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
+                              m_options.includeQuoteDirectories.end());
         }
         candidates.insert(candidates.end(), m_options.includeDirectories.begin(), m_options.includeDirectories.end());
         for (const auto& candidate : candidates)
         {
-            auto filename = candidate + "/" + path;
+            llvm::SmallString<50> filename;
+            if (candidate.empty())
+            {
+                filename = path;
+            }
+            else if (candidate.back() == '/'
+#if _WIN32
+                     || candidate.back() == '\\'
+#endif
+            )
+            {
+                filename = candidate + path;
+            }
+            else
+            {
+                filename = candidate + '/' + path;
+            }
             if (!llvm::sys::fs::exists(filename))
             {
                 continue;
@@ -868,7 +954,7 @@ public:
             if (!error)
             {
                 auto handle = llvm::sys::fs::openNativeFileForRead(filename);
-                if (!handle)
+                if (handle)
                 {
                     auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*handle); });
                     llvm::sys::fs::mapped_file_region mapping(*handle, llvm::sys::fs::mapped_file_region::readonly,
@@ -876,11 +962,15 @@ public:
                     if (!error)
                     {
                         std::string_view view(mapping.const_data(), mapping.size());
-                        auto newFile = cld::Lexer::tokenize(view, m_options, m_report, &m_errorsOccured, filename);
+                        llvm::sys::path::remove_dots(filename, true);
+                        auto newFile = cld::Lexer::tokenize(view, m_options, m_report, &m_errorsOccured,
+                                                            {filename.data(), filename.size()});
                         if (m_errorsOccured)
                         {
                             return;
                         }
+                        llvm::sys::fs::closeFile(*handle);
+                        scopeExit.release();
                         include(std::move(newFile));
                         return;
                     }

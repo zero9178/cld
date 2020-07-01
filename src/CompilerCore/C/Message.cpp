@@ -60,8 +60,8 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
     }();
 
     Lexer::TokenBase actualBegin = toMacroId0(*m_begin, sourceInterface);
-    CLD_ASSERT(!m_maybeEnd || *m_maybeEnd > m_begin);
     Lexer::TokenBase actualEnd = toMacroId0(*(m_maybeEnd.value_or(m_begin + 1) - 1), sourceInterface);
+    CLD_ASSERT(actualBegin.getOffset() <= actualEnd.getOffset());
 
     const auto TEST_ME_FILE_ID = actualBegin.getFileId();
 
@@ -173,7 +173,6 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
         cld::match(
             iter,
             [&](const Underline& underline) {
-                CLD_ASSERT(!underline.maybeEnd() || underline.begin() < *underline.maybeEnd());
                 auto begin = toMacroId0(*underline.begin(), sourceInterface).getOffset();
                 CLD_ASSERT(begin >= startOffset);
                 auto inclusiveEndToken =
@@ -189,10 +188,10 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
                 for (auto iter = pointAt.begin(); iter != endIter; iter++)
                 {
                     auto token = toMacroId0(*iter, sourceInterface);
-                    CLD_ASSERT(pointAt.begin() < endIter);
                     auto begin = token.getOffset();
                     CLD_ASSERT(begin >= startOffset);
                     auto end = token.getOffset() + token.getLength();
+                    CLD_ASSERT(begin < end);
                     CLD_ASSERT(end < endOffset);
                     begin += mapping[begin - startOffset];
                     end += mapping[end - startOffset];
@@ -201,10 +200,10 @@ llvm::raw_ostream& cld::Message::print(llvm::raw_ostream& os, const SourceInterf
             },
             [&](const Annotate& annotate) {
                 auto endToken = toMacroId0(*(annotate.maybeEnd().value_or(annotate.begin() + 1) - 1), sourceInterface);
-                CLD_ASSERT(!annotate.maybeEnd() || *annotate.maybeEnd() > annotate.begin());
                 auto begin = toMacroId0(*annotate.begin(), sourceInterface).getOffset();
                 CLD_ASSERT(begin >= startOffset);
                 auto end = endToken.getOffset() + endToken.getLength();
+                CLD_ASSERT(begin < end);
                 CLD_ASSERT(end < endOffset);
                 auto pos = begin + (end - begin) / 2;
                 begin += mapping[begin - startOffset];

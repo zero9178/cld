@@ -1,7 +1,8 @@
 #pragma once
 
+#include <unordered_map>
+
 #include <bitset2.hpp>
-#include <map>
 
 #include "Limits.hpp"
 #include "Message.hpp"
@@ -29,7 +30,7 @@ class Context final
         DeclarationLocation location;
         bool isTypedef{};
     };
-    std::vector<std::map<std::string, Declaration>> m_currentScope{1};
+    std::vector<std::unordered_map<std::string, Declaration>> m_currentScope{1};
     std::size_t m_errorCount = 0;
     bool m_inPreprocessor;
 

@@ -178,7 +178,7 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
             begin = eol;
             if (value == "include")
             {
-                return {ControlLine::IncludeTag{{lineStart, eol - 1}}};
+                return {ControlLine::IncludeTag{lineStart - 1, {lineStart, eol - 1}}};
             }
             else if (value == "line")
             {
@@ -195,22 +195,18 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
             CLD_UNREACHABLE;
         }
 
-        if (value == "include" || value == "line")
+        // We allow no tokens following include so that later in the Preprocessor step we can error out with the same
+        // error as if a computed include resulted in no tokens
+        if (value == "line")
         {
             context.log(
                 {Message::error(Errors::Parser::EXPECTED_N_AFTER_N.args("Tokens", "'" + cld::to_string(value) + "'"),
                                 begin - 1, {InsertAfter(begin - 1)})});
-            if (value == "include")
-            {
-                return {ControlLine::IncludeTag{}};
-            }
-            else if (value == "line")
-            {
-                return {ControlLine::LineTag{}};
-            }
+            return {ControlLine::LineTag{}};
         }
         else
         {
+            const auto* valueToken = begin - 1;
             expect(Lexer::TokenType::Newline, begin, end, context);
             if (value == "error")
             {
@@ -219,6 +215,10 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
             else if (value == "pragma")
             {
                 return {ControlLine::PragmaTag{}};
+            }
+            else if (value == "include")
+            {
+                return {ControlLine::IncludeTag{valueToken, {}}};
             }
         }
         CLD_UNREACHABLE;

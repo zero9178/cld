@@ -105,7 +105,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#include", ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'include'")));
+            treeProduces("#include", ProducesNothing());
         }
     }
     SECTION("Lines")

@@ -214,6 +214,10 @@ constexpr auto OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIS
 
 constexpr auto OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST =
     "Operator '##' not allowed at end of replacement list";
+
+constexpr auto EXPECTED_A_FILENAME_AFTER_INCLUDE = "Expected a <FILENAME> or \"FILENAME\" after #include";
+
+constexpr auto EXTRA_TOKENS_AFTER_INCLUDE = "Extra tokens after #include";
 } // namespace PP
 } // namespace Errors
 
