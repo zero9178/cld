@@ -966,7 +966,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     #ifndef __has_feature
         #define UNRESTRICTED_STACK
     #else
-        #if !__has_feature(address_sanitizer)
+        #if !__has_feature(address_sanitizer) && !defined(__SANITIZE_ADDRESS__)
             #define UNRESTRICTED_STACK
         #endif
     #endif
