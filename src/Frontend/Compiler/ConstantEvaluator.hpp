@@ -1,6 +1,6 @@
 #pragma once
 
-#include <CompilerCore/Common/Expected.hpp>
+#include <Frontend/Common/Expected.hpp>
 
 #include <functional>
 

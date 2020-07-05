@@ -4,7 +4,7 @@
 #include <llvm/Support/Format.h>
 #include <llvm/Support/WithColor.h>
 
-#include <CompilerCore/Common/Text.hpp>
+#include <Frontend/Common/Text.hpp>
 
 #include <cmath>
 

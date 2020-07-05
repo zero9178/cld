@@ -2,7 +2,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include <string>
 #include <vector>

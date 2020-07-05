@@ -1,6 +1,6 @@
 
-#include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Preprocessor/Parser.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
+#include <Frontend/Preprocessor/Parser.hpp>
 
 #include <algorithm>
 #include <cstdint>

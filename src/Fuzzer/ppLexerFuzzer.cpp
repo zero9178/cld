@@ -1,7 +1,7 @@
 #include <llvm/Support/raw_ostream.h>
 
-#include <CompilerCore/C/Lexer.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/Lexer.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include <cstdint>
 #include <string>

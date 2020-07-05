@@ -1,6 +1,6 @@
 #pragma once
 
-#include <CompilerCore/C/Lexer.hpp>
+#include <Frontend/Compiler/Lexer.hpp>
 
 #include <memory>
 #include <optional>

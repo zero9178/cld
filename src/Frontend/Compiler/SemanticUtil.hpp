@@ -1,6 +1,7 @@
 #pragma once
 
-#include <CompilerCore/Common/Util.hpp>
+#include <Frontend/Common/Util.hpp>
+
 #include <variant>
 
 namespace cld::Semantics

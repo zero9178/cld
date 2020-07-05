@@ -4,8 +4,6 @@
 #include <optional>
 #include <utility>
 
-#include "CompilerCore/Common/Util.hpp"
-
 #include "ErrorMessages.hpp"
 
 const cld::Semantics::Type& cld::Semantics::ArrayType::getType() const

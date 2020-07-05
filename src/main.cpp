@@ -5,10 +5,10 @@
 //#include <llvm/Support/TargetRegistry.h>
 //#include <llvm/Support/TargetSelect.h>
 //
-//#include <CompilerCore/C/Codegen.hpp>
-//#include <CompilerCore/C/Lexer.hpp>
-//#include <CompilerCore/C/Parser.hpp>
-//#include <CompilerCore/Preprocessor/Preprocessor.hpp>
+//#include <Frontend/C/Codegen.hpp>
+//#include <Frontend/C/Lexer.hpp>
+//#include <Frontend/C/Parser.hpp>
+//#include <Frontend/Preprocessor/Preprocessor.hpp>
 //
 //#include <fstream>
 //#include <iostream>

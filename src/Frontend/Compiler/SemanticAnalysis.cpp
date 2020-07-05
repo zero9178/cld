@@ -1,7 +1,7 @@
 #include "SemanticAnalysis.hpp"
 
-#include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Text.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
+#include <Frontend/Common/Text.hpp>
 
 #include <algorithm>
 #include <array>

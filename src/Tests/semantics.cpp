@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
-#include <CompilerCore/C/Parser.hpp>
-#include <CompilerCore/C/SemanticAnalysis.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/SemanticAnalysis.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include <array>
 

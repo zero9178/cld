@@ -2,10 +2,10 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Timer.h>
 
-#include <CompilerCore/C/Lexer.hpp>
-#include <CompilerCore/C/Parser.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Preprocessor/Parser.hpp>
+#include <Frontend/Compiler/Lexer.hpp>
+#include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
+#include <Frontend/Preprocessor/Parser.hpp>
 
 int main(int argc, char** argv)
 {

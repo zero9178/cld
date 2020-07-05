@@ -3,9 +3,9 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
 
-#include <CompilerCore/C/LanguageOptions.hpp>
-#include <CompilerCore/C/Semantics.hpp>
-#include <CompilerCore/Preprocessor/Preprocessor.hpp>
+#include <Frontend/Compiler/LanguageOptions.hpp>
+#include <Frontend/Compiler/Semantics.hpp>
+#include <Frontend/Preprocessor/Preprocessor.hpp>
 
 #include <numeric>
 

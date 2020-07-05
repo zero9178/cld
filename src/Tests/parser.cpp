@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
-#include <CompilerCore/C/ErrorMessages.hpp>
-#include <CompilerCore/C/Parser.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/ErrorMessages.hpp>
+#include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include "TestConfig.hpp"
 

@@ -4,8 +4,8 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 
-#include <CompilerCore/C/ErrorMessages.hpp>
-#include <CompilerCore/Common/Text.hpp>
+#include <Frontend/Compiler/ErrorMessages.hpp>
+#include <Frontend/Common/Text.hpp>
 
 #include <ctime>
 #include <stack>

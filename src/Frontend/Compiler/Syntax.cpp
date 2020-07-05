@@ -1,6 +1,6 @@
 #include "Syntax.hpp"
 
-#include <CompilerCore/Common/Util.hpp>
+#include <Frontend/Common/Util.hpp>
 
 #include <algorithm>
 

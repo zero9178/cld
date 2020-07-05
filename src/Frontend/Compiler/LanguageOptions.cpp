@@ -1,6 +1,6 @@
 #include "LanguageOptions.hpp"
 
-#include <CompilerCore/Common/Util.hpp>
+#include <Frontend/Common/Util.hpp>
 
 #include <limits>
 #include <numeric>

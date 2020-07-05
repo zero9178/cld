@@ -2,9 +2,9 @@
 
 #include <llvm/Support/Format.h>
 
-#include <CompilerCore/C/ErrorMessages.hpp>
-#include <CompilerCore/C/Lexer.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/ErrorMessages.hpp>
+#include <Frontend/Compiler/Lexer.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include <array>
 

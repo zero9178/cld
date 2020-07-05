@@ -1,8 +1,8 @@
 #include "Parser.hpp"
 
-#include <CompilerCore/C/ErrorMessages.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
-#include <CompilerCore/Common/Text.hpp>
+#include <Frontend/Common/Text.hpp>
+#include <Frontend/Compiler/ErrorMessages.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 namespace
 {

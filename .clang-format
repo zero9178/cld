@@ -39,13 +39,13 @@ IncludeCategories:
     Priority: -1
   - Regex: '<llvm/.*>'
     Priority: 2
-  - Regex: '<CompilerCore/.*>'
+  - Regex: '<Frontend/.*>'
     Priority: 3
   - Regex: '<.*\..*>'
     Priority: 5
   - Regex: '<.*>'
     Priority: 4
-  - Regex: '"CompilerCore/.*"'
+  - Regex: '"Frontend/.*"'
     Priority: 6
   - Regex: '".*"'
     Priority: 7

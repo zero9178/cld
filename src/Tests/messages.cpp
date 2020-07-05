@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
-#include <CompilerCore/C/Lexer.hpp>
-#include <CompilerCore/C/Message.hpp>
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/Lexer.hpp>
+#include <Frontend/Compiler/Message.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include "TestConfig.hpp"
 

@@ -8,7 +8,7 @@
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
 
-#include <CompilerCore/Common/Text.hpp>
+#include <Frontend/Common/Text.hpp>
 
 #include <algorithm>
 #include <numeric>

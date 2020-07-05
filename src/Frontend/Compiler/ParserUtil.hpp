@@ -1,7 +1,7 @@
 #pragma once
 
-#include <CompilerCore/Common/Text.hpp>
-#include <CompilerCore/Common/Util.hpp>
+#include <Frontend/Common/Text.hpp>
+#include <Frontend/Common/Util.hpp>
 
 #include <utility>
 

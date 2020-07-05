@@ -1,6 +1,6 @@
 #include "Parser.hpp"
 
-#include <CompilerCore/C/Semantics.hpp>
+#include <Frontend/Compiler/Semantics.hpp>
 
 #include <algorithm>
 #include <unordered_set>

@@ -2,7 +2,7 @@
 
 #include <llvm/Support/ConvertUTF.h>
 
-#include <CompilerCore/C/SourceObject.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
 
 #include <algorithm>
 
