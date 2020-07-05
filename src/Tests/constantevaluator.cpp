@@ -24,7 +24,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     REQUIRE(!tokens.data().empty());
     auto ctokens = cld::Lexer::toCTokens(tokens);
     cld::Parser::Context context(ctokens, &ss);
-    auto ref = std::as_const(ctokens).data().data();
+    const auto* ref = std::as_const(ctokens).data().data();
     auto parsing = cld::Parser::parseConditionalExpression(ref, ctokens.data().data() + ctokens.data().size(), context);
     INFO(ss.str());
     REQUIRE((ss.str().empty()));
@@ -2316,11 +2316,8 @@ TEST_CASE("Const eval expression", "[constEval]")
 
 TEST_CASE("Const eval assignments", "[constEval]")
 {
-    std::array assignmentOperators = {"=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="};
-    for (auto& iter : assignmentOperators)
-    {
-        auto [value, error] = evaluateConstantExpression("(.55 " + std::string(iter) + " 3)");
-        CHECK(value.isUndefined());
-        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + std::string(iter) + '\'')));
-    }
+    auto iter = GENERATE(as<std::string>{}, "=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=");
+    auto [value, error] = evaluateConstantExpression("(.55 " + iter + " 3)");
+    CHECK(value.isUndefined());
+    CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args('\'' + iter + '\'')));
 }
