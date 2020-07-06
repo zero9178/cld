@@ -3,11 +3,14 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
 
+#include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/LanguageOptions.hpp>
 #include <Frontend/Compiler/Semantics.hpp>
 #include <Frontend/Preprocessor/Preprocessor.hpp>
 
 #include <numeric>
+
+#include <Frontend/Compiler/Diagnostic.h>
 
 namespace cld::Tests
 {
@@ -18,10 +21,36 @@ const inline auto x86windowsMsvc = LanguageOptions{cld::LanguageOptions::C99, 1,
 const inline auto x64linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 8, 80, 8};
 const inline auto x86linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 4, 80, 4};
 
+namespace detail
+{
+template <class Diagnostic, class... Args>
+std::string args(const Diagnostic&, Args&&... args)
+{
+    std::array<std::string, sizeof...(Args)> strArgs = {{cld::to_string(args)...}};
+    std::string result;
+    std::u32string_view stringView = Diagnostic::getFormat();
+    std::size_t i = 0;
+    for (auto& iter : ctre::range<cld::detail::DIAG_ARG_PATTERN>(stringView))
+    {
+        auto view = iter.view();
+        result.insert(result.end(), view.begin(), view.end());
+        stringView.remove_prefix(iter.get_end_position() - stringView.begin());
+        result += strArgs[i++];
+    }
+    return result;
+}
+} // namespace detail
+
 struct ProducesError : Catch::Matchers::StdString::ContainsMatcher
 {
     ProducesError(const std::string& comparator)
         : ContainsMatcher(Catch::Matchers::StdString::CasedString("error: " + comparator, Catch::CaseSensitive::Yes))
+    {
+    }
+
+    template <class Diagnostic, class... Args>
+    ProducesError(const Diagnostic& diagnostic, Args&&... args)
+        : ProducesError(detail::args(diagnostic, std::forward<Args>(args)...))
     {
     }
 };
@@ -49,6 +78,12 @@ struct ProducesNote : Catch::Matchers::StdString::ContainsMatcher
         : ContainsMatcher(Catch::Matchers::StdString::CasedString("note: " + comparator, Catch::CaseSensitive::Yes))
     {
     }
+
+    template <class Diagnostic, class... Args>
+    ProducesNote(const Diagnostic& diagnostic, Args&&... args)
+        : ProducesNote(detail::args(diagnostic, std::forward<Args>(args)...))
+    {
+    }
 };
 
 struct ProducesNoNotes : Catch::Matchers::StdString::ContainsMatcher
@@ -70,6 +105,12 @@ struct ProducesWarning : Catch::Matchers::StdString::ContainsMatcher
 {
     ProducesWarning(const std::string& comparator)
         : ContainsMatcher(Catch::Matchers::StdString::CasedString("warning: " + comparator, Catch::CaseSensitive::Yes))
+    {
+    }
+
+    template <class Diagnostic, class... Args>
+    ProducesWarning(const Diagnostic& diagnostic, Args&&... args)
+        : ProducesWarning(detail::args(diagnostic, std::forward<Args>(args)...))
     {
     }
 };

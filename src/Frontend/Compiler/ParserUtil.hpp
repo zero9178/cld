@@ -21,16 +21,18 @@ bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CToke
     {
         if (curr == end)
         {
-            context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
-                                        Message::after, end - 1, {InsertAfter(end - 1, Lexer::tokenValue(expected))})});
+            // TODO: context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
+            //                                        Message::after, end - 1, {InsertAfter(end - 1,
+            //                                        Lexer::tokenValue(expected))})});
         }
         else
         {
-            context.log(
-                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-                                    Lexer::tokenName(expected),
-                                    '\'' + to_string(curr->getRepresentation(context.getSourceObject())) + '\''),
-                                curr, {PointAt(curr, curr + 1)})});
+            // TODO:            context.log(
+            //                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+            //                                    Lexer::tokenName(expected),
+            //                                    '\'' + to_string(curr->getRepresentation(context.getSourceObject())) +
+            //                                    '\''),
+            //                                curr, {PointAt(curr, curr + 1)})});
         }
         context.log(std::move(additional));
         return false;

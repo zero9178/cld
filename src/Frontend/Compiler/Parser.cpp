@@ -18,10 +18,13 @@ void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocati
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
     {
-        log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin, declarator.end,
-                            {Underline(declarator.identifier, declarator.identifier + 1)}),
-             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
-                           {Underline(iter->second.location.identifier, iter->second.location.identifier + 1)})});
+        // TODO:        log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
+        // declarator.end,
+        //                            {Underline(declarator.identifier, declarator.identifier + 1)}),
+        //             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin,
+        //             iter->second.location.end,
+        //                           {Underline(iter->second.location.identifier, iter->second.location.identifier +
+        //                           1)})});
     }
 }
 
@@ -41,7 +44,7 @@ void cld::Parser::Context::log(std::vector<Message> messages)
 {
     for (auto& iter : messages)
     {
-        if (iter.getSeverity() == Message::Error)
+        if (iter.getSeverity() == Severity::Error)
         {
             m_errorCount++;
         }
@@ -58,10 +61,13 @@ void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocati
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
-        log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin, declarator.end,
-                            {Underline(declarator.identifier, declarator.identifier + 1)}),
-             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin, iter->second.location.end,
-                           {Underline(iter->second.location.identifier, iter->second.location.identifier + 1)})});
+        // TODO:        log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' + name + '\''), declarator.begin,
+        // declarator.end,
+        //                            {Underline(declarator.identifier, declarator.identifier + 1)}),
+        //             Message::note(Notes::PREVIOUSLY_DECLARED_HERE, iter->second.location.begin,
+        //             iter->second.location.end,
+        //                           {Underline(iter->second.location.identifier, iter->second.location.identifier +
+        //                           1)})});
     }
 }
 
@@ -139,8 +145,8 @@ void cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        {PointAt(bracket, bracket + 1)})});
+// TODO:    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+//                        {PointAt(bracket, bracket + 1)})});
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else
@@ -159,8 +165,8 @@ void cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        {PointAt(bracket, bracket + 1)})});
+// TODO:    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+//                        {PointAt(bracket, bracket + 1)})});
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else
@@ -179,8 +185,8 @@ void cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
-                        {PointAt(bracket, bracket + 1)})});
+// TODO:    log({Message::error(Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED.args("bracket", m_bracketMax), bracket,
+//                        {PointAt(bracket, bracket + 1)})});
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else

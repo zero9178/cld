@@ -4,6 +4,7 @@
 
 #include <functional>
 
+#include "Message.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
 
@@ -133,7 +134,7 @@ class ConstantEvaluator final
     LanguageOptions m_languageOptions;
     std::function<Type(const Syntax::TypeName&)> m_typeCallback;
     std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
-    std::function<void(std::string, std::vector<Modifier>, Message::Severity)> m_loggerCallback;
+    std::function<void(const Message&)> m_loggerCallback;
 
 public:
     enum Mode
@@ -146,18 +147,13 @@ public:
 private:
     Mode m_mode;
 
-    void logError(std::string message, std::vector<Modifier> modifiers = {});
-
-    void logWarning(std::string message, std::vector<Modifier> modifiers = {});
-
-    void logNote(std::string message, std::vector<Modifier> modifiers = {});
+    void log(const Message& message);
 
 public:
     explicit ConstantEvaluator(
         const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback = {},
         std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
-        std::function<void(std::string, std::vector<Modifier>, Message::Severity)> loggerCallback = {},
-        Mode mode = Integer);
+        std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
 
     ConstRetType visit(const Syntax::Expression& node);
 

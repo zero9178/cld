@@ -79,7 +79,7 @@ TEST_CASE("Parse Preprocessor Group", "[PPParse]")
     }
     SECTION("Invalid directive")
     {
-        treeProduces("#non directive", ProducesError(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args("'non'"))
+        treeProduces("#non directive", ProducesError(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "'non'")
                                            && ProducesNoWarnings() && ProducesNoNotes());
     }
 }
@@ -122,7 +122,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#line", ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'line'")));
+            treeProduces("#line", ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'line'"));
         }
     }
     SECTION("Errors")
@@ -179,8 +179,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Errors")
         {
-            treeProduces("#undef", ProducesError(EXPECTED_N.args("identifier")));
-            treeProduces("#undef ID 5", ProducesError(EXPECTED_N.args("newline")));
+            treeProduces("#undef", ProducesError(EXPECTED_N, "identifier"));
+            treeProduces("#undef ID 5", ProducesError(EXPECTED_N, "newline"));
         }
     }
     SECTION("define")
@@ -203,8 +203,8 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.argumentList);
         functionProduces(parseDefineDirective, "#define 5", 1,
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
-        functionProduces(parseDefineDirective, "#define", 1, ProducesError(EXPECTED_N.args("identifier")));
+                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
+        functionProduces(parseDefineDirective, "#define", 1, ProducesError(EXPECTED_N, "identifier"));
         ret = functionProduces(parseDefineDirective, "#define ID (a)", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.argumentList);
@@ -233,7 +233,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(", 1,
-                         ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
+                         ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Ellipse only")
     {
@@ -250,7 +250,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(...", 1,
-                         ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
+                         ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Single Identifier list")
     {
@@ -269,9 +269,9 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         functionProduces(parseDefineDirective, "#define ID(5", 1,
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
+                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
         functionProduces(parseDefineDirective, "#define ID(a", 1,
-                         ProducesError(EXPECTED_N.args("')'")) && ProducesNote(TO_MATCH_N_HERE.args("'('")));
+                         ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Multiple identifiers")
     {
@@ -284,10 +284,10 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.argumentList.value()[2].getValue() == "c");
         CHECK(ret.replacement.empty());
         functionProduces(parseDefineDirective, "#define ID(a,)", 1,
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "')'")));
-        functionProduces(parseDefineDirective, "#define ID(a,", 1, ProducesError(EXPECTED_N.args("identifier")));
+                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "')'"));
+        functionProduces(parseDefineDirective, "#define ID(a,", 1, ProducesError(EXPECTED_N, "identifier"));
         ret = functionProduces(parseDefineDirective, "#define ID(a,5) 5", 1,
-                               ProducesError(EXPECTED_N_INSTEAD_OF_N.args("identifier", "'5'")));
+                               ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         REQUIRE(ret.argumentList->size() == 1);
@@ -304,7 +304,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.argumentList.value()[2].getValue() == "c");
         CHECK(ret.replacement.empty());
         functionProduces(parseDefineDirective, "#define ID(a,b,a)", 1,
-                         ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N.args("'a'"))
+                         ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N, "'a'")
                              && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     }
 }
@@ -321,7 +321,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "0");
-        functionProduces(parseIfGroup, "#if\n5", 1, ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'if'")));
+        functionProduces(parseIfGroup, "#if\n5", 1, ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'if'"));
     }
     SECTION("ifdef")
     {
@@ -331,8 +331,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ret.ifs));
         const auto& tokens = std::get<cld::PP::IfGroup::IfDefTag>(ret.ifs);
         CHECK(tokens.identifier == "ID");
-        functionProduces(parseIfGroup, "#ifdef \n5", 1, ProducesError(EXPECTED_N.args("identifier")));
-        functionProduces(parseIfGroup, "#ifdef ID 5 \n 5", 1, ProducesError(EXPECTED_N.args("newline")));
+        functionProduces(parseIfGroup, "#ifdef \n5", 1, ProducesError(EXPECTED_N, "identifier"));
+        functionProduces(parseIfGroup, "#ifdef ID 5 \n 5", 1, ProducesError(EXPECTED_N, "newline"));
     }
     SECTION("ifndef")
     {
@@ -342,8 +342,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(ret.ifs));
         const auto& tokens = std::get<cld::PP::IfGroup::IfnDefTag>(ret.ifs);
         CHECK(tokens.identifier == "ID");
-        functionProduces(parseIfGroup, "#ifndef \n5", 1, ProducesError(EXPECTED_N.args("identifier")));
-        functionProduces(parseIfGroup, "#ifndef ID 5 \n 5", 1, ProducesError(EXPECTED_N.args("newline")));
+        functionProduces(parseIfGroup, "#ifndef \n5", 1, ProducesError(EXPECTED_N, "identifier"));
+        functionProduces(parseIfGroup, "#ifndef ID 5 \n 5", 1, ProducesError(EXPECTED_N, "newline"));
     }
     SECTION("elif")
     {
@@ -357,7 +357,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "1");
         functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif", 1,
-                         ProducesError(EXPECTED_N_AFTER_N.args("Tokens", "'elif'")));
+                         ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'elif'"));
     }
     SECTION("Else")
     {
@@ -371,7 +371,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(ret.optionalElseGroup);
         CHECK(!ret.optionalElseGroup->optionalGroup);
         functionProduces(parseIfSection, "#if 0\n#else 5\n#endif", 1,
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N.args("newline", "'5'")));
+                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "newline", "'5'"));
     }
     SECTION("Nested")
     {
@@ -390,9 +390,9 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n#else\n#endif", ProducesNothing());
         treeProduces("#if 0\n#elif 1\n#endif", ProducesNothing());
     }
-    treeProduces("#if 0\n", ProducesError(EXPECTED_N.args("'#endif'")) && ProducesNote(TO_MATCH_N_HERE.args("'if'")));
-    treeProduces("#if 0\n#else\n#else\n", ProducesError(EXPECTED_N_INSTEAD_OF_N.args("'#endif'", "'#else'"))
-                                              && ProducesNote(TO_MATCH_N_HERE.args("'if'")));
+    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "'#endif'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
+    treeProduces("#if 0\n#else\n#else\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "'#endif'", "'#else'")
+                                              && ProducesNote(TO_MATCH_N_HERE, "'if'"));
 }
 
 namespace

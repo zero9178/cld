@@ -576,18 +576,23 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
             return alignmentOf(arrayType.getType(), options);
         },
         [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+            // TODO:            return
+            // Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+            return "";
         },
         [&options](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
             return alignmentOf(valArrayType.getType(), options);
         },
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
+            // TODO:            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
+            return "";
         },
         [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+                // TODO:                return
+                // Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
+                return "";
             }
             if (!recordType.isUnion())
             {
@@ -663,18 +668,24 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
             return *result * arrayType.getSize();
         },
         [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+            // TODO:            return
+            // Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+            return "";
         },
         [](const ValArrayType&) -> Expected<std::size_t, std::string> {
-            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
+            // TODO:            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
+            return "";
         },
         [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
+            // TODO:            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
+            return "";
         },
         [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
             if (recordType.getMembers().empty())
             {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+                // TODO:                return
+                // Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
+                return "";
             }
             if (!recordType.isUnion())
             {

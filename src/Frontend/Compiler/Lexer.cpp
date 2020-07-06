@@ -999,19 +999,20 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     {
         if (result != '$' && result != '@' && result != '`')
         {
-            context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                    value, cld::Errors::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
-                                endOffset - value.size(), startOffset, endOffset,
-                                {{endOffset - value.size(), endOffset}});
+            // TODO: context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+            //                                    value, cld::Errors::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
+            //                                endOffset - value.size(), startOffset, endOffset,
+            //                                {{endOffset - value.size(), endOffset}});
             return {};
         }
     }
     else if ((result >= 0xD800 && result <= 0xDFFF) || result > UTF32_MAX)
     {
-        context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-                                value, result > UTF32_MAX ? cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32 :
-                                                            cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                            endOffset - value.size(), startOffset, endOffset, {{endOffset - value.size(), endOffset}});
+        // TODO:        context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
+        //                                value, result > UTF32_MAX ? cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32 :
+        //                                                            cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+        //                            endOffset - value.size(), startOffset, endOffset, {{endOffset - value.size(),
+        //                            endOffset}});
         return {};
     }
     return result;
@@ -1205,9 +1206,10 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     ss << llvm::format_hex_no_prefix(c, 8);
                     ss.flush();
                     auto size = getNumUTF8ForUTF32(c);
-                    context.reportError(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
-                                        context.getOffset() - size, context.getOffset() - size, context.getOffset(),
-                                        {{context.getOffset() - size, context.getOffset()}});
+                    // TODO: context.reportError(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
+                    //                                        context.getOffset() - size, context.getOffset() - size,
+                    //                                        context.getOffset(),
+                    //                                        {{context.getOffset() - size, context.getOffset()}});
                 }
                 else
                 {
@@ -1415,8 +1417,9 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
         }
         else
         {
-            context.reportError(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, ucStart, context.getOffset(),
-                                {{ucStart, context.getOffset()}});
+            // TODO:            context.reportError(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, ucStart,
+            // context.getOffset(),
+            //                                {{ucStart, context.getOffset()}});
             return {Start{}, true};
         }
     }
@@ -1616,9 +1619,11 @@ std::pair<StateMachine, bool> AfterInclude::advance(char c, Context& context)
         // If the delimiter is a " it means that the whole token would otherwise be interpreted as a string literal
         // if there wasn't a include directive in front. Therefore no macro expansion could make this a valid include
         // directive
-        context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
-                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-                            {{context.tokenStartOffset, context.getOffset() - 1}});
+
+        // TODO: context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
+        //                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
+        //                            {{context.tokenStartOffset, context.getOffset() - 1}});
+
         // if the delimiter is a < however then subsequent tokens will later be retokenized in the preprocessor
         // which might form a valid include after macro substitution
     }
@@ -1768,8 +1773,9 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
                     != llvm::conversionOK)
                 {
                     step = getNumBytesForUTF8(start, end);
-                    context.reportError(Errors::Lexer::INVALID_UTF8_SEQUENCE, offset, offset, offset + step,
-                                        {{offset, offset + 1}});
+                    // TODO:                    context.reportError(Errors::Lexer::INVALID_UTF8_SEQUENCE, offset,
+                    // offset, offset + step,
+                    //                                        {{offset, offset + 1}});
                     return false;
                 }
                 c = result;
@@ -1834,9 +1840,10 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
     }
     if (std::holds_alternative<BlockComment>(stateMachine))
     {
-        context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::BLOCK_COMMENT), context.tokenStartOffset,
-                            context.tokenStartOffset, context.getOffset() - 1,
-                            {{context.tokenStartOffset, context.getOffset() - 1}});
+        // TODO:        context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::BLOCK_COMMENT),
+        // context.tokenStartOffset,
+        //                            context.tokenStartOffset, context.getOffset() - 1,
+        //                            {{context.tokenStartOffset, context.getOffset() - 1}});
     }
     if (errorsOccured)
     {
@@ -1960,14 +1967,16 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
         case 'r': return '\r';
         case ' ':
         {
-            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
-                                {{backslash, backslash + 2}});
+            // TODO:            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash +
+            // 1,
+            //                                {{backslash, backslash + 2}});
             return {};
         }
         default:
         {
-            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\") + escape),
-                                backslash + 1, {{backslash, backslash + 2}});
+            // TODO:            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\")
+            // + escape),
+            //                                backslash + 1, {{backslash, backslash + 2}});
             return {};
         }
     }
@@ -2005,10 +2014,11 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         auto offset = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data());
         if (*iter == '\n')
         {
-            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
-                                    literalType == Literal::CharLiteral ? cld::Errors::Lexer::CHARACTER_LITERAL :
-                                                                          cld::Errors::Lexer::STRING_LITERAL),
-                                offset, {{offset, offset + 1}});
+            // TODO:            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
+            //                                    literalType == Literal::CharLiteral ?
+            //                                    cld::Errors::Lexer::CHARACTER_LITERAL :
+            //                                                                          cld::Errors::Lexer::STRING_LITERAL),
+            //                                offset, {{offset, offset + 1}});
             iter++;
             errorOccured = true;
             continue;
@@ -2024,8 +2034,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (res != llvm::conversionOK)
             {
                 auto invalid = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (start - characters.data());
-                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, context.token.getCharSpaceOffset(),
-                                    {{invalid, invalid + 1}});
+                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE,
+                // context.token.getCharSpaceOffset(),
+                //                                    {{invalid, invalid + 1}});
                 errorOccured = true;
             }
             continue;
@@ -2054,8 +2065,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 // First character followed after \u or \U is not a hex digit or its the end of string
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ? "\\U" : "\\u"), start,
-                                    {{start, start + 2}});
+                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ?
+                // "\\U" : "\\u"), start,
+                //                                    {{start, start + 2}});
                 errorOccured = true;
                 continue;
             }
@@ -2067,9 +2079,11 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-                                        std::to_string((big ? 8 : 4) - std::distance(hexStart, hexEnd))),
-                                    start, {{start, start + std::distance(hexStart, hexEnd)}});
+                // TODO:
+                // context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
+                //                                        std::to_string((big ? 8 : 4) - std::distance(hexStart,
+                //                                        hexEnd))),
+                //                                    start, {{start, start + std::distance(hexStart, hexEnd)}});
                 errorOccured = true;
                 iter = hexEnd;
                 continue;
@@ -2097,8 +2111,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (lastHex == iter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
-                                    {{start, start + 2}});
+                // TODO:                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED,
+                // start,
+                //                                    {{start, start + 2}});
                 errorOccured = true;
                 continue;
             }
@@ -2109,8 +2124,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (input.getBitWidth() >= 21 && input.ugt(rhs))
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
-                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                // TODO:                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
+                //                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex -
+                //                                    iter}});
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2119,10 +2135,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value >= 0xD800 && value <= 0xDFFF)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
-                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                                    start, start, start + 2 + lastHex - iter,
-                                    {{start + 2, start + 2 + lastHex - iter}});
+                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
+                //                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
+                //                                    start, start, start + 2 + lastHex - iter,
+                //                                    {{start + 2, start + 2 + lastHex - iter}});
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2130,8 +2146,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value > largestCharacter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
-                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex - iter}});
+                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                // start, start,
+                //                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex -
+                //                                    iter}});
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2153,8 +2171,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                 // Also since there must be at least one character after \, lastOctal is definitely not end
                 // here.
-                context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *lastOctal)),
-                                    offset, {{offset, offset + 2}});
+
+                // TODO: context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1,
+                // *lastOctal)),
+                //                                    offset, {{offset, offset + 2}});
                 errorOccured = true;
                 continue;
             }
@@ -2163,8 +2183,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value > largestCharacter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start, start,
-                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal - iter}});
+                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                // start, start,
+                //                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal -
+                //                                    iter}});
                 errorOccured = true;
                 iter = lastOctal;
                 continue;
@@ -2197,8 +2219,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         {
             if (*iter > largestCharacter)
             {
-                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                                    context.token.getCharSpaceOffset());
+                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                //                                    context.token.getCharSpaceOffset());
                 errorOccured = true;
             }
         }
@@ -2293,18 +2315,19 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
-            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
-                                beginLocation + std::distance(begin, suffixBegin), context.token.getCharSpaceOffset(),
-                                context.token.getCharSpaceOffset() + context.token.getCharSpaceLength());
+            // TODO:            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+            //                                beginLocation + std::distance(begin, suffixBegin),
+            //                                context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
+            //                                context.token.getCharSpaceLength());
             errorsOccurred = true;
         }
     }
     else if (isHex && isFloat)
     {
-        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
-                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
-                            context.token.getCharSpaceOffset(),
-                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength());
+        // TODO:        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+        //                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
+        //                            context.token.getCharSpaceOffset(),
+        //                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength());
         errorsOccurred = true;
     }
 
@@ -2317,10 +2340,12 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         {
             errorsOccurred = true;
             auto arrowBegin = beginLocation + std::distance(begin, result);
-            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1, *result)),
-                                beginLocation + std::distance(begin, result), context.token.getCharSpaceOffset(),
-                                context.token.getCharSpaceOffset() + context.token.getCharSpaceLength() /*-1*/,
-                                {{arrowBegin, arrowBegin + 1}});
+            // TODO:            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1,
+            // *result)),
+            //                                beginLocation + std::distance(begin, result),
+            //                                context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
+            //                                context.token.getCharSpaceLength() /*-1*/,
+            //                                {{arrowBegin, arrowBegin + 1}});
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
         }
     }
@@ -2338,10 +2363,11 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     if (set.count(suffix) == 0)
     {
         auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
-        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-                            beginLocation + std::distance(begin, suffixBegin), context.token.getCharSpaceOffset(),
-                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength() /*-1*/,
-                            {{arrowBegin, arrowBegin + suffix.size()}});
+        // TODO:        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
+        //                            beginLocation + std::distance(begin, suffixBegin),
+        //                            context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
+        //                            context.token.getCharSpaceLength() /*-1*/,
+        //                            {{arrowBegin, arrowBegin + suffix.size()}});
         return {};
     }
 
@@ -2356,9 +2382,11 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         llvm::StringRef(number).getAsInteger(0, test);
         if (test.getBitWidth() > 64)
         {
-            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation,
-                                context.token.getCharSpaceOffset(),
-                                context.token.getCharSpaceOffset() + context.token.getCharSpaceLength() /*-1*/);
+            // TODO:            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE,
+            // beginLocation,
+            //                                context.token.getCharSpaceOffset(),
+            //                                context.token.getCharSpaceOffset() + context.token.getCharSpaceLength()
+            //                                /*-1*/);
             return {};
         }
         char* endPtr;
@@ -2547,8 +2575,9 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    cld::Message::error(cld::Errors::Lexer::UNEXPECTED_CHARACTER, iter, {PointAt(iter)})
-                        .print(*reporter, sourceObject);
+                    // TODO:                    cld::Message::error(cld::Errors::Lexer::UNEXPECTED_CHARACTER, iter,
+                    // {PointAt(iter)})
+                    //                        .print(*reporter, sourceObject);
                 }
                 break;
             case TokenType::Pound:
@@ -2560,9 +2589,10 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    cld::Message::error(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args(tokenValue(iter->getTokenType())),
-                                        iter, {PointAt(iter)})
-                        .print(*reporter, sourceObject);
+                    // TODO:
+                    // cld::Message::error(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args(tokenValue(iter->getTokenType())),
+                    //                                        iter, {PointAt(iter)})
+                    //                        .print(*reporter, sourceObject);
                 }
                 break;
             case TokenType::Newline: break;
@@ -2662,18 +2692,22 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                     {
                         std::vector<std::uint64_t> arrows(iter->getCharSpaceLength());
                         std::iota(arrows.begin(), arrows.end(), iter->getCharSpaceOffset());
-                        context.reportError(
-                            Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY, iter->getCharSpaceOffset(),
-                            {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() + iter->getCharSpaceLength()}});
+                        // TODO:                        context.reportError(
+                        //                            Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
+                        //                            iter->getCharSpaceOffset(),
+                        //                            {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() +
+                        //                            iter->getCharSpaceLength()}});
                     }
                     break;
                 }
 
                 if (chars.size() > 1)
                 {
-                    context.reportWarning(
-                        Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER, iter->getCharSpaceOffset(),
-                        {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() + iter->getCharSpaceLength()}});
+                    // TODO:                    context.reportWarning(
+                    //                        Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
+                    //                        iter->getCharSpaceOffset(),
+                    //                        {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() +
+                    //                        iter->getCharSpaceLength()}});
                 }
 
                 if (wide)

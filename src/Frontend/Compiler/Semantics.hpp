@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "Message.hpp"
 #include "Syntax.hpp"
 
 namespace cld::Semantics
