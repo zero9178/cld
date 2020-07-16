@@ -135,7 +135,7 @@ public:
         return m_tokens;
     }
 
-    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override
     {
         return m_languageOptions;
     }

@@ -48,9 +48,9 @@ void cld::Parser::Context::log(std::vector<Message> messages)
         {
             m_errorCount++;
         }
-        if (this->m_reporter)
+        if (m_reporter)
         {
-            iter.print(*this->m_reporter, getSourceObject());
+            *m_reporter << iter;
         }
     }
 }

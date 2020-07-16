@@ -1901,52 +1901,17 @@ struct ConversionContext
     const cld::Lexer::PPToken& token;
     bool* errorsOccured;
 
-    void reportError(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
+    template <class Diag, class... Args>
+    void report(const Diag& diag, std::uint64_t location, Args&&... args) const
     {
-        if (errorsOccured)
+        if (diag.getSeverity() == cld::Severity::Error && errorsOccured)
         {
             *errorsOccured = true;
         }
-        ::report(reporter, sourceObject, token, "error", llvm::raw_ostream::RED, message, location, std::move(arrows),
-                 token.getCharSpaceOffset(), token.getCharSpaceOffset() + token.getCharSpaceLength());
-    }
-
-    void reportNote(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
-    {
-        ::report(reporter, sourceObject, token, "note", llvm::raw_ostream::CYAN, message, location, std::move(arrows),
-                 token.getCharSpaceOffset(), token.getCharSpaceOffset() + token.getCharSpaceLength());
-    }
-
-    void reportWarning(std::string_view message, std::uint64_t location, ArrowRange&& arrows = {})
-    {
-        ::report(reporter, sourceObject, token, "warning", llvm::raw_ostream::MAGENTA, message, location,
-                 std::move(arrows), token.getCharSpaceOffset(),
-                 token.getCharSpaceOffset() + token.getCharSpaceLength());
-    }
-
-    void reportError(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                     ArrowRange&& arrows = {})
-    {
-        if (errorsOccured)
+        if (reporter)
         {
-            *errorsOccured = true;
+            *reporter << diag.args(std::make_pair(token, location), sourceObject, std::forward<Args>(args)...);
         }
-        ::report(reporter, sourceObject, token, "error", llvm::raw_ostream::RED, message, location, std::move(arrows),
-                 start, end);
-    }
-
-    void reportNote(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                    ArrowRange&& arrows = {})
-    {
-        ::report(reporter, sourceObject, token, "note", llvm::raw_ostream::CYAN, message, location, std::move(arrows),
-                 start, end);
-    }
-
-    void reportWarning(std::string_view message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                       ArrowRange&& arrows = {})
-    {
-        ::report(reporter, sourceObject, token, "warning", llvm::raw_ostream::MAGENTA, message, location,
-                 std::move(arrows), start, end);
     }
 };
 
@@ -2079,6 +2044,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
+                context.report(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS, start,
+                               (big ? 8 : 4) - std::distance(hexStart, hexEnd));
                 // TODO:
                 // context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
                 //                                        std::to_string((big ? 8 : 4) - std::distance(hexStart,

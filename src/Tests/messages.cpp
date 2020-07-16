@@ -1,59 +1,58 @@
-//#include "catch.hpp"
-//
-//#include <Frontend/Compiler/Lexer.hpp>
-//#include <Frontend/Compiler/Message.hpp>
-//#include <Frontend/Compiler/SourceObject.hpp>
-//
-//#include "TestConfig.hpp"
-//
-// namespace
-//{
-// cld::SourceInterface* interface;
-//
-//[[nodiscard]] cld::Lexer::CTokenIterator lexes(std::string_view code,
-//                                               const cld::LanguageOptions& options = cld::LanguageOptions::native())
-//{
-//    std::string buffer;
-//    llvm::raw_string_ostream ss(buffer);
-//    auto temp = cld::Lexer::tokenize(code, options, &ss);
-//    INFO(buffer);
-//    REQUIRE(buffer.empty());
-//    static cld::CSourceObject csourceObject;
-//    csourceObject = cld::Lexer::toCTokens(temp);
-//    interface = &csourceObject;
-//    return csourceObject.data().data();
-//}
-//
-//[[nodiscard]] cld::Lexer::PPTokenIterator pplexes(std::string_view code,
-//                                                  const cld::LanguageOptions& options =
-//                                                  cld::LanguageOptions::native())
-//{
-//    std::string buffer;
-//    llvm::raw_string_ostream ss(buffer);
-//    static cld::PPSourceObject ppsourceObject;
-//    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
-//    INFO(buffer);
-//    REQUIRE(buffer.empty());
-//    interface = &ppsourceObject;
-//    return ppsourceObject.data().data();
-//}
-//
-//[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
-//                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
-//{
-//    std::string buffer;
-//    llvm::raw_string_ostream ss(buffer);
-//    static cld::PPSourceObject ppsourceObject;
-//    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
-//    INFO(buffer);
-//    REQUIRE(buffer.empty());
-//    ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), &ss);
-//    INFO(buffer);
-//    REQUIRE(buffer.empty());
-//    interface = &ppsourceObject;
-//    return ppsourceObject.data().data();
-//}
-//
+#include "catch.hpp"
+
+#include <Frontend/Compiler/Lexer.hpp>
+#include <Frontend/Compiler/Message.hpp>
+#include <Frontend/Compiler/SourceObject.hpp>
+
+#include "TestConfig.hpp"
+
+namespace
+{
+cld::SourceInterface* interface;
+
+[[nodiscard]] cld::Lexer::CTokenIterator lexes(std::string_view code,
+                                               const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    auto temp = cld::Lexer::tokenize(code, options, &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    static cld::CSourceObject csourceObject;
+    csourceObject = cld::Lexer::toCTokens(temp);
+    interface = &csourceObject;
+    return csourceObject.data().data();
+}
+
+[[nodiscard]] cld::Lexer::PPTokenIterator pplexes(std::string_view code,
+                                                  const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    static cld::PPSourceObject ppsourceObject;
+    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    interface = &ppsourceObject;
+    return ppsourceObject.data().data();
+}
+
+[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
+                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    static cld::PPSourceObject ppsourceObject;
+    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), &ss);
+    INFO(buffer);
+    REQUIRE(buffer.empty());
+    interface = &ppsourceObject;
+    return ppsourceObject.data().data();
+}
+
 // template <class... Args>
 // std::string messagePrints(cld::Message::Severity severity, Args&&... args)
 //{
@@ -72,9 +71,9 @@
 //    message.print(llvm::errs(), *interface);
 //    return buffer;
 //}
-//
-//} // namespace
-//
+
+} // namespace
+
 // TEST_CASE("Message Simple printing", "[MSG]")
 //{
 //    const auto* begin = lexes("A series of\n identifiers");

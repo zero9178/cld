@@ -6,6 +6,8 @@
 #pragma clang diagnostic ignored "-Wunused-const-variable"
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 
+// TODO: Use __VA_OPT__(,) in C++20
+
 #define CREATE_NOTE(variableName, format, ...)                        \
     namespace detail                                                  \
     {                                                                 \
@@ -48,10 +50,10 @@ CREATE_ERROR(MISSING_PARAMETER_NAME, "Parameter name omitted in function definit
 
 CREATE_ERROR(N_REQUIRES_AT_LEAST_ONE_N, "%0 requires at least one %1");
 
-CREATE_ERROR(MAXIMUM_N_DEPTH_OF_N_EXCEEDED, "Maximum {} depth of {} exceeded");
+CREATE_ERROR(MAXIMUM_N_DEPTH_OF_N_EXCEEDED, "Maximum %0 depth of %1 exceeded");
 } // namespace Parser
 
-CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol {}");
+CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0");
 
 namespace Semantics
 {
@@ -155,7 +157,7 @@ CREATE_ERROR(INVALID_LITERAL_SUFFIX, "Invalid literal suffix '{}'");
 CREATE_ERROR(INVALID_ESCAPE_SEQUENCE_N, "Invalid escape sequence '{}'");
 
 CREATE_ERROR(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS,
-             "Invalid universal character. Expected {} more hex digits");
+             "Invalid universal character. Expected %0 more hex digit%s0");
 
 CREATE_ERROR(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N,
              "Invalid universal character. Illegal value of 0x{} ({})");

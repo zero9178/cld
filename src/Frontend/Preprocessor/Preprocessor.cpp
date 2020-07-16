@@ -73,7 +73,7 @@ class Preprocessor final : private cld::SourceInterface
             }
             if (m_report)
             {
-                iter.print(*m_report, *this);
+                *m_report << iter;
             }
         }
     }
@@ -706,6 +706,11 @@ class Preprocessor final : private cld::SourceInterface
     const cld::Source::PPRecord& getSubstitutions() const noexcept override
     {
         return m_substitutions;
+    }
+
+    const cld::LanguageOptions& getLanguageOptions() const noexcept override
+    {
+        return m_options;
     }
 
 public:

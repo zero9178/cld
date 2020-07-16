@@ -4,6 +4,8 @@
 #include <variant>
 #include <vector>
 
+#include "LanguageOptions.hpp"
+
 namespace cld
 {
 namespace Lexer
@@ -40,5 +42,7 @@ public:
     [[nodiscard]] virtual const std::vector<Source::File>& getFiles() const noexcept = 0;
 
     [[nodiscard]] virtual const Source::PPRecord& getSubstitutions() const noexcept = 0;
+
+    [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const noexcept = 0;
 };
 } // namespace cld

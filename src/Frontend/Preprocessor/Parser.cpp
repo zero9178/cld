@@ -75,7 +75,7 @@ void cld::PP::Context::log(std::vector<Message> messages)
         }
         if (m_reporter)
         {
-            iter.print(*m_reporter, m_sourceInterface);
+            *m_reporter << iter;
         }
     }
 }

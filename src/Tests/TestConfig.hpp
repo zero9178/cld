@@ -33,10 +33,30 @@ std::string args(const Diagnostic&, Args&&... args)
     for (auto& iter : ctre::range<cld::detail::DIAG_ARG_PATTERN>(stringView))
     {
         auto view = iter.view();
-        result.insert(result.end(), view.begin(), view.end());
+        const char32_t* start = stringView.data();
+        result.resize(result.size() + 4 * (view.data() - stringView.data()));
+        char* resStart = result.data() + result.size() - 4 * (view.data() - stringView.data());
+        auto ret = llvm::ConvertUTF32toUTF8(
+            reinterpret_cast<const llvm::UTF32**>(&start), reinterpret_cast<const llvm::UTF32*>(view.data()),
+            reinterpret_cast<llvm::UTF8**>(&resStart), reinterpret_cast<llvm::UTF8*>(result.data() + result.size()),
+            llvm::strictConversion);
+        (void)ret;
+        CLD_ASSERT(ret == llvm::conversionOK);
+        result.resize(resStart - result.data());
         stringView.remove_prefix(iter.get_end_position() - stringView.begin());
         result += strArgs[i++];
     }
+    const char32_t* start = stringView.data();
+    result.resize(result.size() + 4 * stringView.size());
+    char* resStart = result.data() + result.size() - 4 * stringView.size();
+    auto ret =
+        llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&start),
+                                 reinterpret_cast<const llvm::UTF32*>(stringView.data() + stringView.size()),
+                                 reinterpret_cast<llvm::UTF8**>(&resStart),
+                                 reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
+    (void)ret;
+    CLD_ASSERT(ret == llvm::conversionOK);
+    result.resize(resStart - result.data());
     return result;
 }
 } // namespace detail

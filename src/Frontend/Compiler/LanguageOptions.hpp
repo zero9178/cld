@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace cld
@@ -26,6 +27,7 @@ struct LanguageOptions
     std::uint8_t sizeOfVoidStar;
     std::vector<std::string> includeDirectories{};
     std::vector<std::string> includeQuoteDirectories{};
+    std::unordered_set<std::string> disabledWarnings{};
 
     static LanguageOptions native(Language language = Language::C99);
 };

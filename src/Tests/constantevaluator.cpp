@@ -36,7 +36,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                 typeName.getAbstractDeclarator());
         },
-        {}, [&ss, &ctokens](const cld::Message& message) { message.print(ss, ctokens); }, mode);
+        {}, [&ss, &ctokens](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
     auto string = ss.str();
     if (!string.empty())
@@ -48,7 +48,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
-            {}, [&ctokens](const cld::Message& message) { message.print(llvm::errs(), ctokens) << '\n'; }, mode)
+            {}, [&ctokens](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);
     }
     return {ret, string};

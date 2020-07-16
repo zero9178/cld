@@ -3,6 +3,12 @@
 int main(int argc, char* argv[])
 {
     Catch::Session session; // There must be exactly one instance
+#ifdef _MSC_VER
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
 
     // writing to session.configData() here sets defaults
     // this is the preferred way to set them

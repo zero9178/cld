@@ -20,7 +20,7 @@ void cld::Semantics::SemanticAnalysis::log(std::vector<Message> messages)
     {
         for (auto& iter : messages)
         {
-            iter.print(*m_reporter, m_sourceObject);
+            *m_reporter << iter;
         }
     }
 }
