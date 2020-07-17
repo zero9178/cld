@@ -87,6 +87,11 @@ CREATE_ERROR(singleArgumentTest, "Here %0");
 CREATE_ERROR(englishPluralTest, "I want %0 cake%s0 now");
 CREATE_WARNING(warningTest, "warning-test", "A warning");
 CREATE_NOTE(noteTest, "A note");
+CREATE_ERROR(underline, "Highlight!", cld::Underline<0>);
+CREATE_ERROR(pointAt, "Highlight!", cld::PointAt<0>);
+CREATE_ERROR(insertAfter, "Highlight!", cld::InsertAfter<0>);
+CREATE_ERROR(insertAfterText, "Highlight!", cld::InsertAfter<0, 1>);
+CREATE_ERROR(annotate, "Highlight!", cld::Annotate<0, 1>);
 } // namespace
 
 TEST_CASE("Diag in format arguments", "[diag]")
@@ -157,5 +162,7 @@ TEST_CASE("Diag severity", "[diag]")
         CHECK_THAT(message.getText(), Catch::Matchers::StartsWith("<stdin>:1:1: note:"));
     }
 }
+
+TEST_CASE("Diag line printing", "[diag]") {}
 
 #undef CREATE_ERROR

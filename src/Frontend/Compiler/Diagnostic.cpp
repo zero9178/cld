@@ -34,7 +34,7 @@ PointLocation toMacroId0(PointLocation location, const cld::SourceInterface& sou
 } // namespace
 
 cld::Message cld::detail::DiagnosticBase::print(PointLocation location, std::string_view message,
-                                                llvm::ArrayRef<Argument> arguments,
+                                                llvm::ArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
                                                 const SourceInterface& sourceInterface) const
 {
     std::string result;
@@ -79,7 +79,7 @@ cld::Message cld::detail::DiagnosticBase::print(PointLocation location, std::str
             CLD_UNREACHABLE;
         }
     }
-    ss.write(message.data(), message.size());
+    ss.write(message.data(), message.size()) << '\n';
 
     ss.flush();
     return Message(m_severity, std::move(result));

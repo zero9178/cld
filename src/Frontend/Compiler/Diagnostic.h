@@ -13,6 +13,15 @@
 
 namespace cld
 {
+template <std::size_t index, std::int64_t text = -1>
+struct InsertAfter;
+
+template <std::size_t index, std::size_t text>
+struct Annotate;
+
+template <std::size_t index, char character = '~', bool continuous = true>
+struct Underline;
+
 namespace detail
 {
 constexpr static auto DIAG_ARG_PATTERN = ctll::fixed_string{"%([^\\s\\\\]*)(\\d)"};
@@ -42,7 +51,7 @@ constexpr bool checkForNoHoles(std::u32string_view text)
     }
     else
     {
-        bool seen[N] = {false};
+        std::array<bool, N> seen = {{false}};
         while (auto result = ctre::search<DIAG_ARG_PATTERN>(text))
         {
             auto index = result.template get<2>().view().back() - '0';
@@ -67,17 +76,67 @@ constexpr bool checkForNoHoles(std::u32string_view text)
         return true;
     }
 }
+
+// Got these due to a bug in VS not allowing to make a IsSpecializationOf struct
+
+template <class T>
+struct IsUnderline : std::false_type
+{
+};
+
+template <auto... Args>
+struct IsUnderline<Underline<Args...>> : std::true_type
+{
+};
+
+template <class T>
+struct IsInsertAfter : std::false_type
+{
+};
+
+template <auto... Args>
+struct IsInsertAfter<InsertAfter<Args...>> : std::true_type
+{
+};
+
+template <class T>
+struct IsAnnotate : std::false_type
+{
+};
+
+template <auto... Args>
+struct IsAnnotate<Annotate<Args...>> : std::true_type
+{
+};
+
+template <std::size_t N, class... Args>
+constexpr bool checkForNoDuplicates()
+{
+    if constexpr (N == 0)
+    {
+        return true;
+    }
+    else
+    {
+        std::array<bool, N> seen = {{false}};
+        return (([&seen](auto value) {
+                    using T = decltype(value);
+                    if constexpr (IsInsertAfter<T>{})
+                    {
+                        return true;
+                    }
+                    constexpr auto index = T::affects;
+                    if (seen[index])
+                    {
+                        return false;
+                    }
+                    seen[index] = true;
+                    return true;
+                }(Args{}))
+                && ...);
+    }
+}
 #pragma clang diagnostic pop
-
-template <template <auto...> class Template, typename T>
-struct IsSpecializationOf : std::false_type
-{
-};
-
-template <template <auto...> class Template, auto... Args>
-struct IsSpecializationOf<Template, Template<Args...>> : std::true_type
-{
-};
 
 class DiagnosticBase
 {
@@ -92,15 +151,36 @@ public:
     };
 
 protected:
+    struct Underline
+    {
+        std::size_t index;
+        char characters;
+        bool continuous;
+    };
+
+    struct InsertAfter
+    {
+        std::size_t index;
+        std::int64_t text;
+    };
+
+    struct Annotate
+    {
+        std::size_t index;
+        std::size_t text;
+    };
+
+    using Modifiers = std::variant<Underline, InsertAfter, Annotate>;
+
     struct Argument
     {
-        std::optional<PointLocation> location;
+        std::optional<std::pair<PointLocation, PointLocation>> range;
         std::optional<std::string> text;
         std::optional<std::uint64_t> integral;
     };
 
-    cld::Message print(PointLocation location, std::string_view message, llvm::ArrayRef<Argument> arguments,
-                       const SourceInterface& sourceInterface) const;
+    Message print(PointLocation location, std::string_view message, llvm::ArrayRef<Argument> arguments,
+                  llvm::ArrayRef<Modifiers> modifiers, const SourceInterface& sourceInterface) const;
 
 public:
     constexpr DiagnosticBase(Severity severity) : m_severity(severity) {}
@@ -113,17 +193,34 @@ public:
 
 } // namespace detail
 
-template <std::size_t n, char character = '~'>
+// Move the non-type template parameters to become members in C++20
+
+template <std::size_t index, char character, bool continuous>
 struct Underline
 {
-    constexpr static std::array<std::size_t, 1> indices = {n};
-    constexpr static std::size_t affects = n;
+    constexpr static std::array<std::size_t, 1> indices = {index};
+    constexpr static std::size_t affects = index;
+
+    [[nodiscard]] constexpr static std::size_t getIndex() noexcept
+    {
+        return index;
+    }
+
+    [[nodiscard]] constexpr static char getCharacter() noexcept
+    {
+        return character;
+    }
+
+    [[nodiscard]] constexpr static bool isContinuous() noexcept
+    {
+        return continuous;
+    }
 };
 
-template <std::size_t n>
-using PointAt = Underline<n, '^'>;
+template <std::size_t index>
+using PointAt = Underline<index, '^', false>;
 
-template <std::size_t token, std::int64_t text = -1>
+template <std::size_t index, std::int64_t text>
 struct InsertAfter
 {
 private:
@@ -131,24 +228,44 @@ private:
     {
         if constexpr (text >= 0)
         {
-            return {token, text};
+            return {index, text};
         }
         else
         {
-            return {token};
+            return {index};
         }
     }
 
 public:
     constexpr static std::array<std::size_t, 1 + (text >= 0 ? 1 : 0)> indices = getIndices();
-    constexpr static std::size_t affects = token;
+    constexpr static std::size_t affects = index;
+
+    [[nodiscard]] constexpr static std::size_t getIndex() noexcept
+    {
+        return index;
+    }
+
+    [[nodiscard]] constexpr static std::int64_t getText() noexcept
+    {
+        return text;
+    }
 };
 
-template <std::size_t token, std::size_t text>
+template <std::size_t index, std::size_t text>
 struct Annotate
 {
-    constexpr static std::array<std::size_t, 2> indices = {token, text};
-    constexpr static std::size_t affects = token;
+    constexpr static std::array<std::size_t, 2> indices = {index, text};
+    constexpr static std::size_t affects = index;
+
+    [[nodiscard]] constexpr static std::size_t getIndex() noexcept
+    {
+        return index;
+    }
+
+    [[nodiscard]] constexpr static std::size_t getText() noexcept
+    {
+        return text;
+    }
 };
 
 template <std::size_t N, auto& format, class... Mods>
@@ -163,10 +280,13 @@ class Diagnostic : public detail::DiagnosticBase
 
     constexpr static std::array<std::underlying_type_t<Constraint>, N> getConstraints();
 
+    template <std::size_t... ints>
+    constexpr static std::array<Modifiers, sizeof...(Mods)> getModifiers(std::index_sequence<ints...>);
+
     template <class T>
     static std::string getString(const T& arg)
     {
-        return cld::to_string(arg);
+        return to_string(arg);
     }
 
     // TODO: Replace all those things with Concepts once the Codebase is C++20
@@ -180,73 +300,50 @@ class Diagnostic : public detail::DiagnosticBase
     {
     };
 
-    template <typename T, typename = void>
-    struct IsIterable : std::false_type
+    template <class T, typename = void>
+    struct IsTupleLike : std::false_type
     {
     };
 
-    template <typename T>
-    struct IsIterable<T, std::void_t<decltype(std::begin(std::declval<T>())), decltype(std::end(std::declval<T>()))>>
-        : std::true_type
+    template <class T>
+    struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::true_type
     {
     };
-
-    template <class T, std::enable_if_t<IsIterable<T>{}>* = nullptr>
-    constexpr static bool iteratesOverTokens()
-    {
-        return std::is_base_of_v<cld::Lexer::TokenBase,
-                                 typename std::iterator_traits<decltype(std::begin(std::declval<T>()))>::value_type>;
-    }
-
-    template <class T, std::enable_if_t<!IsIterable<T>{}>* = nullptr>
-    constexpr static bool iteratesOverTokens()
-    {
-        return false;
-    }
-
-    template <class T, std::enable_if_t<IsIterable<T>{}>* = nullptr>
-    constexpr static bool iteratesOverIntegrals()
-    {
-        return std::is_convertible_v<typename std::iterator_traits<decltype(std::begin(std::declval<T>()))>::value_type,
-                                     std::int64_t>;
-    }
-
-    template <class T, std::enable_if_t<!IsIterable<T>{}>* = nullptr>
-    constexpr static bool iteratesOverIntegrals()
-    {
-        return false;
-    }
-
-    template <class>
-    struct IsPair : std::false_type
-    {
-    };
-
-    template <class T, class U>
-    struct IsPair<std::pair<T, U>> : std::true_type
-    {
-    };
-
-    template <class T, std::enable_if_t<IsPair<T>{}>* = nullptr>
-    constexpr static bool isPairComboOfTheseThings()
-    {
-        using T1 = std::tuple_element_t<0, T>;
-        using T2 = std::tuple_element_t<1, T>;
-        return (std::is_base_of_v<cld::Lexer::TokenBase, T1> && iteratesOverIntegrals<T2>())
-               || (std::is_base_of_v<cld::Lexer::TokenBase, T2> && iteratesOverIntegrals<T1>());
-    }
-
-    template <class T, std::enable_if_t<!IsPair<T>{}>* = nullptr>
-    constexpr static bool isPairComboOfTheseThings()
-    {
-        return false;
-    }
 
     template <class T>
     constexpr static bool locationConstraintCheck()
     {
-        return std::is_base_of_v<cld::Lexer::TokenBase, T> || iteratesOverTokens<T>() || iteratesOverIntegrals<T>()
-               || isPairComboOfTheseThings<T>();
+        if constexpr (IsTupleLike<T>{})
+        {
+            if constexpr (std::tuple_size_v<T> == 2)
+            {
+                using T1 = std::tuple_element_t<0, T>;
+                using T2 = std::tuple_element_t<1, T>;
+                return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
+                       || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
+                       || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>);
+            }
+            else if constexpr (std::tuple_size_v<T> == 3)
+            {
+                using T1 = std::tuple_element_t<0, T>;
+                using T2 = std::tuple_element_t<1, T>;
+                using T3 = std::tuple_element_t<2, T>;
+                return (std::is_base_of_v<
+                            Lexer::TokenBase,
+                            T1> && std::is_convertible_v<T2, std::uint64_t> && std::is_convertible_v<T3, std::uint64_t>)
+                       || (std::is_base_of_v<
+                               Lexer::TokenBase,
+                               T3> && std::is_convertible_v<T2, std::uint64_t> && std::is_convertible_v<T1, std::uint64_t>);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return std::is_base_of_v<Lexer::TokenBase, T> || std::is_convertible_v<T, std::uint64_t>;
+        }
     }
 
     template <std::size_t argumentIndex, std::underlying_type_t<Constraint> constraint, class T>
@@ -257,19 +354,26 @@ class Diagnostic : public detail::DiagnosticBase
         static_assert(!(constraint & IntegerConstraint) || std::is_convertible_v<T, std::int64_t>,
                       "Argument must be an integer type");
         static_assert(!(constraint & LocationConstraint) || locationConstraintCheck<T>(),
-                      "Argument must denote a location or location range");
+                      "Argument must denote a location range");
     };
 
-    template <class T, std::enable_if_t<IsPair<T>{}>* = nullptr>
+    template <class T, std::enable_if_t<IsTupleLike<T>{}>* = nullptr>
     constexpr static bool isPointLocationPair()
     {
-        using T1 = std::tuple_element_t<0, T>;
-        using T2 = std::tuple_element_t<1, T>;
-        return (std::is_base_of_v<cld::Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::int64_t>)
-               || (std::is_base_of_v<cld::Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::int64_t>);
+        if constexpr (std::tuple_size_v<T> != 2)
+        {
+            return false;
+        }
+        else
+        {
+            using T1 = std::tuple_element_t<0, T>;
+            using T2 = std::tuple_element_t<1, T>;
+            return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::int64_t>)
+                   || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::int64_t>);
+        }
     }
 
-    template <class T, std::enable_if_t<!IsPair<T>{}>* = nullptr>
+    template <class T, std::enable_if_t<!IsTupleLike<T>{}>* = nullptr>
     constexpr static bool isPointLocationPair()
     {
         return false;
@@ -300,6 +404,59 @@ class Diagnostic : public detail::DiagnosticBase
             {
                 return {static_cast<std::uint64_t>(arg.first.getOffset() + arg.second), arg.first.getFileId(),
                         arg.first.getMacroId()};
+            }
+        }
+    }
+
+    template <class T>
+    static std::pair<PointLocation, PointLocation> getPointRange(const T& arg)
+    {
+        if constexpr (std::is_base_of_v<Lexer::TokenBase, T>)
+        {
+            return {{arg.getOffset(), arg.getFileId(), arg.getMacroId()},
+                    {arg.getOffset() + arg.getLength(), arg.getFileId(), arg.getMacroId()}};
+        }
+        else if constexpr (std::is_convertible_v<T, std::uint64_t>)
+        {
+            return {{static_cast<std::uint64_t>(arg), 0, 0}, {static_cast<std::uint64_t>(arg) + 1, 0, 0}};
+        }
+        else if constexpr (std::tuple_size_v<T> == 2)
+        {
+            using T1 = std::tuple_element_t<0, T>;
+            using T2 = std::tuple_element_t<1, T>;
+            if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
+            {
+                auto& [arg1, arg2] = arg;
+                return {{arg1.getOffset(), arg1.getFileId(), arg1.getMacroId()},
+                        {arg2.getOffset() + arg2.getLength(), arg2.getFileId(), arg2.getMacroId()}};
+            }
+            else if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
+            {
+                auto& [arg1, arg2] = arg;
+                return {{static_cast<std::uint64_t>(arg2), arg1.getFileId(), arg1.getMacroId()},
+                        {static_cast<std::uint64_t>(arg2) + 1, arg1.getFileId(), arg1.getMacroId()}};
+            }
+            else if constexpr (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
+            {
+                auto& [arg1, arg2] = arg;
+                return {{static_cast<std::uint64_t>(arg1), arg2.getFileId(), arg2.getMacroId()},
+                        {static_cast<std::uint64_t>(arg1) + 1, arg2.getFileId(), arg2.getMacroId()}};
+            }
+        }
+        else
+        {
+            using T1 = std::tuple_element_t<0, T>;
+            if constexpr (std::is_base_of_v<Lexer::TokenBase, T1>)
+            {
+                auto& [arg1, arg2, arg3] = arg;
+                return {{static_cast<std::uint64_t>(arg2), arg1.getFileId(), arg1.getMacroId()},
+                        {static_cast<std::uint64_t>(arg3), arg1.getFileId(), arg1.getMacroId()}};
+            }
+            else
+            {
+                auto& [arg1, arg2, arg3] = arg;
+                return {{static_cast<std::uint64_t>(arg1), arg3.getFileId(), arg3.getMacroId()},
+                        {static_cast<std::uint64_t>(arg2), arg3.getFileId(), arg3.getMacroId()}};
             }
         }
     }
@@ -339,6 +496,8 @@ public:
 
 private:
     constexpr static auto constraints = getConstraints();
+
+    constexpr static auto modifiers = getModifiers(std::index_sequence_for<Mods...>{});
 };
 
 template <const auto& text, class... Args>
@@ -347,6 +506,8 @@ constexpr auto makeDiagnostic(Severity category, std::string_view name)
     constexpr auto n = detail::getBiggestPercentArg<Args...>({text.begin(), text.size()});
     constexpr bool tmp = detail::checkForNoHoles<n, Args...>({text.begin(), text.size()});
     static_assert(tmp, "Not allowed to have any holes between % indices");
+    constexpr bool duplicates = detail::checkForNoDuplicates<n, Args...>();
+    static_assert(duplicates, "Not allowed to have any duplicate indices in Modifiers");
     return Diagnostic<n, text, Args...>(category, name);
 }
 
@@ -357,7 +518,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
 {
     static_assert(sizeof...(Args) == N, "Not the same amount of argument as needed by the format");
     this->checkConstraints<constraints, 0, Args...>();
-    if (sourceInterface.getLanguageOptions().disabledWarnings.count(cld::to_string(m_name)))
+    if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
     {
         return {};
     }
@@ -403,24 +564,24 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
         text.remove_prefix(end - text.begin());
     }
     (
-        [&result](auto&& value) {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (detail::IsSpecializationOf<Underline, T>{})
+        [&result](auto value) {
+            using T = decltype(value);
+            if constexpr (detail::IsUnderline<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint;
             }
-            else if constexpr (detail::IsSpecializationOf<InsertAfter, T>{})
+            else if constexpr (detail::IsAnnotate<T>{})
+            {
+                result[T::indices[0]] |= Constraint::LocationConstraint;
+                result[T::indices[1]] |= Constraint::StringConstraint;
+            }
+            else if constexpr (detail::IsInsertAfter<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint;
                 if constexpr (T::indices.size() > 1)
                 {
                     result[T::indices[1]] |= Constraint::StringConstraint;
                 }
-            }
-            else if constexpr (detail::IsSpecializationOf<Annotate, T>{})
-            {
-                result[T::indices[0]] |= Constraint::LocationConstraint;
-                result[T::indices[1]] |= Constraint::StringConstraint;
             }
         }(Mods{}),
         ...);
@@ -438,7 +599,7 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::inde
             constexpr auto i = decltype(integer)::value;
             if constexpr ((bool)(constraints[i] & Constraint::LocationConstraint))
             {
-                // TODO:
+                result[i].range = getPointRange(std::get<i>(args));
             }
             if constexpr ((bool)(constraints[i] & Constraint::StringConstraint))
             {
@@ -447,6 +608,33 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::inde
             if constexpr ((bool)(constraints[i] & Constraint::IntegerConstraint))
             {
                 result[i].integral = static_cast<std::int64_t>(std::get<i>(args));
+            }
+        }(std::integral_constant<std::size_t, ints>{}),
+        ...);
+    return result;
+}
+
+template <std::size_t N, auto& format, class... Mods>
+template <std::size_t... ints>
+constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<ints...>)
+    -> std::array<Modifiers, sizeof...(Mods)>
+{
+    std::array<Modifiers, sizeof...(Mods)> result;
+    (
+        [&result](auto value) {
+            constexpr std::size_t i = decltype(value)::value;
+            using T = std::tuple_element_t<i, std::tuple<Mods...>>;
+            if constexpr (detail::IsUnderline<T>{})
+            {
+                result[i] = DiagnosticBase::Underline{T::getIndex(), T::getCharacter(), T::isContinous()};
+            }
+            else if constexpr (detail::IsAnnotate<T>{})
+            {
+                result[i] = DiagnosticBase::Annotate{T::getIndex(), T::getText()};
+            }
+            else if constexpr (detail::IsInsertAfter<T>{})
+            {
+                result[i] = DiagnosticBase::InsertAfter{T::getIndex(), T::getText()};
             }
         }(std::integral_constant<std::size_t, ints>{}),
         ...);
