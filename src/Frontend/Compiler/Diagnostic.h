@@ -1,5 +1,6 @@
 #pragma once
 
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/Support/Unicode.h>
 
 #include <Frontend/Common/Text.hpp>
@@ -179,8 +180,9 @@ protected:
         std::optional<std::uint64_t> integral;
     };
 
-    Message print(PointLocation location, std::string_view message, llvm::ArrayRef<Argument> arguments,
-                  llvm::ArrayRef<Modifiers> modifiers, const SourceInterface& sourceInterface) const;
+    Message print(std::pair<PointLocation, PointLocation> location, std::string_view message,
+                  llvm::MutableArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
+                  const SourceInterface& sourceInterface) const;
 
 public:
     constexpr DiagnosticBase(Severity severity) : m_severity(severity) {}
@@ -321,7 +323,8 @@ class Diagnostic : public detail::DiagnosticBase
                 using T2 = std::tuple_element_t<1, T>;
                 return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
-                       || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>);
+                       || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
+                       || (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>);
             }
             else if constexpr (std::tuple_size_v<T> == 3)
             {
@@ -357,57 +360,6 @@ class Diagnostic : public detail::DiagnosticBase
                       "Argument must denote a location range");
     };
 
-    template <class T, std::enable_if_t<IsTupleLike<T>{}>* = nullptr>
-    constexpr static bool isPointLocationPair()
-    {
-        if constexpr (std::tuple_size_v<T> != 2)
-        {
-            return false;
-        }
-        else
-        {
-            using T1 = std::tuple_element_t<0, T>;
-            using T2 = std::tuple_element_t<1, T>;
-            return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::int64_t>)
-                   || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::int64_t>);
-        }
-    }
-
-    template <class T, std::enable_if_t<!IsTupleLike<T>{}>* = nullptr>
-    constexpr static bool isPointLocationPair()
-    {
-        return false;
-    }
-
-    template <class T>
-    static PointLocation getPointLocation(const T& arg)
-    {
-        if constexpr (std::is_convertible_v<T, std::uint64_t>)
-        {
-            return {static_cast<std::uint64_t>(arg), 0, 0};
-        }
-        else if constexpr (std::is_base_of_v<Lexer::TokenBase, T>)
-        {
-            return {arg.getOffset(), arg.getFileId(), arg.getMacroId()};
-        }
-        else
-        {
-            static_assert(
-                isPointLocationPair<T>(),
-                "Location must be an integer type, a subtype of Lexer::TokenBase or a std::pair of the previous two");
-            if constexpr (std::is_integral_v<std::tuple_element_t<0, T>>)
-            {
-                return {static_cast<std::uint64_t>(arg.second.getOffset() + arg.first), arg.second.getFileId(),
-                        arg.second.getMacroId()};
-            }
-            else
-            {
-                return {static_cast<std::uint64_t>(arg.first.getOffset() + arg.second), arg.first.getFileId(),
-                        arg.first.getMacroId()};
-            }
-        }
-    }
-
     template <class T>
     static std::pair<PointLocation, PointLocation> getPointRange(const T& arg)
     {
@@ -441,6 +393,11 @@ class Diagnostic : public detail::DiagnosticBase
                 auto& [arg1, arg2] = arg;
                 return {{static_cast<std::uint64_t>(arg1), arg2.getFileId(), arg2.getMacroId()},
                         {static_cast<std::uint64_t>(arg1) + 1, arg2.getFileId(), arg2.getMacroId()}};
+            }
+            else if constexpr (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>)
+            {
+                auto& [arg1, arg2] = arg;
+                return {{static_cast<std::uint64_t>(arg1), 0, 0}, {static_cast<std::uint64_t>(arg2), 0, 0}};
             }
         }
         else
@@ -518,6 +475,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
 {
     static_assert(sizeof...(Args) == N, "Not the same amount of argument as needed by the format");
     this->checkConstraints<constraints, 0, Args...>();
+    static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
     if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
     {
         return {};
@@ -535,7 +493,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
     CLD_ASSERT(ret == llvm::conversionOK);
     auto array =
         createArgumentArray(std::forward_as_tuple(std::forward<Args>(args)...), std::index_sequence_for<Args...>{});
-    return print(getPointLocation(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
+    return print(getPointRange(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
                  modifiers, sourceInterface);
 }
 

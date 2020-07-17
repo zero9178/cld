@@ -120,9 +120,11 @@ public:
     {
         CLD_ASSERT((std::uint64_t)fileID < m_files.size());
         CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
-        return line == m_files[fileID].starts.size() ?
-                   m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength() :
-                   m_files[fileID].starts[line];
+        if (line != m_files[fileID].starts.size())
+        {
+            return m_files[fileID].starts[line] - 1;
+        }
+        return m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength();
     }
 
     [[nodiscard]] const std::vector<T>& data() const noexcept

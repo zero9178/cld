@@ -1629,7 +1629,7 @@ TEST_CASE("Lexing Preprocessor unterminated characters", "[lexer]")
     PP_LEXER_OUTPUTS_WITH("ad\n#include <test", ProducesNothing());
 }
 
-TEST_CASE("Lexing Preprocessor Miscellaneous")
+TEST_CASE("Lexing Preprocessor Miscellaneous", "[lexer]")
 {
     auto result = pplexes("〺");
     REQUIRE(result.data().size() == 2);
@@ -1641,7 +1641,7 @@ TEST_CASE("Lexing Preprocessor Miscellaneous")
     CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
 }
 
-TEST_CASE("Lexing Preprocessor Newlines")
+TEST_CASE("Lexing Preprocessor Newlines", "[lexer]")
 {
     // Sanity check
     {
@@ -1668,6 +1668,38 @@ TEST_CASE("Lexing Preprocessor Newlines")
     CHECK(result.data()[4].getTokenType() == cld::Lexer::TokenType::Pound);
     CHECK(result.data()[5].getTokenType() == cld::Lexer::TokenType::Identifier);
     CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::Newline);
+}
+
+TEST_CASE("Lexing source object lines", "[lexer]")
+{
+    auto result = pplexes("#if 0\n50\n#endif");
+    SECTION("Line 1")
+    {
+        auto line1Start = result.getLineStartOffset(0, 1);
+        REQUIRE(line1Start == 0);
+        auto line1End = result.getLineEndOffset(0, 1);
+        REQUIRE(line1End == 5);
+        auto line1 = std::string_view(result.getFiles()[0].source).substr(line1Start, line1End - line1Start);
+        CHECK(line1 == "#if 0");
+    }
+    SECTION("Line 2")
+    {
+        auto line2Start = result.getLineStartOffset(0, 2);
+        REQUIRE(line2Start == 6);
+        auto line2End = result.getLineEndOffset(0, 2);
+        REQUIRE(line2End == 8);
+        auto line2 = std::string_view(result.getFiles()[0].source).substr(line2Start, line2End - line2Start);
+        CHECK(line2 == "50");
+    }
+    SECTION("Line 3")
+    {
+        auto line3Start = result.getLineStartOffset(0, 3);
+        REQUIRE(line3Start == 9);
+        auto line3End = result.getLineEndOffset(0, 3);
+        REQUIRE(line3End == 15);
+        auto line3 = std::string_view(result.getFiles()[0].source).substr(line3Start, line3End - line3Start);
+        CHECK(line3 == "#endif");
+    }
 }
 
 namespace
