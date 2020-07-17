@@ -536,7 +536,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
     auto array =
         createArgumentArray(std::forward_as_tuple(std::forward<Args>(args)...), std::index_sequence_for<Args...>{});
     return print(getPointLocation(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
-                 sourceInterface);
+                 modifiers, sourceInterface);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -619,22 +619,22 @@ template <std::size_t... ints>
 constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<ints...>)
     -> std::array<Modifiers, sizeof...(Mods)>
 {
-    std::array<Modifiers, sizeof...(Mods)> result;
+    std::array<Modifiers, sizeof...(Mods)> result = {};
     (
         [&result](auto value) {
             constexpr std::size_t i = decltype(value)::value;
             using T = std::tuple_element_t<i, std::tuple<Mods...>>;
             if constexpr (detail::IsUnderline<T>{})
             {
-                result[i] = DiagnosticBase::Underline{T::getIndex(), T::getCharacter(), T::isContinous()};
+                result[i] = Modifiers{DiagnosticBase::Underline{T::getIndex(), T::getCharacter(), T::isContinuous()}};
             }
             else if constexpr (detail::IsAnnotate<T>{})
             {
-                result[i] = DiagnosticBase::Annotate{T::getIndex(), T::getText()};
+                result[i] = Modifiers{DiagnosticBase::Annotate{T::getIndex(), T::getText()}};
             }
             else if constexpr (detail::IsInsertAfter<T>{})
             {
-                result[i] = DiagnosticBase::InsertAfter{T::getIndex(), T::getText()};
+                result[i] = Modifiers{DiagnosticBase::InsertAfter{T::getIndex(), T::getText()}};
             }
         }(std::integral_constant<std::size_t, ints>{}),
         ...);
