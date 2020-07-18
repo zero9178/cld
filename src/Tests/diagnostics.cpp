@@ -6,6 +6,9 @@
 
 #include "TestConfig.hpp"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+
 // TODO: Use __VA_OPT__(,) in C++20
 #define CREATE_ERROR(variableName, format, ...)                       \
     namespace detail                                                  \
@@ -88,10 +91,14 @@ CREATE_ERROR(englishPluralTest, "I want %0 cake%s0 now");
 CREATE_WARNING(warningTest, "warning-test", "A warning");
 CREATE_NOTE(noteTest, "A note");
 CREATE_ERROR(underline, "Highlight!", cld::Underline<0>);
+CREATE_ERROR(twoUnderlines, "Highlight!", cld::Underline<0>, cld::Underline<1, '^'>);
 CREATE_ERROR(pointAt, "Highlight!", cld::PointAt<0>);
 CREATE_ERROR(insertAfter, "Highlight!", cld::InsertAfter<0>);
 CREATE_ERROR(insertAfterText, "Highlight!", cld::InsertAfter<0, 1>);
+CREATE_ERROR(threeInsertsWithText, "Highlight!", cld::InsertAfter<0, 1>, cld::InsertAfter<2, 3>,
+             cld::InsertAfter<4, 5>);
 CREATE_ERROR(annotate, "Highlight!", cld::Annotate<0, 1>);
+CREATE_ERROR(annotateWithInsert, "Highlight!", cld::Annotate<0, 1>, cld::InsertAfter<2, 1>);
 } // namespace
 
 using namespace Catch::Matchers;
@@ -217,4 +224,193 @@ TEST_CASE("Diag line printing", "[diag]")
     }
 }
 
+TEST_CASE("Diag underline", "[diag]")
+{
+    SECTION("Word for word")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = underline.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("| ~"));
+        llvm::errs() << message;
+        message = underline.args(*begin, *interface, *(begin + 1));
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("|   ~~~~~~"));
+        llvm::errs() << message;
+        message = underline.args(*begin, *interface, *(begin + 2));
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("|          ~~"));
+        llvm::errs() << message;
+        message = underline.args(*begin, *interface, *(begin + 3));
+        CHECK_THAT(message.getText(),
+                   Contains("1 | A series of") && Contains("2 |  identifiers") && Contains("|  ~~~~~~~~~~~"));
+        llvm::errs() << message;
+    }
+    SECTION("Range")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = underline.args(*begin, *interface, std::pair{*begin, *(begin + 3)});
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("2 |  identifiers")
+                                          && Contains("| ~~~~~~~~~~~") && Contains("| ~~~~~~~~~~~~"));
+        llvm::errs() << message;
+    }
+    SECTION("Unicode")
+    {
+        const auto* begin = lexes("\"🍌\" text");
+        auto message = underline.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("1 | \"🍌\" text") && Contains("| ~~~"));
+        llvm::errs() << message;
+        begin = lexes("\"\xe3\\\n\x80\xBA\"");
+        message = underline.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("| ~~~"));
+        llvm::errs() << message;
+    }
+    SECTION("Overlapping")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = twoUnderlines.args(*begin, *interface, std::pair{*begin, *(begin + 3)}, *(begin + 1));
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("2 |  identifiers")
+                                          && Contains("| ~~^^^^^^~~~") && Contains("| ~~~~~~~~~~~~"));
+        llvm::errs() << message;
+    }
+}
+
+TEST_CASE("Diag point at", "[diag]")
+{
+    SECTION("Word for word")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = pointAt.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("| ^"));
+        llvm::errs() << message;
+        message = pointAt.args(*begin, *interface, *(begin + 1));
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("|   ^^^^^^"));
+        llvm::errs() << message;
+        message = pointAt.args(*begin, *interface, *(begin + 2));
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("|          ^^"));
+        llvm::errs() << message;
+        message = pointAt.args(*begin, *interface, *(begin + 3));
+        CHECK_THAT(message.getText(),
+                   Contains("1 | A series of") && Contains("2 |  identifiers") && Contains("|  ^^^^^^^^^^^"));
+        llvm::errs() << message;
+    }
+    SECTION("Range")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = pointAt.args(*begin, *interface, std::pair{*begin, *(begin + 3)});
+        CHECK_THAT(message.getText(), Contains("1 | A series of") && Contains("2 |  identifiers")
+                                          && Contains("| ^ ^^^^^^ ^^") && Contains("|  ^^^^^^^^^^^"));
+        llvm::errs() << message;
+    }
+    SECTION("Unicode")
+    {
+        const auto* begin = lexes("\"🍌\" text");
+        auto message = pointAt.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("1 | \"🍌\" text") && Contains("| ^^^"));
+        llvm::errs() << message;
+        begin = lexes("\"\xe3\\\n\x80\xBA\"");
+        message = pointAt.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("| ^^^"));
+        llvm::errs() << message;
+    }
+}
+
+TEST_CASE("Diag insertion", "[diag]")
+{
+    SECTION("Simple non text insertion")
+    {
+        const auto* begin = lexes("A series of \n identifiers");
+        auto message = insertAfter.args(*begin, *interface, *begin);
+        CHECK_THAT(message.getText(), Contains("|  ^"));
+        llvm::errs() << message;
+        message = insertAfter.args(*begin, *interface, *(begin + 1));
+        CHECK_THAT(message.getText(), Contains("|         ^"));
+        llvm::errs() << message;
+        message = insertAfter.args(*begin, *interface, *(begin + 2));
+        CHECK_THAT(message.getText(), Contains("|            ^"));
+        llvm::errs() << message;
+        message = insertAfter.args(*(begin + 3), *interface, *(begin + 3));
+        CHECK_THAT(message.getText(), Contains("|             ^"));
+        llvm::errs() << message;
+    }
+    SECTION("After PP Newline")
+    {
+        const auto* begin = pplexes("A series of\n identifiers");
+        auto message = insertAfter.args(*begin, *interface, *(begin + 3));
+        CHECK_THAT(message.getText(), Contains("\n     >"));
+        llvm::errs() << message;
+    }
+    SECTION("Simple with text insertion")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = insertAfterText.args(*begin, *interface, *begin, "text");
+        CHECK_THAT(message.getText(), Contains("|  ^") && Contains("|  text"));
+        llvm::errs() << message;
+        message = insertAfterText.args(*begin, *interface, *(begin + 1), "text");
+        CHECK_THAT(message.getText(), Contains("|         ^") && Contains("|         text"));
+        llvm::errs() << message;
+        message = insertAfterText.args(*begin, *interface, *(begin + 2), "text");
+        CHECK_THAT(message.getText(), Contains("|            ^") && Contains("|            text"));
+        llvm::errs() << message;
+        message = insertAfterText.args(*(begin + 3), *interface, *(begin + 3), "text");
+        CHECK_THAT(message.getText(), Contains("|             ^") && Contains("|             text"));
+        llvm::errs() << message;
+    }
+    SECTION("After PP Newline with text")
+    {
+        const auto* begin = pplexes("A series of\n identifiers");
+        auto message = insertAfterText.args(*begin, *interface, *(begin + 3), "text");
+        CHECK_THAT(message.getText(), Contains("\n     > text"));
+        llvm::errs() << message;
+    }
+    SECTION("Multiple with text insertion")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = threeInsertsWithText.args(*begin, *interface, *begin, "Whitespace 1", *(begin + 1),
+                                                 "Whitespace 2", *(begin + 2), "Whitespace 3");
+        CHECK_THAT(message.getText(), Contains("|  ^      ^  ^") && Contains("|  |      |  Whitespace 3")
+                                          && Contains("|  |      Whitespace 2") && Contains("|  Whitespace 1"));
+        llvm::errs() << message;
+        message = threeInsertsWithText.args(*begin, *interface, *begin, 1, *(begin + 1), 2, *(begin + 2), 3);
+        CHECK_THAT(message.getText(), Contains("|  ^      ^  ^") && Contains("|  1      2  3"));
+        llvm::errs() << message;
+    }
+}
+
+TEST_CASE("Diag annotate", "[diag]")
+{
+    SECTION("Simple annotate")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = annotate.args(*begin, *interface, *begin, "text");
+        CHECK_THAT(message.getText(), Contains("| ^") && Contains("| |") && Contains("| text"));
+        llvm::errs() << message;
+        message = annotate.args(*begin, *interface, *(begin + 1), "text");
+        CHECK_THAT(message.getText(), Contains("|   ~~~~~~") && Contains("|      |") && Contains("|      text"));
+        llvm::errs() << message;
+        message = annotate.args(*begin, *interface, *(begin + 2), "text");
+        CHECK_THAT(message.getText(),
+                   Contains("|          ~~") && Contains("|           |") && Contains("|           text"));
+        llvm::errs() << message;
+        message = annotate.args(*(begin + 3), *interface, *(begin + 3), "text");
+        CHECK_THAT(message.getText(), Contains("|  ~~~~~~~~~~~") && Contains("|       |") && Contains("|       text"));
+        llvm::errs() << message;
+    }
+    SECTION("Ranges")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = annotate.args(*begin, *interface, std::pair{*begin, *(begin + 2)}, "text");
+        CHECK_THAT(message.getText(), Contains("| ~~~~~~~~~~~") && Contains("|      |") && Contains("|      text"));
+        llvm::errs() << message;
+    }
+    SECTION("Mixed with insert")
+    {
+        const auto* begin = lexes("A series of\n identifiers");
+        auto message = annotateWithInsert.args(*begin, *interface, *begin, "text", *(begin + 2));
+        CHECK_THAT(message.getText(),
+                   Contains("| ^          ^") && Contains("| |          text") && Contains("| text"));
+        llvm::errs() << message;
+    }
+}
+
 #undef CREATE_ERROR
+#undef CREATE_WARNING
+#undef CREATE_NOTE
+#pragma clang diagnostic pop

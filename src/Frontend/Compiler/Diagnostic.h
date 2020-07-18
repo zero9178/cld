@@ -85,8 +85,8 @@ struct IsUnderline : std::false_type
 {
 };
 
-template <auto... Args>
-struct IsUnderline<Underline<Args...>> : std::true_type
+template <std::size_t index, char character, bool continuous>
+struct IsUnderline<Underline<index, character, continuous>> : std::true_type
 {
 };
 
@@ -95,8 +95,8 @@ struct IsInsertAfter : std::false_type
 {
 };
 
-template <auto... Args>
-struct IsInsertAfter<InsertAfter<Args...>> : std::true_type
+template <std::size_t index, std::int64_t text>
+struct IsInsertAfter<InsertAfter<index, text>> : std::true_type
 {
 };
 
@@ -105,8 +105,8 @@ struct IsAnnotate : std::false_type
 {
 };
 
-template <auto... Args>
-struct IsAnnotate<Annotate<Args...>> : std::true_type
+template <std::size_t index, std::size_t text>
+struct IsAnnotate<Annotate<index, text>> : std::true_type
 {
 };
 
@@ -155,7 +155,7 @@ protected:
     struct Underline
     {
         std::size_t index;
-        char characters;
+        char character;
         bool continuous;
     };
 
@@ -399,6 +399,10 @@ class Diagnostic : public detail::DiagnosticBase
                 auto& [arg1, arg2] = arg;
                 return {{static_cast<std::uint64_t>(arg1), 0, 0}, {static_cast<std::uint64_t>(arg2), 0, 0}};
             }
+            else
+            {
+                CLD_UNREACHABLE;
+            }
         }
         else
         {
@@ -426,7 +430,7 @@ class Diagnostic : public detail::DiagnosticBase
     template <auto& array, std::size_t i, class Curr, class... Args>
     constexpr static void checkConstraints()
     {
-        [[maybe_unused]] auto v = ConstraintCheck<i, array[i], Curr>{};
+        [[maybe_unused]] auto v = ConstraintCheck<i, array[i], std::decay_t<Curr>>{};
         checkConstraints<array, i + 1, Args...>();
     }
 
@@ -541,6 +545,10 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
                     result[T::indices[1]] |= Constraint::StringConstraint;
                 }
             }
+            else
+            {
+                CLD_UNREACHABLE;
+            }
         }(Mods{}),
         ...);
     return result;
@@ -555,6 +563,7 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::inde
     (
         [&result, &args](auto integer) {
             constexpr auto i = decltype(integer)::value;
+            static_assert(constraints[i]);
             if constexpr ((bool)(constraints[i] & Constraint::LocationConstraint))
             {
                 result[i].range = getPointRange(std::get<i>(args));
@@ -593,6 +602,10 @@ constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<
             else if constexpr (detail::IsInsertAfter<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::InsertAfter{T::getIndex(), T::getText()}};
+            }
+            else
+            {
+                CLD_UNREACHABLE;
             }
         }(std::integral_constant<std::size_t, ints>{}),
         ...);
