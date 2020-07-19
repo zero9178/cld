@@ -29,7 +29,6 @@ std::string args(const Diagnostic&, Args&&... args)
     std::array<std::string, sizeof...(Args)> strArgs = {{cld::to_string(args)...}};
     std::string result;
     std::u32string_view stringView = Diagnostic::getFormat();
-    std::size_t i = 0;
     for (auto& iter : ctre::range<cld::detail::DIAG_ARG_PATTERN>(stringView))
     {
         auto view = iter.view();
@@ -44,7 +43,19 @@ std::string args(const Diagnostic&, Args&&... args)
         CLD_ASSERT(ret == llvm::conversionOK);
         result.resize(resStart - result.data());
         stringView.remove_prefix(iter.get_end_position() - stringView.begin());
-        result += strArgs[i++];
+        auto mod = iter.get<1>().view();
+        auto index = iter.get<2>().view().back() - '0';
+        if (mod != U"s")
+        {
+            result += strArgs[index];
+        }
+        else
+        {
+            if (strArgs[index] != "1")
+            {
+                result += "s";
+            }
+        }
     }
     const char32_t* start = stringView.data();
     result.resize(result.size() + 4 * stringView.size());

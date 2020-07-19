@@ -33,12 +33,7 @@ public:
         return m_text;
     }
 
-    friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message)
-    {
-        os << message.m_text;
-        os.flush();
-        return os;
-    }
+    friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message);
 };
 
 } // namespace cld
