@@ -77,33 +77,33 @@ class SourceObject final : public SourceInterface, public detail::SourceObjectSt
     std::vector<T> m_tokens;
     std::vector<Source::File> m_files;
     LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
-    Source::PPRecord m_substitutions;
+    std::vector<Source::PPRecord> m_substitutions;
 
 public:
     SourceObject() = default;
 
     SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                 Source::PPRecord substitutions)
+                 std::vector<Source::PPRecord> substitutions)
         : m_tokens(std::move(tokens)),
           m_files(std::move(files)),
           m_languageOptions(std::move(languageOptions)),
-          m_substitutions(substitutions)
+          m_substitutions(std::move(substitutions))
     {
     }
 
     SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                 Source::PPRecord substitutions, detail::SourceObjectStorage<T> storage)
+                 std::vector<Source::PPRecord> substitutions, detail::SourceObjectStorage<T> storage)
         : detail::SourceObjectStorage<T>(std::move(storage)),
           m_tokens(std::move(tokens)),
           m_files(std::move(files)),
           m_languageOptions(std::move(languageOptions)),
-          m_substitutions(substitutions)
+          m_substitutions(std::move(substitutions))
     {
     }
 
     [[nodiscard]] std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
+        CLD_ASSERT(fileID < m_files.size());
         auto result = std::lower_bound(m_files[fileID].starts.begin(), m_files[fileID].starts.end(), offset);
         CLD_ASSERT(result != m_files[fileID].starts.end());
         return std::distance(m_files[fileID].starts.begin(), result) + (*result == offset ? 1 : 0);
@@ -118,7 +118,7 @@ public:
 
     [[nodiscard]] std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
-        CLD_ASSERT((std::uint64_t)fileID < m_files.size());
+        CLD_ASSERT(fileID < m_files.size());
         CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
         if (line != m_files[fileID].starts.size())
         {
@@ -142,12 +142,12 @@ public:
         return m_languageOptions;
     }
 
-    [[nodiscard]] const Source::PPRecord& getSubstitutions() const noexcept override
+    [[nodiscard]] llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }
 
-    [[nodiscard]] const std::vector<Source::File>& getFiles() const noexcept override
+    [[nodiscard]] llvm::ArrayRef<Source::File> getFiles() const noexcept override
     {
         return m_files;
     }

@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include "CustomDiag.hpp"
 #include "LanguageOptions.hpp"
 #include "SourceInterface.hpp"
 
@@ -135,7 +136,7 @@ using PPTokenIterator = const PPToken*;
 
 PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
                         llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,
-                        std::string_view sourceFile = "<stdin>");
+                        std::string_view sourcePath = "<stdin>");
 
 CSourceObject toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
                         bool* errorsOccured = nullptr);
@@ -360,4 +361,18 @@ bool needsWhitespaceInBetween(TokenType left, TokenType right) noexcept;
 //
 // std::string constructPPTrimmed(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end);
 } // namespace Lexer
+
+namespace diag
+{
+template <>
+struct CustomModifier<U't', U'o', U'k', U'e', U'n', U'T', U'y', U'p', U'e'>
+{
+    std::string operator()(const Lexer::TokenBase& token) const
+    {
+        auto view = Lexer::tokenName(token.getTokenType());
+        return std::string(view.begin(), view.end());
+    }
+};
+} // namespace diag
+
 } // namespace cld

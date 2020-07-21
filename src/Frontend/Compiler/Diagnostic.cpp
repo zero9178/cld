@@ -1,4 +1,4 @@
-#include "Diagnostic.h"
+#include "Diagnostic.hpp"
 
 #include <llvm/Support/Format.h>
 #include <llvm/Support/WithColor.h>
@@ -103,6 +103,15 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
             [&](const ModifierOfLine::Underline& underline) {
                 const auto indent = cld::unsafeColumnWidth(text.substr(0, iter.fromToInLine.first - lineStartOffset));
                 canvas.resize(std::max<std::size_t>(1, canvas.size()), std::string(widthOfText, ' '));
+
+                if (iter.fromToInLine.first == iter.fromToInLine.second && text.size() == iter.fromToInLine.first)
+                {
+                    // Special case when we are pointing at a newline character
+                    canvas[0].resize(std::max<std::size_t>(indent + 1, canvas[0].size()), ' ');
+                    canvas[0][indent] = underline.character;
+                    return;
+                }
+
                 if (underline.continuous)
                 {
                     const auto sizeOfTextAbove = cld::unsafeColumnWidth(text.substr(
@@ -120,10 +129,10 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
                     {
                         llvm::UTF32 utf32;
                         const auto* before = ptr;
-                        auto result =
-                            llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&ptr),
-                                                      reinterpret_cast<const llvm::UTF8*>(ptr + textAbove.size()),
-                                                      &utf32, llvm::strictConversion);
+                        auto result = llvm::convertUTF8Sequence(
+                            reinterpret_cast<const llvm::UTF8**>(&ptr),
+                            reinterpret_cast<const llvm::UTF8*>(textAbove.data() + textAbove.size()), &utf32,
+                            llvm::strictConversion);
                         (void)result;
                         CLD_ASSERT(result == llvm::conversionOK);
                         if (!cld::isWhitespace(utf32))
@@ -139,10 +148,10 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
                     {
                         llvm::UTF32 utf32;
                         const auto* before = start;
-                        auto result =
-                            llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
-                                                      reinterpret_cast<const llvm::UTF8*>(start + textAbove.size()),
-                                                      &utf32, llvm::strictConversion);
+                        auto result = llvm::convertUTF8Sequence(
+                            reinterpret_cast<const llvm::UTF8**>(&start),
+                            reinterpret_cast<const llvm::UTF8*>(textAbove.data() + textAbove.size()), &utf32,
+                            llvm::strictConversion);
                         (void)result;
                         CLD_ASSERT(result == llvm::conversionOK);
                         if (cld::isWhitespace(utf32))
@@ -286,14 +295,29 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
         }
         else
         {
-            CLD_UNREACHABLE;
+            std::u32string temp(mods.size(), '\0');
+            const auto* start = mods.data();
+            auto* dest = temp.data();
+            auto ok = llvm::ConvertUTF8toUTF32(
+                reinterpret_cast<const llvm::UTF8**>(&start),
+                reinterpret_cast<const llvm::UTF8*>(mods.data() + mods.size()), reinterpret_cast<llvm::UTF32**>(&dest),
+                reinterpret_cast<llvm::UTF32*>(dest + temp.size()), llvm::strictConversion);
+            (void)ok;
+            CLD_ASSERT(ok == llvm::conversionOK);
+            std::u32string_view view = {temp.data(), static_cast<std::size_t>(dest - temp.data())};
+            CLD_ASSERT(arguments[index].customModifiers.count(view) != 0);
+            ss << arguments[index].customModifiers[view];
         }
     }
     ss.write(message.data(), message.size()) << '\n';
 
+    // The second argument doesn't use getLineCol for location.second because the std::pair location
+    // is an open range aka [location.first,location.second). Therefore to get the actual last line
+    // that needs to be printed we need to do offset - 1 to get the closed range end
     std::map<std::uint32_t, std::pair<std::uint64_t, std::uint64_t>> fileToMaxMinLine = {
         {location.first.fileId,
-         {getLineCol(location.first, sourceInterface).first, getLineCol(location.second, sourceInterface).first}}};
+         {getLineCol(location.first, sourceInterface).first,
+          sourceInterface.getLineNumber(location.second.fileId, location.second.offset - 1)}}};
     // Using a map cause I am too lazy to get a std::hash function for std::pair now. Future TODO
     std::map<std::pair<std::uint32_t, std::uint64_t>, std::vector<ModifierOfLine>> fileAndLineToModifiers;
     for (auto& iter : modifiers)
@@ -328,7 +352,7 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
                 // This case only occurs when we are pointing at a newline
                 // into the second line
                 // We want to handle this specially for InsertAfter
-                CLD_ASSERT(std::holds_alternative<InsertAfter>(iter));
+                CLD_ASSERT(!std::holds_alternative<Annotate>(iter));
                 continue;
             }
             vector.push_back(

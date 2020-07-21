@@ -1,6 +1,6 @@
 #include "catch.hpp"
 
-#include <Frontend/Compiler/Diagnostic.h>
+#include <Frontend/Compiler/Diagnostic.hpp>
 #include <Frontend/Compiler/Lexer.hpp>
 #include <Frontend/Compiler/SourceObject.hpp>
 
@@ -220,6 +220,14 @@ TEST_CASE("Diag line printing", "[diag]")
         const auto* begin = lexes("\"\xe3\\\n\x80\xBA\"");
         auto message = pointLocationTest.args(*begin, *interface);
         CHECK_THAT(message.getText(), Contains("1 | \"�\\") && Contains("2 | ��\""));
+        llvm::errs() << message;
+    }
+    SECTION("Newline")
+    {
+        const auto* begin = pplexes("A series of\n identifiers");
+        auto message = pointLocationTest.args(
+            std::make_pair(*(begin + 2), (begin + 2)->getOffset() + (begin + 2)->getLength()), *interface);
+        CHECK_THAT(message.getText(), Contains(":1:12:") && Contains("1 | A series of") && !Contains("2 |"));
         llvm::errs() << message;
     }
 }

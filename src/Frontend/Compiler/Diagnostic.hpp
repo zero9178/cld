@@ -6,10 +6,13 @@
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Common/Util.hpp>
 
+#include <array>
 #include <optional>
+#include <unordered_map>
 
 #include <ctre.hpp>
 
+#include "CustomDiag.hpp"
 #include "Message.hpp"
 
 namespace cld
@@ -178,6 +181,7 @@ protected:
         std::optional<std::pair<PointLocation, PointLocation>> range;
         std::optional<std::string> text;
         std::optional<std::uint64_t> integral;
+        std::unordered_map<std::u32string_view, std::string> customModifiers;
     };
 
     Message print(std::pair<PointLocation, PointLocation> location, std::string_view message,
@@ -273,13 +277,16 @@ struct Annotate
 template <std::size_t N, auto& format, class... Mods>
 class Diagnostic : public detail::DiagnosticBase
 {
+public:
     enum Constraint : std::uint8_t
     {
         LocationConstraint = 0b1,
         StringConstraint = 0b10,
         IntegerConstraint = 0b100,
+        CustomConstraint = 0b1000,
     };
 
+private:
     constexpr static std::array<std::underlying_type_t<Constraint>, N> getConstraints();
 
     template <std::size_t... ints>
@@ -298,39 +305,30 @@ class Diagnostic : public detail::DiagnosticBase
     };
 
     template <class T>
-    struct StringConstraintCheck<T, std::void_t<decltype(getString(std::declval<T>()))>> : std::true_type
-    {
-    };
-
-    template <class T, typename = void>
-    struct IsTupleLike : std::false_type
-    {
-    };
-
-    template <class T>
-    struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::true_type
+    struct StringConstraintCheck<T, std::void_t<decltype(getString(std::declval<std::decay_t<T>>()))>> : std::true_type
     {
     };
 
     template <class T>
     constexpr static bool locationConstraintCheck()
     {
-        if constexpr (IsTupleLike<T>{})
+        using U = std::decay_t<T>;
+        if constexpr (IsTupleLike<U>{})
         {
-            if constexpr (std::tuple_size_v<T> == 2)
+            if constexpr (std::tuple_size_v<U> == 2)
             {
-                using T1 = std::tuple_element_t<0, T>;
-                using T2 = std::tuple_element_t<1, T>;
+                using T1 = std::decay_t<std::tuple_element_t<0, U>>;
+                using T2 = std::decay_t<std::tuple_element_t<1, U>>;
                 return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
                        || (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>);
             }
-            else if constexpr (std::tuple_size_v<T> == 3)
+            else if constexpr (std::tuple_size_v<U> == 3)
             {
-                using T1 = std::tuple_element_t<0, T>;
-                using T2 = std::tuple_element_t<1, T>;
-                using T3 = std::tuple_element_t<2, T>;
+                using T1 = std::decay_t<std::tuple_element_t<0, U>>;
+                using T2 = std::decay_t<std::tuple_element_t<1, U>>;
+                using T3 = std::decay_t<std::tuple_element_t<2, U>>;
                 return (std::is_base_of_v<
                             Lexer::TokenBase,
                             T1> && std::is_convertible_v<T2, std::uint64_t> && std::is_convertible_v<T3, std::uint64_t>)
@@ -345,7 +343,7 @@ class Diagnostic : public detail::DiagnosticBase
         }
         else
         {
-            return std::is_base_of_v<Lexer::TokenBase, T> || std::is_convertible_v<T, std::uint64_t>;
+            return std::is_base_of_v<Lexer::TokenBase, U> || std::is_convertible_v<U, std::uint64_t>;
         }
     }
 
@@ -363,19 +361,20 @@ class Diagnostic : public detail::DiagnosticBase
     template <class T>
     static std::pair<PointLocation, PointLocation> getPointRange(const T& arg)
     {
-        if constexpr (std::is_base_of_v<Lexer::TokenBase, T>)
+        using U = std::decay_t<T>;
+        if constexpr (std::is_base_of_v<Lexer::TokenBase, U>)
         {
             return {{arg.getOffset(), arg.getFileId(), arg.getMacroId()},
                     {arg.getOffset() + arg.getLength(), arg.getFileId(), arg.getMacroId()}};
         }
-        else if constexpr (std::is_convertible_v<T, std::uint64_t>)
+        else if constexpr (std::is_convertible_v<U, std::uint64_t>)
         {
             return {{static_cast<std::uint64_t>(arg), 0, 0}, {static_cast<std::uint64_t>(arg) + 1, 0, 0}};
         }
-        else if constexpr (std::tuple_size_v<T> == 2)
+        else if constexpr (std::tuple_size_v<U> == 2)
         {
-            using T1 = std::tuple_element_t<0, T>;
-            using T2 = std::tuple_element_t<1, T>;
+            using T1 = std::decay_t<std::tuple_element_t<0, U>>;
+            using T2 = std::decay_t<std::tuple_element_t<1, U>>;
             if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
             {
                 auto& [arg1, arg2] = arg;
@@ -406,7 +405,7 @@ class Diagnostic : public detail::DiagnosticBase
         }
         else
         {
-            using T1 = std::tuple_element_t<0, T>;
+            using T1 = std::decay_t<std::tuple_element_t<0, U>>;
             if constexpr (std::is_base_of_v<Lexer::TokenBase, T1>)
             {
                 auto& [arg1, arg2, arg3] = arg;
@@ -430,7 +429,7 @@ class Diagnostic : public detail::DiagnosticBase
     template <auto& array, std::size_t i, class Curr, class... Args>
     constexpr static void checkConstraints()
     {
-        [[maybe_unused]] auto v = ConstraintCheck<i, array[i], std::decay_t<Curr>>{};
+        [[maybe_unused]] auto v = ConstraintCheck<i, array[i], Curr>{};
         checkConstraints<array, i + 1, Args...>();
     }
 
@@ -438,6 +437,74 @@ class Diagnostic : public detail::DiagnosticBase
     static std::array<Argument, N> createArgumentArray(Tuple&& args, std::index_sequence<ints...>);
 
     std::string_view m_name;
+
+    template <std::size_t... ints>
+    constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
+    {
+        return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
+    }
+
+    template <std::size_t i>
+    constexpr static auto customModifiersFor()
+    {
+        constexpr std::size_t amountOfCustomModifiers = [] {
+            std::size_t count = 0;
+            auto text = getFormat();
+            while (auto result = ctre::search<detail::DIAG_ARG_PATTERN>(text))
+            {
+                const auto end = result.get_end_position();
+                text.remove_prefix(end - text.begin());
+                auto index = result.template get<2>().view().back() - '0';
+                auto mods = result.template get<1>().view();
+                if (index != i || mods.empty() || mods == U"s")
+                {
+                    continue;
+                }
+                count++;
+            }
+            return count;
+        }();
+        std::array<std::u32string_view, amountOfCustomModifiers> result{};
+        std::size_t count = 0;
+        auto text = getFormat();
+        while (auto search = ctre::search<detail::DIAG_ARG_PATTERN>(text))
+        {
+            const auto end = search.get_end_position();
+            text.remove_prefix(end - text.begin());
+            auto index = search.template get<2>().view().back() - '0';
+            auto mods = search.template get<1>().view();
+            if (index != i || mods.empty() || mods == U"s")
+            {
+                continue;
+            }
+            result[count++] = mods;
+        }
+        return result;
+    }
+
+    template <std::size_t i1, std::size_t i2, class Tuple>
+    constexpr static void convertCustomModifier(std::array<detail::DiagnosticBase::Argument, N>& result, Tuple& args)
+    {
+        constexpr std::tuple tuple = std::apply(
+            [](auto... stringIndices) {
+                return std::make_tuple(
+                    std::integral_constant<char32_t,
+                                           std::get<i1>(allFormatModifiers)[i2][decltype(stringIndices)::value]>{}...);
+            },
+            integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
+        result[i1].customModifiers[std::get<i1>(allFormatModifiers)[i2]] = std::apply(
+            [&args](auto... chars) -> std::string {
+                static_assert(
+                    IsTypeCompleteV<diag::CustomModifier<decltype(chars)::value...>>,
+                    "No template specialization of cld::diag::CustomModifier exists for a given format modifier");
+                static_assert(
+                    std::is_invocable_r_v<std::string, diag::CustomModifier<decltype(chars)::value...>,
+                                          std::tuple_element_t<i1, Tuple>>,
+                    "No operator() found in cld::diag::CustomModifier for the given arg that returns a type convertible to std::string");
+                return diag::CustomModifier<decltype(chars)::value...>{}(std::get<i1>(args));
+            },
+            tuple);
+    }
 
 public:
     constexpr Diagnostic(Severity severity, std::string_view name) : detail::DiagnosticBase(severity), m_name(name) {}
@@ -455,10 +522,14 @@ public:
     template <class T, class... Args>
     Message args(const T& location, const SourceInterface& sourceInterface, Args&&... args) const;
 
-private:
     constexpr static auto constraints = getConstraints();
 
+private:
     constexpr static auto modifiers = getModifiers(std::index_sequence_for<Mods...>{});
+
+    constexpr static auto allFormatModifiers =
+        std::apply([](auto... indices) { return std::make_tuple(customModifiersFor<decltype(indices)::value>()...); },
+                   integerSequenceToTuple(std::make_index_sequence<N>{}));
 };
 
 template <const auto& text, class... Args>
@@ -506,6 +577,7 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
 {
     std::array<std::underlying_type_t<Constraint>, N> result{};
     auto text = getFormat();
+    std::uint8_t i = 0;
     while (auto search = ctre::search<detail::DIAG_ARG_PATTERN>(text))
     {
         auto index = search.template get<2>().view().back() - '0';
@@ -520,10 +592,11 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
         }
         else
         {
-            CLD_UNREACHABLE;
+            result[index] |= Constraint::CustomConstraint;
         }
         const auto end = search.get_end_position();
         text.remove_prefix(end - text.begin());
+        i++;
     }
     (
         [&result](auto value) {
@@ -562,19 +635,28 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::inde
     std::array<Argument, N> result;
     (
         [&result, &args](auto integer) {
-            constexpr auto i = decltype(integer)::value;
-            static_assert(constraints[i]);
-            if constexpr ((bool)(constraints[i] & Constraint::LocationConstraint))
+            using IntegerTy = decltype(integer);
+            static_assert(constraints[IntegerTy::value]);
+            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::LocationConstraint))
             {
-                result[i].range = getPointRange(std::get<i>(args));
+                result[IntegerTy::value].range = getPointRange(std::get<IntegerTy::value>(args));
             }
-            if constexpr ((bool)(constraints[i] & Constraint::StringConstraint))
+            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::StringConstraint))
             {
-                result[i].text = getString(std::get<i>(args));
+                result[IntegerTy::value].text = getString(std::get<IntegerTy::value>(args));
             }
-            if constexpr ((bool)(constraints[i] & Constraint::IntegerConstraint))
+            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::IntegerConstraint))
             {
-                result[i].integral = static_cast<std::int64_t>(std::get<i>(args));
+                result[IntegerTy::value].integral = static_cast<std::int64_t>(std::get<IntegerTy::value>(args));
+            }
+            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
+            {
+                auto apply = [&result, &args](auto... values) {
+                    (convertCustomModifier<IntegerTy::value, decltype(values)::value>(result, args), ...);
+                };
+                std::apply(apply,
+                           integerSequenceToTuple(
+                               std::make_index_sequence<std::get<IntegerTy::value>(allFormatModifiers).size()>{}));
             }
         }(std::integral_constant<std::size_t, ints>{}),
         ...);

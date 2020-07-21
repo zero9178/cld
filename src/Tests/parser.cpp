@@ -874,12 +874,13 @@ void parse(const std::string& source)
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
-    auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);
-    if (!ss.str().empty() || tokens.data().empty())
+    bool errorsOccured = false;
+    auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss, &errorsOccured);
+    if (!ss.str().empty() || tokens.data().empty() || errorsOccured)
     {
         return;
     }
-    auto ctokens = cld::Lexer::toCTokens(tokens,&ss);
+    auto ctokens = cld::Lexer::toCTokens(tokens, &ss);
     if (!ss.str().empty() || tokens.data().empty())
     {
         return;

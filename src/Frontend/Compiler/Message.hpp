@@ -36,4 +36,6 @@ public:
     friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message);
 };
 
+llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message);
+
 } // namespace cld

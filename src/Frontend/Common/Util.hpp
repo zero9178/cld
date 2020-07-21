@@ -372,4 +372,21 @@ constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
     (test(std::is_same_v<T, Ts>) || ...);
     return r;
 }
+
+template <class T, typename = void>
+struct IsTupleLike : std::false_type
+{
+};
+
+template <class T>
+struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::true_type
+{
+};
+
+template <typename, typename = void>
+constexpr bool IsTypeCompleteV = false;
+
+template <typename T>
+constexpr bool IsTypeCompleteV<T, std::void_t<decltype(sizeof(T))>> = true;
+
 } // namespace cld

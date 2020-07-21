@@ -4,13 +4,12 @@
 #include <llvm/ADT/APSInt.h>
 
 #include <Frontend/Common/Text.hpp>
+#include <Frontend/Compiler/Diagnostic.hpp>
 #include <Frontend/Compiler/LanguageOptions.hpp>
 #include <Frontend/Compiler/Semantics.hpp>
 #include <Frontend/Preprocessor/Preprocessor.hpp>
 
 #include <numeric>
-
-#include <Frontend/Compiler/Diagnostic.h>
 
 namespace cld::Tests
 {
@@ -42,7 +41,7 @@ std::string args(const Diagnostic&, Args&&... args)
         (void)ret;
         CLD_ASSERT(ret == llvm::conversionOK);
         result.resize(resStart - result.data());
-        stringView.remove_prefix(iter.get_end_position() - stringView.begin());
+        stringView.remove_prefix(view.data() + view.size() - stringView.data());
         auto mod = iter.get<1>().view();
         auto index = iter.get<2>().view().back() - '0';
         if (mod != U"s")

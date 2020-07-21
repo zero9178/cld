@@ -1,8 +1,9 @@
 #pragma once
 
+#include <llvm/ADT/ArrayRef.h>
+
 #include <cstdint>
 #include <variant>
-#include <vector>
 
 #include "LanguageOptions.hpp"
 
@@ -19,8 +20,8 @@ struct File;
 struct Substitution;
 struct Stringification;
 struct TokenConcatenation;
-using PPRecord = std::vector<
-    std::variant<std::monostate, Source::Substitution, Source::Stringification, Source::TokenConcatenation>>;
+using PPRecord =
+    std::variant<std::monostate, Source::Substitution, Source::Stringification, Source::TokenConcatenation>;
 } // namespace Source
 
 class SourceInterface
@@ -39,9 +40,9 @@ public:
 
     [[nodiscard]] virtual std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept = 0;
 
-    [[nodiscard]] virtual const std::vector<Source::File>& getFiles() const noexcept = 0;
+    [[nodiscard]] virtual llvm::ArrayRef<Source::File> getFiles() const noexcept = 0;
 
-    [[nodiscard]] virtual const Source::PPRecord& getSubstitutions() const noexcept = 0;
+    [[nodiscard]] virtual llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept = 0;
 
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const noexcept = 0;
 };

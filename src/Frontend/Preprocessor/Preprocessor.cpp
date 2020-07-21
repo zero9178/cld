@@ -39,7 +39,7 @@ class Preprocessor final : private cld::SourceInterface
     std::uint64_t m_macroID = 0;
     std::uint64_t m_currentFile = 0;
     std::vector<cld::Lexer::PPToken> m_result;
-    cld::Source::PPRecord m_substitutions{1};
+    std::vector<cld::Source::PPRecord> m_substitutions{1};
     struct Macro
     {
         cld::Lexer::PPTokenIterator identifierPos;
@@ -251,8 +251,7 @@ class Preprocessor final : private cld::SourceInterface
                 auto scratchPadPP = cld::Lexer::tokenize(text, m_options, m_report, &m_errorsOccured, "<Strings>");
                 CLD_ASSERT(!m_errorsOccured);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
-                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
-                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
+                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
                 auto file = scratchPadPP.getFiles()[0];
                 file.ppTokens[0].setFileId(m_files.size());
                 file.ppTokens[0].setMacroId(i);
@@ -446,15 +445,18 @@ class Preprocessor final : private cld::SourceInterface
             bool errors = false;
             auto scratchPadPP = cld::Lexer::tokenize(text, m_options, &llvm::nulls(), &errors, "<Pastings>");
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
-            if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 2)
+            if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
-//TODO:                log({cld::Message::warning(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB,
-//                                           &lhs, &rhs + 1,
-//                                           {cld::Underline(&lhs), cld::Underline(&rhs), cld::PointAt(&*iter)}),
-//                     cld::Message::note(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(
-//                                            cld::Lexer::normalizeSpelling(lhs.getRepresentation(*this)),
-//                                            cld::Lexer::normalizeSpelling(rhs.getRepresentation(*this))),
-//                                        &lhs, &rhs + 1, {cld::Underline(&lhs), cld::Underline(&rhs)})});
+                // TODO:
+                // log({cld::Message::warning(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB,
+                //                                           &lhs, &rhs + 1,
+                //                                           {cld::Underline(&lhs), cld::Underline(&rhs),
+                //                                           cld::PointAt(&*iter)}),
+                //                     cld::Message::note(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(
+                //                                            cld::Lexer::normalizeSpelling(lhs.getRepresentation(*this)),
+                //                                            cld::Lexer::normalizeSpelling(rhs.getRepresentation(*this))),
+                //                                        &lhs, &rhs + 1, {cld::Underline(&lhs),
+                //                                        cld::Underline(&rhs)})});
                 iter = tokens.erase(iter - 1, iter + 2);
                 if (iter == tokens.end())
                 {
@@ -462,8 +464,7 @@ class Preprocessor final : private cld::SourceInterface
                 }
                 continue;
             }
-            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 2);
-            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens[1].getTokenType() == cld::Lexer::TokenType::Newline);
+            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
             m_disabledMacros[i].insert(m_disabledMacros[parentID].begin(), m_disabledMacros[parentID].end());
@@ -689,21 +690,23 @@ class Preprocessor final : private cld::SourceInterface
         return m_files[fileID].starts[line - 1];
     }
 
-    std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
+    [[nodiscard]] std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT(fileID < m_files.size());
         CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
-        return line == m_files[fileID].starts.size() ?
-                   m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength() :
-                   m_files[fileID].starts[line];
+        if (line != m_files[fileID].starts.size())
+        {
+            return m_files[fileID].starts[line] - 1;
+        }
+        return m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength();
     }
 
-    const std::vector<cld::Source::File>& getFiles() const noexcept override
+    llvm::ArrayRef<cld::Source::File> getFiles() const noexcept override
     {
         return m_files;
     }
 
-    const cld::Source::PPRecord& getSubstitutions() const noexcept override
+    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }
@@ -768,7 +771,7 @@ public:
         return m_result;
     }
 
-    cld::Source::PPRecord& getSubstitutions() noexcept
+    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() noexcept
     {
         return m_substitutions;
     }

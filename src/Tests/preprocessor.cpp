@@ -393,7 +393,7 @@ TEST_CASE("PP Function like Macros", "[PP]")
         CHECK(haveMacroID(ret.data().begin() + 17, ret.data().begin() + 18, 5)); // b
         CHECK(haveMacroID(ret.data().begin() + 18, ret.data().begin() + 20, 1));
         CHECK(haveMacroID(ret.data().begin() + 20, ret.data().begin() + 21, 0));
-        auto& subs = ret.getSubstitutions();
+        auto subs = ret.getSubstitutions();
         REQUIRE(subs.size() == 6);
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(subs[1]));
         CHECK(cld::get<cld::Source::Substitution>(subs[1]).macroIdentifier.getRepresentation(ret) == "max");
@@ -586,7 +586,7 @@ TEST_CASE("PP Operator #", "[PP]")
         auto ret = preprocessResult("#define Q(x) #x\n"
                                     "Q(5)");
         CHECK_THAT(ret, ProducesPP("\"5\""));
-        auto& subs = ret.getSubstitutions();
+        auto subs = ret.getSubstitutions();
         REQUIRE(subs.size() == 4);
         REQUIRE(std::holds_alternative<cld::Source::Stringification>(subs[3]));
         auto& stringify = cld::get<cld::Source::Stringification>(subs[3]);
@@ -648,7 +648,7 @@ TEST_CASE("PP Operator ##", "[PP]")
         auto ret = preprocessResult("#define Q 5 ## 7\n"
                                     "Q");
         CHECK_THAT(ret, ProducesPP("57"));
-        auto& subs = ret.getSubstitutions();
+        auto subs = ret.getSubstitutions();
         REQUIRE(subs.size() == 3);
         REQUIRE(std::holds_alternative<cld::Source::TokenConcatenation>(subs[2]));
         auto& stringify = cld::get<cld::Source::TokenConcatenation>(subs[2]);

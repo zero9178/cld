@@ -594,14 +594,6 @@ struct L;
 using StateMachine = std::variant<Start, CharacterLiteral, StringLiteral, Text, PreprocessingNumber, MaybeUC,
                                   UniversalCharacter, LineComment, BlockComment, Dot, Punctuation, AfterInclude, L>;
 
-using ArrowRange = std::vector<std::pair<std::uint64_t, std::uint64_t>>;
-
-llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const std::string_view& sv)
-{
-    os.write(sv.data(), sv.size());
-    return os;
-}
-
 std::pair<std::uint64_t, std::uint64_t> map(const IntervalMap& intervalMap, std::uint64_t offset)
 {
     auto result = std::lower_bound(intervalMap.begin(), intervalMap.end(), offset,
@@ -612,7 +604,12 @@ std::pair<std::uint64_t, std::uint64_t> map(const IntervalMap& intervalMap, std:
         result--;
     }
     const auto next = result + 1;
-    CLD_ASSERT(next != intervalMap.end());
+    if (next == intervalMap.end())
+    {
+        CLD_ASSERT(intervalMap.size() >= 2);
+        // does this make sense?
+        return {std::get<2>(intervalMap[intervalMap.size() - 2]), std::get<2>(intervalMap[intervalMap.size() - 2])};
+    }
     const auto denominator = std::get<0>(*next) - std::get<0>(*result);
     CLD_ASSERT(denominator != 0);
     const auto nominatorRange = std::get<2>(*result) - std::get<1>(*result);
@@ -621,166 +618,67 @@ std::pair<std::uint64_t, std::uint64_t> map(const IntervalMap& intervalMap, std:
     return {lowBound, highBound};
 }
 
-void report(llvm::raw_ostream& reporter, std::string_view source, const IntervalMap& intervalMap, std::string_view type,
-            llvm::raw_ostream::Colors colour, std::string_view message, std::uint64_t location, ArrowRange&& arrows,
-            std::uint64_t underlineStart, std::uint64_t underlineEnd,
-            llvm::function_ref<std::uint64_t(std::uint64_t)> lineNumberF,
-            llvm::function_ref<std::uint64_t(std::uint64_t)> lineStartOffsetF,
-            llvm::function_ref<std::uint64_t(std::uint64_t)> lineEndOffsetF)
+template <class Arg>
+decltype(auto) mapArgument(const IntervalMap& intervalMap, Arg&& arg)
 {
-    CLD_ASSERT(underlineStart < underlineEnd);
-
-    // Convert from character space to source space
-    location = map(intervalMap, location).first;
-    underlineStart = map(intervalMap, underlineStart).first;
-    underlineEnd = map(intervalMap, underlineEnd - 1).second;
-    for (auto& [lower, upper] : arrows)
+    using T = std::decay_t<Arg>;
+    if constexpr (std::is_integral_v<T>)
     {
-        lower = map(intervalMap, lower).first;
-        upper = map(intervalMap, upper - 1).second;
+        return map(intervalMap, arg).first;
     }
-
-    const auto startLine = lineNumberF(underlineStart);
-    const auto endLine = lineNumberF(underlineEnd);
-    const auto lineNumber = lineNumberF(location);
-    reporter << lineNumber << ':' << location - lineStartOffsetF(lineNumber) + 1 << ": ";
-    llvm::WithColor(reporter, colour, true).get() << type << ": ";
-    llvm::WithColor(reporter, llvm::raw_ostream::SAVEDCOLOR, true).get() << message << '\n';
-
-    auto textStartOffset = lineStartOffsetF(startLine);
-    std::vector<std::int64_t> mapping(lineEndOffsetF(endLine) - textStartOffset + 1);
-    llvm::SmallString<128> safeUTF8;
-    safeUTF8.reserve(mapping.size() - 1);
-    cld::toSafeUTF8(source.substr(textStartOffset, mapping.size() - 1), std::back_inserter(safeUTF8), mapping.begin());
-
-    llvm::SmallVector<std::string_view, 2> lines;
-    lines.reserve(endLine - startLine + 1);
+    else if constexpr (cld::IsTupleLike<T>{})
     {
-        auto view = std::string_view(safeUTF8.data(), safeUTF8.size());
-        std::size_t result = 0;
-        while (true)
+        static_assert(std::tuple_size_v<T> == 3 || std::tuple_size_v<T> == 2);
+        if constexpr (std::tuple_size_v<T> == 2)
         {
-            auto newline = view.find('\n', result);
-            if (newline == std::string_view::npos)
-            {
-                lines.emplace_back(view.substr(result));
-                break;
-            }
-            lines.emplace_back(view.substr(result, newline - result));
-            result = newline + 1;
-        }
-    }
-
-    underlineStart += mapping[underlineStart - textStartOffset];
-    underlineEnd += mapping[underlineEnd - textStartOffset];
-    for (auto& iter : arrows)
-    {
-        iter.first += mapping[iter.first - textStartOffset];
-        iter.second += mapping[iter.second - textStartOffset];
-        CLD_ASSERT(iter.first >= underlineStart && iter.second <= underlineEnd);
-    }
-
-    auto numSize = 1 + (std::size_t)std::floor(log10f(endLine));
-    const auto remainder = numSize % 4;
-    if (remainder)
-    {
-        numSize += 4 - remainder;
-    }
-
-    llvm::SmallString<128> underline;
-    llvm::SmallString<128> space;
-    for (auto i = startLine; i <= endLine; i++)
-    {
-        // Text
-        reporter << llvm::format_decimal(i, numSize) << " | ";
-
-        auto string = lines[i - startLine];
-        std::int64_t lineStartOffset = lineStartOffsetF(i);
-        lineStartOffset += mapping[lineStartOffset - textStartOffset];
-        if (i != startLine && i != endLine)
-        {
-            // The token spans multiple lines and we are neither at the first nor last line. Therefore
-            // this line consist only of the token
-            llvm::WithColor(reporter, colour).get() << string;
-        }
-        else if (i == startLine && i == endLine)
-        {
-            // The token does not span lines and starts as well as ends here
-            auto column = underlineStart - lineStartOffset;
-            reporter << string.substr(0, column);
-            llvm::WithColor(reporter, colour).get() << string.substr(column, underlineEnd - underlineStart);
-            reporter << string.substr(column + underlineEnd - underlineStart);
-        }
-        else if (i == startLine)
-        {
-            // The token starts here and does not end here
-            auto column = underlineStart - lineStartOffset;
-            reporter << string.substr(0, column);
-            llvm::WithColor(reporter, colour).get() << string.substr(column);
+            return std::apply(
+                [&intervalMap](auto&&... args) {
+                    return std::tuple(mapArgument(intervalMap, std::forward<decltype(args)>(args))...);
+                },
+                std::forward<Arg>(arg));
         }
         else
         {
-            // The token ends here and did not start here
-            auto endColumn = underlineEnd - lineStartOffset;
-            llvm::WithColor(reporter, colour).get() << string.substr(0, endColumn);
-            reporter << string.substr(endColumn);
-        }
-        reporter << '\n';
-
-        // Underline + Arrows
-        underline.clear();
-        space.clear();
-        reporter.indent(numSize) << " | ";
-        if (i != startLine && i != endLine)
-        {
-            // The token spans multiple lines and we are neither at the first nor last line. Therefore
-            // this line consist only of the token
-            cld::stringOfSameWidth(string, '~', std::back_inserter(underline));
-        }
-        else if (i == startLine && i == endLine)
-        {
-            // The token does not span lines and starts as well as ends here
-            auto column = underlineStart - lineStartOffset;
-            cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
-            underline += space;
-            cld::stringOfSameWidth(string.substr(column, underlineEnd - underlineStart), '~',
-                                   std::back_inserter(underline));
-        }
-        else if (i == startLine)
-        {
-            // The token starts here and does not end here
-            auto column = underlineStart - lineStartOffset;
-            cld::stringOfSameWidth(string.substr(0, column), ' ', std::back_inserter(space));
-            underline += space;
-            cld::stringOfSameWidth(string.substr(column), '~', std::back_inserter(underline));
-        }
-        else
-        {
-            // The token ends here and did not start here
-            auto endColumn = underlineEnd - lineStartOffset;
-            cld::stringOfSameWidth(string.substr(0, endColumn), '~', std::back_inserter(underline));
-        }
-
-        for (auto [begin, end] : arrows)
-        {
-            if ((std::int64_t)end <= lineStartOffset || begin >= lineStartOffset + string.size())
+            using T1 = std::tuple_element_t<0, T>;
+            using T3 = std::tuple_element_t<2, T>;
+            static_assert(
+                std::is_base_of_v<cld::Lexer::TokenBase,
+                                  std::decay_t<T3>> || std::is_base_of_v<cld::Lexer::TokenBase, std::decay_t<T1>>);
+            if constexpr (std::is_base_of_v<cld::Lexer::TokenBase, std::decay_t<T1>>)
             {
-                continue;
+                return std::make_tuple(std::get<0>(arg), map(intervalMap, std::get<1>(arg)).first,
+                                       map(intervalMap, std::get<2>(arg)).second);
             }
-            auto startIndex = std::max<std::int64_t>((std::int64_t)begin - lineStartOffset, 0);
-            auto endIndex =
-                std::min<std::int64_t>((std::int64_t)end - lineStartOffset, lineStartOffset + string.size());
-            auto toHighlightView = string.substr(startIndex, endIndex - startIndex);
-            auto prefix = string.substr(0, startIndex);
-            auto pos = cld::unsafeColumnWidth(prefix);
-            std::fill(underline.begin() + pos, underline.begin() + pos + cld::unsafeColumnWidth(toHighlightView), '^');
+            else
+            {
+                return std::make_tuple(map(intervalMap, std::get<0>(arg)).first,
+                                       map(intervalMap, std::get<1>(arg)).second, std::get<2>(arg));
+            }
         }
-        llvm::WithColor(reporter, colour) << underline << '\n';
     }
-    reporter.flush();
+    else
+    {
+        return std::forward<Arg>(arg);
+    }
 }
 
-class Context
+template <class Diag, class Tuple, std::size_t... ints>
+auto mapArguments(const Diag&, const IntervalMap& intervalMap, Tuple&& tuple, std::index_sequence<ints...>)
+{
+    return std::make_tuple([&tuple, &intervalMap](auto value) {
+        constexpr auto i = decltype(value)::value;
+        if constexpr ((bool)(Diag::constraints[i] & Diag::LocationConstraint))
+        {
+            return mapArgument(intervalMap, std::get<i>(tuple));
+        }
+        else
+        {
+            return std::get<i>(tuple);
+        }
+    }(std::integral_constant<std::size_t, ints>{})...);
+}
+
+class Context : private cld::SourceInterface
 {
     llvm::raw_ostream* m_reporter;
     std::vector<PPToken> m_result;
@@ -788,101 +686,118 @@ class Context
     std::string_view m_characterSpace;
     std::uint64_t& m_offset;
     std::vector<std::uint64_t> m_lineStarts;
-    IntervalMap m_characterToSourceSpace;
+    const IntervalMap& m_characterToSourceSpace;
     bool m_errorsOccured = false;
     std::optional<std::uint64_t> m_lastBlockCommentEndPos;
+    cld::Source::File m_fakeFile;
+    cld::LanguageOptions m_languageOptions;
 
-    std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
+    std::uint64_t getLineNumber(std::uint32_t, std::uint64_t offset) const noexcept override
     {
         auto result = std::lower_bound(m_lineStarts.begin(), m_lineStarts.end(), offset);
         CLD_ASSERT(result != m_lineStarts.end());
-        return result == m_lineStarts.begin() ?
-                   1 :
-                   std::distance(m_lineStarts.begin(), *result != offset ? result - 1 : result) + 1;
+        return std::distance(m_lineStarts.begin(), result) + (*result == offset ? 1 : 0);
     }
 
-    /**
-     * @param line Line whose start offset should be queried for
-     * @return Offset at which the line starts in source space
-     */
-    std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept
+    std::uint64_t getLineStartOffset(std::uint32_t, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT(line - 1 < m_lineStarts.size());
         return m_lineStarts[line - 1];
     }
 
-    /**
-     * @param line Line whose end offset should be queried for
-     * @return Offset at which the line ends (aka offset to newline) in source space
-     */
-    std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept
+    std::uint64_t getLineEndOffset(std::uint32_t, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT(line - 1 < m_lineStarts.size());
-        return line == m_lineStarts.size() ? m_sourceSpace.size() : m_lineStarts[line];
+        if (line != m_lineStarts.size())
+        {
+            return m_lineStarts[line] - 1;
+        }
+        return m_sourceSpace.size();
     }
 
-    void report(std::string_view type, llvm::raw_ostream::Colors colour, std::string_view message,
-                std::uint64_t location, ArrowRange&& arrows, std::uint64_t underlineStart,
-                std::uint64_t underlineEnd) const
+    llvm::ArrayRef<cld::Source::File> getFiles() const noexcept override
     {
-        if (!m_reporter)
-        {
-            return;
-        }
-        ::report(
-            *m_reporter, m_sourceSpace, m_characterToSourceSpace, type, colour, message, location, std::move(arrows),
-            underlineStart, underlineEnd, [this](std::uint64_t value) { return getLineNumber(value); },
-            [this](std::uint64_t value) { return getLineStartOffset(value); },
-            [this](std::uint64_t value) { return getLineEndOffset(value); });
+        return m_fakeFile;
+    }
+
+    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() const noexcept override
+    {
+        return {};
+    }
+
+    const cld::LanguageOptions& getLanguageOptions() const noexcept override
+    {
+        return m_languageOptions;
+    }
+
+    std::uint64_t getLineNumber(std::uint64_t offset) const noexcept
+    {
+        return getLineNumber(0, offset);
+    }
+
+    std::uint64_t getLineStartOffset(std::uint64_t line) const noexcept
+    {
+        return getLineStartOffset(0, line);
+    }
+
+    std::uint64_t getLineEndOffset(std::uint64_t line) const noexcept
+    {
+        return getLineEndOffset(0, line);
     }
 
 public:
     std::uint64_t tokenStartOffset;
 
-    Context(std::string_view sourceSpace, IntervalMap characterToSourceSpace, std::string_view characterSpace,
-            std::uint64_t& offset, std::vector<std::uint64_t> lineStarts, llvm::raw_ostream* reporter) noexcept
+    Context(std::string_view sourceSpace, const IntervalMap& characterToSourceSpace, std::string_view characterSpace,
+            std::uint64_t& offset, std::vector<std::uint64_t> lineStarts, llvm::raw_ostream* reporter,
+            std::string_view path, const cld::LanguageOptions& languageOptions) noexcept
         : m_reporter(reporter),
           m_sourceSpace(sourceSpace),
           m_characterSpace(characterSpace),
           m_offset(offset),
           m_lineStarts(std::move(lineStarts)),
-          m_characterToSourceSpace(std::move(characterToSourceSpace))
+          m_characterToSourceSpace(characterToSourceSpace),
+          m_fakeFile{cld::to_string(path), cld::to_string(sourceSpace), {}, {}},
+          m_languageOptions(languageOptions)
     {
     }
 
-    void reportError(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
+    template <class Diag, class Location, class... Args>
+    void report(const Diag& diag, Location&& location, Args&&... args)
     {
-        m_errorsOccured = true;
-        report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), tokenStartOffset, m_offset);
-    }
-
-    void reportNote(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
-    {
-        report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), tokenStartOffset, m_offset);
-    }
-
-    void reportWarning(const std::string& message, std::uint64_t location, ArrowRange&& arrows = {})
-    {
-        report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), tokenStartOffset, m_offset);
-    }
-
-    void reportError(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                     ArrowRange&& arrows = {})
-    {
-        m_errorsOccured = true;
-        report("error", llvm::raw_ostream::RED, message, location, std::move(arrows), start, end);
-    }
-
-    void reportNote(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                    ArrowRange&& arrows = {})
-    {
-        report("note", llvm::raw_ostream::CYAN, message, location, std::move(arrows), start, end);
-    }
-
-    void reportWarning(const std::string& message, std::uint64_t location, std::uint64_t start, std::uint64_t end,
-                       ArrowRange&& arrows = {})
-    {
-        report("warning", llvm::raw_ostream::MAGENTA, message, location, std::move(arrows), start, end);
+        if (diag.getSeverity() == cld::Severity::Error)
+        {
+            m_errorsOccured = true;
+        }
+        if (m_reporter)
+        {
+            std::apply(
+                [&](auto&&... args) {
+                    if constexpr (std::is_integral_v<std::decay_t<Location>>)
+                    {
+                        *m_reporter << diag.args(map(m_characterToSourceSpace, location).first, *this,
+                                                 std::forward<decltype(args)>(args)...);
+                        return;
+                    }
+                    if constexpr (cld::IsTupleLike<std::decay_t<Location>>{})
+                    {
+                        if constexpr (std::tuple_size_v<std::decay_t<Location>> == 2)
+                        {
+                            using T1 = std::decay_t<std::tuple_element_t<0, std::decay_t<Location>>>;
+                            using T2 = std::decay_t<std::tuple_element_t<1, std::decay_t<Location>>>;
+                            if constexpr (std::is_integral_v<T1> && std::is_integral_v<T2>)
+                            {
+                                *m_reporter << diag.args(map(std::get<0>(location), map(std::get<1>(location))), *this,
+                                                         std::forward<decltype(args)>(args)...);
+                            }
+                        }
+                    }
+                    *m_reporter << diag.args(mapArgument(m_characterToSourceSpace, location), *this,
+                                             std::forward<decltype(args)>(args)...);
+                },
+                mapArguments(diag, m_characterToSourceSpace, std::forward_as_tuple(std::forward<Args>(args)...),
+                             std::index_sequence_for<Args...>{}));
+        }
     }
 
     [[nodiscard]] std::uint64_t getOffset() const
@@ -989,9 +904,9 @@ constexpr auto UTF32_MAX = 0x10FFFF;
  * @param value string that either consist of 4 or 8 hex digits
  * @return Unicode value
  */
-template <class T>
-std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t startOffset,
-                                                       std::uint64_t endOffset, T& context)
+template <class T, class PosArg>
+std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, std::uint64_t location, PosArg&& arg,
+                                                       T& context)
 {
     CLD_ASSERT(value.size() == 4 || value.size() == 8);
     auto result = hexToValue(std::string(value.begin(), value.end()));
@@ -999,20 +914,19 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
     {
         if (result != '$' && result != '@' && result != '`')
         {
-            // TODO: context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-            //                                    value, cld::Errors::Lexer::VALUE_MUSTNT_BE_LESS_THAN_A0),
-            //                                endOffset - value.size(), startOffset, endOffset,
-            //                                {{endOffset - value.size(), endOffset}});
+            context.report(cld::Errors::Lexer::INVALID_UC_VALUE_MUSTNT_BE_LESS_THAN_A0, location,
+                           std::forward<PosArg>(arg));
             return {};
         }
     }
-    else if ((result >= 0xD800 && result <= 0xDFFF) || result > UTF32_MAX)
+    else if (result > UTF32_MAX)
     {
-        // TODO:        context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N.args(
-        //                                value, result > UTF32_MAX ? cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32 :
-        //                                                            cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-        //                            endOffset - value.size(), startOffset, endOffset, {{endOffset - value.size(),
-        //                            endOffset}});
+        context.report(cld::Errors::Lexer::INVALID_UC_VALUE_MUST_FIT_IN_UTF32, location, std::forward<PosArg>(arg));
+        return {};
+    }
+    else if ((result >= 0xD800 && result <= 0xDFFF))
+    {
+        context.report(cld::Errors::Lexer::INVALID_UC_VALUE_MUSTNT_BE_IN_RANGE, location, std::forward<PosArg>(arg));
         return {};
     }
     return result;
@@ -1206,10 +1120,8 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                     ss << llvm::format_hex_no_prefix(c, 8);
                     ss.flush();
                     auto size = getNumUTF8ForUTF32(c);
-                    // TODO: context.reportError(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N.args(std::move(buffer)),
-                    //                                        context.getOffset() - size, context.getOffset() - size,
-                    //                                        context.getOffset(),
-                    //                                        {{context.getOffset() - size, context.getOffset()}});
+                    context.report(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N, context.getOffset() - size, buffer,
+                                   std::pair{context.getOffset() - size, context.getOffset()});
                 }
                 else
                 {
@@ -1380,8 +1292,8 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
     std::size_t ucStart = context.currentView().rfind('\\');
     CLD_ASSERT(ucStart != std::string_view::npos);
     ucStart += context.tokenStartOffset;
-    auto result =
-        universalCharacterToValue({characters.data(), characters.size()}, ucStart, context.getOffset(), context);
+    auto result = universalCharacterToValue({characters.data(), characters.size()}, ucStart,
+                                            std::pair{ucStart, context.getOffset()}, context);
     if (!result)
     {
         return {Start{}, true};
@@ -1417,9 +1329,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
         }
         else
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, ucStart,
-            // context.getOffset(),
-            //                                {{ucStart, context.getOffset()}});
+            context.report(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, std::pair{ucStart, context.getOffset()});
             return {Start{}, true};
         }
     }
@@ -1614,15 +1524,16 @@ std::pair<StateMachine, bool> AfterInclude::advance(char c, Context& context)
         return {Start{}, true};
     }
 
+    // c is '\n' at this point
+
     if (delimiter == '"')
     {
         // If the delimiter is a " it means that the whole token would otherwise be interpreted as a string literal
         // if there wasn't a include directive in front. Therefore no macro expansion could make this a valid include
         // directive
 
-        // TODO: context.reportError(cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
-        //                            context.tokenStartOffset, context.tokenStartOffset, context.getOffset() - 1,
-        //                            {{context.tokenStartOffset, context.getOffset() - 1}});
+        context.report(cld::Errors::Lexer::UNTERMINATED_INCLUDE_DIRECTIVE, context.tokenStartOffset,
+                       std::pair{context.tokenStartOffset, context.getOffset() - 1});
 
         // if the delimiter is a < however then subsequent tokens will later be retokenized in the preprocessor
         // which might form a valid include after macro substitution
@@ -1682,7 +1593,7 @@ struct [[maybe_unused]] FirstArgOfMethod<R (*)(U, Args...) noexcept>
 constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
 
 cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOptions languageOptions,
-                                         llvm::raw_ostream* reporter, bool* errorsOccured, std::string_view sourceFile)
+                                         llvm::raw_ostream* reporter, bool* errorsOccured, std::string_view sourcePath)
 {
     if (errorsOccured)
     {
@@ -1745,15 +1656,11 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
                                                 source.size());
             charactersSpace += stringView;
         }
-        if (charactersSpace.empty() || charactersSpace.back() != '\n')
-        {
-            characterToSourceSpace.emplace_back(charactersSpace.size(), source.size(), source.size());
-            charactersSpace += '\n';
-        }
         characterToSourceSpace.emplace_back(charactersSpace.size(), 0, 0);
     }
 
-    Context context(source, characterToSourceSpace, charactersSpace, offset, starts, reporter);
+    Context context(source, characterToSourceSpace, charactersSpace, offset, starts, reporter, sourcePath,
+                    languageOptions);
     const auto* end = charactersSpace.data() + charactersSpace.size();
     for (const auto* iter = charactersSpace.data(); iter != end;)
     {
@@ -1773,9 +1680,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
                     != llvm::conversionOK)
                 {
                     step = getNumBytesForUTF8(start, end);
-                    // TODO:                    context.reportError(Errors::Lexer::INVALID_UTF8_SEQUENCE, offset,
-                    // offset, offset + step,
-                    //                                        {{offset, offset + 1}});
+                    context.report(Errors::Lexer::INVALID_UTF8_SEQUENCE, offset, std::pair{offset, offset + step});
                     return false;
                 }
                 c = result;
@@ -1838,13 +1743,89 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
         offset = prevOffset + step;
         iter += step;
     }
-    if (std::holds_alternative<BlockComment>(stateMachine))
+    bool needNewline = cld::match(
+        stateMachine,
+        [&context](BlockComment&) {
+            context.report(Errors::Lexer::UNTERMINATED_BLOCK_COMMENT, context.tokenStartOffset,
+                           std::pair{context.tokenStartOffset, context.getOffset()});
+            return false;
+        },
+        [&context](StringLiteral&) {
+            context.report(Errors::Lexer::UNTERMINATED_STRING_LITERAL, context.tokenStartOffset,
+                           std::pair{context.tokenStartOffset, context.getOffset()});
+            return false;
+        },
+        [&context](CharacterLiteral&) {
+            context.report(Errors::Lexer::UNTERMINATED_CHARACTER_LITERAL, context.tokenStartOffset,
+                           std::pair{context.tokenStartOffset, context.getOffset()});
+            return false;
+        },
+        [&context](AfterInclude&) {
+            context.report(Errors::Lexer::UNTERMINATED_INCLUDE_DIRECTIVE, context.tokenStartOffset,
+                           std::pair{context.tokenStartOffset, context.getOffset()});
+            return false;
+        },
+        [](Start&) { return false; }, [](LineComment&) { return false; }, [](auto&&) { return true; });
+    if (needNewline)
     {
-        // TODO:        context.reportError(Errors::Lexer::UNTERMINATED_N.args(Errors::Lexer::BLOCK_COMMENT),
-        // context.tokenStartOffset,
-        //                            context.tokenStartOffset, context.getOffset() - 1,
-        //                            {{context.tokenStartOffset, context.getOffset() - 1}});
+        offset++;
+        characterToSourceSpace.back() = {charactersSpace.size(), source.size(), source.size()};
+        characterToSourceSpace.emplace_back(charactersSpace.size() + 1, 0, 0);
+        auto visitor = [offset, &context, &stateMachine](auto&& state) -> bool {
+            if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+            {
+                return false;
+            }
+            std::uint32_t c = '\n';
+            if constexpr (std::is_convertible_v<decltype(state.advance(c, context)), bool>)
+            {
+                return !state.advance(c, context);
+            }
+            else if constexpr (std::is_same_v<StateMachine, decltype(state.advance(c, context))>)
+            {
+                stateMachine = state.advance(c, context);
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                {
+                    if (!std::holds_alternative<Start>(stateMachine))
+                    {
+                        context.tokenStartOffset = offset - 1;
+                    }
+                }
+                return false;
+            }
+            else if constexpr (std::is_void_v<decltype(state.advance(c, context))>)
+            {
+                state.advance(c, context);
+                return false;
+            }
+            else
+            {
+                bool proceed;
+                auto&& [lhs, rhs] = state.advance(c, context);
+                if constexpr (std::is_same_v<std::decay_t<decltype(lhs)>, bool>)
+                {
+                    stateMachine = std::move(rhs);
+                    proceed = lhs;
+                }
+                else
+                {
+                    stateMachine = std::move(lhs);
+                    proceed = rhs;
+                }
+                if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
+                {
+                    if (!std::holds_alternative<Start>(stateMachine))
+                    {
+                        context.tokenStartOffset = offset - 1;
+                    }
+                }
+                return !proceed;
+            }
+        };
+        while (cld::match(stateMachine, visitor))
+            ;
     }
+
     if (errorsOccured)
     {
         *errorsOccured = context.isErrorsOccured();
@@ -1852,7 +1833,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
 
     return PPSourceObject(
         context.getResult(),
-        {Source::File{to_string(sourceFile), to_string(source), std::move(starts), context.getResult()}},
+        {Source::File{to_string(sourcePath), to_string(source), std::move(starts), context.getResult()}},
         languageOptions, {}, {std::move(characterToSourceSpace)});
 }
 
@@ -1874,26 +1855,6 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
 
 namespace
 {
-void report(llvm::raw_ostream* reporter, const cld::PPSourceObject& sourceObject, const cld::Lexer::PPToken& token,
-            std::string_view type, llvm::raw_ostream::Colors colour, std::string_view message, std::uint64_t location,
-            ArrowRange&& arrows, std::uint64_t underlineStart, std::uint64_t underlineEnd)
-{
-    if (!reporter)
-    {
-        return;
-    }
-    report(
-        *reporter, sourceObject.getFiles()[(std::uint64_t)token.getFileId()].source, sourceObject.getIntervalMap(),
-        type, colour, message, location, std::move(arrows), underlineStart, underlineEnd,
-        [&sourceObject, &token](std::uint64_t value) { return sourceObject.getLineNumber(token.getFileId(), value); },
-        [&sourceObject, &token](std::uint64_t value) {
-            return sourceObject.getLineStartOffset(token.getFileId(), value);
-        },
-        [&sourceObject, &token](std::uint64_t value) {
-            return sourceObject.getLineEndOffset(token.getFileId(), value);
-        });
-}
-
 struct ConversionContext
 {
     llvm::raw_ostream* reporter;
@@ -1901,8 +1862,8 @@ struct ConversionContext
     const cld::Lexer::PPToken& token;
     bool* errorsOccured;
 
-    template <class Diag, class... Args>
-    void report(const Diag& diag, std::uint64_t location, Args&&... args) const
+    template <class Diag, class Location, class... Args>
+    void report(const Diag& diag, Location&& location, Args&&... args) const
     {
         if (diag.getSeverity() == cld::Severity::Error && errorsOccured)
         {
@@ -1910,7 +1871,34 @@ struct ConversionContext
         }
         if (reporter)
         {
-            *reporter << diag.args(std::make_pair(token, location), sourceObject, std::forward<Args>(args)...);
+            std::apply(
+                [&](auto&&... args) {
+                    if constexpr (std::is_integral_v<std::decay_t<Location>>)
+                    {
+                        *reporter << diag.args(
+                            std::forward_as_tuple(token, map(sourceObject.getIntervalMap(), location).first),
+                            sourceObject, std::forward<decltype(args)>(args)...);
+                        return;
+                    }
+                    if constexpr (cld::IsTupleLike<std::decay_t<Location>>{})
+                    {
+                        if constexpr (std::tuple_size_v<std::decay_t<Location>> == 2)
+                        {
+                            using T1 = std::decay_t<std::tuple_element_t<0, std::decay_t<Location>>>;
+                            using T2 = std::decay_t<std::tuple_element_t<1, std::decay_t<Location>>>;
+                            if constexpr (std::is_integral_v<T1> && std::is_integral_v<T2>)
+                            {
+                                *reporter << diag.args(std::forward_as_tuple(token, map(std::get<0>(location)),
+                                                                             map(std::get<1>(location))),
+                                                       sourceObject, std::forward<decltype(args)>(args)...);
+                            }
+                        }
+                    }
+                    *reporter << diag.args(mapArgument(sourceObject.getIntervalMap(), location), sourceObject,
+                                           std::forward<decltype(args)>(args)...);
+                },
+                mapArguments(diag, sourceObject.getIntervalMap(), std::forward_as_tuple(std::forward<Args>(args)...),
+                             std::index_sequence_for<Args...>{}));
         }
     }
 };
@@ -1932,16 +1920,16 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
         case 'r': return '\r';
         case ' ':
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash +
-            // 1,
-            //                                {{backslash, backslash + 2}});
+            context.report(cld::Errors::Lexer::EXPECTED_CHARACTER_AFTER_BACKSLASH, backslash + 1,
+                           std::forward_as_tuple(context.token, backslash, backslash + 2));
+
             return {};
         }
         default:
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(std::string("\\")
-            // + escape),
-            //                                backslash + 1, {{backslash, backslash + 2}});
+            context.report(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N, backslash + 1, std::string("\\") + escape,
+                           std::forward_as_tuple(context.token, backslash, backslash + 2));
+
             return {};
         }
     }
@@ -1979,11 +1967,16 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         auto offset = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data());
         if (*iter == '\n')
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::NEWLINE_IN_N_USE_BACKLASH_N.args(
-            //                                    literalType == Literal::CharLiteral ?
-            //                                    cld::Errors::Lexer::CHARACTER_LITERAL :
-            //                                                                          cld::Errors::Lexer::STRING_LITERAL),
-            //                                offset, {{offset, offset + 1}});
+            if (literalType == Literal::CharLiteral)
+            {
+                context.report(cld::Errors::Lexer::NEWLINE_IN_CHARACTER_LITERAL_USE_BACKLASH_N, offset,
+                               std::forward_as_tuple(context.token, offset, offset + 1));
+            }
+            else
+            {
+                context.report(cld::Errors::Lexer::NEWLINE_IN_STRING_LITERAL_USE_BACKLASH_N, offset,
+                               std::forward_as_tuple(context.token, offset, offset + 1));
+            }
             iter++;
             errorOccured = true;
             continue;
@@ -1998,10 +1991,10 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                                                 llvm::strictConversion);
             if (res != llvm::conversionOK)
             {
-                auto invalid = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (start - characters.data());
-                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE,
-                // context.token.getCharSpaceOffset(),
-                //                                    {{invalid, invalid + 1}});
+                auto invalidStart = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (start - characters.data());
+                auto invalidEnd = invalidStart + std::min<std::size_t>(llvm::getNumBytesForUTF8(*start), iter - start);
+                context.report(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, invalidStart,
+                               std::make_tuple(context.token, invalidStart, invalidEnd));
                 errorOccured = true;
             }
             continue;
@@ -2030,9 +2023,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 // First character followed after \u or \U is not a hex digit or its the end of string
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N.args(big ?
-                // "\\U" : "\\u"), start,
-                //                                    {{start, start + 2}});
+                context.report(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N, start, big ? "\\U" : "\\u",
+                               std::forward_as_tuple(context.token, start, start + 2));
                 errorOccured = true;
                 continue;
             }
@@ -2043,20 +2035,17 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 [](char c) { return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'); });
             if (std::distance(hexStart, hexEnd) != (big ? 8 : 4))
             {
-                auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.report(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS, start,
-                               (big ? 8 : 4) - std::distance(hexStart, hexEnd));
-                // TODO:
-                // context.reportError(cld::Errors::Lexer::INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS.args(
-                //                                        std::to_string((big ? 8 : 4) - std::distance(hexStart,
-                //                                        hexEnd))),
-                //                                    start, {{start, start + std::distance(hexStart, hexEnd)}});
+                auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data());
+                context.report(cld::Errors::Lexer::INVALID_UC_EXPECTED_N_MORE_DIGITS, start,
+                               (big ? 8 : 4) - std::distance(hexStart, hexEnd),
+                               std::forward_as_tuple(context.token, start, start + std::distance(hexStart, hexEnd)));
                 errorOccured = true;
                 iter = hexEnd;
                 continue;
             }
-            auto uc = universalCharacterToValue({hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
-                                                offset + 2 + (big ? 8 : 4), context);
+            auto uc = universalCharacterToValue(
+                {hexStart, static_cast<std::size_t>(hexEnd - hexStart)}, offset,
+                std::forward_as_tuple(context.token, offset, offset + 2 + (big ? 8 : 4)), context);
             if (uc)
             {
                 *resultStart = *uc;
@@ -2078,9 +2067,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (lastHex == iter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED,
-                // start,
-                //                                    {{start, start + 2}});
+                context.report(cld::Errors::Lexer::AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, start,
+                               std::forward_as_tuple(context.token, start, start + 2));
                 errorOccured = true;
                 continue;
             }
@@ -2091,9 +2079,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (input.getBitWidth() >= 21 && input.ugt(rhs))
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::VALUE_MUST_FIT_IN_UTF32, start, start,
-                //                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex -
-                //                                    iter}});
+                context.report(cld::Errors::Lexer::INVALID_HEX_VALUE_MUST_FIT_IN_UTF32, start,
+                               std::forward_as_tuple(context.token, start, start + 2 + lastHex - iter));
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2102,10 +2089,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value >= 0xD800 && value <= 0xDFFF)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::INVALID_HEX_ESCAPE_SEQUENCE_N.args(
-                //                                        cld::Errors::Lexer::VALUE_MUSTNT_BE_IN_RANGE),
-                //                                    start, start, start + 2 + lastHex - iter,
-                //                                    {{start + 2, start + 2 + lastHex - iter}});
+                context.report(cld::Errors::Lexer::INVALID_HEX_VALUE_MUSTNT_BE_IN_RANGE, start,
+                               std::forward_as_tuple(context.token, start, start + 2 + lastHex - iter));
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2113,10 +2098,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value > largestCharacter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                // start, start,
-                //                                    start + 2 + lastHex - iter, {{start + 2, start + 2 + lastHex -
-                //                                    iter}});
+                context.report(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start,
+                               std::forward_as_tuple(context.token, start, start + 2 + lastHex - iter));
                 errorOccured = true;
                 iter = lastHex;
                 continue;
@@ -2138,10 +2121,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 // First character is 8 or 9. That's why we didn't encounter a single octal digit.
                 // Also since there must be at least one character after \, lastOctal is definitely not end
                 // here.
-
-                // TODO: context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1,
-                // *lastOctal)),
-                //                                    offset, {{offset, offset + 2}});
+                context.report(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER, offset, std::string_view(lastOctal, 1),
+                               std::forward_as_tuple(context.token, offset, offset + 2));
                 errorOccured = true;
                 continue;
             }
@@ -2150,10 +2131,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (value > largestCharacter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                // start, start,
-                //                                    start + 2 + lastOctal - iter, {{start + 2, start + 2 + lastOctal -
-                //                                    iter}});
+                context.report(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, start,
+                               std::forward_as_tuple(context.token, start, start + 2 + lastOctal - iter));
                 errorOccured = true;
                 iter = lastOctal;
                 continue;
@@ -2186,8 +2165,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         {
             if (*iter > largestCharacter)
             {
-                // TODO:                context.reportError(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
-                //                                    context.token.getCharSpaceOffset());
+                context.report(cld::Errors::Lexer::CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE,
+                               context.token.getCharSpaceOffset(), context.token);
                 errorOccured = true;
             }
         }
@@ -2282,19 +2261,16 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
-            //                                beginLocation + std::distance(begin, suffixBegin),
-            //                                context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
-            //                                context.token.getCharSpaceLength());
+            context.report(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
+                           context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
+                           context.token.getCharSpaceOffset() + context.token.getCharSpaceLength() - 1, context.token);
             errorsOccurred = true;
         }
     }
     else if (isHex && isFloat)
     {
-        // TODO:        context.reportError(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
-        //                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
-        //                            context.token.getCharSpaceOffset(),
-        //                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength());
+        context.report(cld::Errors::Lexer::BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT,
+                       context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(), context.token);
         errorsOccurred = true;
     }
 
@@ -2307,12 +2283,8 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         {
             errorsOccurred = true;
             auto arrowBegin = beginLocation + std::distance(begin, result);
-            // TODO:            context.reportError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER.args(std::string(1,
-            // *result)),
-            //                                beginLocation + std::distance(begin, result),
-            //                                context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
-            //                                context.token.getCharSpaceLength() /*-1*/,
-            //                                {{arrowBegin, arrowBegin + 1}});
+            context.report(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER, arrowBegin, std::string(1, *result),
+                           std::forward_as_tuple(context.token, arrowBegin));
             result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
         }
     }
@@ -2330,11 +2302,8 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     if (set.count(suffix) == 0)
     {
         auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
-        // TODO:        context.reportError(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX.args(suffix),
-        //                            beginLocation + std::distance(begin, suffixBegin),
-        //                            context.token.getCharSpaceOffset(), context.token.getCharSpaceOffset() +
-        //                            context.token.getCharSpaceLength() /*-1*/,
-        //                            {{arrowBegin, arrowBegin + suffix.size()}});
+        context.report(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX, arrowBegin, suffix,
+                       std::forward_as_tuple(context.token, arrowBegin, arrowBegin + suffix.size()));
         return {};
     }
 
@@ -2349,11 +2318,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         llvm::StringRef(number).getAsInteger(0, test);
         if (test.getBitWidth() > 64)
         {
-            // TODO:            context.reportError(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE,
-            // beginLocation,
-            //                                context.token.getCharSpaceOffset(),
-            //                                context.token.getCharSpaceOffset() + context.token.getCharSpaceLength()
-            //                                /*-1*/);
+            context.report(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation, context.token);
             return {};
         }
         char* endPtr;
@@ -2542,9 +2507,7 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    // TODO:                    cld::Message::error(cld::Errors::Lexer::UNEXPECTED_CHARACTER, iter,
-                    // {PointAt(iter)})
-                    //                        .print(*reporter, sourceObject);
+                    *reporter << Errors::Lexer::UNEXPECTED_CHARACTER.args(*iter, sourceObject, *iter);
                 }
                 break;
             case TokenType::Pound:
@@ -2556,10 +2519,7 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 }
                 if (reporter)
                 {
-                    // TODO:
-                    // cld::Message::error(cld::Errors::Lexer::STRAY_N_IN_PROGRAM.args(tokenValue(iter->getTokenType())),
-                    //                                        iter, {PointAt(iter)})
-                    //                        .print(*reporter, sourceObject);
+                    *reporter << Errors::Lexer::STRAY_N_IN_PROGRAM.args(*iter, sourceObject, *iter);
                 }
                 break;
             case TokenType::Newline: break;
@@ -2657,24 +2617,19 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 {
                     if (!errorOccured)
                     {
-                        std::vector<std::uint64_t> arrows(iter->getCharSpaceLength());
-                        std::iota(arrows.begin(), arrows.end(), iter->getCharSpaceOffset());
-                        // TODO:                        context.reportError(
-                        //                            Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY,
-                        //                            iter->getCharSpaceOffset(),
-                        //                            {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() +
-                        //                            iter->getCharSpaceLength()}});
+                        errorOccured = true;
+                        if (reporter)
+                        {
+                            *reporter << Errors::Lexer::CHARACTER_LITERAL_CANNOT_BE_EMPTY.args(*iter, sourceObject,
+                                                                                               *iter);
+                        }
                     }
                     break;
                 }
 
-                if (chars.size() > 1)
+                if (reporter && chars.size() > 1)
                 {
-                    // TODO:                    context.reportWarning(
-                    //                        Errors::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER,
-                    //                        iter->getCharSpaceOffset(),
-                    //                        {{iter->getCharSpaceOffset(), iter->getCharSpaceOffset() +
-                    //                        iter->getCharSpaceLength()}});
+                    *reporter << Warnings::Lexer::DISCARDING_ALL_BUT_FIRST_CHARACTER.args(*iter, sourceObject, *iter);
                 }
 
                 if (wide)
@@ -2795,7 +2750,7 @@ std::string_view cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::UnderlineBool: return "'_Bool'";
         case TokenType::PPNumber: return "preprocessing number";
         case TokenType::Miscellaneous: CLD_UNREACHABLE;
-        case TokenType::Backslash: return "backslash";
+        case TokenType::Backslash: return "'\\'";
     }
     CLD_UNREACHABLE;
 }

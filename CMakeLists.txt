@@ -162,6 +162,8 @@ else ()
             )
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         add_compile_options(-Wno-assume)
+    else ()
+        #add_compile_options(/experimental:newLambdaProcessor)
     endif ()
 endif ()
 

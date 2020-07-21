@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Diagnostic.h"
+#include "Diagnostic.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-const-variable"
@@ -148,61 +148,65 @@ CREATE_ERROR(UNKNOWN_TYPE_N, "Unknown type '{}'");
 
 namespace Lexer
 {
-CREATE_ERROR(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, "At least one hexadecimal digit required");
+CREATE_ERROR(AT_LEAST_ONE_HEXADECIMAL_DIGIT_REQUIRED, "At least one hexadecimal digit required", PointAt<0>);
 
-CREATE_ERROR(INVALID_OCTAL_CHARACTER, "Invalid octal character '{}'");
+CREATE_ERROR(INVALID_OCTAL_CHARACTER, "Invalid octal character '%0'", PointAt<1>);
 
-CREATE_ERROR(INVALID_LITERAL_SUFFIX, "Invalid literal suffix '{}'");
+CREATE_ERROR(INVALID_LITERAL_SUFFIX, "Invalid literal suffix '%0'", Underline<1>);
 
-CREATE_ERROR(INVALID_ESCAPE_SEQUENCE_N, "Invalid escape sequence '{}'");
+CREATE_ERROR(INVALID_ESCAPE_SEQUENCE_N, "Invalid escape sequence '%0'", PointAt<1>);
 
-CREATE_ERROR(INVALID_UNIVERSAL_CHARACTER_EXPECTED_N_MORE_DIGITS,
-             "Invalid universal character. Expected %0 more hex digit%s0");
+CREATE_ERROR(INVALID_UC_EXPECTED_N_MORE_DIGITS, "Invalid universal character. Expected %0 more hex digit%s0",
+             Underline<1>);
 
-CREATE_ERROR(INVALID_UNIVERSAL_CHARACTER_VALUE_ILLEGAL_VALUE_N,
-             "Invalid universal character. Illegal value of 0x{} ({})");
+CREATE_ERROR(INVALID_UC_VALUE_MUSTNT_BE_LESS_THAN_A0, "Invalid universal character. Value mustn't be less than 0x00A0",
+             Underline<0>);
 
-CREATE_ERROR(VALUE_MUSTNT_BE_LESS_THAN_A0, "Value mustn't be less than 0x00A0");
+CREATE_ERROR(INVALID_UC_VALUE_MUSTNT_BE_IN_RANGE,
+             "Invalid universal character. Value mustn't be in range of 0xD800 to 0xDFFF", Underline<0>);
 
-CREATE_ERROR(VALUE_MUSTNT_BE_IN_RANGE, "Value mustn't be in range of 0xD800 to 0xDFFF");
+CREATE_ERROR(INVALID_UC_VALUE_MUST_FIT_IN_UTF32, "Invalid universal character. Value must fit in UTF32", Underline<0>);
 
-CREATE_ERROR(INVALID_HEX_ESCAPE_SEQUENCE_N, "Invalid hex escape sequence {}");
+CREATE_ERROR(INVALID_HEX_VALUE_MUSTNT_BE_LESS_THAN_A0, "Invalid hex escape sequence. Value mustn't be less than 0x00A0",
+             Underline<0>);
 
-CREATE_ERROR(VALUE_MUST_FIT_IN_UTF32, "Value must fit in UTF32");
+CREATE_ERROR(INVALID_HEX_VALUE_MUSTNT_BE_IN_RANGE,
+             "Invalid hex escape sequence. Value mustn't be in range of 0xD800 to 0xDFFF", Underline<0>);
 
-CREATE_ERROR(EXPECTED_CHARACTER_AFTER_BACKSLASH, "Expected character after \\");
+CREATE_ERROR(INVALID_HEX_VALUE_MUST_FIT_IN_UTF32, "Invalid hex escape sequence. Value must fit in UTF32", Underline<0>);
 
-CREATE_ERROR(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT, "Binary floating point literal must contain an exponent");
+CREATE_ERROR(EXPECTED_CHARACTER_AFTER_BACKSLASH, "Expected character after '\\'", PointAt<0>);
 
-CREATE_ERROR(EXPECTED_DIGITS_AFTER_EXPONENT, "Expected digits after exponent");
+CREATE_ERROR(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT, "Binary floating point literal must contain an exponent",
+             InsertAfter<0>, Underline<0>);
 
-CREATE_ERROR(UNEXPECTED_CHARACTER, "Unexpected character");
+CREATE_ERROR(EXPECTED_DIGITS_AFTER_EXPONENT, "Expected digits after exponent", Underline<0>, InsertAfter<1>);
 
-CREATE_ERROR(NON_PRINTABLE_CHARACTER_N, "Non printable character '{}'");
+CREATE_ERROR(UNEXPECTED_CHARACTER, "Unexpected character", PointAt<0>);
 
-CREATE_ERROR(NEWLINE_IN_N_USE_BACKLASH_N, "Newline in {} use \\n instead");
+CREATE_ERROR(NON_PRINTABLE_CHARACTER_N, "Non printable character '%0'", PointAt<1>);
 
-CREATE_ERROR(CHARACTER_LITERAL, "Character literal");
+CREATE_ERROR(NEWLINE_IN_CHARACTER_LITERAL_USE_BACKLASH_N, "Newline in character literal. Use \\n instead", PointAt<0>);
 
-CREATE_ERROR(STRING_LITERAL, "String literal");
+CREATE_ERROR(NEWLINE_IN_STRING_LITERAL_USE_BACKLASH_N, "Newline in string literal. Use \\n instead", PointAt<0>);
 
-CREATE_ERROR(UNTERMINATED_N, "Unterminated {}");
+CREATE_ERROR(INVALID_UTF8_SEQUENCE, "Invalid UTF-8 Sequence", PointAt<0>);
 
-CREATE_ERROR(BLOCK_COMMENT, "Block comment");
+CREATE_ERROR(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, "Character too large for literal type", Underline<0>);
 
-CREATE_ERROR(INCLUDE_DIRECTIVE, "Include directive");
+CREATE_ERROR(CHARACTER_LITERAL_CANNOT_BE_EMPTY, "Character literal cannot be empty", Underline<0>);
 
-CREATE_ERROR(INVALID_UTF8_SEQUENCE, "Invalid UTF-8 Sequence");
+CREATE_ERROR(STRAY_N_IN_PROGRAM, "Stray %tokenType0 in program", PointAt<0>);
 
-CREATE_ERROR(CHARACTER_TOO_LARGE_FOR_LITERAL_TYPE, "Character too large for literal type");
+CREATE_ERROR(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, "Integer value too big to be representable", Underline<0>);
 
-CREATE_ERROR(CHARACTER_LITERAL_CANNOT_BE_EMPTY, "Character literal cannot be empty");
+CREATE_ERROR(UNTERMINATED_INCLUDE_DIRECTIVE, "Unterminated include directive", Underline<0>);
 
-CREATE_ERROR(DISCARDING_ALL_BUT_FIRST_CHARACTER, "Discarding all but first character");
+CREATE_ERROR(UNTERMINATED_BLOCK_COMMENT, "Unterminated block comment", Underline<0>);
 
-CREATE_ERROR(STRAY_N_IN_PROGRAM, "Stray '{}' in program");
+CREATE_ERROR(UNTERMINATED_CHARACTER_LITERAL, "Unterminated character literal", Underline<0>);
 
-CREATE_ERROR(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, "Integer value too big to be representable");
+CREATE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal", Underline<0>);
 } // namespace Lexer
 
 namespace PP
@@ -252,6 +256,10 @@ namespace Semantics
 {
 CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow", "Value of {} is too large for integer type {}");
 } // namespace Semantics
+namespace Lexer
+{
+CREATE_WARNING(DISCARDING_ALL_BUT_FIRST_CHARACTER, "multichar", "Discarding all but first character", Underline<0>);
+} // namespace Lexer
 namespace PP
 {
 CREATE_WARNING(N_REDEFINED, "macro-redefined", "{} redefined");
