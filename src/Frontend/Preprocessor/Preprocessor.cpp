@@ -63,18 +63,15 @@ class Preprocessor final : private cld::SourceInterface
         m_result.insert(m_result.end(), cld::Lexer::PPToken(cld::Lexer::TokenType::Newline, 0, 0, 0, 0, 0));
     }
 
-    void log(std::vector<cld::Message> messages)
+    void log(const cld::Message& message)
     {
-        for (auto& iter : messages)
+        if (message.getSeverity() == cld::Severity::Error)
         {
-            if (iter.getSeverity() == cld::Severity::Error)
-            {
-                m_errorsOccured = true;
-            }
-            if (m_report)
-            {
-                *m_report << iter;
-            }
+            m_errorsOccured = true;
+        }
+        if (m_report)
+        {
+            *m_report << message;
         }
     }
 
@@ -348,11 +345,10 @@ class Preprocessor final : private cld::SourceInterface
                 auto* openParentheses = std::find_if(&namePos, end, [](const cld::Lexer::PPToken& token) {
                     return token.getTokenType() == cld::Lexer::TokenType::OpenParentheses;
                 });
-//TODO:                log({cld::Message::error(cld::Errors::Parser::EXPECTED_N.args(cld::to_string(count + 1) + " ')'"),
-//                                         cld::Message::after, closeParenthesesOrComma - 1,
-//                                         {cld::InsertAfter(closeParenthesesOrComma - 1, ")")}),
-//                     cld::Message::note(cld::Notes::TO_MATCH_N_HERE.args("'('"), openParentheses,
-//                                        {cld::PointAt(openParentheses)})});
+                log(cld::Errors::Parser::EXPECTED_N.args(*(closeParenthesesOrComma - 1), *this,
+                                                         cld::Lexer::TokenType::CloseParentheses,
+                                                         *(closeParenthesesOrComma - 1)));
+                log(cld::Notes::TO_MATCH_N_HERE.args(*openParentheses, *this, *openParentheses));
                 return {};
             }
             if (!macro.hasEllipse || arguments.size() != identifierCount)
@@ -384,30 +380,26 @@ class Preprocessor final : private cld::SourceInterface
 
         if (arguments.size() < identifierCount)
         {
-//TODO:            auto& format = macro.hasEllipse ?
-//                               cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N :
-//                               cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N;
-//            log({cld::Message::error(
-//                     format.args('"' + cld::to_string(namePos.getValue()) + '"', identifierCount, arguments.size()),
-//                     &namePos, begin + 1, {cld::Underline(&namePos)}),
-//                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, macro.identifierPos,
-//                                    {cld::Underline(macro.identifierPos)})});
+            if (macro.hasEllipse)
+            {
+                log(cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N.args(
+                    std::forward_as_tuple(namePos, *(begin + 1)), *this, namePos, identifierCount, arguments.size()));
+            }
+            else
+            {
+                log(cld::Errors::PP::NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
+                    std::forward_as_tuple(namePos, *(begin + 1)), *this, namePos, identifierCount, arguments.size()));
+            }
+            log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro.identifierPos, *this, *macro.identifierPos));
             return {};
         }
         else if (arguments.size() > identifierCount && !macro.hasEllipse)
         {
             auto firstRedundant = arguments.begin() + identifierCount;
-//TODO:            std::vector<cld::Modifier> modifiers = {cld::Underline(&namePos)};
-//            modifiers.reserve(1 + firstRedundant->size());
-//            std::transform(
-//                firstRedundant, arguments.end(), std::back_inserter(modifiers),
-//                [](llvm::ArrayRef<cld::Lexer::PPToken> ref) { return cld::PointAt(ref.begin(), ref.end()); });
-//            log({cld::Message::error(
-//                     cld::Errors::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
-//                         '"' + cld::to_string(namePos.getValue()) + '"', identifierCount, arguments.size()),
-//                     &namePos, begin + 1, std::move(modifiers)),
-//                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, macro.identifierPos,
-//                                    {cld::Underline(macro.identifierPos)})});
+            log(cld::Errors::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
+                namePos, *this, namePos, identifierCount, arguments.size(),
+                std::forward_as_tuple(firstRedundant->front(), arguments.back().back())));
+            log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro.identifierPos, *this, *macro.identifierPos));
             return {};
         }
 
@@ -447,16 +439,9 @@ class Preprocessor final : private cld::SourceInterface
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
-                // TODO:
-                // log({cld::Message::warning(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB,
-                //                                           &lhs, &rhs + 1,
-                //                                           {cld::Underline(&lhs), cld::Underline(&rhs),
-                //                                           cld::PointAt(&*iter)}),
-                //                     cld::Message::note(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(
-                //                                            cld::Lexer::normalizeSpelling(lhs.getRepresentation(*this)),
-                //                                            cld::Lexer::normalizeSpelling(rhs.getRepresentation(*this))),
-                //                                        &lhs, &rhs + 1, {cld::Underline(&lhs),
-                //                                        cld::Underline(&rhs)})});
+                log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(*iter, *this, lhs,
+                                                                                                    *iter, rhs));
+                log(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(*iter, *this, lhs, *iter, rhs));
                 iter = tokens.erase(iter - 1, iter + 2);
                 if (iter == tokens.end())
                 {
@@ -858,22 +843,22 @@ public:
             {
                 if (includeTag.tokens.empty())
                 {
-//TODO:                    log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE, cld::Message::after,
-//                                             includeTag.includeToken, {cld::InsertAfter(includeTag.includeToken)})});
+                    log(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE.args(*includeTag.includeToken, *this,
+                                                                                *includeTag.includeToken));
                 }
                 else
                 {
-//TODO:                    log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE,
-//                                             includeTag.includeToken, includeTag.tokens.end(),
-//                                             {cld::Underline(includeTag.tokens.begin(), includeTag.tokens.end())})});
+                    log(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE_2.args(
+                        *includeTag.includeToken, *this,
+                        std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
                 }
                 return;
             }
             if (result[0].getTokenType() != cld::Lexer::TokenType::LessThan
                 && result[0].getTokenType() != cld::Lexer::TokenType::StringLiteral)
             {
-//TODO:                log({cld::Message::error(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE, includeTag.includeToken,
-//                                         &result.back() + 1, {cld::Underline(&result.front(), &result.back() + 1)})});
+                log(cld::Errors::PP::EXPECTED_A_FILENAME_AFTER_INCLUDE_2.args(
+                    *includeTag.includeToken, *this, std::forward_as_tuple(result.front(), result.back())));
                 return;
             }
             if (result[0].getTokenType() == cld::Lexer::TokenType::StringLiteral)
@@ -881,9 +866,8 @@ public:
                 isQuoted = true;
                 if (result.size() != 0)
                 {
-//TODO:                    log({cld::Message::error(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE, includeTag.includeToken,
-//                                             &result.back() + 1,
-//                                             {cld::Underline(&result.front() + 1, &result.back() + 1)})});
+                    log(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE.args(
+                        *includeTag.includeToken, *this, std::forward_as_tuple(result[1], result.back())));
                 }
                 path = result[0].getValue();
             }
@@ -900,15 +884,13 @@ public:
                 }
                 if (iter == result.end())
                 {
-//TODO:                    log({cld::Message::error(
-//                        cld::Errors::Lexer::UNTERMINATED_N.args(cld::Errors::Lexer::INCLUDE_DIRECTIVE),
-//                        includeTag.includeToken, &result.back() + 1,
-//                        {cld::Underline(&result.front(), &result.back() + 1)})});
+                    log(cld::Errors::Lexer::UNTERMINATED_INCLUDE_DIRECTIVE.args(
+                        *includeTag.includeToken, *this, std::forward_as_tuple(result.front(), result.back())));
                 }
                 else if (iter + 1 != result.end())
                 {
-//TODO:                    log({cld::Message::error(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE, includeTag.includeToken,
-//                                             &result.back() + 1, {cld::Underline(&*iter + 1, &result.back() + 1)})});
+                    log(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE.args(
+                        *includeTag.includeToken, *this, std::forward_as_tuple(result[1], result.back())));
                 }
             }
         }
@@ -1002,9 +984,7 @@ public:
         if (std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
                         [name](std::string_view value) { return value == name; }))
         {
-//TODO:            log({cld::Message::error(
-//                cld::Errors::PP::UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + cld::to_string(name) + '\''),
-//                undef, {cld::Underline(undef)})});
+            log(cld::Errors::PP::UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*undef, *this, *undef));
             return;
         }
         m_defines.erase(name);
@@ -1025,8 +1005,7 @@ public:
                                             });
             if (iter != defineDirective.replacement.end())
             {
-//TODO:                log({cld::Message::error(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, iter,
-//                                         {cld::Underline(iter)})});
+                log(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST.args(*iter, *this, *iter));
                 errors = true;
             }
         }
@@ -1047,8 +1026,7 @@ public:
                                          })
                             && (!defineDirective.hasEllipse || iter->getValue() != "__VA_ARGS__")))
                     {
-//TODO:                        log({cld::Message::error(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND, iter,
-//                                                 {cld::PointAt(iter - 1), cld::Underline(iter)})});
+                        log(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND.args(*iter, *this, *(iter - 1), *iter));
                         errors = true;
                     }
                 }
@@ -1058,34 +1036,31 @@ public:
         {
             if (defineDirective.replacement.front().getTokenType() == cld::Lexer::TokenType::DoublePound)
             {
-//TODO:                log({cld::Message::error(
-//                    cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST,
-//                    &defineDirective.replacement.front(), {cld::Underline(&defineDirective.replacement.front())})});
+                log(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST.args(
+                    defineDirective.replacement.front(), *this, defineDirective.replacement.front()));
                 errors = true;
             }
             if (defineDirective.replacement.size() > 1
                 && defineDirective.replacement.back().getTokenType() == cld::Lexer::TokenType::DoublePound)
             {
-//TODO:                log({cld::Message::error(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST,
-//                                         &defineDirective.replacement.back(),
-//                                         {cld::Underline(&defineDirective.replacement.back())})});
+                log(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST.args(
+                    defineDirective.replacement.back(), *this, defineDirective.replacement.back()));
                 errors = true;
             }
         }
         auto name = defineDirective.identifierPos->getValue();
         if (name == "defined")
         {
-//TODO:            log({cld::Message::error(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME,
-//                                     defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
+            log(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME.args(*defineDirective.identifierPos, *this,
+                                                                           *defineDirective.identifierPos));
             errors = true;
         }
         if (!m_visitingScratchPad
             && std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
                            [name](std::string_view value) { return value == name; }))
         {
-//TODO:            log({cld::Message::error(
-//                cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args('\'' + cld::to_string(name) + '\''),
-//                defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)})});
+            log(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*defineDirective.identifierPos, *this,
+                                                                              *defineDirective.identifierPos));
             errors = true;
         }
         if (errors)
@@ -1104,16 +1079,20 @@ public:
         }
         if (equal(defineDirective, result->second))
         {
-//TODO:            log({cld::Message::warning(cld::Warnings::PP::N_REDEFINED.args('\'' + cld::to_string(name) + '\''),
-//                                       defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)}),
-//                 cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
-//                                    {cld::Underline(result->second.identifierPos)})});
+            log(cld::Warnings::PP::N_REDEFINED.args(*defineDirective.identifierPos, *this,
+                                                    *defineDirective.identifierPos));
+            if (getLanguageOptions().disabledWarnings.count(cld::to_string(cld::Warnings::PP::N_REDEFINED.getName()))
+                == 0)
+            {
+                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*defineDirective.identifierPos, *this,
+                                                              *defineDirective.identifierPos));
+            }
             return;
         }
-//TODO:        log({cld::Message::error(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args('\'' + cld::to_string(name) + '\''),
-//                                 defineDirective.identifierPos, {cld::Underline(defineDirective.identifierPos)}),
-//             cld::Message::note(cld::Notes::PREVIOUSLY_DECLARED_HERE, result->second.identifierPos,
-//                                {cld::Underline(result->second.identifierPos)})});
+        log(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args(*defineDirective.identifierPos, *this,
+                                                          *defineDirective.identifierPos));
+        log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*defineDirective.identifierPos, *this,
+                                                      *defineDirective.identifierPos));
     }
 };
 } // namespace

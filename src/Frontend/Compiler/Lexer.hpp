@@ -385,12 +385,30 @@ inline std::string inArg(Lexer::TokenType arg, const SourceInterface&)
 
 inline std::string inFormat(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
 {
-    return "'" + Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface)) + "'";
+    auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+    for (std::size_t i = 0; i < spelling.size(); i++)
+    {
+        if (spelling[i] != '\n')
+        {
+            continue;
+        }
+        spelling.replace(i, 1, "\\n");
+    }
+    return "'" + spelling + "'";
 }
 
 inline std::string inArg(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
 {
-    return Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+    auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+    for (std::size_t i = 0; i < spelling.size(); i++)
+    {
+        if (spelling[i] != '\n')
+        {
+            continue;
+        }
+        spelling.replace(i, 1, "\\n");
+    }
+    return spelling;
 }
 } // namespace StringConverters
 

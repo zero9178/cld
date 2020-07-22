@@ -390,7 +390,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n#else\n#endif", ProducesNothing());
         treeProduces("#if 0\n#elif 1\n#endif", ProducesNothing());
     }
-    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "#endif") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
+    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "'#endif'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
     treeProduces("#if 0\n#else\n#else\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "'#endif'", "'#else'")
                                               && ProducesNote(TO_MATCH_N_HERE, "'if'"));
 }

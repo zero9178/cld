@@ -165,32 +165,33 @@ TEST_CASE("PP Define", "[PP]")
 {
     SECTION("6.10.3.2 Duplicates")
     {
-        PP_OUTPUTS_WITH("#define macroName\n#define macroName",
+        PP_OUTPUTS_WITH("#define macroName\n#define macroName\n",
                         ProducesWarning(N_REDEFINED, "'macroName'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName()\n#define macroName()",
+        PP_OUTPUTS_WITH("#define macroName()\n#define macroName()\n",
                         ProducesWarning(N_REDEFINED, "'macroName'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName(a)\n#define macroName(a)",
+        PP_OUTPUTS_WITH("#define macroName(a)\n#define macroName(a)\n",
                         ProducesWarning(N_REDEFINED, "'macroName'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName(...)\n#define macroName(...)",
+        PP_OUTPUTS_WITH("#define macroName(...)\n#define macroName(...)\n",
                         ProducesWarning(N_REDEFINED, "'macroName'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName ad\n#define macroName ad",
+        PP_OUTPUTS_WITH("#define macroName ad\n#define macroName ad\n",
                         ProducesWarning(N_REDEFINED, "'macroName'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName ad\n#define macroName a",
+        PP_OUTPUTS_WITH("#define macroName ad\n#define macroName a\n",
                         ProducesError(REDEFINITION_OF_MACRO_N, "'macroName'")
                             && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName()\n#define macroName", ProducesError(REDEFINITION_OF_MACRO_N, "'macroName'")
-                                                                      && ProducesNote(PREVIOUSLY_DECLARED_HERE));
-        PP_OUTPUTS_WITH("#define macroName(...)\n#define macroName()",
+        PP_OUTPUTS_WITH("#define macroName()\n#define macroName\n",
+                        ProducesError(REDEFINITION_OF_MACRO_N, "'macroName'")
+                            && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+        PP_OUTPUTS_WITH("#define macroName(...)\n#define macroName()\n",
                         ProducesError(REDEFINITION_OF_MACRO_N, "'macroName'")
                             && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     }
     SECTION("6.10.3.5 __VA_ARGS__ not allowed")
     {
-        PP_OUTPUTS_WITH("#define macroName __VA_ARGS__", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
-        PP_OUTPUTS_WITH("#define macroName() __VA_ARGS__", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
-        PP_OUTPUTS_WITH("#define macroName(a) __VA_ARGS__", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
-        PP_OUTPUTS_WITH("#define macroName(...) __VA_ARGS__", ProducesNothing());
-        PP_OUTPUTS_WITH("#define macroName(a,...) __VA_ARGS__", ProducesNothing());
+        PP_OUTPUTS_WITH("#define macroName __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
+        PP_OUTPUTS_WITH("#define macroName() __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
+        PP_OUTPUTS_WITH("#define macroName(a) __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
+        PP_OUTPUTS_WITH("#define macroName(...) __VA_ARGS__\n", ProducesNothing());
+        PP_OUTPUTS_WITH("#define macroName(a,...) __VA_ARGS__\n", ProducesNothing());
     }
     SECTION("6.10.8.4 Defining builtin macros")
     {
@@ -205,7 +206,7 @@ TEST_CASE("PP Define", "[PP]")
             DYNAMIC_SECTION(iter)
             {
                 PP_OUTPUTS_WITH(
-                    "#define " + cld::to_string(iter),
+                    "#define " + cld::to_string(iter) + "\n",
                     ProducesError(DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, '\'' + cld::to_string(iter) + '\''));
             }
         }
@@ -223,20 +224,20 @@ TEST_CASE("PP Define", "[PP]")
             DYNAMIC_SECTION(iter)
             {
                 PP_OUTPUTS_WITH(
-                    "#undef " + cld::to_string(iter),
+                    "#undef " + cld::to_string(iter) + "\n",
                     ProducesError(UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, '\'' + cld::to_string(iter) + '\''));
             }
         }
     }
-    PP_OUTPUTS_WITH("#define defined", ProducesError(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME));
-    PP_OUTPUTS_WITH("#define A(x) # a x", ProducesError(EXPECTED_AN_ARGUMENT_AFTER_POUND));
-    PP_OUTPUTS_WITH("#define A # a x", ProducesNothing());
-    PP_OUTPUTS_WITH("#define A(x) ## x",
+    PP_OUTPUTS_WITH("#define defined\n", ProducesError(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME));
+    PP_OUTPUTS_WITH("#define A(x) # a x\n", ProducesError(EXPECTED_AN_ARGUMENT_AFTER_POUND));
+    PP_OUTPUTS_WITH("#define A # a x\n", ProducesNothing());
+    PP_OUTPUTS_WITH("#define A(x) ## x\n",
                     ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST));
-    PP_OUTPUTS_WITH("#define A ## x",
+    PP_OUTPUTS_WITH("#define A ## x\n",
                     ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST));
-    PP_OUTPUTS_WITH("#define A(x) x ##", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
-    PP_OUTPUTS_WITH("#define A x ##", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
+    PP_OUTPUTS_WITH("#define A(x) x ##\n", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
+    PP_OUTPUTS_WITH("#define A x ##\n", ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST));
 }
 
 namespace
@@ -253,7 +254,7 @@ TEST_CASE("PP Object like Macros", "[PP]")
 {
     SECTION("Normal")
     {
-        auto ret = preprocessResult("#define FUNC (1 + 3)\nint main(void) {\n    return FUNC;\n}\n");
+        auto ret = preprocessResult("#define FUNC (1 + 3)\nint main(void) {\n    return FUNC;\n}");
         CHECK_THAT(ret, ProducesPP("int main(void) {\n    return (1 + 3);\n}"));
         REQUIRE(ret.data().size() == 17);
         CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 6, 0));
@@ -436,25 +437,28 @@ TEST_CASE("PP Function like Macros", "[PP]")
     {
         PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(5);",
-                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "\"max\"", 2, 1));
+                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "'max'", 2, 1));
         PP_OUTPUTS_WITH("#define max(a, b,...) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(5);",
-                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N, "\"max\"", 2, 1));
+                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N, "'max'", 2, 1));
         PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(5,7,10);",
-                        ProducesError(TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "\"max\"", 2, 3));
+                        ProducesError(TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "'max'", 2, 3));
     }
     SECTION("No closing )")
     {
         PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(5",
-                        ProducesError(cld::Errors::Parser::EXPECTED_N, "1 ')'"));
+                        ProducesError(cld::Errors::Parser::EXPECTED_N, "')'")
+                            && ProducesNote(cld::Notes::TO_MATCH_N_HERE, "'('"));
         PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max((5,",
-                        ProducesError(cld::Errors::Parser::EXPECTED_N, "2 ')'"));
+                        ProducesError(cld::Errors::Parser::EXPECTED_N, "')'")
+                            && ProducesNote(cld::Notes::TO_MATCH_N_HERE, "'('"));
         PP_OUTPUTS_WITH("#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max((5,)",
-                        ProducesError(cld::Errors::Parser::EXPECTED_N, "1 ')'"));
+                        ProducesError(cld::Errors::Parser::EXPECTED_N, "')'")
+                            && ProducesNote(cld::Notes::TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Must be a call")
     {
@@ -502,7 +506,7 @@ TEST_CASE("PP Function like Macros", "[PP]")
         PP_OUTPUTS_WITH("#define VALUE 5,7\n"
                         "#define max(a, b) ((a) > (b) ? (a) : (b))\n"
                         "int i = max(VALUE);",
-                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "\"max\"", 2, 1));
+                        ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "'max'", 2, 1));
     }
     SECTION("Empty result")
     {
@@ -682,7 +686,7 @@ TEST_CASE("PP Operator ##", "[PP]")
         PP_OUTPUTS_WITH("#define concat(x,y) x ## y\n"
                         "concat(.,foo)",
                         ProducesWarning(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB)
-                            && ProducesNote(WHEN_CONCATENATING_N_AND_N, ".", "foo"));
+                            && ProducesNote(WHEN_CONCATENATING_N_AND_N, "'.'", "", "'foo'"));
     }
     SECTION("Placemarkers")
     {
@@ -931,21 +935,21 @@ TEST_CASE("PP includes", "[PP]")
     SECTION("Simple") {}
     SECTION("Empty")
     {
-        PP_OUTPUTS_WITH("#include", ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));
+        PP_OUTPUTS_WITH("#include\n", ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));
     }
     SECTION("Computed")
     {
         PP_OUTPUTS_WITH("#define EMPTY()\n"
-                        "#include EMPTY()",
+                        "#include EMPTY()\n",
                         ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));
-//TODO:        PP_OUTPUTS_WITH("#define MACRO <TEST\n"
-//                        "#include MACRO",
-//                        ProducesError(cld::Errors::Lexer::UNTERMINATED_N,cld::Errors::Lexer::INCLUDE_DIRECTIVE));
+        PP_OUTPUTS_WITH("#define MACRO <TEST\n"
+                        "#include MACRO\n",
+                        ProducesError(cld::Errors::Lexer::UNTERMINATED_INCLUDE_DIRECTIVE));
         PP_OUTPUTS_WITH("#define MACRO <TEST> w\n"
-                        "#include MACRO",
+                        "#include MACRO\n",
                         ProducesError(EXTRA_TOKENS_AFTER_INCLUDE));
         PP_OUTPUTS_WITH("#define MACRO \"TEST\" w\n"
-                        "#include MACRO",
+                        "#include MACRO\n",
                         ProducesError(EXTRA_TOKENS_AFTER_INCLUDE));
     }
 }

@@ -415,8 +415,8 @@ cld::PP::IfSection cld::PP::parseIfSection(Lexer::PPTokenIterator& begin, Lexer:
     {
         if (begin == end)
         {
-            context.log(
-                Errors::Parser::EXPECTED_N.args(*(begin - 1), context.getSourceInterface(), "#endif", *(begin - 1)));
+            context.log(Errors::Parser::EXPECTED_N_2.args(*(begin - 1), context.getSourceInterface(), "'#endif'",
+                                                          *(begin - 1), "#endif"));
         }
         else if (begin->getTokenType() == Lexer::TokenType::Pound && begin + 1 != end)
         {

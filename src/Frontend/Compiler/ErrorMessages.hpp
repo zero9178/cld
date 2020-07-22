@@ -40,6 +40,8 @@ namespace Parser
 {
 CREATE_ERROR(EXPECTED_N, "Expected %0", InsertAfter<1, 0>);
 
+CREATE_ERROR(EXPECTED_N_2, "Expected %0", InsertAfter<1, 2>);
+
 CREATE_ERROR(EXPECTED_N_BEFORE_N, "Expected %0 before %1");
 
 CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected %0 after %1", InsertAfter<2, 0>);
@@ -220,36 +222,39 @@ CREATE_ERROR(REDEFINITION_OF_MACRO_PARAMETER_N, "Redefinition of macro parameter
 CREATE_ERROR(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION, "Whitespace required after object macro definition",
              Underline<0>);
 
-CREATE_ERROR(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME, "'defined' cannot be used as macro name");
+CREATE_ERROR(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME, "'defined' cannot be used as macro name", Underline<0>);
 
-CREATE_ERROR(REDEFINITION_OF_MACRO_N, "Redefinition of macro {}");
+CREATE_ERROR(REDEFINITION_OF_MACRO_N, "Redefinition of macro %0", Underline<0>);
 
-CREATE_ERROR(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, "__VA_ARGS__ not allowed in replacement list");
+CREATE_ERROR(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST, "__VA_ARGS__ not allowed in replacement list", Underline<0>);
 
-CREATE_ERROR(DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, "Defining builtin macro {} is not allowed");
+CREATE_ERROR(DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, "Defining builtin macro %0 is not allowed", Underline<0>);
 
-CREATE_ERROR(UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, "Undefining builtin macro {} is not allowed");
+CREATE_ERROR(UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED, "Undefining builtin macro %0 is not allowed", Underline<0>);
 
-CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N,
-             "Not enough arguments for macro {}. Expected {} got {}");
+CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "Not enough arguments for macro %0. Expected %1 got %2",
+             Underline<0>);
 
 CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_MACRO_N_EXPECTED_AT_LEAST_N_GOT_N,
-             "Not enough arguments for macro {}. Expected at least {} got {}");
+             "Not enough arguments for macro %0. Expected at least %1 got %2", Underline<0>);
 
-CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "Too many arguments for macro {}. Expected {} got {}");
+CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N, "Too many arguments for macro %0. Expected %1 got %2",
+             Underline<0>, PointAt<3>);
 
 CREATE_ERROR(EXPECTED_AN_ARGUMENT_AFTER_POUND,
-             "Expected an argument after '#' in replacement list of function like macro");
+             "Expected an argument after '#' in replacement list of function like macro", PointAt<0>, Underline<1>);
 
 CREATE_ERROR(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST,
-             "Operator '##' not allowed at beginning of replacement list");
+             "Operator '##' not allowed at beginning of replacement list", Underline<0>);
 
 CREATE_ERROR(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST,
-             "Operator '##' not allowed at end of replacement list");
+             "Operator '##' not allowed at end of replacement list", Underline<0>);
 
-CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE, "Expected a <FILENAME> or \"FILENAME\" after #include");
+CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE, "Expected a <FILENAME> or \"FILENAME\" after #include", InsertAfter<0>);
 
-CREATE_ERROR(EXTRA_TOKENS_AFTER_INCLUDE, "Extra tokens after #include");
+CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE_2, "Expected a <FILENAME> or \"FILENAME\" after #include", Underline<0>);
+
+CREATE_ERROR(EXTRA_TOKENS_AFTER_INCLUDE, "Extra tokens after '#include'", Underline<0>);
 } // namespace PP
 } // namespace Errors
 
@@ -265,10 +270,11 @@ CREATE_WARNING(DISCARDING_ALL_BUT_FIRST_CHARACTER, "multichar", "Discarding all 
 } // namespace Lexer
 namespace PP
 {
-CREATE_WARNING(N_REDEFINED, "macro-redefined", "{} redefined");
+CREATE_WARNING(N_REDEFINED, "macro-redefined", "%0 redefined", Underline<0>);
 
 CREATE_WARNING(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB, "token-concat",
-               "Token concatenation resulting in an invalid token is undefined behaviour");
+               "Token concatenation resulting in an invalid token is undefined behaviour", Underline<0>, PointAt<1>,
+               Underline<2>);
 } // namespace PP
 } // namespace Warnings
 
@@ -286,7 +292,7 @@ CREATE_NOTE(PREVIOUS_STORAGE_SPECIFIER_HERE, "Previous storage specifier encount
 
 namespace PP
 {
-CREATE_NOTE(WHEN_CONCATENATING_N_AND_N, "When concatenating '{}' and '{}'");
+CREATE_NOTE(WHEN_CONCATENATING_N_AND_N, "When concatenating %0 and %2", Underline<0>, PointAt<1>, Underline<2>);
 } // namespace PP
 } // namespace Notes
 } // namespace cld

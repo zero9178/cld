@@ -523,6 +523,11 @@ public:
 
     constexpr static auto constraints = getConstraints();
 
+    std::string_view getName() const
+    {
+        return m_name;
+    }
+
 private:
     constexpr static auto modifiers = getModifiers(std::index_sequence_for<Mods...>{});
 
