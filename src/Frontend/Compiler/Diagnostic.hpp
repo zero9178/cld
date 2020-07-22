@@ -179,14 +179,16 @@ protected:
     struct Argument
     {
         std::optional<std::pair<PointLocation, PointLocation>> range;
-        std::optional<std::string> text;
-        std::optional<std::uint64_t> integral;
+        std::optional<std::string> inFormatText;
+        std::optional<std::string> inArgText;
         std::unordered_map<std::u32string_view, std::string> customModifiers;
     };
 
     Message print(std::pair<PointLocation, PointLocation> location, std::string_view message,
                   llvm::MutableArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
                   const SourceInterface& sourceInterface) const;
+
+    static std::string stringFromToken(const SourceInterface& sourceInterface, const Lexer::TokenBase& token);
 
 public:
     constexpr DiagnosticBase(Severity severity) : m_severity(severity) {}
@@ -282,7 +284,6 @@ public:
     {
         LocationConstraint = 0b1,
         StringConstraint = 0b10,
-        IntegerConstraint = 0b100,
         CustomConstraint = 0b1000,
     };
 
@@ -292,22 +293,7 @@ private:
     template <std::size_t... ints>
     constexpr static std::array<Modifiers, sizeof...(Mods)> getModifiers(std::index_sequence<ints...>);
 
-    template <class T>
-    static std::string getString(const T& arg)
-    {
-        return to_string(arg);
-    }
-
     // TODO: Replace all those things with Concepts once the Codebase is C++20
-    template <class T, class = void>
-    struct StringConstraintCheck : std::false_type
-    {
-    };
-
-    template <class T>
-    struct StringConstraintCheck<T, std::void_t<decltype(getString(std::declval<std::decay_t<T>>()))>> : std::true_type
-    {
-    };
 
     template <class T>
     constexpr static bool locationConstraintCheck()
@@ -347,13 +333,25 @@ private:
         }
     }
 
+    template <class T, class = void>
+    struct HasStringConverters : std::false_type
+    {
+    };
+
+    template <class T>
+    struct HasStringConverters<
+        T, std::void_t<decltype(
+               diag::StringConverters::inFormat(std::declval<T>(), std::declval<const SourceInterface&>()),
+               diag::StringConverters::inArg(std::declval<T>(), std::declval<const SourceInterface&>()))>>
+        : std::true_type
+    {
+    };
+
     template <std::size_t argumentIndex, std::underlying_type_t<Constraint> constraint, class T>
     struct ConstraintCheck
     {
-        static_assert(!(constraint & StringConstraint) || StringConstraintCheck<T>{},
+        static_assert(!(constraint & StringConstraint) || HasStringConverters<std::decay_t<T>>{},
                       "Argument must be convertible to string");
-        static_assert(!(constraint & IntegerConstraint) || std::is_convertible_v<T, std::int64_t>,
-                      "Argument must be an integer type");
         static_assert(!(constraint & LocationConstraint) || locationConstraintCheck<T>(),
                       "Argument must denote a location range");
     };
@@ -434,7 +432,8 @@ private:
     }
 
     template <class Tuple, std::size_t... ints>
-    static std::array<Argument, N> createArgumentArray(Tuple&& args, std::index_sequence<ints...>);
+    static std::array<Argument, N> createArgumentArray(const SourceInterface& sourceInterface, Tuple&& args,
+                                                       std::index_sequence<ints...>);
 
     std::string_view m_name;
 
@@ -456,7 +455,7 @@ private:
                 text.remove_prefix(end - text.begin());
                 auto index = result.template get<2>().view().back() - '0';
                 auto mods = result.template get<1>().view();
-                if (index != i || mods.empty() || mods == U"s")
+                if (index != i || mods.empty())
                 {
                     continue;
                 }
@@ -473,7 +472,7 @@ private:
             text.remove_prefix(end - text.begin());
             auto index = search.template get<2>().view().back() - '0';
             auto mods = search.template get<1>().view();
-            if (index != i || mods.empty() || mods == U"s")
+            if (index != i || mods.empty())
             {
                 continue;
             }
@@ -495,13 +494,13 @@ private:
         result[i1].customModifiers[std::get<i1>(allFormatModifiers)[i2]] = std::apply(
             [&args](auto... chars) -> std::string {
                 static_assert(
-                    IsTypeCompleteV<diag::CustomModifier<decltype(chars)::value...>>,
+                    IsTypeCompleteV<diag::CustomFormat<decltype(chars)::value...>>,
                     "No template specialization of cld::diag::CustomModifier exists for a given format modifier");
                 static_assert(
-                    std::is_invocable_r_v<std::string, diag::CustomModifier<decltype(chars)::value...>,
+                    std::is_invocable_r_v<std::string, diag::CustomFormat<decltype(chars)::value...>,
                                           std::tuple_element_t<i1, Tuple>>,
                     "No operator() found in cld::diag::CustomModifier for the given arg that returns a type convertible to std::string");
-                return diag::CustomModifier<decltype(chars)::value...>{}(std::get<i1>(args));
+                return diag::CustomFormat<decltype(chars)::value...>{}(std::get<i1>(args));
             },
             tuple);
     }
@@ -566,8 +565,8 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
                                  reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
     (void)ret;
     CLD_ASSERT(ret == llvm::conversionOK);
-    auto array =
-        createArgumentArray(std::forward_as_tuple(std::forward<Args>(args)...), std::index_sequence_for<Args...>{});
+    auto array = createArgumentArray(sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
+                                     std::index_sequence_for<Args...>{});
     return print(getPointRange(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
                  modifiers, sourceInterface);
 }
@@ -585,10 +584,6 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
         if (mods.empty())
         {
             result[index] |= Constraint::StringConstraint;
-        }
-        else if (mods == U"s")
-        {
-            result[index] |= Constraint::IntegerConstraint;
         }
         else
         {
@@ -629,12 +624,12 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
 
 template <std::size_t N, auto& format, class... Mods>
 template <class Tuple, std::size_t... ints>
-auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::index_sequence<ints...>)
-    -> std::array<Argument, N>
+auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface& sourceInterface, Tuple&& args,
+                                                         std::index_sequence<ints...>) -> std::array<Argument, N>
 {
     std::array<Argument, N> result;
     (
-        [&result, &args](auto integer) {
+        [&result, &args, &sourceInterface](auto integer) {
             using IntegerTy = decltype(integer);
             static_assert(constraints[IntegerTy::value]);
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::LocationConstraint))
@@ -643,11 +638,10 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(Tuple&& args, std::inde
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::StringConstraint))
             {
-                result[IntegerTy::value].text = getString(std::get<IntegerTy::value>(args));
-            }
-            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::IntegerConstraint))
-            {
-                result[IntegerTy::value].integral = static_cast<std::int64_t>(std::get<IntegerTy::value>(args));
+                result[IntegerTy::value].inFormatText =
+                    diag::StringConverters::inFormat(std::get<IntegerTy::value>(args), sourceInterface);
+                result[IntegerTy::value].inArgText =
+                    diag::StringConverters::inArg(std::get<IntegerTy::value>(args), sourceInterface);
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
             {

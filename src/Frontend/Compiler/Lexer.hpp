@@ -357,15 +357,12 @@ std::string normalizeSpelling(std::string_view tokenSpelling);
 
 bool needsWhitespaceInBetween(TokenType left, TokenType right) noexcept;
 
-// std::string constructPP(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end);
-//
-// std::string constructPPTrimmed(const PPSourceObject& sourceObject, PPTokenIterator begin, PPTokenIterator end);
 } // namespace Lexer
 
 namespace diag
 {
 template <>
-struct CustomModifier<U't', U'o', U'k', U'e', U'n', U'T', U'y', U'p', U'e'>
+struct CustomFormat<U't', U'o', U'k', U'e', U'n', U'T', U'y', U'p', U'e'>
 {
     std::string operator()(const Lexer::TokenBase& token) const
     {
@@ -373,6 +370,30 @@ struct CustomModifier<U't', U'o', U'k', U'e', U'n', U'T', U'y', U'p', U'e'>
         return std::string(view.begin(), view.end());
     }
 };
+
+namespace StringConverters
+{
+inline std::string inFormat(Lexer::TokenType arg, const SourceInterface&)
+{
+    return cld::to_string(tokenName(arg));
+}
+
+inline std::string inArg(Lexer::TokenType arg, const SourceInterface&)
+{
+    return cld::to_string(tokenValue(arg));
+}
+
+inline std::string inFormat(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
+{
+    return "'" + Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface)) + "'";
+}
+
+inline std::string inArg(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
+{
+    return Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+}
+} // namespace StringConverters
+
 } // namespace diag
 
 } // namespace cld

@@ -282,16 +282,8 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
         message.remove_prefix(iter.view().data() + iter.view().size() - message.data());
         if (mods.empty())
         {
-            CLD_ASSERT(arguments[index].text);
-            ss << *arguments[index].text;
-        }
-        else if (mods == "s")
-        {
-            CLD_ASSERT(arguments[index].integral);
-            if (*arguments[index].integral != 1)
-            {
-                ss << 's';
-            }
+            CLD_ASSERT(arguments[index].inFormatText);
+            ss << *arguments[index].inFormatText;
         }
         else
         {
@@ -366,16 +358,17 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
                      [&arguments](const DiagnosticBase::InsertAfter& insertAfter) -> ModifierOfLine::variant {
                          if (insertAfter.text >= 0)
                          {
-                             CLD_ASSERT(arguments[insertAfter.text].text);
-                             return ModifierOfLine::InsertAfter{*arguments[insertAfter.text].text};
+                             CLD_ASSERT(arguments[insertAfter.text].inArgText);
+                             return ModifierOfLine::InsertAfter{*arguments[insertAfter.text].inArgText};
                          }
                          return ModifierOfLine::InsertAfter{};
                      },
                      [&arguments, index](const DiagnosticBase::Annotate& annotate) -> ModifierOfLine::variant {
-                         CLD_ASSERT(arguments[annotate.text].text);
+                         CLD_ASSERT(arguments[annotate.text].inArgText);
                          const auto begin = arguments[index].range->first.offset;
                          const auto end = arguments[index].range->second.offset;
-                         return ModifierOfLine::Annotate{*arguments[annotate.text].text, begin + (end - begin) / 2};
+                         return ModifierOfLine::Annotate{*arguments[annotate.text].inArgText,
+                                                         begin + (end - begin) / 2};
                      })});
         }
     }

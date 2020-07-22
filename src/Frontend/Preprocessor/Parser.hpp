@@ -24,7 +24,7 @@ public:
     Context(Context&&) = delete;
     Context& operator=(Context&&) = delete;
 
-    void log(std::vector<Message> messages);
+    void log(const Message& message);
 
     std::size_t getErrorCount() const;
 

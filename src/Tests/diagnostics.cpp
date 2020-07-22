@@ -65,8 +65,8 @@ cld::SourceInterface* interface;
     return ppsourceObject.data().data();
 }
 
-[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
-                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
+[[nodiscard, maybe_unused]] cld::Lexer::PPTokenIterator
+    pp(std::string_view code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);

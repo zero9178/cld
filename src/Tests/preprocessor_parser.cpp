@@ -90,7 +90,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            auto tree = treeProduces("#include <String>", ProducesNothing());
+            auto tree = treeProduces("#include <String>\n", ProducesNothing());
             REQUIRE(tree.groups.size() == 1);
             const auto& parts = tree.groups[0];
             REQUIRE(parts.groupPart.size() == 1);
@@ -105,15 +105,15 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#include", ProducesNothing());
+            treeProduces("#include\n", ProducesNothing());
         }
     }
     SECTION("Lines")
     {
         SECTION("Normal")
         {
-            treeProduces("#line 5", ProducesNothing());
-            auto ret = functionProduces(parseControlLine, "#line 5", 1, ProducesNothing());
+            treeProduces("#line 5\n", ProducesNothing());
+            auto ret = functionProduces(parseControlLine, "#line 5\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::LineTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::LineTag>(ret.variant);
             REQUIRE(include.tokens.size() == 1);
@@ -122,15 +122,15 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#line", ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'line'"));
+            treeProduces("#line\n", ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'line'"));
         }
     }
     SECTION("Errors")
     {
         SECTION("Normal")
         {
-            treeProduces("#error 5", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#error 5", 1, ProducesNothing());
+            treeProduces("#error 5\n", ProducesNothing());
+            const auto& ret = functionProduces(parseControlLine, "#error 5\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
             REQUIRE(include.tokens.size() == 1);
@@ -139,8 +139,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#error", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#error", 1, ProducesNothing());
+            treeProduces("#error\n", ProducesNothing());
+            const auto& ret = functionProduces(parseControlLine, "#error\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
             REQUIRE(include.tokens.size() == 0);
@@ -150,8 +150,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            treeProduces("#pragma 5", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#pragma 5", 1, ProducesNothing());
+            treeProduces("#pragma 5\n", ProducesNothing());
+            const auto& ret = functionProduces(parseControlLine, "#pragma 5\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
             REQUIRE(include.tokens.size() == 1);
@@ -160,8 +160,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#pragma", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#pragma", 1, ProducesNothing());
+            treeProduces("#pragma\n", ProducesNothing());
+            const auto& ret = functionProduces(parseControlLine, "#pragma\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
             CHECK(include.tokens.empty());
@@ -171,21 +171,21 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            treeProduces("#undef ID", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#undef ID", 1, ProducesNothing());
+            treeProduces("#undef ID\n", ProducesNothing());
+            const auto& ret = functionProduces(parseControlLine, "#undef ID\n", 1, ProducesNothing());
             REQUIRE(std::holds_alternative<cld::Lexer::PPTokenIterator>(ret.variant));
             const auto& iter = std::get<cld::Lexer::PPTokenIterator>(ret.variant);
             CHECK(iter->getValue() == "ID");
         }
         SECTION("Errors")
         {
-            treeProduces("#undef", ProducesError(EXPECTED_N, "identifier"));
-            treeProduces("#undef ID 5", ProducesError(EXPECTED_N, "newline"));
+            treeProduces("#undef\n", ProducesError(EXPECTED_N, "identifier"));
+            treeProduces("#undef ID 5\n", ProducesError(EXPECTED_N, "newline"));
         }
     }
     SECTION("define")
     {
-        treeProduces("#define ID", ProducesNothing());
+        treeProduces("#define ID\n", ProducesNothing());
     }
 }
 
@@ -193,19 +193,19 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
 {
     SECTION("Simple")
     {
-        auto ret = functionProduces(parseDefineDirective, "#define ID 5", 1, ProducesNothing());
+        auto ret = functionProduces(parseDefineDirective, "#define ID 5\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.argumentList);
         CHECK(ret.replacement.size() == 1);
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        ret = functionProduces(parseDefineDirective, "#define ID", 1, ProducesNothing());
+        ret = functionProduces(parseDefineDirective, "#define ID\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.argumentList);
-        functionProduces(parseDefineDirective, "#define 5", 1,
+        functionProduces(parseDefineDirective, "#define 5\n", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
-        functionProduces(parseDefineDirective, "#define", 1, ProducesError(EXPECTED_N, "identifier"));
-        ret = functionProduces(parseDefineDirective, "#define ID (a)", 1, ProducesNothing());
+        functionProduces(parseDefineDirective, "#define\n", 1, ProducesError(EXPECTED_N, "identifier"));
+        ret = functionProduces(parseDefineDirective, "#define ID (a)\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         CHECK(!ret.argumentList);
         CHECK(ret.replacement.size() == 3);
@@ -215,52 +215,52 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.replacement[1].getTokenType() == cld::Lexer::TokenType::Identifier);
         CHECK(ret.replacement[2].getRepresentation(sourceObject) == ")");
         CHECK(ret.replacement[2].getTokenType() == cld::Lexer::TokenType::CloseParentheses);
-        functionProduces(parseDefineDirective, "#define ID+", 1,
+        functionProduces(parseDefineDirective, "#define ID+\n", 1,
                          ProducesError(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION));
     }
     SECTION("Empty Identifier list")
     {
-        auto ret = functionProduces(parseDefineDirective, "#define ID()", 1, ProducesNothing());
+        auto ret = functionProduces(parseDefineDirective, "#define ID()\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         CHECK(ret.argumentList->empty());
         CHECK(ret.replacement.empty());
-        ret = functionProduces(parseDefineDirective, "#define ID() 5", 1, ProducesNothing());
+        ret = functionProduces(parseDefineDirective, "#define ID() 5\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         CHECK(ret.argumentList->empty());
         REQUIRE(ret.replacement.size() == 1);
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        functionProduces(parseDefineDirective, "#define ID(", 1,
+        functionProduces(parseDefineDirective, "#define ID(\n", 1,
                          ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Ellipse only")
     {
-        auto ret = functionProduces(parseDefineDirective, "#define ID(...)", 1, ProducesNothing());
+        auto ret = functionProduces(parseDefineDirective, "#define ID(...)\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
         REQUIRE(ret.argumentList);
         CHECK(ret.argumentList->size() == 1);
         CHECK(ret.replacement.empty());
-        ret = functionProduces(parseDefineDirective, "#define ID(...) 5", 1, ProducesNothing());
+        ret = functionProduces(parseDefineDirective, "#define ID(...) 5\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
         REQUIRE(ret.argumentList);
         CHECK(ret.argumentList->size() == 1);
         REQUIRE(ret.replacement.size() == 1);
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        functionProduces(parseDefineDirective, "#define ID(...", 1,
+        functionProduces(parseDefineDirective, "#define ID(...\n", 1,
                          ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Single Identifier list")
     {
-        auto ret = functionProduces(parseDefineDirective, "#define ID(a)", 1, ProducesNothing());
+        auto ret = functionProduces(parseDefineDirective, "#define ID(a)\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         REQUIRE(ret.argumentList->size() == 1);
         REQUIRE(ret.argumentList.value()[0].getValue() == "a");
         CHECK(ret.replacement.empty());
-        ret = functionProduces(parseDefineDirective, "#define ID(a) 5", 1, ProducesNothing());
+        ret = functionProduces(parseDefineDirective, "#define ID(a) 5\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         REQUIRE(ret.argumentList->size() == 1);
@@ -268,14 +268,14 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         REQUIRE(ret.replacement.size() == 1);
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
-        functionProduces(parseDefineDirective, "#define ID(5", 1,
+        functionProduces(parseDefineDirective, "#define ID(5\n", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
-        functionProduces(parseDefineDirective, "#define ID(a", 1,
+        functionProduces(parseDefineDirective, "#define ID(a\n", 1,
                          ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     }
     SECTION("Multiple identifiers")
     {
-        auto ret = functionProduces(parseDefineDirective, "#define ID(a,b,c)", 1, ProducesNothing());
+        auto ret = functionProduces(parseDefineDirective, "#define ID(a,b,c)\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
         REQUIRE(ret.argumentList->size() == 3);
@@ -283,10 +283,10 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.argumentList.value()[1].getValue() == "b");
         CHECK(ret.argumentList.value()[2].getValue() == "c");
         CHECK(ret.replacement.empty());
-        functionProduces(parseDefineDirective, "#define ID(a,)", 1,
+        functionProduces(parseDefineDirective, "#define ID(a,)\n", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "')'"));
-        functionProduces(parseDefineDirective, "#define ID(a,", 1, ProducesError(EXPECTED_N, "identifier"));
-        ret = functionProduces(parseDefineDirective, "#define ID(a,5) 5", 1,
+        functionProduces(parseDefineDirective, "#define ID(a,\n", 1, ProducesError(EXPECTED_N, "identifier"));
+        ret = functionProduces(parseDefineDirective, "#define ID(a,5) 5\n", 1,
                                ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
         CHECK(ret.hasEllipse == false);
         REQUIRE(ret.argumentList);
@@ -295,7 +295,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         REQUIRE(ret.replacement.size() == 1);
         CHECK(ret.replacement[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(ret.replacement[0].getRepresentation(sourceObject) == "5");
-        ret = functionProduces(parseDefineDirective, "#define ID(a,b,c,...)", 1, ProducesNothing());
+        ret = functionProduces(parseDefineDirective, "#define ID(a,b,c,...)\n", 1, ProducesNothing());
         CHECK(ret.hasEllipse == true);
         REQUIRE(ret.argumentList);
         REQUIRE(ret.argumentList->size() == 4);
@@ -303,7 +303,7 @@ TEST_CASE("Parse Preprocessor Define", "[PPParse]")
         CHECK(ret.argumentList.value()[1].getValue() == "b");
         CHECK(ret.argumentList.value()[2].getValue() == "c");
         CHECK(ret.replacement.empty());
-        functionProduces(parseDefineDirective, "#define ID(a,b,a)", 1,
+        functionProduces(parseDefineDirective, "#define ID(a,b,a)\n", 1,
                          ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N, "'a'")
                              && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     }
@@ -313,7 +313,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
 {
     SECTION("if")
     {
-        treeProduces("#if 0\n5\n#endif", ProducesNothing());
+        treeProduces("#if 0\n5\n#endif\n", ProducesNothing());
         auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNothing());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs));
@@ -321,22 +321,22 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "0");
-        functionProduces(parseIfGroup, "#if\n5", 1, ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'if'"));
+        functionProduces(parseIfGroup, "#if\n5\n", 1, ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'if'"));
     }
     SECTION("ifdef")
     {
-        treeProduces("#ifdef ID\n5\n#endif", ProducesNothing());
+        treeProduces("#ifdef ID\n5\n#endif\n", ProducesNothing());
         auto ret = functionProduces(parseIfGroup, "#ifdef ID\n5\n", 1, ProducesNothing());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ret.ifs));
         const auto& tokens = std::get<cld::PP::IfGroup::IfDefTag>(ret.ifs);
         CHECK(tokens.identifier == "ID");
         functionProduces(parseIfGroup, "#ifdef \n5", 1, ProducesError(EXPECTED_N, "identifier"));
-        functionProduces(parseIfGroup, "#ifdef ID 5 \n 5", 1, ProducesError(EXPECTED_N, "newline"));
+        functionProduces(parseIfGroup, "#ifdef ID 5 \n 5\n", 1, ProducesError(EXPECTED_N, "newline"));
     }
     SECTION("ifndef")
     {
-        treeProduces("#ifndef ID\n5\n#endif", ProducesNothing());
+        treeProduces("#ifndef ID\n5\n#endif\n", ProducesNothing());
         auto ret = functionProduces(parseIfGroup, "#ifndef ID\n5\n", 1, ProducesNothing());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(ret.ifs));
@@ -347,8 +347,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
     }
     SECTION("elif")
     {
-        treeProduces("#if 0\n#elif 1\n5\n#endif", ProducesNothing());
-        auto ret = functionProduces(parseIfSection, "#if 0\n#elif 1\n5\n#endif", 1, ProducesNothing());
+        treeProduces("#if 0\n#elif 1\n5\n#endif\n", ProducesNothing());
+        auto ret = functionProduces(parseIfSection, "#if 0\n#elif 1\n5\n#endif\n", 1, ProducesNothing());
         REQUIRE(ret.elifGroups.size() == 1);
         const auto& elif = ret.elifGroups[0];
         CHECK(elif.optionalGroup);
@@ -356,21 +356,21 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "1");
-        functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif", 1,
+        functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif\n", 1,
                          ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'elif'"));
     }
     SECTION("Else")
     {
-        auto ret = functionProduces(parseIfSection, "#if 0\n#else\n5\n#endif", 1, ProducesNothing());
+        auto ret = functionProduces(parseIfSection, "#if 0\n#else\n5\n#endif\n", 1, ProducesNothing());
         CHECK(ret.elifGroups.empty());
         REQUIRE(ret.optionalElseGroup);
         const auto& elseGroup = *ret.optionalElseGroup;
         CHECK(elseGroup.optionalGroup);
-        ret = functionProduces(parseIfSection, "#if 0\n#else\n#endif", 1, ProducesNothing());
+        ret = functionProduces(parseIfSection, "#if 0\n#else\n#endif\n", 1, ProducesNothing());
         CHECK(ret.elifGroups.empty());
         REQUIRE(ret.optionalElseGroup);
         CHECK(!ret.optionalElseGroup->optionalGroup);
-        functionProduces(parseIfSection, "#if 0\n#else 5\n#endif", 1,
+        functionProduces(parseIfSection, "#if 0\n#else 5\n#endif\n", 1,
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "newline", "'5'"));
     }
     SECTION("Nested")
@@ -390,7 +390,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n#else\n#endif", ProducesNothing());
         treeProduces("#if 0\n#elif 1\n#endif", ProducesNothing());
     }
-    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "'#endif'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
+    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "#endif") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
     treeProduces("#if 0\n#else\n#else\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "'#endif'", "'#else'")
                                               && ProducesNote(TO_MATCH_N_HERE, "'if'"));
 }

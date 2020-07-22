@@ -38,13 +38,15 @@ namespace Errors
 {
 namespace Parser
 {
-CREATE_ERROR(EXPECTED_N, "Expected %0", InsertAfter<0>);
+CREATE_ERROR(EXPECTED_N, "Expected %0", InsertAfter<1, 0>);
 
 CREATE_ERROR(EXPECTED_N_BEFORE_N, "Expected %0 before %1");
 
-CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected %0 after %1");
+CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected %0 after %1", InsertAfter<2, 0>);
 
-CREATE_ERROR(EXPECTED_N_INSTEAD_OF_N, "Expected %0 instead of %1");
+CREATE_ERROR(EXPECTED_N_INSTEAD_OF_N, "Expected %0 instead of %1", PointAt<1>);
+
+CREATE_ERROR(EXPECTED_N_INSTEAD_OF_N_2, "Expected %0 instead of %1", Underline<2>);
 
 CREATE_ERROR(MISSING_PARAMETER_NAME, "Parameter name omitted in function definition");
 
@@ -211,11 +213,12 @@ CREATE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal", Underli
 
 namespace PP
 {
-CREATE_ERROR(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "{} is an invalid preprocessor directive");
+CREATE_ERROR(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "%0 is an invalid preprocessor directive", Underline<1>);
 
-CREATE_ERROR(REDEFINITION_OF_MACRO_PARAMETER_N, "Redefinition of macro parameter {}");
+CREATE_ERROR(REDEFINITION_OF_MACRO_PARAMETER_N, "Redefinition of macro parameter %0", Underline<0>);
 
-CREATE_ERROR(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION, "Whitespace required after object macro definition");
+CREATE_ERROR(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION, "Whitespace required after object macro definition",
+             Underline<0>);
 
 CREATE_ERROR(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME, "'defined' cannot be used as macro name");
 
@@ -275,9 +278,9 @@ CREATE_NOTE(TYPEDEF_OVERSHADOWED_BY_DECLARATION, "{} is a typedef but overshadow
 
 CREATE_NOTE(IDENTIFIER_IS_TYPEDEF, "{} is a typename and not an identifier due to typedef declaration here:");
 
-CREATE_NOTE(TO_MATCH_N_HERE, "To match {} here:");
+CREATE_NOTE(TO_MATCH_N_HERE, "To match %0 here:", PointAt<0>);
 
-CREATE_NOTE(PREVIOUSLY_DECLARED_HERE, "Previously declared here:");
+CREATE_NOTE(PREVIOUSLY_DECLARED_HERE, "Previously declared here:", Underline<0>);
 
 CREATE_NOTE(PREVIOUS_STORAGE_SPECIFIER_HERE, "Previous storage specifier encountered here:");
 
