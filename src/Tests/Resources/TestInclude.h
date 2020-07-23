@@ -1,0 +1,2 @@
+
+#define MACRO 1

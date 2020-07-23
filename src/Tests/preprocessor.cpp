@@ -1,8 +1,11 @@
 #include "catch.hpp"
 
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Path.h>
+
+#include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/SourceObject.hpp>
-#include <Frontend/Common/Text.hpp>
 #include <Frontend/Preprocessor/Preprocessor.hpp>
 
 #include "TestConfig.hpp"
@@ -932,7 +935,29 @@ TEST_CASE("PP C Preprocessor tricks", "[PP]")
 
 TEST_CASE("PP includes", "[PP]")
 {
-    SECTION("Simple") {}
+    SECTION("Absolute path")
+    {
+        llvm::SmallString<50> thisFile(__FILE__);
+        llvm::sys::fs::make_absolute(thisFile);
+        llvm::sys::path::remove_filename(thisFile);
+        auto ret = preprocessResult(("#include \"" + thisFile
+                                     + "/Resources/TestInclude.h\"\n"
+                                       "MACRO\n")
+                                        .str());
+        CHECK_THAT(ret, ProducesPP("1"));
+    }
+    SECTION("File not found")
+    {
+        PP_OUTPUTS_WITH("#include \"hello\"\n", ProducesError(FILE_NOT_FOUND, "hello"));
+    }
+    SECTION("Could not open file")
+    {
+        llvm::SmallString<50> thisFile(__FILE__);
+        llvm::sys::fs::make_absolute(thisFile);
+        llvm::sys::path::remove_filename(thisFile);
+        PP_OUTPUTS_WITH(("#include \"" + thisFile + "/FileThatDoesNotExist\"\n").str(),
+                        ProducesError(COULD_NOT_OPEN_FILE, (thisFile + "/FileThatDoesNotExist").str()));
+    }
     SECTION("Empty")
     {
         PP_OUTPUTS_WITH("#include\n", ProducesError(EXPECTED_A_FILENAME_AFTER_INCLUDE));

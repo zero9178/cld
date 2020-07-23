@@ -899,77 +899,96 @@ public:
             isQuoted = includeTag.tokens[0].getRepresentation(*this)[0] == '"';
             path = includeTag.tokens[0].getValue();
         }
+
+        llvm::SmallString<50> result;
+
         std::vector<std::string> candidates;
         if (llvm::sys::path::is_absolute(path))
         {
-            candidates.push_back("");
+            result = path;
         }
-        llvm::SmallString<50> dir(m_files[m_currentFile].path);
-        llvm::sys::path::remove_filename(dir);
-        if (llvm::sys::fs::exists(dir))
+        else
         {
-            candidates.push_back(std::string(dir.begin(), dir.end()));
-        }
-        if (isQuoted)
-        {
-            candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
-                              m_options.includeQuoteDirectories.end());
-        }
-        candidates.insert(candidates.end(), m_options.includeDirectories.begin(), m_options.includeDirectories.end());
-        for (const auto& candidate : candidates)
-        {
-            llvm::SmallString<50> filename;
-            if (candidate.empty())
+            if (isQuoted)
             {
-                filename = path;
-            }
-            else if (candidate.back() == '/'
-#if _WIN32
-                     || candidate.back() == '\\'
-#endif
-            )
-            {
-                filename = candidate + path;
-            }
-            else
-            {
-                filename = candidate + '/' + path;
-            }
-            if (!llvm::sys::fs::exists(filename))
-            {
-                continue;
-            }
-            std::uint64_t size;
-            auto error = llvm::sys::fs::file_size(filename, size);
-            if (!error)
-            {
-                auto handle = llvm::sys::fs::openNativeFileForRead(filename);
-                if (handle)
+                llvm::SmallString<50> dir(m_files[m_currentFile].path);
+                llvm::sys::path::remove_filename(dir);
+                if (llvm::sys::fs::exists(dir))
                 {
-                    auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*handle); });
-                    llvm::sys::fs::mapped_file_region mapping(*handle, llvm::sys::fs::mapped_file_region::readonly,
-                                                              size, 0, error);
-                    if (!error)
+                    candidates.push_back(std::string(dir.begin(), dir.end()));
+                }
+                candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
+                                  m_options.includeQuoteDirectories.end());
+            }
+            candidates.insert(candidates.end(), m_options.includeDirectories.begin(),
+                              m_options.includeDirectories.end());
+            for (const auto& candidate : candidates)
+            {
+                llvm::SmallString<50> filename;
+                if (candidate.empty())
+                {
+                    filename = path;
+                }
+                else if (candidate.back() == '/'
+#if _WIN32
+                         || candidate.back() == '\\'
+#endif
+                )
+                {
+                    filename = candidate + path;
+                }
+                else
+                {
+                    filename = candidate + '/' + path;
+                }
+                if (!llvm::sys::fs::exists(filename))
+                {
+                    continue;
+                }
+                result = filename;
+            }
+        }
+        if (result.empty())
+        {
+            log(cld::Errors::PP::FILE_NOT_FOUND.args(
+                includeTag.tokens.front(), *this, path,
+                std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
+            return;
+        }
+
+        std::uint64_t size;
+        auto error = llvm::sys::fs::file_size(result, size);
+        if (!error)
+        {
+            auto handle = llvm::sys::fs::openNativeFileForRead(result);
+            if (handle)
+            {
+                auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*handle); });
+                llvm::sys::fs::mapped_file_region mapping(*handle, llvm::sys::fs::mapped_file_region::readonly, size, 0,
+                                                          error);
+                if (!error)
+                {
+                    std::string_view view(mapping.const_data(), mapping.size());
+                    llvm::sys::path::remove_dots(result, true);
+                    bool errors = false;
+                    auto newFile =
+                        cld::Lexer::tokenize(view, m_options, m_report, &errors, {result.data(), result.size()});
+                    if (errors)
                     {
-                        std::string_view view(mapping.const_data(), mapping.size());
-                        llvm::sys::path::remove_dots(filename, true);
-                        auto newFile = cld::Lexer::tokenize(view, m_options, m_report, &m_errorsOccured,
-                                                            {filename.data(), filename.size()});
-                        if (m_errorsOccured)
-                        {
-                            return;
-                        }
-                        llvm::sys::fs::closeFile(*handle);
-                        scopeExit.release();
-                        include(std::move(newFile));
+                        m_errorsOccured = true;
                         return;
                     }
+                    llvm::sys::fs::closeFile(*handle);
+                    scopeExit.release();
+                    include(std::move(newFile));
+                    return;
                 }
             }
-            // TODO: Error about failure to open
-            break;
         }
-        // TODO: Error about failure to find
+        log(cld::Errors::PP::COULD_NOT_OPEN_FILE.args(
+            includeTag.tokens.front(), *this, path,
+            std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
+        return;
     }
 
     void visit(const cld::PP::ControlLine::LineTag& lineTag) {}

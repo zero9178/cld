@@ -308,6 +308,10 @@ CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE, "Expected a <FILENAME> or \"FILE
 CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE_2, "Expected a <FILENAME> or \"FILENAME\" after #include", Underline<0>);
 
 CREATE_ERROR(EXTRA_TOKENS_AFTER_INCLUDE, "Extra tokens after '#include'", Underline<0>);
+
+CREATE_ERROR(FILE_NOT_FOUND, "'%0' file not found", Underline<1>);
+
+CREATE_ERROR(COULD_NOT_OPEN_FILE, "Could not open '%0'", Underline<1>);
 } // namespace PP
 } // namespace Errors
 
