@@ -14,39 +14,34 @@ namespace cld::Parser
 bool isAssignment(Lexer::TokenType type);
 
 template <class T>
-bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CTokenIterator end, Context& context,
-            T& value, std::vector<Message> additional = {})
+bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
+            T& value, std::optional<Message> additional = {})
 {
-    if (curr == end || curr->getTokenType() != expected)
+    if (begin == end || begin->getTokenType() != expected)
     {
-        if (curr == end)
+        if (begin == end)
         {
-            // TODO: context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
-            //                                        Message::after, end - 1, {InsertAfter(end - 1,
-            //                                        Lexer::tokenValue(expected))})});
+            context.log(
+                cld::Errors::Parser::EXPECTED_N.args(*(end - 1), context.getSourceObject(), expected, *(end - 1)));
         }
         else
         {
-            // TODO:            context.log(
-            //                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-            //                                    Lexer::tokenName(expected),
-            //                                    '\'' + to_string(curr->getRepresentation(context.getSourceObject())) +
-            //                                    '\''),
-            //                                curr, {PointAt(curr, curr + 1)})});
+            context.log(
+                cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceObject(), expected, *begin));
         }
-        context.log(std::move(additional));
+        if (additional)
+        {
+            context.log(*additional);
+        }
         return false;
     }
-    else
-    {
-        value = cld::get<T>(curr->getValue());
-        curr++;
-        return true;
-    }
+    value = cld::get<T>(begin->getValue());
+    begin++;
+    return true;
 }
 
-bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CTokenIterator end, Context& context,
-            std::vector<Message> additional = {});
+bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
+            std::optional<Message> additional = {});
 
 constexpr Context::TokenBitSet firstPostfixSet = Context::fromTokenTypes(
     cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::Dot, cld::Lexer::TokenType::OpenSquareBracket,

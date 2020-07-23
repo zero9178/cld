@@ -1,33 +1,28 @@
 #include "ParserUtil.hpp"
 
-bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& curr, Lexer::CTokenIterator end,
-                         Context& context, std::vector<Message> additional)
+bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                         Context& context, std::optional<Message> additional)
 {
-    if (curr == end || curr->getTokenType() != expected)
+    if (begin == end || begin->getTokenType() != expected)
     {
-        if (curr == end)
+        if (begin == end)
         {
-            // TODO: context.log({Message::error(cld::Errors::Parser::EXPECTED_N.args(Lexer::tokenName(expected)),
-            //                                        Message::after, end - 1, {InsertAfter(end - 1,
-            //                                        Lexer::tokenValue(expected))})});
+            context.log(cld::Errors::Parser::EXPECTED_N.args(diag::after(*(end - 1)), context.getSourceObject(),
+                                                             expected, *(end - 1)));
         }
         else
         {
-            // TODO:            context.log(
-            //                {Message::error(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
-            //                                    Lexer::tokenName(expected),
-            //                                    '\'' + to_string(curr->getRepresentation(context.getSourceObject())) +
-            //                                    '\''),
-            //                                curr, {PointAt(curr, curr + 1)})});
+            context.log(
+                cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceObject(), expected, *begin));
         }
-        context.log(std::move(additional));
+        if (additional)
+        {
+            context.log(*additional);
+        }
         return false;
     }
-    else
-    {
-        curr++;
-        return true;
-    }
+    begin++;
+    return true;
 }
 
 bool cld::Parser::isAssignment(Lexer::TokenType type)

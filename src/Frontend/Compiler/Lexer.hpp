@@ -364,53 +364,70 @@ namespace diag
 template <>
 struct CustomFormat<U't', U'o', U'k', U'e', U'n', U'T', U'y', U'p', U'e'>
 {
-    std::string operator()(const Lexer::TokenBase& token) const
+    template <class T>
+    std::string operator()(const T& token) const
     {
+        static_assert(std::is_base_of_v<Lexer::TokenBase, T>, "Argument to %tokenType must be a token class");
         auto view = Lexer::tokenName(token.getTokenType());
         return std::string(view.begin(), view.end());
     }
 };
 
-namespace StringConverters
+template <>
+struct StringConverter<Lexer::TokenType>
 {
-inline std::string inFormat(Lexer::TokenType arg, const SourceInterface&)
-{
-    return cld::to_string(tokenName(arg));
-}
-
-inline std::string inArg(Lexer::TokenType arg, const SourceInterface&)
-{
-    return cld::to_string(tokenValue(arg));
-}
-
-inline std::string inFormat(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
-{
-    auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
-    for (std::size_t i = 0; i < spelling.size(); i++)
+    static std::string inFormat(Lexer::TokenType arg, const SourceInterface&)
     {
-        if (spelling[i] != '\n')
-        {
-            continue;
-        }
-        spelling.replace(i, 1, "\\n");
+        return cld::to_string(tokenName(arg));
     }
-    return "'" + spelling + "'";
-}
 
-inline std::string inArg(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
-{
-    auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
-    for (std::size_t i = 0; i < spelling.size(); i++)
+    static std::string inArg(Lexer::TokenType arg, const SourceInterface&)
     {
-        if (spelling[i] != '\n')
-        {
-            continue;
-        }
-        spelling.replace(i, 1, "\\n");
+        return cld::to_string(tokenValue(arg));
     }
-    return spelling;
-}
-} // namespace StringConverters
+};
+
+template <>
+struct StringConverter<Lexer::TokenBase>
+{
+    static std::string inFormat(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
+    {
+        auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+        for (std::size_t i = 0; i < spelling.size(); i++)
+        {
+            if (spelling[i] != '\n')
+            {
+                continue;
+            }
+            spelling.replace(i, 1, "\\n");
+        }
+        return "'" + spelling + "'";
+    }
+
+    static std::string inArg(const Lexer::TokenBase& arg, const SourceInterface& sourceInterface)
+    {
+        auto spelling = Lexer::normalizeSpelling(arg.getRepresentation(sourceInterface));
+        for (std::size_t i = 0; i < spelling.size(); i++)
+        {
+            if (spelling[i] != '\n')
+            {
+                continue;
+            }
+            spelling.replace(i, 1, "\\n");
+        }
+        return spelling;
+    }
+};
+
+template <>
+struct StringConverter<Lexer::CToken> : StringConverter<Lexer::TokenBase>
+{
+};
+
+template <>
+struct StringConverter<Lexer::PPToken> : StringConverter<Lexer::TokenBase>
+{
+};
 
 } // namespace diag
 

@@ -3,7 +3,6 @@
 #include "Diagnostic.hpp"
 
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-const-variable"
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 
 // TODO: Use __VA_OPT__(,) in C++20
@@ -40,24 +39,60 @@ namespace Parser
 {
 CREATE_ERROR(EXPECTED_N, "Expected %0", InsertAfter<1, 0>);
 
-CREATE_ERROR(EXPECTED_N_2, "Expected %0", InsertAfter<1, 2>);
+CREATE_ERROR(EXPECTED_N_OR_N, "Expected %0 or %1", InsertAfter<2>);
 
-CREATE_ERROR(EXPECTED_N_BEFORE_N, "Expected %0 before %1");
+CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected %0 after %1", InsertAfter<1, 0>);
 
-CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected %0 after %1", InsertAfter<2, 0>);
+CREATE_ERROR(EXPECTED_N_OR_N_AFTER_N, "Expected %0 or %1 after %2", InsertAfter<2>);
 
 CREATE_ERROR(EXPECTED_N_INSTEAD_OF_N, "Expected %0 instead of %1", PointAt<1>);
 
-CREATE_ERROR(EXPECTED_N_INSTEAD_OF_N_2, "Expected %0 instead of %1", Underline<2>);
+CREATE_ERROR(EXPECTED_N_OR_N_INSTEAD_OF_N, "Expected %0 or %1 instead of %2", PointAt<2>);
 
-CREATE_ERROR(MISSING_PARAMETER_NAME, "Parameter name omitted in function definition");
+CREATE_ERROR(EXPECTED_LITERAL_N_OR_N, "Expected literal, %0 or %1", InsertAfter<2>);
 
-CREATE_ERROR(N_REQUIRES_AT_LEAST_ONE_N, "%0 requires at least one %1");
+CREATE_ERROR(EXPECTED_LITERAL_N_OR_N_INSTEAD_OF_N, "Expected literal, %0 or %1 instead of %2", PointAt<2>);
 
-CREATE_ERROR(MAXIMUM_N_DEPTH_OF_N_EXCEEDED, "Maximum %0 depth of %1 exceeded");
+CREATE_ERROR(EXPECTED_TYPENAME, "Expected typename", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_TYPENAME_INSTEAD_OF_N, "Expected typename instead of %0", PointAt<0>);
+
+CREATE_ERROR(EXPECTED_TYPENAME_BEFORE_N, "Expected typename before %0", PointAt<0>);
+
+CREATE_ERROR(EXPECTED_N_INSTEAD_OF_TYPENAME, "Expected %0 instead of typename", Underline<1>);
+
+CREATE_ERROR(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME, "Expected storage specifier or typename", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "Expected storage specifier or typename before %0",
+             PointAt<0>);
+
+CREATE_ERROR(EXPECTED_EXPRESSION, "Expected expression", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_EXPRESSION_OR_DECLARATION, "Expected expression or declaration", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_TOKENS_AFTER_N, "Expected tokens after %0", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_PARAMETER_AFTER_N, "Expected parameter after %0", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_ENDIF, "Expected '#endif'", InsertAfter<0, 1>);
+
+CREATE_ERROR(EXPECTED_ENDIF_INSTEAD_OF_N, "Expected 'endif' instead of %0", PointAt<0>);
+
+CREATE_ERROR(MISSING_PARAMETER_NAME, "Parameter name omitted in function definition", Underline<0>);
+
+CREATE_ERROR(UNION_REQUIRES_AT_LEAST_ONE_FIELD, "Union requires at least one field", Underline<0>);
+
+CREATE_ERROR(STRUCT_REQUIRES_AT_LEAST_ONE_FIELD, "Struct requires at least one field", Underline<0>);
+
+CREATE_ERROR(ENUM_REQUIRES_AT_LEAST_ONE_VALUE, "Enum requires at least one value", Underline<0>);
+
+CREATE_ERROR(PARAMETER_LIST_REQUIRES_AT_LEAST_ONE_PARAMETER, "Parameter list requires at least one parameter",
+             PointAt<0>);
+
+CREATE_ERROR(MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED, "Maximum bracket depth of %0 exceeded", PointAt<1>);
 } // namespace Parser
 
-CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0");
+CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0", Underline<0>);
 
 namespace Semantics
 {
@@ -280,9 +315,10 @@ CREATE_WARNING(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB, "token-c
 
 namespace Notes
 {
-CREATE_NOTE(TYPEDEF_OVERSHADOWED_BY_DECLARATION, "{} is a typedef but overshadowed by declaration here:");
+CREATE_NOTE(TYPEDEF_OVERSHADOWED_BY_DECLARATION, "%0 is a typedef but overshadowed by declaration here:", PointAt<0>);
 
-CREATE_NOTE(IDENTIFIER_IS_TYPEDEF, "{} is a typename and not an identifier due to typedef declaration here:");
+CREATE_NOTE(IDENTIFIER_IS_TYPEDEF,
+            "%0 is a typename and not an identifier due to typedef declaration here:", Underline<0>);
 
 CREATE_NOTE(TO_MATCH_N_HERE, "To match %0 here:", PointAt<0>);
 

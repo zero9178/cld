@@ -252,6 +252,11 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
 
 } // namespace
 
+auto cld::diag::after(const Lexer::TokenBase& token) -> std::tuple<const Lexer::TokenBase&, std::uint64_t>
+{
+    return std::make_tuple(std::cref(token), token.getOffset() + token.getLength());
+}
+
 cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLocation> location,
                                                 std::string_view message, llvm::MutableArrayRef<Argument> arguments,
                                                 llvm::ArrayRef<Modifiers> modifiers,

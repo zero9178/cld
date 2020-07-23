@@ -70,7 +70,7 @@ TEST_CASE("Parse external declaration", "[parser]")
     functionProduces(parseExternalDeclaration, "int;", ProducesNothing());
     functionProduces(parseExternalDeclaration, "int i", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "i{}",
-                     ProducesError(EXPECTED_N_BEFORE_N, "storage specifier or typename", "'i'") && ProducesNoNotes());
+                     ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "'i'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int i() int f;{}", ProducesNothing());
     functionProduces(parseExternalDeclaration, "int i(void) {}", ProducesNothing());
     functionProduces(parseExternalDeclaration, "int () int f;{}",
@@ -175,22 +175,22 @@ TEST_CASE("Parse Specifier Qualifiers", "[parser]")
 TEST_CASE("Parse structs and unions", "[parser]")
 {
     functionProduces(parseStructOrUnionSpecifier, "int",
-                     ProducesError(EXPECTED_N, "struct or union") && ProducesNoNotes());
+                     ProducesError(EXPECTED_N_OR_N_INSTEAD_OF_N, "'struct'", "'union'", "'int'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct",
-                     ProducesError(EXPECTED_N_AFTER_N, "identifier or '{'", "struct") && ProducesNoNotes());
+                     ProducesError(EXPECTED_N_OR_N_AFTER_N, "identifier", "'{'", "'struct'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "union",
-                     ProducesError(EXPECTED_N_AFTER_N, "identifier or '{'", "union") && ProducesNoNotes());
+                     ProducesError(EXPECTED_N_OR_N_AFTER_N, "identifier", "'{'", "'union'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "';'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i", ProducesNothing());
     functionProduces(parseStructOrUnionSpecifier, "union i", ProducesNothing());
     functionProduces(parseStructOrUnionSpecifier, "struct i {int foo, bar;int foobar;}", ProducesNothing());
     functionProduces(parseStructOrUnionSpecifier, "struct i{i;}",
-                     ProducesError(EXPECTED_N_BEFORE_N, "typename", "'i'") && ProducesNoNotes());
+                     ProducesError(EXPECTED_TYPENAME_BEFORE_N, "'i'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{}",
-                     ProducesError(N_REQUIRES_AT_LEAST_ONE_N, "struct", "field") && ProducesNoNotes());
+                     ProducesError(STRUCT_REQUIRES_AT_LEAST_ONE_FIELD) && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "union i{}",
-                     ProducesError(N_REQUIRES_AT_LEAST_ONE_N, "union", "field") && ProducesNoNotes());
+                     ProducesError(UNION_REQUIRES_AT_LEAST_ONE_FIELD) && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5;}", ProducesNothing());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int r:5;}", ProducesNothing());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5}",
@@ -208,19 +208,20 @@ TEST_CASE("Parse structs and unions", "[parser]")
 TEST_CASE("Parse enums", "[parser]")
 {
     functionProduces(parseEnumSpecifier, "enum",
-                     ProducesError(EXPECTED_N_AFTER_N, "identifier", "enum") && ProducesNoNotes());
+                     ProducesError(EXPECTED_N_AFTER_N, "identifier", "'enum'") && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "';'") && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum i", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum i{i}", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum {}",
-                     ProducesError(N_REQUIRES_AT_LEAST_ONE_N, "enum", "value") && ProducesNoNotes());
+                     ProducesError(ENUM_REQUIRES_AT_LEAST_ONE_VALUE) && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum i{test}", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum i{test = 5}", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum {test,}", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum {test,ft}", ProducesNothing());
     functionProduces(parseEnumSpecifier, "enum {test,ft,}", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum i{test = 5", ProducesError(EXPECTED_N, "'}'") && ProducesNoNotes());
+    functionProduces(parseEnumSpecifier, "enum i{test = 5",
+                     ProducesError(EXPECTED_N, "'}'") && ProducesNote(TO_MATCH_N_HERE, "'{'"));
     functionProduces(parseEnumSpecifier, "enum i{test ft}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "','", "'ft'") && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum {test,,ft}",
@@ -260,7 +261,7 @@ TEST_CASE("Parse Declarators and DirectDeclarators", "[parser]")
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     functionProduces(parseDeclarator, "foo(int,int[5])", ProducesNothing());
     functionProduces(parseDeclarator, "foo(int i,int f[5],)",
-                     ProducesError(EXPECTED_N_BEFORE_N, "storage specifier or typename", "')'") && ProducesNoNotes());
+                     ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "')'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "foo(i,f e)",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "','", "'e'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "foo(i,int)",
@@ -337,7 +338,7 @@ TEST_CASE("Parse Abstract Declarator and Direct Abstract Declarator", "[parser]"
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     functionProduces(parseAbstractDeclarator, "(int,int[5])", ProducesNothing());
     functionProduces(parseAbstractDeclarator, "(int i,int f[5],)",
-                     ProducesError(EXPECTED_N_BEFORE_N, "storage specifier or typename", "')'") && ProducesNoNotes());
+                     ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "')'") && ProducesNoNotes());
     functionProduces(parseAbstractDeclarator, "[",
                      ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
     functionProduces(parseAbstractDeclarator, "*", ProducesNothing());
@@ -512,7 +513,7 @@ TEST_CASE("Parse Statements", "[parser]")
         functionProduces(parseCompoundStatement, "}",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'{'", "'}'") && ProducesNoNotes());
         functionProduces(parseStatement, "{case:;}",
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "litearl, identifier or '('", "':'")
+                         ProducesError(EXPECTED_LITERAL_N_OR_N_INSTEAD_OF_N, "identifier", "'('", "':'")
                              && ProducesNoNotes());
     }
 }
@@ -605,7 +606,7 @@ TEST_CASE("Parse Expressions", "[parser]")
 
         functionProduces(parsePostFixExpression, "i.m", ProducesNothing());
         functionProduces(parsePostFixExpression, "].m",
-                         ProducesError(EXPECTED_N_INSTEAD_OF_N, "litearl, identifier or '('", "']'")
+                         ProducesError(EXPECTED_LITERAL_N_OR_N_INSTEAD_OF_N, "identifier", "'('", "']'")
                              && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i.", ProducesError(EXPECTED_N, "identifier") && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "i.[]",

@@ -193,8 +193,8 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
         // error as if a computed include resulted in no tokens
         if (value == "line")
         {
-            context.log(Errors::Parser::EXPECTED_N_AFTER_N.args(*(begin - 1), context.getSourceInterface(), "Tokens",
-                                                                '\'' + cld::to_string(value) + '\'', *(begin - 1)));
+            context.log(Errors::Parser::EXPECTED_TOKENS_AFTER_N.args(diag::after(*(begin - 1)),
+                                                                     context.getSourceInterface(), *(begin - 1)));
             return {ControlLine::LineTag{}};
         }
         else
@@ -415,15 +415,13 @@ cld::PP::IfSection cld::PP::parseIfSection(Lexer::PPTokenIterator& begin, Lexer:
     {
         if (begin == end)
         {
-            context.log(Errors::Parser::EXPECTED_N_2.args(*(begin - 1), context.getSourceInterface(), "'#endif'",
-                                                          *(begin - 1), "#endif"));
+            context.log(Errors::Parser::EXPECTED_ENDIF.args(diag::after(*(begin - 1)), context.getSourceInterface(),
+                                                            *(begin - 1), std::string_view("#endif")));
         }
         else if (begin->getTokenType() == Lexer::TokenType::Pound && begin + 1 != end)
         {
-            context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_N_2.args(
-                *begin, context.getSourceInterface(), "'#endif'",
-                "'#" + to_string((begin + 1)->getRepresentation(context.getSourceInterface())) + "'",
-                std::make_pair(*begin, *(begin + 1))));
+            context.log(Errors::Parser::EXPECTED_ENDIF_INSTEAD_OF_N.args(*(begin + 1), context.getSourceInterface(),
+                                                                         *(begin + 1)));
         }
         else
         {
@@ -464,8 +462,8 @@ cld::PP::ElIfGroup cld::PP::parseElIfGroup(Lexer::PPTokenIterator& begin, Lexer:
     auto vector = llvm::ArrayRef(begin, eol);
     if (vector.empty())
     {
-        context.log(Errors::Parser::EXPECTED_N_AFTER_N.args(*(begin - 1), context.getSourceInterface(), "Tokens",
-                                                            "'elif'", *(begin - 1)));
+        context.log(Errors::Parser::EXPECTED_TOKENS_AFTER_N.args(diag::after(*(begin - 1)),
+                                                                 context.getSourceInterface(), *(begin - 1)));
     }
     begin = eol;
     expect(Lexer::TokenType::Newline, begin, end, context);
@@ -494,8 +492,8 @@ cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPT
         auto vector = llvm::ArrayRef(begin, eol);
         if (vector.empty())
         {
-            context.log(Errors::Parser::EXPECTED_N_AFTER_N.args(*(begin - 1), context.getSourceInterface(), "Tokens",
-                                                                "'if'", *(begin - 1)));
+            context.log(
+                Errors::Parser::EXPECTED_TOKENS_AFTER_N.args(*(begin - 1), context.getSourceInterface(), *(begin - 1)));
         }
         variant = vector;
         begin = eol == end ? eol : eol + 1;

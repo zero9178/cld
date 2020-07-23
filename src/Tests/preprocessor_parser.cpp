@@ -122,7 +122,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#line\n", ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'line'"));
+            treeProduces("#line\n", ProducesError(EXPECTED_TOKENS_AFTER_N, "'line'"));
         }
     }
     SECTION("Errors")
@@ -321,7 +321,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "0");
-        functionProduces(parseIfGroup, "#if\n5\n", 1, ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'if'"));
+        functionProduces(parseIfGroup, "#if\n5\n", 1, ProducesError(EXPECTED_TOKENS_AFTER_N, "'if'"));
     }
     SECTION("ifdef")
     {
@@ -357,7 +357,7 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "1");
         functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif\n", 1,
-                         ProducesError(EXPECTED_N_AFTER_N, "Tokens", "'elif'"));
+                         ProducesError(EXPECTED_TOKENS_AFTER_N, "'elif'"));
     }
     SECTION("Else")
     {
@@ -390,9 +390,9 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n#else\n#endif", ProducesNothing());
         treeProduces("#if 0\n#elif 1\n#endif", ProducesNothing());
     }
-    treeProduces("#if 0\n", ProducesError(EXPECTED_N, "'#endif'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
-    treeProduces("#if 0\n#else\n#else\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "'#endif'", "'#else'")
-                                              && ProducesNote(TO_MATCH_N_HERE, "'if'"));
+    treeProduces("#if 0\n", ProducesError(EXPECTED_ENDIF, "'endif'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
+    treeProduces("#if 0\n#else\n#else\n",
+                 ProducesError(EXPECTED_ENDIF_INSTEAD_OF_N, "'else'") && ProducesNote(TO_MATCH_N_HERE, "'if'"));
 }
 
 namespace

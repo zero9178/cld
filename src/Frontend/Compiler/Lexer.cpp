@@ -2023,7 +2023,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                 // First character followed after \u or \U is not a hex digit or its the end of string
                 // Let's assume the user thought \u might be an escape character
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
-                context.report(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N, start, big ? "\\U" : "\\u",
+                context.report(cld::Errors::Lexer::INVALID_ESCAPE_SEQUENCE_N, start,
+                               std::string_view(big ? "\\U" : "\\u"),
                                std::forward_as_tuple(context.token, start, start + 2));
                 errorOccured = true;
                 continue;

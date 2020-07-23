@@ -341,8 +341,8 @@ private:
     template <class T>
     struct HasStringConverters<
         T, std::void_t<decltype(
-               diag::StringConverters::inFormat(std::declval<T>(), std::declval<const SourceInterface&>()),
-               diag::StringConverters::inArg(std::declval<T>(), std::declval<const SourceInterface&>()))>>
+               diag::StringConverter<T>::inFormat(std::declval<T>(), std::declval<const SourceInterface&>()),
+               diag::StringConverter<T>::inArg(std::declval<T>(), std::declval<const SourceInterface&>()))>>
         : std::true_type
     {
     };
@@ -536,6 +536,11 @@ private:
                    integerSequenceToTuple(std::make_index_sequence<N>{}));
 };
 
+namespace diag
+{
+std::tuple<const Lexer::TokenBase&, std::uint64_t> after(const Lexer::TokenBase& token);
+}
+
 template <const auto& text, class... Args>
 constexpr auto makeDiagnostic(Severity category, std::string_view name)
 {
@@ -636,7 +641,12 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface& 
     (
         [&result, &args, &sourceInterface](auto integer) {
             using IntegerTy = decltype(integer);
+            using ArgTy = std::decay_t<std::tuple_element_t<IntegerTy::value, Tuple>>;
             static_assert(constraints[IntegerTy::value]);
+            static_assert(!(constraints[IntegerTy::value] & Constraint::StringConstraint)
+                              || !std::is_same_v<ArgTy, const char*>,
+                          "Using string literals as arguments is heavily discouraged. Make a new Diagnostic."
+                          "If you are mean and want to circumvent this error, convert to std::string_view");
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::LocationConstraint))
             {
                 result[IntegerTy::value].range = getPointRange(std::get<IntegerTy::value>(args));
@@ -644,9 +654,9 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface& 
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::StringConstraint))
             {
                 result[IntegerTy::value].inFormatText =
-                    diag::StringConverters::inFormat(std::get<IntegerTy::value>(args), sourceInterface);
+                    ::cld::diag::StringConverter<ArgTy>::inFormat(std::get<IntegerTy::value>(args), sourceInterface);
                 result[IntegerTy::value].inArgText =
-                    diag::StringConverters::inArg(std::get<IntegerTy::value>(args), sourceInterface);
+                    ::cld::diag::StringConverter<ArgTy>::inArg(std::get<IntegerTy::value>(args), sourceInterface);
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
             {

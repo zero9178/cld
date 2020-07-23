@@ -99,7 +99,7 @@ public:
 
     [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
 
-    void log(std::vector<Message> messages);
+    void log(const Message& message);
 
     void addToScope(const std::string& name, DeclarationLocation declarator);
 

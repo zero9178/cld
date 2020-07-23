@@ -126,7 +126,7 @@ TEST_CASE("Diag in format arguments", "[diag]")
     {
         STATIC_REQUIRE(singleArgumentTest.getSize() == 1);
         const auto* tokens = lexes("text");
-        auto message = singleArgumentTest.args(*tokens, *interface, "we go");
+        auto message = singleArgumentTest.args(*tokens, *interface, std::string_view("we go"));
         CHECK_THAT(message.getText(), Contains("Here we go"));
         llvm::errs() << message;
         message = singleArgumentTest.args(*tokens, *interface, 5);
@@ -348,31 +348,32 @@ TEST_CASE("Diag insertion", "[diag]")
     SECTION("Simple with text insertion")
     {
         const auto* begin = lexes("A series of\n identifiers");
-        auto message = insertAfterText.args(*begin, *interface, *begin, "text");
+        auto message = insertAfterText.args(*begin, *interface, *begin, std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|  ^") && Contains("|  text"));
         llvm::errs() << message;
-        message = insertAfterText.args(*begin, *interface, *(begin + 1), "text");
+        message = insertAfterText.args(*begin, *interface, *(begin + 1), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|         ^") && Contains("|         text"));
         llvm::errs() << message;
-        message = insertAfterText.args(*begin, *interface, *(begin + 2), "text");
+        message = insertAfterText.args(*begin, *interface, *(begin + 2), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|            ^") && Contains("|            text"));
         llvm::errs() << message;
-        message = insertAfterText.args(*(begin + 3), *interface, *(begin + 3), "text");
+        message = insertAfterText.args(*(begin + 3), *interface, *(begin + 3), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|             ^") && Contains("|             text"));
         llvm::errs() << message;
     }
     SECTION("After PP Newline with text")
     {
         const auto* begin = pplexes("A series of\n identifiers");
-        auto message = insertAfterText.args(*begin, *interface, *(begin + 3), "text");
+        auto message = insertAfterText.args(*begin, *interface, *(begin + 3), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("\n     > text"));
         llvm::errs() << message;
     }
     SECTION("Multiple with text insertion")
     {
         const auto* begin = lexes("A series of\n identifiers");
-        auto message = threeInsertsWithText.args(*begin, *interface, *begin, "Whitespace 1", *(begin + 1),
-                                                 "Whitespace 2", *(begin + 2), "Whitespace 3");
+        auto message =
+            threeInsertsWithText.args(*begin, *interface, *begin, std::string_view("Whitespace 1"), *(begin + 1),
+                                      std::string_view("Whitespace 2"), *(begin + 2), std::string_view("Whitespace 3"));
         CHECK_THAT(message.getText(), Contains("|  ^      ^  ^") && Contains("|  |      |  Whitespace 3")
                                           && Contains("|  |      Whitespace 2") && Contains("|  Whitespace 1"));
         llvm::errs() << message;
@@ -387,31 +388,31 @@ TEST_CASE("Diag annotate", "[diag]")
     SECTION("Simple annotate")
     {
         const auto* begin = lexes("A series of\n identifiers");
-        auto message = annotate.args(*begin, *interface, *begin, "text");
+        auto message = annotate.args(*begin, *interface, *begin, std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("| ^") && Contains("| |") && Contains("| text"));
         llvm::errs() << message;
-        message = annotate.args(*begin, *interface, *(begin + 1), "text");
+        message = annotate.args(*begin, *interface, *(begin + 1), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|   ~~~~~~") && Contains("|      |") && Contains("|      text"));
         llvm::errs() << message;
-        message = annotate.args(*begin, *interface, *(begin + 2), "text");
+        message = annotate.args(*begin, *interface, *(begin + 2), std::string_view("text"));
         CHECK_THAT(message.getText(),
                    Contains("|          ~~") && Contains("|           |") && Contains("|           text"));
         llvm::errs() << message;
-        message = annotate.args(*(begin + 3), *interface, *(begin + 3), "text");
+        message = annotate.args(*(begin + 3), *interface, *(begin + 3), std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("|  ~~~~~~~~~~~") && Contains("|       |") && Contains("|       text"));
         llvm::errs() << message;
     }
     SECTION("Ranges")
     {
         const auto* begin = lexes("A series of\n identifiers");
-        auto message = annotate.args(*begin, *interface, std::pair{*begin, *(begin + 2)}, "text");
+        auto message = annotate.args(*begin, *interface, std::pair{*begin, *(begin + 2)}, std::string_view("text"));
         CHECK_THAT(message.getText(), Contains("| ~~~~~~~~~~~") && Contains("|      |") && Contains("|      text"));
         llvm::errs() << message;
     }
     SECTION("Mixed with insert")
     {
         const auto* begin = lexes("A series of\n identifiers");
-        auto message = annotateWithInsert.args(*begin, *interface, *begin, "text", *(begin + 2));
+        auto message = annotateWithInsert.args(*begin, *interface, *begin, std::string_view("text"), *(begin + 2));
         CHECK_THAT(message.getText(),
                    Contains("| ^          ^") && Contains("| |          text") && Contains("| text"));
         llvm::errs() << message;
