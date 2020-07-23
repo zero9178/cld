@@ -8,6 +8,11 @@
 
 #include "Syntax.hpp"
 
+namespace cld
+{
+class Message;
+}
+
 namespace cld::Semantics
 {
 class Type;
@@ -458,9 +463,37 @@ std::string declaratorToName(const cld::Syntax::Declarator& declarator);
 
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
-cld::Expected<std::size_t, std::string> sizeOf(const Type& type, const LanguageOptions& options);
+cld::Expected<std::size_t, Message> sizeOf(const Type& type, const SourceInterface& sourceInterface,
+                                           const Syntax::Node* node);
 
-cld::Expected<std::size_t, std::string> alignmentOf(const Type& type, const LanguageOptions& options);
+cld::Expected<std::size_t, Message> alignmentOf(const Type& type, const SourceInterface& sourceInterface,
+                                                const Syntax::Node* node);
 
 bool isVoid(const Type& type);
 } // namespace cld::Semantics
+
+namespace cld::diag
+{
+template <>
+struct StringConverter<Semantics::Type>
+{
+    static std::string inFormat(const Semantics::Type& arg, const SourceInterface&)
+    {
+        return "'" + arg.getTypeName() + "'";
+    }
+
+    static std::string inArg(const Semantics::Type& arg, const SourceInterface&)
+    {
+        return arg.getTypeName();
+    }
+};
+
+template <>
+struct CustomFormat<U'f', U'u', U'l', U'l'>
+{
+    std::string operator()(const Semantics::Type& arg)
+    {
+        return arg.getFullFormattedTypeName();
+    }
+};
+} // namespace cld::diag

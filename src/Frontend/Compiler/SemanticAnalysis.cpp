@@ -1195,16 +1195,16 @@ cld::Semantics::ConstantEvaluator cld::Semantics::SemanticAnalysis::makeEvaluato
                                                                                   Lexer::CTokenIterator exprEnd)
 {
     return Semantics::ConstantEvaluator(
-        m_sourceObject.getLanguageOptions(),
+        m_sourceObject,
         [this](const Syntax::TypeName& typeName) -> Type {
             return declaratorsToType(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                 typeName.getAbstractDeclarator());
         },
-        [this](const std::string& name) -> const DeclarationTypedefEnums* {
+        [this](std::string_view name) -> const DeclarationTypedefEnums* {
             for (auto iter = m_declarations.rbegin(); iter != m_declarations.rend(); iter++)
             {
-                if (auto result = iter->find(name); result != iter->end())
+                if (auto result = iter->find(cld::to_string(name)); result != iter->end())
                 {
                     return &result->second;
                 }

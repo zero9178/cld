@@ -30,25 +30,25 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     REQUIRE((ss.str().empty()));
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     cld::Semantics::ConstantEvaluator evaluator(
-        options,
+        ctokens,
         [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
             return analysis.declaratorsToType(
                 {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                 typeName.getAbstractDeclarator());
         },
-        {}, [&ss, &ctokens](const cld::Message& message) { ss << message; }, mode);
+        {}, [&ss](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
     auto string = ss.str();
     if (!string.empty())
     {
         cld::Semantics::ConstantEvaluator(
-            options,
+            ctokens,
             [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
                 return analysis.declaratorsToType(
                     {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
                     typeName.getAbstractDeclarator());
             },
-            {}, [&ctokens](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
+            {}, [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);
     }
     return {ret, string};
@@ -213,7 +213,7 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
     SECTION("Identifier")
     {
         auto [value, error] = evaluateConstantExpression("i");
-        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "variable access"));
+        CHECK_THAT(error, ProducesError(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
         CHECK(value.isUndefined());
     }
 }
@@ -224,7 +224,7 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
     {
         auto [value, error] = evaluateConstantExpression("i()");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "function call"));
+        CHECK_THAT(error, ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
     SECTION("Increment")
     {
@@ -242,7 +242,7 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
     {
         auto [value, error] = evaluateConstantExpression("(int){0}");
         CHECK(value.isUndefined());
-        CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "initializer"));
+        CHECK_THAT(error, ProducesError(INITIALIZER_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
 }
 
@@ -331,7 +331,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("+(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "+", "'void*'"));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "'+'", "'void*'"));
         }
     }
     SECTION("Minus")
@@ -377,7 +377,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("-(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "-", "'void*'"));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "'-'", "'void*'"));
         }
     }
     SECTION("Bitnot")
@@ -409,7 +409,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("~0.0", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "~", "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "'~'", "'double'"));
             }
         }
         SECTION("Pointer")
@@ -417,7 +417,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             auto [value, error] = evaluateConstantExpression("~(void*)0", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "~", "'void*'"));
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "'~'", "'void*'"));
         }
     }
     SECTION("Logical not")
@@ -836,8 +836,8 @@ TEST_CASE("Const eval term", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3 % .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "%", "'int'",
-                                                "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'%'",
+                                                "'int'", "'double'"));
             }
         }
     }
@@ -848,7 +848,7 @@ TEST_CASE("Const eval term", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 * (void*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "*", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'*'", "'int'",
                                             "'void*'"));
         }
         SECTION("Divide")
@@ -856,7 +856,7 @@ TEST_CASE("Const eval term", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 / (void*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "/", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'/'", "'int'",
                                             "'void*'"));
         }
         SECTION("Rest")
@@ -864,7 +864,7 @@ TEST_CASE("Const eval term", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 % (void*)6", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "%", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'%'", "'int'",
                                             "'void*'"));
         }
     }
@@ -996,22 +996,22 @@ TEST_CASE("Const eval additive", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3.0 + (int*)5", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "+",
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'+'",
                                                 "'double'", "'int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + (int*)3", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "+", "'int*'",
-                                                "'int*'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'+'",
+                                                "'int*'", "'int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + 3.0", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "+", "'int*'",
-                                                "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'+'",
+                                                "'int*'", "'double'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(struct i*)5 + 3", cld::LanguageOptions::native(),
@@ -1122,8 +1122,8 @@ TEST_CASE("Const eval additive", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3 - (int*)5", cld::Tests::x64linux,
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "-", "'int'",
-                                                "'int*'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'-'",
+                                                "'int'", "'int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 - 3", cld::Tests::x64linux,
@@ -1150,15 +1150,15 @@ TEST_CASE("Const eval additive", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3.0 - (int*)5", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "-",
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'-'",
                                                 "'double'", "'int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 - 3.0", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "-", "'int*'",
-                                                "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'-'",
+                                                "'int*'", "'double'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(struct i*)5 - 3", cld::LanguageOptions::native(),
@@ -1221,8 +1221,8 @@ TEST_CASE("Const eval shift", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3 << .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "<<", "'int'",
-                                                "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'<<'",
+                                                "'int'", "'double'"));
             }
         }
         SECTION("Right")
@@ -1241,8 +1241,8 @@ TEST_CASE("Const eval shift", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("3 >> .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, ">>", "'int'",
-                                                "'double'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'>>'",
+                                                "'int'", "'double'"));
             }
         }
     }
@@ -1253,7 +1253,7 @@ TEST_CASE("Const eval shift", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 << (int*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "<<", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'<<'", "'int'",
                                             "'int*'"));
         }
         SECTION("Right")
@@ -1261,7 +1261,7 @@ TEST_CASE("Const eval shift", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 >> (int*)5", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Initialization);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, ">>", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'>>'", "'int'",
                                             "'int*'"));
         }
     }
@@ -1299,7 +1299,7 @@ TEST_CASE("Const eval bitand", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 & .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "&", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'&'", "'int'",
                                             "'double'"));
         }
     }
@@ -1309,7 +1309,7 @@ TEST_CASE("Const eval bitand", "[constEval]")
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
         CHECK_THAT(error,
-                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "&", "'int'", "'int*'"));
+                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'&'", "'int'", "'int*'"));
     }
 }
 
@@ -1345,7 +1345,7 @@ TEST_CASE("Const eval bitxor", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 ^ .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "^", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'^'", "'int'",
                                             "'double'"));
         }
     }
@@ -1355,7 +1355,7 @@ TEST_CASE("Const eval bitxor", "[constEval]")
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
         CHECK_THAT(error,
-                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "^", "'int'", "'int*'"));
+                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'^'", "'int'", "'int*'"));
     }
 }
 
@@ -1391,7 +1391,7 @@ TEST_CASE("Const eval bitor", "[constEval]")
             auto [value, error] = evaluateConstantExpression("3 | .55", cld::LanguageOptions::native(),
                                                              cld::Semantics::ConstantEvaluator::Arithmetic);
             CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "|", "'int'",
+            CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'|'", "'int'",
                                             "'double'"));
         }
     }
@@ -1401,7 +1401,7 @@ TEST_CASE("Const eval bitor", "[constEval]")
                                                          cld::Semantics::ConstantEvaluator::Initialization);
         CHECK(value.isUndefined());
         CHECK_THAT(error,
-                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "|", "'int'", "'int*'"));
+                   ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'|'", "'int'", "'int*'"));
     }
 }
 
@@ -2086,8 +2086,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                     evaluateConstantExpression("(float*)5 == (const int*)4", cld::LanguageOptions::native(),
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N,
-                                                "==", "'float*'", "'int const*'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'=='",
+                                                "'float*'", "'int const*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 == (const int*)4", cld::LanguageOptions::native(),
@@ -2121,13 +2121,13 @@ TEST_CASE("Const eval equal", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("5 == (const int*)4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(const int*)5 == 4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER));
             }
         }
         SECTION("Not equal")
@@ -2212,8 +2212,8 @@ TEST_CASE("Const eval equal", "[constEval]")
                     evaluateConstantExpression("(float*)5 != (const int*)4", cld::LanguageOptions::native(),
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N,
-                                                "!=", "'float*'", "'int const*'"));
+                CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'!='",
+                                                "'float*'", "'int const*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 != (const int*)4", cld::LanguageOptions::native(),
@@ -2247,13 +2247,13 @@ TEST_CASE("Const eval equal", "[constEval]")
                 auto [value, error] = evaluateConstantExpression("5 != (const int*)4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(const int*)5 != 4", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
-                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER));
+                CHECK_THAT(error, ProducesError(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER));
             }
         }
     }

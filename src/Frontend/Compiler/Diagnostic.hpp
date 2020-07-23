@@ -295,6 +295,17 @@ private:
 
     // TODO: Replace all those things with Concepts once the Codebase is C++20
 
+    template <class T, class = void>
+    struct IsIterable : std::false_type
+    {
+    };
+
+    template <class T>
+    struct IsIterable<T, std::void_t<decltype(std::begin(std::declval<T>()), std::end(std::declval<T>()))>>
+        : std::true_type
+    {
+    };
+
     template <class T>
     constexpr static bool locationConstraintCheck()
     {
@@ -326,6 +337,11 @@ private:
             {
                 return false;
             }
+        }
+        else if constexpr (IsIterable<T>{})
+        {
+            using ValueType = typename std::iterator_traits<decltype(std::begin(std::declval<T>()))>::value_type;
+            return locationConstraintCheck<ValueType>();
         }
         else
         {
@@ -368,6 +384,13 @@ private:
         else if constexpr (std::is_convertible_v<U, std::uint64_t>)
         {
             return {{static_cast<std::uint64_t>(arg), 0, 0}, {static_cast<std::uint64_t>(arg) + 1, 0, 0}};
+        }
+        else if constexpr (IsIterable<T>{})
+        {
+            auto& first = *std::begin(arg);
+            auto& last = *(std::end(arg) - 1);
+            return {{first.getOffset(), first.getFileId(), first.getMacroId()},
+                    {last.getOffset() + last.getLength(), last.getFileId(), last.getMacroId()}};
         }
         else if constexpr (std::tuple_size_v<U> == 2)
         {

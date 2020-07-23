@@ -564,35 +564,34 @@ const std::string& cld::Semantics::RecordType::getName() const
     return m_name;
 }
 
-cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::Semantics::Type& type,
-                                                                    const LanguageOptions& options)
+cld::Expected<std::size_t, cld::Message> cld::Semantics::alignmentOf(const cld::Semantics::Type& type,
+                                                                     const SourceInterface& sourceInterface,
+                                                                     const Syntax::Node* node)
 {
     return match(
         type.get(),
-        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
+        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, cld::Message> {
             return primitiveType.getByteCount();
         },
-        [&options](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
-            return alignmentOf(arrayType.getType(), options);
+        [&](const ArrayType& arrayType) -> Expected<std::size_t, cld::Message> {
+            return alignmentOf(arrayType.getType(), sourceInterface, node);
         },
-        [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            // TODO:            return
-            // Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
-            return "";
+        [&](const AbstractArrayType&) -> Expected<std::size_t, cld::Message> {
+            CLD_ASSERT(node);
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface, type, *node);
         },
-        [&options](const ValArrayType& valArrayType) -> Expected<std::size_t, std::string> {
-            return alignmentOf(valArrayType.getType(), options);
+        [&sourceInterface, &node](const ValArrayType& valArrayType) -> Expected<std::size_t, cld::Message> {
+            return alignmentOf(valArrayType.getType(), sourceInterface, node);
         },
-        [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            // TODO:            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF;
-            return "";
+        [&](const FunctionType&) -> Expected<std::size_t, cld::Message> {
+            CLD_ASSERT(node);
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF.args(*node, sourceInterface, *node);
         },
-        [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+        [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
             if (recordType.getMembers().empty())
             {
-                // TODO:                return
-                // Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(type.getFullFormattedTypeName());
-                return "";
+                CLD_ASSERT(node);
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface, type, *node);
             }
             if (!recordType.isUnion())
             {
@@ -601,7 +600,7 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
                 {
                     (void)name;
                     (void)bits;
-                    auto result = alignmentOf(subtype, options);
+                    auto result = alignmentOf(subtype, sourceInterface, node);
                     if (!result)
                     {
                         return result;
@@ -612,15 +611,15 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
             }
             else
             {
-                std::optional<std::string> failure;
+                std::optional<Message> failure;
                 auto result = std::max_element(recordType.getMembers().begin(), recordType.getMembers().end(),
-                                               [&failure, &options](const auto& lhs, const auto& rhs) {
-                                                   auto lhsSize = sizeOf(std::get<0>(lhs), options);
+                                               [&failure, &sourceInterface, &node](const auto& lhs, const auto& rhs) {
+                                                   auto lhsSize = sizeOf(std::get<0>(lhs), sourceInterface, node);
                                                    if (!lhsSize)
                                                    {
                                                        failure = lhsSize.error();
                                                    }
-                                                   auto rhsSize = sizeOf(std::get<0>(rhs), options);
+                                                   auto rhsSize = sizeOf(std::get<0>(rhs), sourceInterface, node);
                                                    if (!rhsSize)
                                                    {
                                                        failure = rhsSize.error();
@@ -631,14 +630,16 @@ cld::Expected<std::size_t, std::string> cld::Semantics::alignmentOf(const cld::S
                 {
                     return *failure;
                 }
-                return alignmentOf(std::get<0>(*result), options);
+                return alignmentOf(std::get<0>(*result), sourceInterface, node);
             }
         },
-        [&options](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{options.sizeOfInt}; },
-        [&options](const PointerType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.sizeOfVoidStar};
+        [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
+            return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
         },
-        [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
+        [&sourceInterface](const PointerType&) -> Expected<std::size_t, cld::Message> {
+            return std::size_t{sourceInterface.getLanguageOptions().sizeOfVoidStar};
+        },
+        [](std::monostate) -> Expected<std::size_t, cld::Message> { CLD_UNREACHABLE; });
 }
 
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
@@ -651,50 +652,63 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semantics::Type& type,
-                                                               const LanguageOptions& options)
+cld::Expected<std::size_t, cld::Message> cld::Semantics::sizeOf(const cld::Semantics::Type& type,
+                                                                const SourceInterface& sourceInterface,
+                                                                const Syntax::Node* node)
 {
     return match(
         type.get(),
-        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, std::string> {
+        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, cld::Message> {
             return primitiveType.getByteCount();
         },
-        [&options](const ArrayType& arrayType) -> Expected<std::size_t, std::string> {
-            auto result = sizeOf(arrayType.getType(), options);
+        [&](const ArrayType& arrayType) -> Expected<std::size_t, cld::Message> {
+            auto result = sizeOf(arrayType.getType(), sourceInterface, node);
             if (!result)
             {
                 return result;
             }
             return *result * arrayType.getSize();
         },
-        [&type](const AbstractArrayType&) -> Expected<std::size_t, std::string> {
-            // TODO:            return
-            // Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
-            return "";
+        [&](const AbstractArrayType&) -> Expected<std::size_t, cld::Message> {
+            if (!node)
+            {
+                return cld::Message{};
+            }
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type, *node);
         },
-        [](const ValArrayType&) -> Expected<std::size_t, std::string> {
-            // TODO:            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION;
-            return "";
+        [&](const ValArrayType&) -> Expected<std::size_t, cld::Message> {
+            if (!node)
+            {
+                return cld::Message{};
+            }
+            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
+                *node, sourceInterface, *node);
         },
-        [](const FunctionType&) -> Expected<std::size_t, std::string> {
-            // TODO:            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF;
-            return "";
+        [&](const FunctionType&) -> Expected<std::size_t, cld::Message> {
+            if (!node)
+            {
+                return cld::Message{};
+            }
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*node, sourceInterface, *node);
         },
-        [&type, &options](const RecordType& recordType) -> Expected<std::size_t, std::string> {
+        [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
             if (recordType.getMembers().empty())
             {
-                // TODO:                return
-                // Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(type.getFullFormattedTypeName());
-                return "";
+                if (!node)
+                {
+                    return cld::Message{};
+                }
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type, *node);
             }
             if (!recordType.isUnion())
             {
                 std::size_t currentSize = 0;
                 for (auto& [subtype, name, bits] : recordType.getMembers())
                 {
+                    // TODO: Shouldn't use node here but instead point at the individual members of the record
                     (void)name;
                     (void)bits;
-                    auto alignment = alignmentOf(subtype, options);
+                    auto alignment = alignmentOf(subtype, sourceInterface, node);
                     if (!alignment)
                     {
                         return alignment;
@@ -704,7 +718,7 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
                     {
                         currentSize += *alignment - rest;
                     }
-                    auto subSize = sizeOf(subtype, options);
+                    auto subSize = sizeOf(subtype, sourceInterface, node);
                     if (!subSize)
                     {
                         return subSize;
@@ -720,7 +734,7 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
                 {
                     (void)name;
                     (void)bits;
-                    auto subSize = sizeOf(subtype, options);
+                    auto subSize = sizeOf(subtype, sourceInterface, node);
                     if (!subSize)
                     {
                         return subSize;
@@ -730,11 +744,13 @@ cld::Expected<std::size_t, std::string> cld::Semantics::sizeOf(const cld::Semant
                 return maxSize;
             }
         },
-        [&options](const EnumType&) -> Expected<std::size_t, std::string> { return std::size_t{options.sizeOfInt}; },
-        [&options](const PointerType&) -> Expected<std::size_t, std::string> {
-            return std::size_t{options.sizeOfVoidStar};
+        [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
+            return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
         },
-        [](std::monostate) -> Expected<std::size_t, std::string> { CLD_UNREACHABLE; });
+        [&sourceInterface](const PointerType&) -> Expected<std::size_t, cld::Message> {
+            return std::size_t{sourceInterface.getLanguageOptions().sizeOfVoidStar};
+        },
+        [](std::monostate) -> Expected<std::size_t, cld::Message> { CLD_UNREACHABLE; });
 }
 
 cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,

@@ -148,39 +148,55 @@ CREATE_ERROR(STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE,
 CREATE_ERROR(IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION,
              "Identifier list not allowed in function declaration");
 
-CREATE_ERROR(INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF, "Incomplete type {} in 'alignof'");
+CREATE_ERROR(INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF, "Incomplete type %full0 in 'alignof'", Underline<1>);
 
-CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type {} in 'sizeof'");
+CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
-CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type {} used in pointer arithmetic");
+CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",
+             Annotate<1, 2>);
 
-CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF, "Function type not allowed in 'alignof'");
+CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC_2, "Incomplete type %full0 used in pointer arithmetic",
+             Annotate<1, 2>, Annotate<3, 4>);
 
-CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'");
+CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF, "Function type not allowed in 'alignof'", Underline<0>);
+
+CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Underline<0>);
 
 CREATE_ERROR(SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
-             "Size of Valarray cannot be determined in constant expression");
+             "Size of variable length array cannot be determined in constant expression", Underline<0>);
 
-CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "{} not allowed in constant expression");
+CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "%tokenType0 not allowed in constant expression", PointAt<0>);
+
+CREATE_ERROR(STRING_LITERALS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "String literals not allowed in constant expression",
+             Underline<0>);
+
+CREATE_ERROR(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Variable access not allowed in constant expression",
+             Underline<0>);
+
+CREATE_ERROR(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Function call not allowed in constant expression",
+             Underline<0>);
+
+CREATE_ERROR(INITIALIZER_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Initializer not allowed in constant expression",
+             Underline<0>);
 
 CREATE_ERROR(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-             "Only integers allowed in integer constant expressions");
+             "Only integers allowed in integer constant expressions", Annotate<0, 1>);
 
-CREATE_ERROR(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N, "Cannot apply unary operator '{}' to value of type {}");
+CREATE_ERROR(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N,
+             "Cannot apply unary operator %tokenType0 to value of type %full1", PointAt<0>, Annotate<2, 1>);
 
 CREATE_ERROR(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
-             "Can only cast to integers in integer constant expression");
+             "Can only cast to integers in integer constant expression", Underline<0>);
 
 CREATE_ERROR(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N,
-             "Cannot apply binary operator '{}' to values of type {} and {}");
+             "Cannot apply binary operator %tokenType0 to values of type %full1 and %full2", PointAt<0>, Annotate<3, 1>,
+             Annotate<4, 2>);
 
-CREATE_ERROR(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_INCOMPATIBLE_TYPES_N_AND_N,
-             "Cannot apply binary operator '{}' to values of incompatible types {} and {}");
+CREATE_ERROR(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N, "Invalid cast from type %full0 to type %full1", Underline<2>,
+             Annotate<3, 0>);
 
-CREATE_ERROR(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N, "Invalid cast from type {} to type {}");
-
-CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARED_WITH_POINTER,
-             "Integer must evaluate to null to be compared with pointer");
+CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER,
+             "Integer must evaluate to null to be comparable with pointer", Underline<0>);
 
 CREATE_ERROR(UNKNOWN_TYPE_N, "Unknown type '{}'");
 } // namespace Semantics
@@ -297,7 +313,8 @@ namespace Warnings
 {
 namespace Semantics
 {
-CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow", "Value of {} is too large for integer type {}");
+CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow",
+               "Value of '%0' is too large for integer type %full1", Underline<2>);
 } // namespace Semantics
 namespace Lexer
 {

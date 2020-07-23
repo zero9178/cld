@@ -78,13 +78,16 @@ public:
 
     ConstRetType& moduloAssign(const ConstRetType& rhs, const LanguageOptions& options);
 
-    ConstRetType plus(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
+    // These are different due to the need of calling sizeof
 
-    ConstRetType& plusAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
+    ConstRetType plus(const ConstRetType& rhs, const SourceInterface& sourceInterface, Issues* issues = nullptr) const;
 
-    ConstRetType minus(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
+    ConstRetType& plusAssign(const ConstRetType& rhs, const SourceInterface& sourceInterface, Issues* issues = nullptr);
 
-    ConstRetType& minusAssign(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr);
+    ConstRetType minus(const ConstRetType& rhs, const SourceInterface& sourceInterface, Issues* issues = nullptr) const;
+
+    ConstRetType& minusAssign(const ConstRetType& rhs, const SourceInterface& sourceInterface,
+                              Issues* issues = nullptr);
 
     ConstRetType shiftLeft(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
@@ -131,9 +134,9 @@ public:
 
 class ConstantEvaluator final
 {
-    LanguageOptions m_languageOptions;
+    const SourceInterface& m_sourceInterface;
     std::function<Type(const Syntax::TypeName&)> m_typeCallback;
-    std::function<const DeclarationTypedefEnums*(const std::string&)> m_declarationCallback;
+    std::function<const DeclarationTypedefEnums*(std::string_view)> m_declarationCallback;
     std::function<void(const Message&)> m_loggerCallback;
 
 public:
@@ -150,10 +153,10 @@ private:
     void log(const Message& message);
 
 public:
-    explicit ConstantEvaluator(
-        const LanguageOptions& languageOptions, std::function<Type(const Syntax::TypeName&)> typeCallback = {},
-        std::function<const DeclarationTypedefEnums*(const std::string&)> declarationCallback = {},
-        std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
+    explicit ConstantEvaluator(const SourceInterface& sourceInterface,
+                               std::function<Type(const Syntax::TypeName&)> typeCallback = {},
+                               std::function<const DeclarationTypedefEnums*(std::string_view)> declarationCallback = {},
+                               std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
 
     ConstRetType visit(const Syntax::Expression& node);
 
