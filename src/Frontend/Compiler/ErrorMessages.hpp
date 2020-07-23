@@ -96,10 +96,10 @@ CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0", Underline<0>
 
 namespace Semantics
 {
-CREATE_ERROR(ONLY_ONE_STORAGE_SPECIFIER, "Only one storage specifier allowed in declaration");
+CREATE_ERROR(ONLY_ONE_STORAGE_SPECIFIER, "Only one storage specifier allowed in declaration", Underline<0>);
 
 CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
-             "Only 'static' or 'extern' are allowed in function definition");
+             "Only 'static' or 'extern' are allowed in function definition", Underline<0>);
 
 CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION,
              "Only 'static' or 'extern' are allowed in function definition");
@@ -135,9 +135,11 @@ CREATE_ERROR(DECLARATION_CANNNOT_BE_VOID, "Declaration cannot have type 'void'")
 
 CREATE_ERROR(N_APPEARING_IN_N_BUT_NOT_IN_N, "{} appearing in {} but not in {}");
 
-CREATE_ERROR(EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, "Expected parameter list in function definition");
+CREATE_ERROR(EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, "Expected parameter list in function definition",
+             Underline<0>);
 
-CREATE_ERROR(DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, "Declarations only allowed with identifier list");
+CREATE_ERROR(DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, "Declarations only allowed with identifier list",
+             Underline<0>);
 
 CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER,
              "Declarations at file scope cannot be 'auto' or 'register'");
@@ -341,7 +343,7 @@ CREATE_NOTE(TO_MATCH_N_HERE, "To match %0 here:", PointAt<0>);
 
 CREATE_NOTE(PREVIOUSLY_DECLARED_HERE, "Previously declared here:", Underline<0>);
 
-CREATE_NOTE(PREVIOUS_STORAGE_SPECIFIER_HERE, "Previous storage specifier encountered here:");
+CREATE_NOTE(PREVIOUS_STORAGE_SPECIFIER_HERE, "Previous storage specifier encountered here:", Underline<0>);
 
 namespace PP
 {

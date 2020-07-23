@@ -14,14 +14,11 @@
 #include "ErrorMessages.hpp"
 #include "SemanticUtil.hpp"
 
-void cld::Semantics::SemanticAnalysis::log(std::vector<Message> messages)
+void cld::Semantics::SemanticAnalysis::log(const Message& message)
 {
     if (m_reporter)
     {
-        for (auto& iter : messages)
-        {
-            *m_reporter << iter;
-        }
+        *m_reporter << message;
     }
 }
 
@@ -95,21 +92,16 @@ std::optional<cld::Semantics::FunctionDefinition>
         {
             if (storageClassSpecifier)
             {
-                // TODO:                log({Message::error(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER, node.begin(),
-                //                                    node.getCompoundStatement().begin(), {Underline(storage->begin(),
-                //                                    storage->end())}),
-                //                     Message::note(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE, node.begin(),
-                //                                   node.getCompoundStatement().begin(),
-                //                                   {Underline(storageClassSpecifier->begin(),
-                //                                   storageClassSpecifier->end())})});
+                log(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER.args(*storage, m_sourceObject, *storage));
+                log(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE.args(*storageClassSpecifier, m_sourceObject,
+                                                                *storageClassSpecifier));
                 continue;
             }
             if (storage->getSpecifier() != Syntax::StorageClassSpecifier::Static
                 && storage->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
             {
-                // TODO: log({Message::error(Errors::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
-                //                                    node.begin(), node.getCompoundStatement().begin(),
-                //                                    {Underline(storage->begin(), storage->end())})});
+                log(Errors::Semantics::ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION.args(
+                    *storage, m_sourceObject, *storage));
                 continue;
             }
             storageClassSpecifier = storage;
@@ -119,10 +111,8 @@ std::optional<cld::Semantics::FunctionDefinition>
                                   node.getDeclarator(), node.getDeclarations());
     if (!std::holds_alternative<Semantics::FunctionType>(type.get()))
     {
-        // TODO:        log({Message::error(Errors::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION,
-        // node.begin(),
-        //                            node.getCompoundStatement().begin(),
-        //                            {Underline(node.getDeclarator().begin(), node.getDeclarator().end())})});
+        log(Errors::Semantics::EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION.args(node.getDeclarator(), m_sourceObject,
+                                                                                   node.getDeclarator()));
         return {};
     }
     const auto& functionRP = cld::get<Semantics::FunctionType>(type.get());
@@ -163,11 +153,10 @@ std::optional<cld::Semantics::FunctionDefinition>
 
     if (!identifierList && !node.getDeclarations().empty())
     {
-        // TODO:        log({Message::error(Errors::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST,
-        // node.begin(),
-        //                            node.getCompoundStatement().end(),
-        //                            {Underline(node.getDeclarations().front().begin(),
-        //                            node.getDeclarations().back().end())})});
+        log(Errors::Semantics::DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST.args(
+            *node.getDeclarations().front().begin(), m_sourceObject,
+            std::forward_as_tuple(*node.getDeclarations().front().begin(),
+                                  *(node.getDeclarations().back().end() - 1))));
     }
 
     std::unordered_map<std::string, Semantics::Type> declarationMap;
@@ -217,10 +206,9 @@ std::optional<cld::Semantics::FunctionDefinition>
                                                                            .getParameterDeclarations()[i]
                                                                            .first.front())
                                         .begin();
-                // TODO:                log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' +
-                // declarations.back().getName() + '\''),
-                //                                    node.begin(), node.getCompoundStatement().begin(),
-                //                                    {Underline(begin, (*declarator)->end())})});
+                //                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*begin, m_sourceObject,
+                //                                                          std::forward_as_tuple(*begin,
+                //                                                          *((*declarator)->end() - 1))));
             }
         }
         else if (identifierList)
@@ -266,6 +254,7 @@ std::optional<cld::Semantics::FunctionDefinition>
                                                                     return false;
                                                                 });
                                          });
+
                 // TODO:                log({Message::error(Errors::REDEFINITION_OF_SYMBOL_N.args('\'' +
                 // declarations.back().getName() + '\''),
                 //                                    node.begin(), node.getCompoundStatement().begin()),
