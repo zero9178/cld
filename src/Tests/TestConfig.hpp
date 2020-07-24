@@ -1,5 +1,7 @@
 #pragma once
 
+#include "catch.hpp"
+
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
 
@@ -238,6 +240,23 @@ private:
 
     std::vector<std::string> m_linesTrimmed;
 };
+
+struct FileScope
+{
+    std::string m_path;
+
+public:
+    FileScope(std::string_view path) : m_path(cld::to_string(path)) {}
+
+    ~FileScope();
+
+    FileScope(const FileScope&) = delete;
+    FileScope& operator=(const FileScope&) = delete;
+    FileScope(FileScope&&) = delete;
+    FileScope& operator=(FileScope&&) = delete;
+};
+
+[[nodiscard]] FileScope createInclude(std::string_view path, std::string_view content);
 
 } // namespace cld::Tests
 

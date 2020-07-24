@@ -864,7 +864,7 @@ public:
             if (result[0].getTokenType() == cld::Lexer::TokenType::StringLiteral)
             {
                 isQuoted = true;
-                if (result.size() != 0)
+                if (result.size() > 1)
                 {
                     log(cld::Errors::PP::EXTRA_TOKENS_AFTER_INCLUDE.args(
                         *includeTag.includeToken, *this, std::forward_as_tuple(result[1], result.back())));
@@ -917,6 +917,14 @@ public:
                 {
                     candidates.push_back(std::string(dir.begin(), dir.end()));
                 }
+                else
+                {
+                    // If we are not in a current file it's probably due to it being stdin or similar.
+                    // For those cases add the current working directory to the include candidates
+                    llvm::SmallString<50> cwd;
+                    llvm::sys::fs::current_path(cwd);
+                    candidates.emplace_back(cwd.begin(), cwd.end());
+                }
                 candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
                                   m_options.includeQuoteDirectories.end());
             }
@@ -925,13 +933,9 @@ public:
             for (const auto& candidate : candidates)
             {
                 llvm::SmallString<50> filename;
-                if (candidate.empty())
-                {
-                    filename = path;
-                }
-                else if (candidate.back() == '/'
+                if (candidate.back() == '/'
 #if _WIN32
-                         || candidate.back() == '\\'
+                    || candidate.back() == '\\'
 #endif
                 )
                 {
@@ -941,11 +945,11 @@ public:
                 {
                     filename = candidate + '/' + path;
                 }
-                if (!llvm::sys::fs::exists(filename))
+                if (llvm::sys::fs::exists(filename))
                 {
-                    continue;
+                    result = filename;
+                    break;
                 }
-                result = filename;
             }
         }
         if (result.empty())
