@@ -176,7 +176,7 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
             }
             else if (value == "line")
             {
-                return {ControlLine::LineTag{{lineStart, eol - 1}}};
+                return {ControlLine::LineTag{lineStart - 1, {lineStart, eol - 1}}};
             }
             else if (value == "error")
             {

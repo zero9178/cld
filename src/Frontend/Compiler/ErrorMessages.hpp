@@ -312,6 +312,23 @@ CREATE_ERROR(EXTRA_TOKENS_AFTER_INCLUDE, "Extra tokens after '#include'", Underl
 CREATE_ERROR(FILE_NOT_FOUND, "'%0' file not found", Underline<1>);
 
 CREATE_ERROR(COULD_NOT_OPEN_FILE, "Could not open '%0'", Underline<1>);
+
+CREATE_ERROR(EXPECTED_A_NUMBER_AFTER_LINE, "Expected a number after '#line'", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_END_OF_LINE_OR_STRING_AFTER_NUMBER_IN_LINE,
+             "Expected end of line or string after number in '#line' directive", Underline<0>);
+
+CREATE_ERROR(EXTRA_TOKENS_AFTER_LINE, "Extra tokens after '#line'", Underline<0>);
+
+CREATE_ERROR(STRING_MUST_BE_NORMAL_IN_LINE_DIRECTIVE, "String must be normal in '#line' directive", Underline<0>);
+
+CREATE_ERROR(NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE, "Number must be in decimal in '#line' directive",
+             Underline<0>);
+
+CREATE_ERROR(NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE, "Number must not be zero in '#line' directive", Underline<0>);
+
+CREATE_ERROR(NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE,
+             "Number must not be greater than 2147483647 in '#line' directive", Underline<0>);
 } // namespace PP
 } // namespace Errors
 

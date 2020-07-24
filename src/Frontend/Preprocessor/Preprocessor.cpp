@@ -995,7 +995,82 @@ public:
         return;
     }
 
-    void visit(const cld::PP::ControlLine::LineTag& lineTag) {}
+    void visit(const cld::PP::ControlLine::LineTag& lineTag)
+    {
+        // Parser makes sure it's not empty.
+        CLD_ASSERT(!lineTag.tokens.empty());
+        if (lineTag.tokens.empty())
+        {
+            log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
+            return;
+        }
+        std::uint64_t lineValue;
+        if (lineTag.tokens[0].getTokenType() != cld::Lexer::TokenType::PPNumber
+            || (lineTag.tokens.size() != 1
+                && (lineTag.tokens.size() != 2
+                    || lineTag.tokens[1].getTokenType() != cld::Lexer::TokenType::StringLiteral
+                    || lineTag.tokens[1].getRepresentation(*this).front() != '"')))
+        {
+            std::vector<cld::Lexer::PPToken> result;
+            macroSubstitute(lineTag.tokens, [&result](auto&& tokens) {
+                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
+            });
+            if (result.empty())
+            {
+                log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
+                return;
+            }
+            if (result[0].getTokenType() != cld::Lexer::TokenType::PPNumber)
+            {
+                log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(result[0], *this, result[0]));
+                return;
+            }
+            if (result.size() > 1)
+            {
+                if (result[1].getTokenType() != cld::Lexer::TokenType::StringLiteral)
+                {
+                    log(cld::Errors::PP::EXPECTED_END_OF_LINE_OR_STRING_AFTER_NUMBER_IN_LINE.args(result[1], *this,
+                                                                                                  result[1]));
+                    return;
+                }
+                else if (result[1].getRepresentation(*this).front() != '"')
+                {
+                    log(cld::Errors::PP::STRING_MUST_BE_NORMAL_IN_LINE_DIRECTIVE.args(result[1], *this, result[1]));
+                    return;
+                }
+            }
+            if (result.size() > 2)
+            {
+                log(cld::Errors::PP::EXTRA_TOKENS_AFTER_LINE.args(result[2], *this,
+                                                                  std::forward_as_tuple(result[2], result.back())));
+            }
+        }
+        llvm::APInt input;
+        auto errors = llvm::StringRef(lineTag.tokens[0].getValue().data(), lineTag.tokens[0].getValue().size())
+                          .getAsInteger(10, input);
+        if (errors)
+        {
+            log(cld::Errors::PP::NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
+                                                                                  lineTag.tokens[0]));
+            return;
+        }
+        if (input == 0)
+        {
+            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
+                                                                                lineTag.tokens[0]));
+            return;
+        }
+        if (input.ugt(2147483647))
+        {
+            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
+                                                                                          lineTag.tokens[0]));
+            return;
+        }
+        lineValue = input.getZExtValue();
+        if (lineTag.tokens.size() == 2)
+        {
+        }
+    }
 
     void visit(const cld::PP::ControlLine::ErrorTag& errorTag) {}
 

@@ -104,6 +104,7 @@ struct ControlLine final
 
     struct LineTag final
     {
+        Lexer::PPTokenIterator lineToken;
         llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 

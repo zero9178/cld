@@ -1103,6 +1103,37 @@ TEST_CASE("PP includes", "[PP]")
     }
 }
 
+TEST_CASE("PP line directive", "[PP]")
+{
+    SECTION("Non decimal")
+    {
+        PP_OUTPUTS_WITH("#line 0x5\n", ProducesError(NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE));
+        PP_OUTPUTS_WITH("#line 0b5\n", ProducesError(NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE));
+    }
+    SECTION("Illegal values")
+    {
+        PP_OUTPUTS_WITH("#line 0\n", ProducesError(NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE));
+        PP_OUTPUTS_WITH("#line 2147483648\n", ProducesError(NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE));
+        PP_OUTPUTS_WITH("#line 34463423545245325234523423423423523\n",
+                        ProducesError(NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE));
+    }
+    SECTION("Computed")
+    {
+        PP_OUTPUTS_WITH("#define EMPTY\n"
+                        "#line EMPTY\n",
+                        ProducesError(EXPECTED_A_NUMBER_AFTER_LINE));
+        PP_OUTPUTS_WITH("#define MACRO w\n"
+                        "#line MACRO\n",
+                        ProducesError(EXPECTED_A_NUMBER_AFTER_LINE));
+        PP_OUTPUTS_WITH("#define MACRO 5 w\n"
+                        "#line MACRO\n",
+                        ProducesError(EXPECTED_END_OF_LINE_OR_STRING_AFTER_NUMBER_IN_LINE));
+        PP_OUTPUTS_WITH("#define MACRO 5 L\"5\"\n"
+                        "#line MACRO\n",
+                        ProducesError(STRING_MUST_BE_NORMAL_IN_LINE_DIRECTIVE));
+    }
+}
+
 TEST_CASE("PP Reconstruction", "[PP]")
 {
     SECTION("Object macro")
