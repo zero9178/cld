@@ -12,6 +12,7 @@ namespace cld
 namespace Lexer
 {
 class TokenBase;
+using IntervalMap = std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>;
 } // namespace Lexer
 
 namespace Source
@@ -45,5 +46,18 @@ public:
     [[nodiscard]] virtual llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept = 0;
 
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const noexcept = 0;
+};
+
+class PPSourceInterface : virtual public SourceInterface
+{
+public:
+    PPSourceInterface() = default;
+    virtual ~PPSourceInterface() = default;
+    PPSourceInterface(const PPSourceInterface&) = default;
+    PPSourceInterface& operator=(const PPSourceInterface&) = default;
+    PPSourceInterface(PPSourceInterface&&) noexcept = default;
+    PPSourceInterface& operator=(PPSourceInterface&&) noexcept = default;
+
+    [[nodiscard]] virtual llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept = 0;
 };
 } // namespace cld

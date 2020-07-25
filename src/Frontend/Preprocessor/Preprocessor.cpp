@@ -32,7 +32,7 @@ std::vector<T>& append(std::vector<T>& lhs, std::vector<T>&& rhs)
     return lhs;
 }
 
-class Preprocessor final : private cld::SourceInterface
+class Preprocessor final : private cld::PPSourceInterface
 {
     llvm::raw_ostream* m_report;
     const cld::LanguageOptions& m_options;
@@ -50,6 +50,7 @@ class Preprocessor final : private cld::SourceInterface
     std::unordered_map<std::string_view, Macro> m_defines;
     std::vector<std::unordered_set<std::string>> m_disabledMacros{1};
     std::vector<cld::Source::File> m_files;
+    std::vector<cld::Lexer::IntervalMap> m_intervalMaps;
     bool m_errorsOccured = false;
     bool m_visitingScratchPad = true;
 
@@ -725,6 +726,11 @@ class Preprocessor final : private cld::SourceInterface
         return m_options;
     }
 
+    llvm::ArrayRef<cld::Lexer::IntervalMap> getIntervalMaps() const noexcept override
+    {
+        return m_intervalMaps;
+    }
+
 public:
     Preprocessor(llvm::raw_ostream* report, const cld::LanguageOptions& options) noexcept
         : m_report(report), m_options(options)
@@ -790,6 +796,11 @@ public:
         return m_files;
     }
 
+    std::vector<cld::Lexer::IntervalMap>& getIntervalMaps() noexcept
+    {
+        return m_intervalMaps;
+    }
+
     void include(cld::PPSourceObject&& sourceObject)
     {
         auto scope = llvm::make_scope_exit([prev = m_currentFile, this] { m_currentFile = prev; });
@@ -802,6 +813,7 @@ public:
             }
             m_files.push_back(
                 {std::move(iter.path), std::move(iter.source), std::move(iter.starts), std::move(iter.ppTokens)});
+            m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
         }
         m_currentFile = m_files.size() - 1;
         cld::PP::Context context(*this, m_report);
@@ -1096,7 +1108,12 @@ public:
         if (result.size() == 2)
         {
             CLD_ASSERT(result[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-            text = result[1].getValue();
+            auto ctoken = cld::Lexer::parseStringLiteral(result[1], *this, m_report);
+            if (!ctoken)
+            {
+                return;
+            }
+            text = cld::get<std::string>(std::move(ctoken->getValue()));
         }
         auto thisLine = lineTag.lineToken->getLine(*this);
         m_files[m_currentFile].lineAndFileMapping.emplace_back(thisLine + 1, std::move(text), lineValue);
@@ -1231,5 +1248,5 @@ cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm
     Preprocessor preprocessor(reporter, options);
     preprocessor.include(std::move(sourceObject));
     return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), options,
-                          std::move(preprocessor.getSubstitutions()));
+                          std::move(preprocessor.getSubstitutions()), {std::move(preprocessor.getIntervalMaps())});
 }

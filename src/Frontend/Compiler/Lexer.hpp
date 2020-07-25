@@ -139,10 +139,10 @@ PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions
                         std::string_view sourcePath = "<stdin>");
 
 CSourceObject toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
-                        bool* errorsOccured = nullptr);
+                        bool* errorsOccurred = nullptr);
 
-std::vector<CToken> toCTokens(PPTokenIterator begin, PPTokenIterator end, const PPSourceObject& sourceObject,
-                              llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr);
+std::vector<CToken> toCTokens(PPTokenIterator begin, PPTokenIterator end, const PPSourceInterface& sourceInterface,
+                              llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccurred = nullptr);
 
 class TokenBase
 {
@@ -333,6 +333,9 @@ public:
 };
 
 static_assert(!std::is_polymorphic_v<CToken>);
+
+std::optional<CToken> parseStringLiteral(const PPToken& ppToken, const PPSourceInterface& sourceInterface,
+                                         llvm::raw_ostream* reporter = nullptr);
 
 /**
  * @param tokenType Token

@@ -1171,6 +1171,12 @@ TEST_CASE("PP line directive", "[PP]")
         CHECK(*fileName == "main.c");
         CHECK(newLine == 5);
     }
+    SECTION("String is parsed as string literal")
+    {
+        PP_OUTPUTS_WITH("#line 5 \"\\9\"\n", ProducesError(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER, "9"));
+        PP_OUTPUTS_WITH("#line 5 \"as\ndawd\"\n",
+                        ProducesError(cld::Errors::Lexer::NEWLINE_IN_STRING_LITERAL_USE_BACKLASH_N));
+    }
     SECTION("Non decimal")
     {
         PP_OUTPUTS_WITH("#line 0x5\n", ProducesError(NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE));

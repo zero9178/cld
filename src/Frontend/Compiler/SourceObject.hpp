@@ -56,16 +56,21 @@ class SourceObjectStorage<Lexer::CToken>
 };
 
 template <>
-class SourceObjectStorage<Lexer::PPToken>
+class SourceObjectStorage<Lexer::PPToken> : public virtual PPSourceInterface
 {
-    Lexer::IntervalMap m_intervalMap;
+    std::vector<Lexer::IntervalMap> m_intervalMap;
 
 public:
     SourceObjectStorage() = default;
 
-    SourceObjectStorage(Lexer::IntervalMap intervalMap) : m_intervalMap(std::move(intervalMap)) {}
+    SourceObjectStorage(std::vector<Lexer::IntervalMap> intervalMap) : m_intervalMap(std::move(intervalMap)) {}
 
-    const Lexer::IntervalMap& getIntervalMap() const
+    llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept
+    {
+        return m_intervalMap;
+    }
+
+    std::vector<Lexer::IntervalMap>& getIntervalMap()
     {
         return m_intervalMap;
     }
@@ -73,7 +78,7 @@ public:
 } // namespace detail
 
 template <class T>
-class SourceObject final : public SourceInterface, public detail::SourceObjectStorage<T>
+class SourceObject final : virtual public SourceInterface, public detail::SourceObjectStorage<T>
 {
     std::vector<T> m_tokens;
     std::vector<Source::File> m_files;
@@ -83,6 +88,7 @@ class SourceObject final : public SourceInterface, public detail::SourceObjectSt
 public:
     SourceObject() = default;
 
+    template <class U = T, std::enable_if_t<!std::is_same_v<Lexer::PPToken, U>>* = nullptr>
     SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
                  std::vector<Source::PPRecord> substitutions)
         : m_tokens(std::move(tokens)),
@@ -92,9 +98,10 @@ public:
     {
     }
 
+    template <class U = T, std::enable_if_t<std::is_same_v<Lexer::PPToken, U>>* = nullptr>
     SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                 std::vector<Source::PPRecord> substitutions, detail::SourceObjectStorage<T> storage)
-        : detail::SourceObjectStorage<T>(std::move(storage)),
+                 std::vector<Source::PPRecord> substitutions, std::vector<Lexer::IntervalMap> intervalMaps)
+        : detail::SourceObjectStorage<T>(std::move(intervalMaps)),
           m_tokens(std::move(tokens)),
           m_files(std::move(files)),
           m_languageOptions(std::move(languageOptions)),
