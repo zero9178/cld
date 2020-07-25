@@ -381,13 +381,59 @@ TEST_CASE("PP Builtin macros", "[PP]")
     }
     SECTION("__FILE__")
     {
-        auto ret = preprocessResult("__FILE__");
-        CHECK_THAT(ret, ProducesPP("\"<stdin>\""));
+        SECTION("Normal")
+        {
+            auto ret = preprocessResult("__FILE__");
+            CHECK_THAT(ret, ProducesPP("\"<stdin>\""));
+        }
+        SECTION("Cross file")
+        {
+            auto scope = createInclude("A.h", "#define MACRO __FILE__\n");
+            auto ret = preprocessResult("#include \"A.h\"\n"
+                                        "MACRO");
+            CHECK_THAT(ret, ProducesPP("\"<stdin>\""));
+        }
+        SECTION("#line directive")
+        {
+            llvm::SmallString<50> cwd;
+            REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+            auto scope = createInclude("A.h", "__FILE__");
+            auto ret = preprocessResult("#line 5 \"main.c\"\n"
+                                        "__FILE__\n"
+                                        "#include \"A.h\"\n");
+            REQUIRE(ret.data().size() == 2);
+            CHECK(ret.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            CHECK(ret.data()[0].getValue() == "main.c");
+            CHECK(llvm::sys::fs::equivalent(ret.data()[1].getValue().data(), cwd + "/A.h"));
+        }
     }
     SECTION("__LINE__")
     {
-        auto ret = preprocessResult("__LINE__\n\n__LINE__");
-        CHECK_THAT(ret, ProducesPP("1\n\n3"));
+        SECTION("Normal")
+        {
+            auto ret = preprocessResult("__LINE__\n\n__LINE__");
+            CHECK_THAT(ret, ProducesPP("1\n\n3"));
+        }
+        SECTION("Cross file")
+        {
+            auto scope = createInclude("A.h", "#define MACRO __LINE__\n");
+            auto ret = preprocessResult("#include \"A.h\"\n"
+                                        "MACRO");
+            CHECK_THAT(ret, ProducesPP("2"));
+        }
+        SECTION("#line directive")
+        {
+            auto scope = createInclude("A.h", "__LINE__");
+            auto ret = preprocessResult("#line 5\n"
+                                        "__LINE__\n"
+                                        "#include \"A.h\"\n");
+            REQUIRE(ret.data().size() == 2);
+            CHECK(ret.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
+            CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::PPNumber);
+            CHECK(ret.data()[0].getValue() == "5");
+            CHECK(ret.data()[1].getValue() == "1");
+        }
     }
 }
 

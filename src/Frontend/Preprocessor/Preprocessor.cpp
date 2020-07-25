@@ -472,7 +472,7 @@ class Preprocessor final : private cld::SourceInterface
         }
         std::vector<cld::Lexer::PPToken> output;
         auto line = tokens.front().getLine(*this);
-        std::string_view file = m_files[tokens.front().getFileId()].path;
+        auto fileId = tokens.front().getFileId();
         auto* start = tokens.data();
         for (auto* iter = tokens.data(); iter != tokens.data() + tokens.size();)
         {
@@ -502,14 +502,39 @@ class Preprocessor final : private cld::SourceInterface
                 m_defines.erase(name);
                 m_visitingScratchPad = true;
                 auto scope = llvm::make_scope_exit([this] { m_visitingScratchPad = false; });
+                const auto& range = m_files[fileId].lineAndFileMapping;
+                auto map = std::upper_bound(range.begin(), range.end(), line,
+                                            [](auto line, const auto& tuple) { return line < std::get<0>(tuple); });
+                if (!range.empty() && map == range.end())
+                {
+                    map--;
+                }
                 std::string source;
                 if (name == "__FILE__")
                 {
+                    std::string_view file;
+                    if (map == range.end() || !std::get<1>(*map))
+                    {
+                        file = m_files[fileId].path;
+                    }
+                    else
+                    {
+                        file = *std::get<1>(*map);
+                    }
                     source = "#define __FILE__ \"" + escapeString(file) + "\"\n";
                 }
                 else
                 {
-                    source = "#define __LINE__ " + std::to_string(line) + "\n";
+                    std::uint64_t printedLine;
+                    if (map != range.end())
+                    {
+                        printedLine = std::get<2>(*map) + line - std::get<0>(*map);
+                    }
+                    else
+                    {
+                        printedLine = line;
+                    }
+                    source = "#define __LINE__ " + std::to_string(printedLine) + "\n";
                 }
                 auto scratchPadPP =
                     cld::Lexer::tokenize(source, m_options, m_report, &m_errorsOccured, "<Scratch Pad>");
