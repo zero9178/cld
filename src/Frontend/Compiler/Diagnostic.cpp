@@ -269,9 +269,29 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
     llvm::raw_string_ostream ss(result);
 
     location = toMacroId0Range(location, sourceInterface);
-    auto [line, column] = getLineCol(location.first, sourceInterface);
-    llvm::WithColor(ss, ss.WHITE, true) << sourceInterface.getFiles()[location.first.fileId].path << ':' << line << ':'
-                                        << column << ": ";
+    const auto [line, column] = getLineCol(location.first, sourceInterface);
+    {
+        const auto& range = sourceInterface.getFiles()[location.first.fileId].lineAndFileMapping;
+        auto iter = std::upper_bound(range.begin(), range.end(), line,
+                                     [](auto line, const auto& tuple) { return line < std::get<0>(tuple); });
+        if (!range.empty() && iter == range.end())
+        {
+            iter--;
+        }
+        if (iter == range.end())
+        {
+            // The element was not found. That means that any #lines appeared after this line or that none exist
+            llvm::WithColor(ss, ss.WHITE, true)
+                << sourceInterface.getFiles()[location.first.fileId].path << ':' << line << ':' << column << ": ";
+        }
+        else
+        {
+            const auto path = std::get<1>(*iter).value_or(sourceInterface.getFiles()[location.first.fileId].path);
+            const auto printedLine = std::get<2>(*iter) + line - std::get<0>(*iter);
+            llvm::WithColor(ss, ss.WHITE, true) << path << ':' << printedLine << ':' << column << ": ";
+        }
+    }
+
     switch (m_severity)
     {
         case Severity::Error: llvm::WithColor(ss, ss.RED, true) << "error: "; break;

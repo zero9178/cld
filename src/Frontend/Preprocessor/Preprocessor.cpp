@@ -60,7 +60,6 @@ class Preprocessor final : private cld::SourceInterface
             return;
         }
         m_result.insert(m_result.end(), tokens.begin(), tokens.end());
-        m_result.insert(m_result.end(), cld::Lexer::PPToken(cld::Lexer::TokenType::Newline, 0, 0, 0, 0, 0));
     }
 
     void log(const cld::Message& message)
@@ -1004,6 +1003,7 @@ public:
             log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
             return;
         }
+        std::vector<cld::Lexer::PPToken> result;
         std::uint64_t lineValue;
         if (lineTag.tokens[0].getTokenType() != cld::Lexer::TokenType::PPNumber
             || (lineTag.tokens.size() != 1
@@ -1011,7 +1011,6 @@ public:
                     || lineTag.tokens[1].getTokenType() != cld::Lexer::TokenType::StringLiteral
                     || lineTag.tokens[1].getRepresentation(*this).front() != '"')))
         {
-            std::vector<cld::Lexer::PPToken> result;
             macroSubstitute(lineTag.tokens, [&result](auto&& tokens) {
                 result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
             });
@@ -1045,31 +1044,37 @@ public:
                                                                   std::forward_as_tuple(result[2], result.back())));
             }
         }
+        else
+        {
+            result = lineTag.tokens;
+        }
+        CLD_ASSERT(result[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         llvm::APInt input;
-        auto errors = llvm::StringRef(lineTag.tokens[0].getValue().data(), lineTag.tokens[0].getValue().size())
-                          .getAsInteger(10, input);
+        auto errors = llvm::StringRef(result[0].getValue().data(), result[0].getValue().size()).getAsInteger(10, input);
         if (errors)
         {
-            log(cld::Errors::PP::NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
-                                                                                  lineTag.tokens[0]));
+            log(cld::Errors::PP::NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE.args(result[0], *this, result[0]));
             return;
         }
         if (input == 0)
         {
-            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
-                                                                                lineTag.tokens[0]));
+            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE.args(result[0], *this, result[0]));
             return;
         }
         if (input.ugt(2147483647))
         {
-            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE.args(lineTag.tokens[0], *this,
-                                                                                          lineTag.tokens[0]));
+            log(cld::Errors::PP::NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE.args(result[0], *this, result[0]));
             return;
         }
         lineValue = input.getZExtValue();
-        if (lineTag.tokens.size() == 2)
+        std::optional<std::string> text;
+        if (result.size() == 2)
         {
+            CLD_ASSERT(result[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+            text = result[1].getValue();
         }
+        auto thisLine = lineTag.lineToken->getLine(*this);
+        m_files[m_currentFile].lineAndFileMapping.emplace_back(thisLine + 1, std::move(text), lineValue);
     }
 
     void visit(const cld::PP::ControlLine::ErrorTag& errorTag) {}

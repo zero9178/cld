@@ -272,11 +272,11 @@ TEST_CASE("PP Object like Macros", "[PP]")
     {
         auto ret = preprocessResult("#define FUNC (1 + 3)\nint main(void) {\n    return FUNC;\n}");
         CHECK_THAT(ret, ProducesPP("int main(void) {\n    return (1 + 3);\n}"));
-        REQUIRE(ret.data().size() == 17);
+        REQUIRE(ret.data().size() == 14);
         CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 6, 0));
-        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 8, 0));
-        CHECK(haveMacroID(ret.data().begin() + 8, ret.data().begin() + 13, 1));
-        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().end(), 0));
+        CHECK(haveMacroID(ret.data().begin() + 6, ret.data().begin() + 7, 0));
+        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 12, 1));
+        CHECK(haveMacroID(ret.data().begin() + 12, ret.data().end(), 0));
         REQUIRE(ret.getSubstitutions().size() == 2);
         REQUIRE(std::holds_alternative<cld::Source::Substitution>(ret.getSubstitutions()[1]));
         CHECK(cld::get<cld::Source::Substitution>(ret.getSubstitutions()[1]).replacedIdentifier.getRepresentation(ret)
@@ -300,13 +300,13 @@ int main(void) {
     return NESTED;
 })");
         CHECK_THAT(ret, ProducesPP("int main(void) {\n    return (1 + 3) * (1 + 3);\n}"));
-        REQUIRE(ret.data().size() == 23);
+        REQUIRE(ret.data().size() == 20);
         CHECK(haveMacroID(ret.data().begin(), ret.data().begin() + 6, 0));
-        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 8, 0));
-        CHECK(haveMacroID(ret.data().begin() + 8, ret.data().begin() + 13, 2));
-        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().begin() + 14, 1));
-        CHECK(haveMacroID(ret.data().begin() + 14, ret.data().begin() + 19, 3));
-        CHECK(haveMacroID(ret.data().begin() + 19, ret.data().end(), 0));
+        CHECK(haveMacroID(ret.data().begin() + 6, ret.data().begin() + 7, 0));
+        CHECK(haveMacroID(ret.data().begin() + 7, ret.data().begin() + 12, 2));
+        CHECK(haveMacroID(ret.data().begin() + 12, ret.data().begin() + 13, 1));
+        CHECK(haveMacroID(ret.data().begin() + 13, ret.data().begin() + 18, 3));
+        CHECK(haveMacroID(ret.data().begin() + 18, ret.data().end(), 0));
     }
     SECTION("At beginning of line")
     {
@@ -1036,16 +1036,13 @@ TEST_CASE("PP includes", "[PP]")
         auto file2 = createInclude("B.h", "__FILE__");
         auto ret = preprocessResult("#include \"A.h\"\n"
                                     "__FILE__");
-        REQUIRE(ret.data().size() == 6);
-        CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::Newline);
-        CHECK(ret.data()[3].getTokenType() == cld::Lexer::TokenType::Newline);
-        CHECK(ret.data()[5].getTokenType() == cld::Lexer::TokenType::Newline);
+        REQUIRE(ret.data().size() == 3);
         CHECK(ret.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
+        CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         CHECK(ret.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-        CHECK(ret.data()[4].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         CHECK(llvm::sys::fs::equivalent(ret.data()[0].getValue().data(), cwd + "/B.h"));
-        CHECK(llvm::sys::fs::equivalent(ret.data()[2].getValue().data(), cwd + "/A.h"));
-        CHECK(ret.data()[4].getValue() == "<stdin>");
+        CHECK(llvm::sys::fs::equivalent(ret.data()[1].getValue().data(), cwd + "/A.h"));
+        CHECK(ret.data()[2].getValue() == "<stdin>");
     }
     SECTION("File not found")
     {
@@ -1105,6 +1102,29 @@ TEST_CASE("PP includes", "[PP]")
 
 TEST_CASE("PP line directive", "[PP]")
 {
+    SECTION("With number")
+    {
+        auto ret = preprocessResult("#line 5\n");
+        REQUIRE(ret.getFiles().size() == 2);
+        CHECK(ret.getFiles()[1].path == "<stdin>");
+        REQUIRE(ret.getFiles()[1].lineAndFileMapping.size() == 1);
+        auto& [startLine, fileName, newLine] = ret.getFiles()[1].lineAndFileMapping[0];
+        CHECK(startLine == 2);
+        CHECK(!fileName);
+        CHECK(newLine == 5);
+    }
+    SECTION("With file too")
+    {
+        auto ret = preprocessResult("#line 5 \"main.c\"\n");
+        REQUIRE(ret.getFiles().size() == 2);
+        CHECK(ret.getFiles()[1].path == "<stdin>");
+        REQUIRE(ret.getFiles()[1].lineAndFileMapping.size() == 1);
+        auto& [startLine, fileName, newLine] = ret.getFiles()[1].lineAndFileMapping[0];
+        CHECK(startLine == 2);
+        REQUIRE(fileName);
+        CHECK(*fileName == "main.c");
+        CHECK(newLine == 5);
+    }
     SECTION("Non decimal")
     {
         PP_OUTPUTS_WITH("#line 0x5\n", ProducesError(NUMBER_MUST_BE_IN_DECIMAL_IN_LINE_DIRECTIVE));
@@ -1203,5 +1223,24 @@ TEST_CASE("PP Reconstruction", "[PP]")
                                  "#define x 2\n"
                                  "t(g)(0)",
                                  "f(2 * (0))");
+    }
+    SECTION("Multiline normal text")
+    {
+        preprocessReconstructsTo("a\n"
+                                 "b\n"
+                                 "c",
+                                 "a\n"
+                                 "b\n"
+                                 "c");
+    }
+    SECTION("Multiline text with macro line")
+    {
+        preprocessReconstructsTo("#define MACRO b\n"
+                                 "a\n"
+                                 "MACRO\n"
+                                 "c",
+                                 "a\n"
+                                 "b\n"
+                                 "c");
     }
 }

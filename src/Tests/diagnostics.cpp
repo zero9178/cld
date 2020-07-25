@@ -65,8 +65,8 @@ cld::SourceInterface* interface;
     return ppsourceObject.data().data();
 }
 
-[[nodiscard, maybe_unused]] cld::Lexer::PPTokenIterator
-    pp(std::string_view code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
+[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
+                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
@@ -415,6 +415,27 @@ TEST_CASE("Diag annotate", "[diag]")
         auto message = annotateWithInsert.args(*begin, *interface, *begin, std::string_view("text"), *(begin + 2));
         CHECK_THAT(message.getText(),
                    Contains("| ^          ^") && Contains("| |          text") && Contains("| text"));
+        llvm::errs() << message;
+    }
+}
+
+TEST_CASE("Diag line and file diretive")
+{
+    SECTION("Line change")
+    {
+        const auto* tokens = pp("#line 5\n"
+                                "text text2");
+        auto message = pointLocationTest.args(*tokens, *interface);
+        CHECK_THAT(message.getText(), StartsWith("<stdin>:5:1:"));
+        llvm::errs() << message;
+    }
+    SECTION("File change")
+    {
+        const auto* tokens = pp("#line 5 \"main.c\"\n"
+                                "\n"
+                                "text text2");
+        auto message = pointLocationTest.args(*tokens, *interface);
+        CHECK_THAT(message.getText(), StartsWith("main.c:6:1:"));
         llvm::errs() << message;
     }
 }

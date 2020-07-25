@@ -21,7 +21,7 @@ struct File
     std::string source;
     std::vector<std::uint64_t> starts;
     std::vector<Lexer::PPToken> ppTokens;
-    std::vector<std::tuple<std::uint64_t, std::string, std::uint64_t>> lineAndFileMapping;
+    std::vector<std::tuple<std::uint64_t, std::optional<std::string>, std::uint64_t>> lineAndFileMapping{};
 };
 
 struct Substitution
