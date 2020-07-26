@@ -1129,9 +1129,6 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                                  TokenType::Miscellaneous);
                 }
             }
-            else
-            {
-            }
             return *this;
         }
     }

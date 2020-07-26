@@ -793,40 +793,37 @@ class Preprocessor final : private cld::PPSourceInterface
         while (curr != end && curr->getTokenType() == cld::Lexer::TokenType::Comma)
         {
             curr++;
-            if (curr == end || curr->getTokenType() == cld::Lexer::TokenType::Identifier
-                || curr->getTokenType() != cld::Lexer::TokenType::Ellipse)
+            if (curr != end && curr->getTokenType() == cld::Lexer::TokenType::Ellipse)
             {
-                if (curr == end)
-                {
-                    log(cld::Errors::Parser::EXPECTED_N.args(*(curr - 1), *this, cld::Lexer::TokenType::Identifier,
-                                                             *(curr - 1)));
-                    return {};
-                }
-                else if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
-                {
-                    log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this,
-                                                                          cld::Lexer::TokenType::Identifier, *curr));
-                    return {};
-                }
-                auto string = curr->getValue();
-                auto result =
-                    std::find_if(argumentList.begin(), argumentList.end(),
-                                 [string](const cld::Lexer::PPToken& token) { return string == token.getValue(); });
-                if (result == argumentList.end())
-                {
-                    argumentList.push_back(*(curr++));
-                    continue;
-                }
-                log(cld::Errors::PP::REDEFINITION_OF_MACRO_PARAMETER_N.args(*curr, *this, *curr));
-                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result, *this, *result));
+                ellipse = true;
+                argumentList.push_back(*curr);
                 curr++;
+                break;
+            }
+            if (curr == end)
+            {
+                log(cld::Errors::Parser::EXPECTED_N.args(*(curr - 1), *this, cld::Lexer::TokenType::Identifier,
+                                                         *(curr - 1)));
+                return {};
+            }
+            else if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
+            {
+                log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this, cld::Lexer::TokenType::Identifier,
+                                                                      *curr));
+                return {};
+            }
+            auto string = curr->getValue();
+            auto result =
+                std::find_if(argumentList.begin(), argumentList.end(),
+                             [string](const cld::Lexer::PPToken& token) { return string == token.getValue(); });
+            if (result == argumentList.end())
+            {
+                argumentList.push_back(*(curr++));
                 continue;
             }
-            CLD_ASSERT(curr->getTokenType() == cld::Lexer::TokenType::Ellipse);
-            ellipse = true;
-            argumentList.push_back(*curr);
+            log(cld::Errors::PP::REDEFINITION_OF_MACRO_PARAMETER_N.args(*curr, *this, *curr));
+            log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result, *this, *result));
             curr++;
-            break;
         }
         if (curr == end)
         {
@@ -1235,8 +1232,13 @@ public:
     {
         std::string path;
         bool isQuoted = false;
-        if (includeTag.tokens.size() != 1
-            || includeTag.tokens[0].getTokenType() != cld::Lexer::TokenType::StringLiteral)
+        if (includeTag.tokens.size() == 1
+            && includeTag.tokens[0].getTokenType() == cld::Lexer::TokenType::StringLiteral)
+        {
+            isQuoted = includeTag.tokens[0].getRepresentation(*this)[0] == '"';
+            path = includeTag.tokens[0].getValue();
+        }
+        else
         {
             std::vector<cld::Lexer::PPToken> result;
             macroSubstitute(includeTag.tokens, [&result](auto&& tokens) {
@@ -1296,11 +1298,6 @@ public:
                         *includeTag.includeToken, *this, std::forward_as_tuple(result[1], result.back())));
                 }
             }
-        }
-        else
-        {
-            isQuoted = includeTag.tokens[0].getRepresentation(*this)[0] == '"';
-            path = includeTag.tokens[0].getValue();
         }
 
         llvm::SmallString<50> result;
@@ -1395,7 +1392,6 @@ public:
         log(cld::Errors::PP::COULD_NOT_OPEN_FILE.args(
             includeTag.tokens.front(), *this, path,
             std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
-        return;
     }
 
     void visit(const cld::PP::ControlLine::LineTag& lineTag)
@@ -1407,11 +1403,15 @@ public:
         }
         std::vector<cld::Lexer::PPToken> result;
         std::uint64_t lineValue;
-        if (lineTag.tokens[0].getTokenType() != cld::Lexer::TokenType::PPNumber
-            || (lineTag.tokens.size() != 1
-                && (lineTag.tokens.size() != 2
-                    || lineTag.tokens[1].getTokenType() != cld::Lexer::TokenType::StringLiteral
-                    || lineTag.tokens[1].getRepresentation(*this).front() != '"')))
+        if (lineTag.tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber
+            && !(lineTag.tokens.size() != 1
+                 && (lineTag.tokens.size() != 2
+                     || lineTag.tokens[1].getTokenType() != cld::Lexer::TokenType::StringLiteral
+                     || lineTag.tokens[1].getRepresentation(*this).front() != '"')))
+        {
+            result = lineTag.tokens;
+        }
+        else
         {
             macroSubstitute(lineTag.tokens, [&result](auto&& tokens) {
                 result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
@@ -1445,10 +1445,6 @@ public:
                 log(cld::Errors::PP::EXTRA_TOKENS_AFTER_LINE.args(result[2], *this,
                                                                   std::forward_as_tuple(result[2], result.back())));
             }
-        }
-        else
-        {
-            result = lineTag.tokens;
         }
         CLD_ASSERT(result[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         llvm::APInt input;
