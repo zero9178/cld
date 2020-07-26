@@ -1484,7 +1484,10 @@ public:
         m_files[m_currentFile].lineAndFileMapping.emplace_back(thisLine + 1, std::move(text), lineValue);
     }
 
-    void visit(const cld::PP::ControlLine::ErrorTag& errorTag) {}
+    void visit(const cld::PP::ControlLine::ErrorTag& errorTag)
+    {
+        log(cld::Errors::PP::ERROR_ENCOUNTERED.args(*errorTag.errorToken, *this, errorTag.tokens));
+    }
 
     void visit(const cld::PP::ControlLine::PragmaTag& pragmaTag) {}
 

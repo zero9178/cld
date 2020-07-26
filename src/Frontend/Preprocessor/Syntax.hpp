@@ -107,6 +107,7 @@ struct ControlLine final
 
     struct ErrorTag final
     {
+        Lexer::PPTokenIterator errorToken;
         llvm::ArrayRef<Lexer::PPToken> tokens;
     };
 

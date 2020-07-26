@@ -329,6 +329,8 @@ CREATE_ERROR(NUMBER_MUST_NOT_BE_ZERO_IN_LINE_DIRECTIVE, "Number must not be zero
 
 CREATE_ERROR(NUMBER_MUST_NOT_BE_GREATER_THAN_X_IN_LINE_DIRECTIVE,
              "Number must not be greater than 2147483647 in '#line' directive", Underline<0>);
+
+CREATE_ERROR(ERROR_ENCOUNTERED, "'#error' encountered", Underline<0>);
 } // namespace PP
 } // namespace Errors
 

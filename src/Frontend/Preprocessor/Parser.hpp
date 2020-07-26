@@ -39,8 +39,6 @@ Group parseGroup(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Cont
 
 ControlLine parseControlLine(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context);
 
-// DefineDirective parseDefineDirective(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context);
-
 IfSection parseIfSection(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context);
 
 ElseGroup parseElseGroup(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context);

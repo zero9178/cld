@@ -1385,6 +1385,15 @@ TEST_CASE("PP conditional inclusion", "[PP]")
     }
 }
 
+TEST_CASE("PP error", "[PP]")
+{
+    PP_OUTPUTS_WITH("#error aiwzdbwauzdbwaizadbw\n", ProducesError(ERROR_ENCOUNTERED));
+    PP_OUTPUTS_WITH("#if 0\n"
+                    "#error aiwzdbwauzdbwaizadbw\n"
+                    "#endif\n",
+                    ProducesNothing());
+}
+
 TEST_CASE("PP Reconstruction", "[PP]")
 {
     SECTION("Object macro")
