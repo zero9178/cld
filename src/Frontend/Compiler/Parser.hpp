@@ -16,7 +16,7 @@ class FatalParserError : public std::exception
 
 class Context final
 {
-    const CSourceObject& m_sourceObject;
+    const SourceInterface& m_sourceInterface;
     llvm::raw_ostream* m_reporter;
     struct DeclarationLocation
     {
@@ -76,7 +76,7 @@ public:
     template <class... Args>
     constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
 
-    explicit Context(const CSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+    explicit Context(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                      bool inPreprocessor = false);
 
     ~Context() = default;
@@ -111,7 +111,7 @@ public:
 
     [[nodiscard]] std::size_t getCurrentErrorCount() const;
 
-    const CSourceObject& getSourceObject() const;
+    const SourceInterface& getSourceInterface() const;
 
     void skipUntil(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, TokenBitSet additional = {});
 

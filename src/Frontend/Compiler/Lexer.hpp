@@ -330,6 +330,16 @@ public:
     {
         return m_type;
     }
+
+    void setType(Type type)
+    {
+        m_type = type;
+    }
+
+    void setValue(const variant& value)
+    {
+        m_value = value;
+    }
 };
 
 static_assert(!std::is_polymorphic_v<CToken>);

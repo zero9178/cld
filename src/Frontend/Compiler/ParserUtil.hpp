@@ -22,12 +22,12 @@ bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTok
         if (begin == end)
         {
             context.log(
-                cld::Errors::Parser::EXPECTED_N.args(*(end - 1), context.getSourceObject(), expected, *(end - 1)));
+                cld::Errors::Parser::EXPECTED_N.args(*(end - 1), context.getSourceInterface(), expected, *(end - 1)));
         }
         else
         {
-            context.log(
-                cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceObject(), expected, *begin));
+            context.log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
+                                                                          expected, *begin));
         }
         if (additional)
         {

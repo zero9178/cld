@@ -10,17 +10,18 @@
 
 #include "TestConfig.hpp"
 
-#define preprocessResult(source)                                                      \
-    [](const std::string& str) {                                                      \
-        std::string storage;                                                          \
-        llvm::raw_string_ostream ss(storage);                                         \
-        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss); \
-        INFO(ss.str());                                                               \
-        REQUIRE(ss.str().empty());                                                    \
-        auto ret = cld::PP::preprocess(std::move(tokens), &ss);                       \
-        INFO(ss.str());                                                               \
-        REQUIRE(ss.str().empty());                                                    \
-        return ret;                                                                   \
+#define preprocessResult(source)                                                                       \
+    [](const std::string& str) {                                                                       \
+        std::string storage;                                                                           \
+        llvm::raw_string_ostream ss(storage);                                                          \
+        bool errorsOccurred = false;                                                                   \
+        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
+        REQUIRE_FALSE(errorsOccurred);                                                                 \
+        INFO(ss.str());                                                                                \
+        auto ret = cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                       \
+        REQUIRE_FALSE(errorsOccurred);                                                                 \
+        INFO(ss.str());                                                                                \
+        return ret;                                                                                    \
     }(source)
 
 #define preprocessResultWith(source, option)                           \
@@ -396,6 +397,13 @@ int main(void) {
         CHECK_THAT(ret, ProducesPP("int table[];"));
         ret = preprocessResult("#define TABSIZE 100\nint table?\?(TABSIZE?\?);");
         CHECK_THAT(ret, ProducesPP("int table[100];"));
+    }
+    SECTION("defined isn't special")
+    {
+        auto ret = preprocessResult("#define BAR 5\n"
+                                    "#define MACRO BAR)\n"
+                                    "defined(MACRO");
+        CHECK_THAT(ret, ProducesPP("defined(5)"));
     }
 }
 
@@ -1258,6 +1266,122 @@ TEST_CASE("PP line directive", "[PP]")
         PP_OUTPUTS_WITH("#define MACRO 5 L\"5\"\n"
                         "#line MACRO\n",
                         ProducesError(STRING_MUST_BE_NORMAL_IN_LINE_DIRECTIVE));
+    }
+}
+
+TEST_CASE("PP conditional inclusion", "[PP]")
+{
+    SECTION("ifdef/ifndef")
+    {
+        SECTION("Simple")
+        {
+            auto ret = preprocessResult("#define MACRO\n"
+                                        "#ifdef MACRO\n"
+                                        "#define RESULT 1\n"
+                                        "#endif\n"
+                                        "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#define MACRO\n"
+                                   "#ifndef MACRO\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("RESULT"));
+            ret = preprocessResult("#ifndef MACRO\n"
+                                   "#define MACRO 1\n"
+                                   "#endif\n"
+                                   "MACRO");
+            CHECK_THAT(ret, ProducesPP("1"));
+        }
+        SECTION("else")
+        {
+            auto ret = preprocessResult("#define MACRO\n"
+                                        "#ifndef MACRO\n"
+                                        "#define RESULT 0\n"
+                                        "#else\n"
+                                        "#define RESULT 1\n"
+                                        "#endif\n"
+                                        "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#ifdef MACRO\n"
+                                   "#define RESULT 0\n"
+                                   "#else\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+        }
+    }
+    SECTION("if")
+    {
+        SECTION("Simple")
+        {
+            auto ret = preprocessResult("#if 1\n"
+                                        "#define RESULT 1\n"
+                                        "#endif\n"
+                                        "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+        }
+        SECTION("Identifiers are 0")
+        {
+            auto ret = preprocessResult("#if !TEST\n"
+                                        "#define RESULT 1\n"
+                                        "#endif\n"
+                                        "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            PP_OUTPUTS_WITH("#if ID.m\n"
+                            "#endif\n",
+                            ProducesError(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N, "identifier", "'m'"));
+        }
+        SECTION("Unary defined")
+        {
+            auto ret = preprocessResult("#define MACRO\n"
+                                        "#if defined MACRO\n"
+                                        "#define RESULT 1\n"
+                                        "#endif\n"
+                                        "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#define MACRO\n"
+                                   "#if defined(MACRO)\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#if defined MACRO\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("RESULT"));
+            ret = preprocessResult("#if defined(MACRO)\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("RESULT"));
+            ret = preprocessResult("#if defined(__FILE__)\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#if defined(__LINE__)\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            ret = preprocessResult("#define BAR\n"
+                                   "#define FOO defined(BAR)\n"
+                                   "#if FOO\n"
+                                   "#define RESULT 1\n"
+                                   "#endif\n"
+                                   "RESULT");
+            CHECK_THAT(ret, ProducesPP("1"));
+            PP_OUTPUTS_WITH("#define BAR\n"
+                            "#define FOO defined(BAR)\n"
+                            "#if FOO\n"
+                            "#define RESULT 1\n"
+                            "#endif\n"
+                            "RESULT",
+                            ProducesWarning(MACRO_EXPANSION_PRODUCING_DEFINED_IS_NOT_PORTABLE));
+        }
     }
 }
 

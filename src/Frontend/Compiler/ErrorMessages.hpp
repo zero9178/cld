@@ -350,6 +350,9 @@ CREATE_WARNING(N_REDEFINED, "macro-redefined", "%0 redefined", Underline<0>);
 CREATE_WARNING(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB, "token-concat",
                "Token concatenation resulting in an invalid token is undefined behaviour", Underline<0>, PointAt<1>,
                Underline<2>);
+
+CREATE_WARNING(MACRO_EXPANSION_PRODUCING_DEFINED_IS_NOT_PORTABLE, "expansion-to-defined",
+               "Macro expansion producing 'defined' is not portable", Underline<0>);
 } // namespace PP
 } // namespace Warnings
 

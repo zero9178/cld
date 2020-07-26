@@ -475,7 +475,7 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
         if (!expect(Lexer::TokenType::Colon, begin, end, context,
-                    Notes::TO_MATCH_N_HERE.args(*questionMarkpos, context.getSourceObject(), *questionMarkpos)))
+                    Notes::TO_MATCH_N_HERE.args(*questionMarkpos, context.getSourceInterface(), *questionMarkpos)))
         {
             context.skipUntil(begin, end, firstExpressionSet);
         }
@@ -557,11 +557,11 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::CTokenIte
     {
         if (begin != end)
         {
-            context.log(Errors::Parser::EXPECTED_TYPENAME_BEFORE_N.args(*begin, context.getSourceObject(), *begin));
+            context.log(Errors::Parser::EXPECTED_TYPENAME_BEFORE_N.args(*begin, context.getSourceInterface(), *begin));
         }
         else
         {
-            context.log(Errors::Parser::EXPECTED_TYPENAME.args(diag::after(*(begin - 1)), context.getSourceObject(),
+            context.log(Errors::Parser::EXPECTED_TYPENAME.args(diag::after(*(begin - 1)), context.getSourceInterface(),
                                                                *(begin - 1)));
         }
     }
@@ -635,7 +635,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             }
 
             if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context,
-                        cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceObject(), *openPpos)))
+                        cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -656,7 +656,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
 
             if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                        cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceObject(), *openPpos)))
+                        cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -735,7 +735,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                Notes::TO_MATCH_N_HERE.args(*start, context.getSourceObject(), *start)))
+                Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start)))
     {
         context.skipUntil(begin, end, firstExpressionSet);
     }
@@ -770,7 +770,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     if (openBrace)
     {
         if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
-                    Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceObject(), **openBrace)))
+                    Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace)))
         {
             context.skipUntil(begin, end, firstPostfixSet);
         }
@@ -811,7 +811,7 @@ std::optional<cld::Syntax::UnaryExpression>
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceObject(), *openPpos)))
+                        Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
             {
                 context.skipUntil(begin, end);
             }
@@ -835,6 +835,11 @@ std::optional<cld::Syntax::UnaryExpression>
     else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
              && cld::get<std::string>(begin->getValue()) == "defined")
     {
+        if (begin->isMacroInserted())
+        {
+            context.log(Warnings::PP::MACRO_EXPANSION_PRODUCING_DEFINED_IS_NOT_PORTABLE.args(
+                *begin, context.getSourceInterface(), *begin));
+        }
         begin++;
         std::optional<Lexer::CTokenIterator> openP;
         if (begin->getTokenType() == Lexer::TokenType::OpenParentheses)
@@ -852,7 +857,7 @@ std::optional<cld::Syntax::UnaryExpression>
         if (openP)
         {
             if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        Notes::TO_MATCH_N_HERE.args(**openP, context.getSourceObject(), **openP)))
+                        Notes::TO_MATCH_N_HERE.args(**openP, context.getSourceInterface(), **openP)))
             {
                 context.skipUntil(begin, end);
             }
@@ -952,7 +957,7 @@ std::optional<cld::Syntax::PostFixExpression>
                         return match(
                             literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
                             [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
-                                switch (context.getSourceObject().getLanguageOptions().sizeOfWChar)
+                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
                                 {
                                     case 2:
                                     {
@@ -997,7 +1002,7 @@ std::optional<cld::Syntax::PostFixExpression>
                         return match(
                             literal,
                             [&str, &context](const std::string& lhs) -> stringVariant {
-                                switch (context.getSourceObject().getLanguageOptions().sizeOfWChar)
+                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
                                 {
                                     case 2:
                                     {
@@ -1062,7 +1067,7 @@ std::optional<cld::Syntax::PostFixExpression>
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceObject(), *openPpos)))
+                        Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
             {
                 context.skipUntil(begin, end);
             }
@@ -1074,14 +1079,14 @@ std::optional<cld::Syntax::PostFixExpression>
             if (begin == end)
             {
                 context.log(Errors::Parser::EXPECTED_LITERAL_N_OR_N.args(
-                    diag::after(*(begin - 1)), context.getSourceObject(), Lexer::TokenType::Identifier,
+                    diag::after(*(begin - 1)), context.getSourceInterface(), Lexer::TokenType::Identifier,
                     Lexer::TokenType::OpenParentheses, *(begin - 1)));
             }
             else
             {
                 context.log(Errors::Parser::EXPECTED_LITERAL_N_OR_N_INSTEAD_OF_N.args(
-                    *begin, context.getSourceObject(), Lexer::TokenType::Identifier, Lexer::TokenType::OpenParentheses,
-                    *begin));
+                    *begin, context.getSourceInterface(), Lexer::TokenType::Identifier,
+                    Lexer::TokenType::OpenParentheses, *begin));
             }
             context.skipUntil(begin, end);
         }
@@ -1096,7 +1101,7 @@ std::optional<cld::Syntax::PostFixExpression>
         begin++;
         auto type = parseTypeName(begin, end, context);
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    Notes::TO_MATCH_N_HERE.args(*start, context.getSourceObject(), *start)))
+                    Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start)))
         {
             context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenBrace));
         }
@@ -1119,7 +1124,7 @@ std::optional<cld::Syntax::PostFixExpression>
         if (openBrace)
         {
             if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
-                        Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceObject(), **openBrace)))
+                        Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace)))
             {
                 context.skipUntil(begin, end, firstPostfixSet);
             }

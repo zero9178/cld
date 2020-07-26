@@ -4,8 +4,10 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 
-#include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Common/Text.hpp>
+#include <Frontend/Compiler/ConstantEvaluator.hpp>
+#include <Frontend/Compiler/ErrorMessages.hpp>
+#include <Frontend/Compiler/Parser.hpp>
 
 #include <ctime>
 #include <stack>
@@ -34,7 +36,7 @@ std::vector<T>& append(std::vector<T>& lhs, std::vector<T>&& rhs)
 
 class Preprocessor final : private cld::PPSourceInterface
 {
-    llvm::raw_ostream* m_report;
+    llvm::raw_ostream* m_reporter;
     const cld::LanguageOptions& m_options;
     std::uint64_t m_macroID = 0;
     std::uint64_t m_currentFile = 0;
@@ -51,7 +53,7 @@ class Preprocessor final : private cld::PPSourceInterface
     std::vector<std::unordered_set<std::string>> m_disabledMacros{1};
     std::vector<cld::Source::File> m_files;
     std::vector<cld::Lexer::IntervalMap> m_intervalMaps;
-    bool m_errorsOccured = false;
+    bool m_errorsOccurred = false;
     bool m_visitingScratchPad = true;
 
     void pushLine(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
@@ -67,11 +69,11 @@ class Preprocessor final : private cld::PPSourceInterface
     {
         if (message.getSeverity() == cld::Severity::Error)
         {
-            m_errorsOccured = true;
+            m_errorsOccurred = true;
         }
-        if (m_report)
+        if (m_reporter)
         {
-            *m_report << message;
+            *m_reporter << message;
         }
     }
 
@@ -245,8 +247,9 @@ class Preprocessor final : private cld::PPSourceInterface
                     text += cld::Lexer::normalizeSpelling(token.getRepresentation(*this));
                 }
                 text += '\"';
-                auto scratchPadPP = cld::Lexer::tokenize(text, m_options, m_report, &m_errorsOccured, "<Strings>");
-                CLD_ASSERT(!m_errorsOccured);
+                bool errorsOccurred = false;
+                auto scratchPadPP = cld::Lexer::tokenize(text, m_options, m_reporter, &errorsOccurred, "<Strings>");
+                CLD_ASSERT(!errorsOccurred);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
                 CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
                 auto file = scratchPadPP.getFiles()[0];
@@ -465,7 +468,8 @@ class Preprocessor final : private cld::PPSourceInterface
     }
 
     void macroSubstitute(std::vector<cld::Lexer::PPToken>&& tokens,
-                         llvm::function_ref<void(std::vector<cld::Lexer::PPToken>&&)> lineOutput)
+                         llvm::function_ref<void(std::vector<cld::Lexer::PPToken>&&)> lineOutput,
+                         bool inIfExpression = false)
     {
         if (tokens.empty())
         {
@@ -537,10 +541,29 @@ class Preprocessor final : private cld::PPSourceInterface
                     }
                     source = "#define __LINE__ " + std::to_string(printedLine) + "\n";
                 }
+                bool errorsOccurred = false;
                 auto scratchPadPP =
-                    cld::Lexer::tokenize(source, m_options, m_report, &m_errorsOccured, "<Scratch Pad>");
-                CLD_ASSERT(!m_errorsOccured);
+                    cld::Lexer::tokenize(source, m_options, m_reporter, &errorsOccurred, "<Scratch Pad>");
+                CLD_ASSERT(!errorsOccurred);
                 include(std::move(scratchPadPP));
+            }
+            else if (inIfExpression && name == "defined")
+            {
+                iter++;
+                if (iter != tokens.data() + tokens.size())
+                {
+                    if (iter->getTokenType() == cld::Lexer::TokenType::Identifier)
+                    {
+                        iter++;
+                    }
+                    else if (iter->getTokenType() == cld::Lexer::TokenType::OpenParentheses
+                             && (iter + 1) != tokens.data() + tokens.size()
+                             && (iter + 1)->getTokenType() == cld::Lexer::TokenType::Identifier)
+                    {
+                        iter += 2;
+                    }
+                }
+                continue;
             }
             auto result = m_defines.find(name);
             if (result == m_defines.end()
@@ -823,6 +846,160 @@ class Preprocessor final : private cld::PPSourceInterface
         return Macro{identifierPos, std::move(argumentList), ellipse, {curr, end}};
     }
 
+    std::optional<bool> evaluateExpression(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
+    {
+        std::vector<cld::Lexer::PPToken> result;
+        macroSubstitute(
+            tokens,
+            [&result](auto&& tokens) {
+                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
+            },
+            true);
+        bool errorsOccurred = false;
+        auto ctokens =
+            cld::Lexer::toCTokens(result.data(), result.data() + result.size(), *this, m_reporter, &errorsOccurred);
+        if (errorsOccurred)
+        {
+            m_errorsOccurred = true;
+            return {};
+        }
+        for (auto iter = ctokens.begin(); iter != ctokens.end(); iter++)
+        {
+            switch (iter->getTokenType())
+            {
+                case cld::Lexer::TokenType::Literal:
+                {
+                    switch (iter->getType())
+                    {
+                        case cld::Lexer::CToken::Type::Int:
+                        case cld::Lexer::CToken::Type::Long:
+                        case cld::Lexer::CToken::Type::LongLong:
+                            iter->setType(cld::Lexer::CToken::Type::LongLong);
+                            break;
+                        case cld::Lexer::CToken::Type::UnsignedInt:
+                        case cld::Lexer::CToken::Type::UnsignedLong:
+                        case cld::Lexer::CToken::Type::UnsignedLongLong:
+                            iter->setType(cld::Lexer::CToken::Type::UnsignedLongLong);
+                            break;
+                        default: break;
+                    }
+                    if (!std::holds_alternative<llvm::APSInt>(iter->getValue()))
+                    {
+                        break;
+                    }
+                    auto integer = cld::get<llvm::APSInt>(iter->getValue());
+                    integer = integer.extOrTrunc(64);
+                    iter->setValue(integer);
+                    break;
+                }
+                case cld::Lexer::TokenType::Identifier:
+                case cld::Lexer::TokenType::VoidKeyword:
+                case cld::Lexer::TokenType::CharKeyword:
+                case cld::Lexer::TokenType::ShortKeyword:
+                case cld::Lexer::TokenType::IntKeyword:
+                case cld::Lexer::TokenType::LongKeyword:
+                case cld::Lexer::TokenType::FloatKeyword:
+                case cld::Lexer::TokenType::DoubleKeyword:
+                case cld::Lexer::TokenType::SignedKeyword:
+                case cld::Lexer::TokenType::UnsignedKeyword:
+                case cld::Lexer::TokenType::TypedefKeyword:
+                case cld::Lexer::TokenType::ExternKeyword:
+                case cld::Lexer::TokenType::StaticKeyword:
+                case cld::Lexer::TokenType::AutoKeyword:
+                case cld::Lexer::TokenType::RegisterKeyword:
+                case cld::Lexer::TokenType::ConstKeyword:
+                case cld::Lexer::TokenType::RestrictKeyword:
+                case cld::Lexer::TokenType::SizeofKeyword:
+                case cld::Lexer::TokenType::VolatileKeyword:
+                case cld::Lexer::TokenType::InlineKeyword:
+                case cld::Lexer::TokenType::ReturnKeyword:
+                case cld::Lexer::TokenType::BreakKeyword:
+                case cld::Lexer::TokenType::ContinueKeyword:
+                case cld::Lexer::TokenType::DoKeyword:
+                case cld::Lexer::TokenType::ElseKeyword:
+                case cld::Lexer::TokenType::ForKeyword:
+                case cld::Lexer::TokenType::IfKeyword:
+                case cld::Lexer::TokenType::WhileKeyword:
+                case cld::Lexer::TokenType::StructKeyword:
+                case cld::Lexer::TokenType::SwitchKeyword:
+                case cld::Lexer::TokenType::CaseKeyword:
+                case cld::Lexer::TokenType::DefaultKeyword:
+                case cld::Lexer::TokenType::UnionKeyword:
+                case cld::Lexer::TokenType::EnumKeyword:
+                case cld::Lexer::TokenType::GotoKeyword:
+                case cld::Lexer::TokenType::UnderlineBool:
+                {
+                    if (iter->getTokenType() == cld::Lexer::TokenType::Identifier
+                        && cld::get<std::string>(iter->getValue()) == "defined")
+                    {
+                        // Neither defined nor the identifier following it (with optionally an opening parentheses
+                        // in between) should be converted to 0
+                        if (iter + 1 == ctokens.end())
+                        {
+                            break;
+                        }
+                        if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::Identifier)
+                        {
+                            iter++;
+                        }
+                        else if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::OpenParentheses)
+                        {
+                            if (iter + 2 != ctokens.end()
+                                && (iter + 2)->getTokenType() == cld::Lexer::TokenType::Identifier)
+                            {
+                                iter += 2;
+                            }
+                        }
+                        break;
+                    }
+                    bool hasLeadingWhitespace = iter->hasLeadingWhitespace();
+                    *iter = cld::Lexer::CToken(cld::Lexer::TokenType::Literal, iter->getOffset(), iter->getLength(),
+                                               iter->getFileId(), iter->getMacroId(), llvm::APSInt(64, false),
+                                               cld::Lexer::CToken::Type::LongLong);
+                    iter->setLeadingWhitespace(hasLeadingWhitespace);
+                    break;
+                }
+                default: break;
+            }
+        }
+        const auto* begin = std::as_const(ctokens).data();
+        auto context = cld::Parser::Context(*this, m_reporter, true);
+        auto tree = cld::Parser::parseConditionalExpression(begin, ctokens.data() + ctokens.size(), context);
+        if (context.getCurrentErrorCount() != 0)
+        {
+            m_errorsOccurred = true;
+            return {};
+        }
+        cld::Semantics::ConstantEvaluator evaluator(
+            *this, {},
+            [&](std::string_view macro) -> const cld::Semantics::DeclarationTypedefEnums* {
+                if (macro == "__FILE__" || macro == "__LINE__")
+                {
+                    return reinterpret_cast<const cld::Semantics::DeclarationTypedefEnums*>(0x1);
+                }
+                if (m_defines.count(macro) == 0)
+                {
+                    return nullptr;
+                }
+                {
+                    return reinterpret_cast<const cld::Semantics::DeclarationTypedefEnums*>(0x1);
+                }
+            },
+            [&](const cld::Message& message) {
+                if (message.getSeverity() == cld::Severity::Error)
+                {
+                    errorsOccurred = true;
+                }
+                log(message);
+            });
+        auto value = evaluator.visit(tree);
+        if (errorsOccurred)
+        {
+            return {};
+        }
+        return static_cast<bool>(value);
+    }
+
     std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {
         CLD_ASSERT(fileID < m_files.size());
@@ -870,7 +1047,7 @@ class Preprocessor final : private cld::PPSourceInterface
 
 public:
     Preprocessor(llvm::raw_ostream* report, const cld::LanguageOptions& options) noexcept
-        : m_report(report), m_options(options)
+        : m_reporter(report), m_options(options)
     {
         std::string scratchPadSource;
         const auto t = std::time(nullptr);
@@ -907,8 +1084,9 @@ public:
         scratchPadSource += "#define __STDC_MB_MIGHT_NEQ_WC__ 1\n";
         scratchPadSource += "#define __STDC_VERSION__ 199901L\n";
 
-        auto scratchPadPP = cld::Lexer::tokenize(scratchPadSource, options, report, &m_errorsOccured, "<Scratch Pad>");
-        CLD_ASSERT(!m_errorsOccured);
+        bool errorsOccurred = false;
+        auto scratchPadPP = cld::Lexer::tokenize(scratchPadSource, options, report, &errorsOccurred, "<Scratch Pad>");
+        CLD_ASSERT(!errorsOccurred);
         include(std::move(scratchPadPP));
         m_visitingScratchPad = false;
     }
@@ -953,14 +1131,14 @@ public:
             m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
         }
         m_currentFile = m_files.size() - 1;
-        cld::PP::Context context(*this, m_report);
+        cld::PP::Context context(*this, m_reporter);
         const auto* begin = std::as_const(m_files).back().ppTokens.data();
         auto tree = parseFile(
             begin, std::as_const(m_files).back().ppTokens.data() + std::as_const(m_files).back().ppTokens.size(),
             context);
         if (context.getErrorCount() != 0)
         {
-            m_errorsOccured = true;
+            m_errorsOccurred = true;
             return;
         }
         visit(tree);
@@ -998,7 +1176,53 @@ public:
         macroSubstitute(text.tokens, [this](auto&& tokens) { pushLine(tokens); });
     }
 
-    void visit(const cld::PP::IfSection& ifSection) {}
+    void visit(const cld::PP::IfSection& ifSection)
+    {
+        auto included = cld::match(
+            ifSection.ifGroup.ifs,
+            [&](const cld::PP::IfGroup::IfnDefTag& ifnDefTag) -> std::optional<bool> {
+                return m_defines.count(ifnDefTag.identifier) == 0;
+            },
+            [&](const cld::PP::IfGroup::IfDefTag& ifDefTag) -> std::optional<bool> {
+                return m_defines.count(ifDefTag.identifier) != 0;
+            },
+            [&](llvm::ArrayRef<cld::Lexer::PPToken> tokens) -> std::optional<bool> {
+                return evaluateExpression(tokens);
+            });
+        if (!included)
+        {
+            return;
+        }
+        if (*included)
+        {
+            if (ifSection.ifGroup.optionalGroup)
+            {
+                visit(*ifSection.ifGroup.optionalGroup);
+            }
+            return;
+        }
+        for (auto& iter : ifSection.elifGroups)
+        {
+            included = evaluateExpression(iter.constantExpression);
+            if (!included)
+            {
+                return;
+            }
+            if (*included)
+            {
+                if (iter.optionalGroup)
+                {
+                    visit(*iter.optionalGroup);
+                }
+                return;
+            }
+        }
+        if (!ifSection.optionalElseGroup || !ifSection.optionalElseGroup->optionalGroup)
+        {
+            return;
+        }
+        visit(*ifSection.optionalElseGroup->optionalGroup);
+    }
 
     void visit(const cld::PP::ControlLine& controlLine)
     {
@@ -1155,10 +1379,10 @@ public:
                     llvm::sys::path::remove_dots(result, true);
                     bool errors = false;
                     auto newFile =
-                        cld::Lexer::tokenize(view, m_options, m_report, &errors, {result.data(), result.size()});
+                        cld::Lexer::tokenize(view, m_options, m_reporter, &errors, {result.data(), result.size()});
                     if (errors)
                     {
-                        m_errorsOccured = true;
+                        m_errorsOccurred = true;
                         return;
                     }
                     llvm::sys::fs::closeFile(*handle);
@@ -1249,7 +1473,7 @@ public:
         if (result.size() == 2)
         {
             CLD_ASSERT(result[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-            auto ctoken = cld::Lexer::parseStringLiteral(result[1], *this, m_report);
+            auto ctoken = cld::Lexer::parseStringLiteral(result[1], *this, m_reporter);
             if (!ctoken)
             {
                 return;
@@ -1378,14 +1602,24 @@ public:
         log(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args(*macro->identifierPos, *this, *macro->identifierPos));
         log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro->identifierPos, *this, *macro->identifierPos));
     }
+
+    bool errorsOccurred() const
+    {
+        return m_errorsOccurred;
+    }
 };
 } // namespace
 
-cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm::raw_ostream* reporter) noexcept
+cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm::raw_ostream* reporter,
+                                        bool* errorsOccurred) noexcept
 {
     auto options = sourceObject.getLanguageOptions();
     Preprocessor preprocessor(reporter, options);
     preprocessor.include(std::move(sourceObject));
+    if (errorsOccurred)
+    {
+        *errorsOccurred = preprocessor.errorsOccurred();
+    }
     return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), options,
                           std::move(preprocessor.getSubstitutions()), {std::move(preprocessor.getIntervalMaps())});
 }

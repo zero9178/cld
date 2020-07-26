@@ -13,7 +13,8 @@ struct LanguageOptions;
 
 namespace PP
 {
-PPSourceObject preprocess(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter = &llvm::errs()) noexcept;
+PPSourceObject preprocess(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+                          bool* errorsOccurred = nullptr) noexcept;
 
 template <class T>
 std::string reconstruct(const T* begin, const T* end, const SourceInterface& sourceInterface) noexcept

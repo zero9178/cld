@@ -7,13 +7,13 @@ bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin
     {
         if (begin == end)
         {
-            context.log(cld::Errors::Parser::EXPECTED_N.args(diag::after(*(end - 1)), context.getSourceObject(),
+            context.log(cld::Errors::Parser::EXPECTED_N.args(diag::after(*(end - 1)), context.getSourceInterface(),
                                                              expected, *(end - 1)));
         }
         else
         {
-            context.log(
-                cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceObject(), expected, *begin));
+            context.log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
+                                                                          expected, *begin));
         }
         if (additional)
         {

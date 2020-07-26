@@ -18,8 +18,8 @@ void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocati
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
     if (!inserted && iter->second.isTypedef)
     {
-        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceObject, *declarator.identifier));
-        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceObject,
+        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceInterface, *declarator.identifier));
+        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceInterface,
                                                  *iter->second.location.identifier));
     }
 }
@@ -54,8 +54,8 @@ void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocati
     auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
     if (!inserted && iter->second.isTypedef)
     {
-        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceObject, *declarator.identifier));
-        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceObject,
+        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceInterface, *declarator.identifier));
+        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceInterface,
                                                  *iter->second.location.identifier));
     }
 }
@@ -99,8 +99,8 @@ bool cld::Parser::Context::isTypedefInScope(const std::string& name) const
     return false;
 }
 
-cld::Parser::Context::Context(const CSourceObject& sourceObject, llvm::raw_ostream* reporter, bool inPreprocessor)
-    : m_sourceObject(sourceObject), m_reporter(reporter), m_inPreprocessor(inPreprocessor)
+cld::Parser::Context::Context(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter, bool inPreprocessor)
+    : m_sourceInterface(sourceInterface), m_reporter(reporter), m_inPreprocessor(inPreprocessor)
 {
 }
 
@@ -134,7 +134,7 @@ void cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceObject, m_bracketMax, *bracket));
+    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else
@@ -153,7 +153,7 @@ void cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceObject, m_bracketMax, *bracket));
+    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else
@@ -172,7 +172,7 @@ void cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket)
     {
         return;
     }
-    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceObject, m_bracketMax, *bracket));
+    log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
     throw FatalParserError();
 #else
@@ -185,9 +185,9 @@ void cld::Parser::Context::braceLeft()
     m_braceDepth--;
 }
 
-const cld::CSourceObject& cld::Parser::Context::getSourceObject() const
+const cld::SourceInterface& cld::Parser::Context::getSourceInterface() const
 {
-    return m_sourceObject;
+    return m_sourceInterface;
 }
 
 bool cld::Parser::Context::isInPreprocessor() const

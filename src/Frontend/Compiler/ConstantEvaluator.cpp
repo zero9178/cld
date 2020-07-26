@@ -921,9 +921,20 @@ void cld::Semantics::ConstantEvaluator::log(const Message& message)
     }
 }
 
-cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionDefined&)
+cld::Semantics::ConstRetType
+    cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionDefined& defined)
 {
-    return cld::Semantics::ConstRetType();
+    const auto* result = m_declarationCallback(defined.getIdentifier());
+    if (result == nullptr)
+    {
+        return {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false),
+                PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+    }
+    else
+    {
+        return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false),
+                PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+    }
 }
 
 cld::Semantics::ConstRetType::ConstRetType(const cld::Semantics::ConstRetType::ValueType& value,
