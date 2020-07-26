@@ -75,7 +75,7 @@ class Preprocessor final : private cld::PPSourceInterface
         }
     }
 
-    static bool equal(const cld::PP::DefineDirective& lhs, const Macro& rhs)
+    static bool equal(const Macro& lhs, const Macro& rhs)
     {
         if (lhs.argumentList.has_value() != rhs.argumentList.has_value())
         {
@@ -669,7 +669,7 @@ class Preprocessor final : private cld::PPSourceInterface
         lineOutput(std::move(output));
     }
 
-    std::string escapeString(std::string_view input)
+    static std::string escapeString(std::string_view input)
     {
         std::string result;
         result.reserve(input.size());
@@ -684,6 +684,143 @@ class Preprocessor final : private cld::PPSourceInterface
             }
         }
         return {input.begin(), input.end()};
+    }
+
+    std::optional<Macro> parseDefineDirective(const cld::PP::DefineDirective& defineDirective)
+    {
+        if (defineDirective.tokens.empty())
+        {
+            log(cld::Errors::Parser::EXPECTED_N_AFTER_N.args(
+                *defineDirective.defineToken, *this, cld::Lexer::TokenType::Identifier, *defineDirective.defineToken));
+            return {};
+        }
+        else if (defineDirective.tokens[0].getTokenType() != cld::Lexer::TokenType::Identifier)
+        {
+            log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                defineDirective.tokens[0], *this, cld::Lexer::TokenType::Identifier, defineDirective.tokens[0]));
+            return {};
+        }
+        const auto* identifierPos = &defineDirective.tokens[0];
+        const auto* curr = identifierPos + 1;
+        const auto* end = defineDirective.tokens.end();
+        if (curr == end)
+        {
+            return Macro{identifierPos, std::nullopt, false, {}};
+        }
+
+        if (curr->getTokenType() != cld::Lexer::TokenType::OpenParentheses
+            || curr->getOffset() != identifierPos->getOffset() + identifierPos->getLength())
+        {
+            if (curr->getTokenType() != cld::Lexer::TokenType::Newline
+                && curr->getOffset() == identifierPos->getOffset() + identifierPos->getLength())
+            {
+                log(cld::Errors::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION.args(*curr, *this, *curr));
+            }
+            return Macro{identifierPos, std::nullopt, false, {curr, end}};
+        }
+
+        // We are a function like macro from here on
+        const auto* openP = curr++;
+        if (curr == end)
+        {
+            log(cld::Errors::Parser::EXPECTED_N.args(*openP, *this, cld::Lexer::TokenType::CloseParentheses, *openP));
+            log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
+            return {};
+        }
+
+        switch (curr->getTokenType())
+        {
+            case cld::Lexer::TokenType::CloseParentheses:
+            {
+                curr++;
+                return Macro{identifierPos, {std::vector<cld::Lexer::PPToken>{}}, false, {curr, end}};
+            }
+            case cld::Lexer::TokenType::Ellipse:
+            {
+                auto argumentList = std::vector{*curr};
+                curr++;
+                if (curr == end)
+                {
+                    log(cld::Errors::Parser::EXPECTED_N_AFTER_N.args(
+                        *(curr - 1), *this, cld::Lexer::TokenType::CloseParentheses, *(curr - 1)));
+                    log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
+                    return {};
+                }
+                else if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
+                {
+                    log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
+                        *curr, *this, cld::Lexer::TokenType::CloseParentheses, *curr));
+                    log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
+                    return {};
+                }
+                return Macro{identifierPos, std::move(argumentList), true, {curr + 1, end}};
+            }
+            default: break;
+        }
+
+        if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
+        {
+            log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this, cld::Lexer::TokenType::Identifier,
+                                                                  *curr));
+            return {};
+        }
+        std::vector<cld::Lexer::PPToken> argumentList = {*curr};
+        curr++;
+        bool ellipse = false;
+        while (curr != end && curr->getTokenType() == cld::Lexer::TokenType::Comma)
+        {
+            curr++;
+            if (curr == end || curr->getTokenType() == cld::Lexer::TokenType::Identifier
+                || curr->getTokenType() != cld::Lexer::TokenType::Ellipse)
+            {
+                if (curr == end)
+                {
+                    log(cld::Errors::Parser::EXPECTED_N.args(*(curr - 1), *this, cld::Lexer::TokenType::Identifier,
+                                                             *(curr - 1)));
+                    return {};
+                }
+                else if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
+                {
+                    log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this,
+                                                                          cld::Lexer::TokenType::Identifier, *curr));
+                    return {};
+                }
+                auto string = curr->getValue();
+                auto result =
+                    std::find_if(argumentList.begin(), argumentList.end(),
+                                 [string](const cld::Lexer::PPToken& token) { return string == token.getValue(); });
+                if (result == argumentList.end())
+                {
+                    argumentList.push_back(*(curr++));
+                    continue;
+                }
+                log(cld::Errors::PP::REDEFINITION_OF_MACRO_PARAMETER_N.args(*curr, *this, *curr));
+                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result, *this, *result));
+                curr++;
+                continue;
+            }
+            CLD_ASSERT(curr->getTokenType() == cld::Lexer::TokenType::Ellipse);
+            ellipse = true;
+            argumentList.push_back(*curr);
+            curr++;
+            break;
+        }
+        if (curr == end)
+        {
+            log(cld::Errors::Parser::EXPECTED_N.args(*(curr - 1), *this, cld::Lexer::TokenType::CloseParentheses,
+                                                     *(curr - 1)));
+            log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
+            return {};
+        }
+        else if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
+        {
+            log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this, cld::Lexer::TokenType::CloseParentheses,
+                                                                  *curr));
+            log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
+            return {};
+        }
+        curr++;
+        return Macro{identifierPos, std::move(argumentList), ellipse, {curr, end}};
     }
 
     std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
@@ -848,6 +985,12 @@ public:
     void visit(const cld::PP::GroupPart& groupPart)
     {
         cld::match(groupPart, [this](auto&& value) { this->visit(value); });
+    }
+
+    void visit(const cld::PP::UnknownDirective& unknownDirective)
+    {
+        log(cld::Errors::PP::N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args(*unknownDirective.identifier, *this,
+                                                                         *unknownDirective.identifier));
     }
 
     void visit(const cld::PP::TextBlock& text)
@@ -1033,8 +1176,6 @@ public:
 
     void visit(const cld::PP::ControlLine::LineTag& lineTag)
     {
-        // Parser makes sure it's not empty.
-        CLD_ASSERT(!lineTag.tokens.empty());
         if (lineTag.tokens.empty())
         {
             log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
@@ -1137,10 +1278,15 @@ public:
 
     void visit(const cld::PP::DefineDirective& defineDirective)
     {
-        bool errors = false;
-        if (!defineDirective.hasEllipse)
+        auto macro = parseDefineDirective(defineDirective);
+        if (!macro)
         {
-            const auto* iter = std::find_if(defineDirective.replacement.begin(), defineDirective.replacement.end(),
+            return;
+        }
+        bool errors = false;
+        if (!macro->hasEllipse)
+        {
+            const auto* iter = std::find_if(macro->replacement.begin(), macro->replacement.end(),
                                             [](const cld::Lexer::PPToken& token) {
                                                 if (token.getTokenType() != cld::Lexer::TokenType::Identifier)
                                                 {
@@ -1148,28 +1294,26 @@ public:
                                                 }
                                                 return token.getValue() == "__VA_ARGS__";
                                             });
-            if (iter != defineDirective.replacement.end())
+            if (iter != macro->replacement.end())
             {
                 log(cld::Errors::PP::VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST.args(*iter, *this, *iter));
                 errors = true;
             }
         }
-        if (defineDirective.argumentList)
+        if (macro->argumentList)
         {
-            for (const auto* iter = defineDirective.replacement.begin(); iter != defineDirective.replacement.end();
-                 iter++)
+            for (const auto* iter = macro->replacement.begin(); iter != macro->replacement.end(); iter++)
             {
                 if (iter->getTokenType() == cld::Lexer::TokenType::Pound)
                 {
                     iter++;
-                    if (iter == defineDirective.replacement.end()
-                        || iter->getTokenType() != cld::Lexer::TokenType::Identifier
-                        || (std::none_of(defineDirective.argumentList->begin(),
-                                         defineDirective.argumentList->end() - (defineDirective.hasEllipse ? 1 : 0),
+                    if (iter == macro->replacement.end() || iter->getTokenType() != cld::Lexer::TokenType::Identifier
+                        || (std::none_of(macro->argumentList->begin(),
+                                         macro->argumentList->end() - (macro->hasEllipse ? 1 : 0),
                                          [&iter](const cld::Lexer::PPToken& token) {
                                              return token.getValue() == iter->getValue();
                                          })
-                            && (!defineDirective.hasEllipse || iter->getValue() != "__VA_ARGS__")))
+                            && (!macro->hasEllipse || iter->getValue() != "__VA_ARGS__")))
                     {
                         log(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND.args(*iter, *this, *(iter - 1), *iter));
                         errors = true;
@@ -1177,67 +1321,62 @@ public:
                 }
             }
         }
-        if (!defineDirective.replacement.empty())
+        if (!macro->replacement.empty())
         {
-            if (defineDirective.replacement.front().getTokenType() == cld::Lexer::TokenType::DoublePound)
+            if (macro->replacement.front().getTokenType() == cld::Lexer::TokenType::DoublePound)
             {
                 log(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST.args(
-                    defineDirective.replacement.front(), *this, defineDirective.replacement.front()));
+                    macro->replacement.front(), *this, macro->replacement.front()));
                 errors = true;
             }
-            if (defineDirective.replacement.size() > 1
-                && defineDirective.replacement.back().getTokenType() == cld::Lexer::TokenType::DoublePound)
+            if (macro->replacement.size() > 1
+                && macro->replacement.back().getTokenType() == cld::Lexer::TokenType::DoublePound)
             {
                 log(cld::Errors::PP::OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_END_OF_REPLACEMENT_LIST.args(
-                    defineDirective.replacement.back(), *this, defineDirective.replacement.back()));
+                    macro->replacement.back(), *this, macro->replacement.back()));
                 errors = true;
             }
         }
-        auto name = defineDirective.identifierPos->getValue();
+        auto name = macro->identifierPos->getValue();
         if (name == "defined")
         {
-            log(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME.args(*defineDirective.identifierPos, *this,
-                                                                           *defineDirective.identifierPos));
+            log(cld::Errors::PP::DEFINED_CANNOT_BE_USED_AS_MACRO_NAME.args(*macro->identifierPos, *this,
+                                                                           *macro->identifierPos));
             errors = true;
         }
         if (!m_visitingScratchPad
             && std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
                            [name](std::string_view value) { return value == name; }))
         {
-            log(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*defineDirective.identifierPos, *this,
-                                                                              *defineDirective.identifierPos));
+            log(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*macro->identifierPos, *this,
+                                                                              *macro->identifierPos));
             errors = true;
         }
         if (errors)
         {
             return;
         }
-        auto [result, notADuplicate] =
-            m_defines.insert({name,
-                              {defineDirective.identifierPos,
-                               defineDirective.argumentList,
-                               defineDirective.hasEllipse,
-                               {defineDirective.replacement.begin(), defineDirective.replacement.end()}}});
+        auto [result, notADuplicate] = m_defines.insert({macro->identifierPos->getValue(),
+                                                         {macro->identifierPos,
+                                                          macro->argumentList,
+                                                          macro->hasEllipse,
+                                                          {macro->replacement.begin(), macro->replacement.end()}}});
         if (notADuplicate)
         {
             return;
         }
-        if (equal(defineDirective, result->second))
+        if (equal(*macro, result->second))
         {
-            log(cld::Warnings::PP::N_REDEFINED.args(*defineDirective.identifierPos, *this,
-                                                    *defineDirective.identifierPos));
+            log(cld::Warnings::PP::N_REDEFINED.args(*macro->identifierPos, *this, *macro->identifierPos));
             if (getLanguageOptions().disabledWarnings.count(cld::to_string(cld::Warnings::PP::N_REDEFINED.getName()))
                 == 0)
             {
-                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*defineDirective.identifierPos, *this,
-                                                              *defineDirective.identifierPos));
+                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro->identifierPos, *this, *macro->identifierPos));
             }
             return;
         }
-        log(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args(*defineDirective.identifierPos, *this,
-                                                          *defineDirective.identifierPos));
-        log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*defineDirective.identifierPos, *this,
-                                                      *defineDirective.identifierPos));
+        log(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args(*macro->identifierPos, *this, *macro->identifierPos));
+        log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro->identifierPos, *this, *macro->identifierPos));
     }
 };
 } // namespace

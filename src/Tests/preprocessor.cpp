@@ -177,8 +177,63 @@ Normal line)");
     }
 }
 
+TEST_CASE("PP Unknown and non directives", "[PP]")
+{
+    SECTION("Non directive")
+    {
+        PP_OUTPUTS_WITH("#5non directive", ProducesNothing());
+        PP_OUTPUTS_WITH("#", ProducesNothing());
+    }
+    SECTION("Unknown directive")
+    {
+        PP_OUTPUTS_WITH("#non directive\n", ProducesError(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "'non'"));
+    }
+}
+
 TEST_CASE("PP Define", "[PP]")
 {
+    SECTION("Parsing")
+    {
+        using namespace cld::Errors::Parser;
+        SECTION("Simple")
+        {
+            PP_OUTPUTS_WITH("#define ID 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define 5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
+            PP_OUTPUTS_WITH("#define\n", ProducesError(EXPECTED_N_AFTER_N, "identifier", "'define'"));
+            PP_OUTPUTS_WITH("#define ID+\n", ProducesError(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION));
+        }
+        SECTION("Empty identifier list")
+        {
+            PP_OUTPUTS_WITH("#define ID()\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID() 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(\n", ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
+        }
+        SECTION("Ellipse only")
+        {
+            PP_OUTPUTS_WITH("#define ID(...)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(...) 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(...\n",
+                            ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
+        }
+        SECTION("Simple identifier list")
+        {
+            PP_OUTPUTS_WITH("#define ID(a)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a) 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
+            PP_OUTPUTS_WITH("#define ID(a\n", ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
+        }
+        SECTION("Multiple identifiers")
+        {
+            PP_OUTPUTS_WITH("#define ID(a,b,c)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a,)\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "')'"));
+            PP_OUTPUTS_WITH("#define ID(a,\n", ProducesError(EXPECTED_N, "identifier"));
+            PP_OUTPUTS_WITH("#define ID(a,5) 5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
+            PP_OUTPUTS_WITH("#define ID(a,b,c,...)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a,b,a)\n", ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N, "'a'")
+                                                       && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+        }
+    }
     SECTION("6.10.3.2 Duplicates")
     {
         PP_OUTPUTS_WITH("#define macroName\n#define macroName\n",

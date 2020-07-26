@@ -268,7 +268,7 @@ CREATE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal", Underli
 
 namespace PP
 {
-CREATE_ERROR(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "%0 is an invalid preprocessor directive", Underline<1>);
+CREATE_ERROR(N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE, "%0 is an invalid preprocessor directive", Underline<0>);
 
 CREATE_ERROR(REDEFINITION_OF_MACRO_PARAMETER_N, "Redefinition of macro parameter %0", Underline<0>);
 

@@ -148,8 +148,7 @@ cld::PP::Group cld::PP::parseGroup(Lexer::PPTokenIterator& begin, Lexer::PPToken
         }
         else
         {
-            context.log(Errors::PP::N_IS_AN_INVALID_PREPROCESSOR_DIRECTIVE.args(
-                *begin, context.getSourceInterface(), '\'' + to_string(value) + '\'', *begin));
+            parts.emplace_back(UnknownDirective{begin});
             skipLine(begin, end);
         }
     } while (begin != end);
@@ -161,65 +160,34 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
 {
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier);
     auto value = begin->getValue();
-    if (value == "include" || value == "line" || value == "error" || value == "pragma")
+    if (value == "include" || value == "line" || value == "error" || value == "pragma" || value == "define")
     {
         begin++;
-        if (begin != end && begin->getTokenType() != Lexer::TokenType::Newline)
+        const auto* eol = findNewline(begin, end);
+        expect(Lexer::TokenType::Newline, eol, end, context);
+        const auto* lineStart = begin;
+        begin = eol;
+        if (value == "include")
         {
-            const auto* eol = findNewline(begin, end);
-            expect(Lexer::TokenType::Newline, eol, end, context);
-            const auto* lineStart = begin;
-            begin = eol;
-            if (value == "include")
-            {
-                return {ControlLine::IncludeTag{lineStart - 1, {lineStart, eol - 1}}};
-            }
-            else if (value == "line")
-            {
-                return {ControlLine::LineTag{lineStart - 1, {lineStart, eol - 1}}};
-            }
-            else if (value == "error")
-            {
-                return {ControlLine::ErrorTag{{lineStart, eol - 1}}};
-            }
-            else if (value == "pragma")
-            {
-                return {ControlLine::PragmaTag{{lineStart, eol - 1}}};
-            }
-            CLD_UNREACHABLE;
+            return {ControlLine::IncludeTag{lineStart - 1, {lineStart, eol - 1}}};
         }
-
-        // We allow no tokens following include so that later in the Preprocessor step we can error out with the same
-        // error as if a computed include resulted in no tokens
-        if (value == "line")
+        else if (value == "line")
         {
-            context.log(Errors::Parser::EXPECTED_TOKENS_AFTER_N.args(diag::after(*(begin - 1)),
-                                                                     context.getSourceInterface(), *(begin - 1)));
-            return {ControlLine::LineTag{}};
+            return {ControlLine::LineTag{lineStart - 1, {lineStart, eol - 1}}};
         }
-        else
+        else if (value == "error")
         {
-            const auto* valueToken = begin - 1;
-            expect(Lexer::TokenType::Newline, begin, end, context);
-            if (value == "error")
-            {
-                return {ControlLine::ErrorTag{}};
-            }
-            else if (value == "pragma")
-            {
-                return {ControlLine::PragmaTag{}};
-            }
-            else if (value == "include")
-            {
-                return {ControlLine::IncludeTag{valueToken, {}}};
-            }
+            return {ControlLine::ErrorTag{{lineStart, eol - 1}}};
+        }
+        else if (value == "pragma")
+        {
+            return {ControlLine::PragmaTag{{lineStart, eol - 1}}};
+        }
+        else if (value == "define")
+        {
+            return {DefineDirective{lineStart - 1, {lineStart, eol - 1}}};
         }
         CLD_UNREACHABLE;
-    }
-    else if (value == "define")
-    {
-        auto defineDirective = parseDefineDirective(begin, end, context);
-        return {std::move(defineDirective)};
     }
     else if (value == "undef")
     {
@@ -240,145 +208,144 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
     CLD_UNREACHABLE;
 }
 
-cld::PP::DefineDirective cld::PP::parseDefineDirective(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end,
-                                                       Context& context)
-{
-    CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier && begin->getValue() == "define");
-    begin++;
-    if (!expect(Lexer::TokenType::Identifier, begin, end, context))
-    {
-        skipLine(begin, end);
-        return {};
-    }
-    const auto* identifierPos = begin - 1;
-    if (begin == end)
-    {
-        expect(Lexer::TokenType::Newline, begin, end, context);
-        return {identifierPos, {}, false, {identifierPos, identifierPos}};
-    }
-
-    if (begin->getTokenType() != Lexer::TokenType::OpenParentheses
-        || begin->getOffset() != identifierPos->getOffset() + identifierPos->getLength())
-    {
-        if (begin->getTokenType() != Lexer::TokenType::Newline
-            && begin->getOffset() == identifierPos->getOffset() + identifierPos->getLength())
-        {
-            context.log(Errors::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION.args(
-                *begin, context.getSourceInterface(), *begin));
-        }
-        const auto* eol = findNewline(begin, end);
-        const auto* startLine = begin;
-        begin = eol;
-        expect(Lexer::TokenType::Newline, begin, end, context);
-        return DefineDirective{identifierPos, {}, false, {startLine, eol}};
-    }
-
-    const auto* openP = begin++;
-    if (begin == end || begin->getTokenType() == Lexer::TokenType::Newline)
-    {
-        expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-               Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP));
-        skipLine(begin, end);
-        return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {identifierPos, identifierPos}};
-    }
-
-    switch (begin->getTokenType())
-    {
-        case Lexer::TokenType::CloseParentheses:
-        {
-            begin++;
-            const auto* eol = findNewline(begin, end);
-            const auto* startLine = begin;
-            begin = eol;
-            expect(Lexer::TokenType::Newline, begin, end, context);
-            return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {startLine, eol}};
-        }
-        case Lexer::TokenType::Ellipse:
-        {
-            auto argumentList = std::vector{*begin};
-            begin++;
-            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                        Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP)))
-            {
-                skipLine(begin, end);
-                return DefineDirective{
-                    identifierPos, {std::vector<Lexer::PPToken>()}, true, {identifierPos, identifierPos}};
-            }
-            const auto* eol = findNewline(begin, end);
-            const auto* startLine = begin;
-            begin = eol;
-            expect(Lexer::TokenType::Newline, begin, end, context);
-            return DefineDirective{identifierPos, {std::move(argumentList)}, true, {startLine, eol}};
-        }
-        default: break;
-    }
-
-    if (!expect(Lexer::TokenType::Identifier, begin, end, context))
-    {
-        skipLine(begin, end);
-        return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {identifierPos, identifierPos}};
-    }
-
-    std::vector<Lexer::PPTokenIterator> argumentList = {begin - 1};
-    bool ellipse = false;
-    while (begin != end && begin->getTokenType() == Lexer::TokenType::Comma)
-    {
-        begin++;
-        if (begin == end || begin->getTokenType() == Lexer::TokenType::Identifier
-            || begin->getTokenType() != Lexer::TokenType::Ellipse)
-        {
-            if (!expect(Lexer::TokenType::Identifier, begin, end, context))
-            {
-                skipUntil(begin, end, std::array{Lexer::TokenType::Newline, Lexer::TokenType::CloseParentheses});
-                if (begin == end || begin->getTokenType() == Lexer::TokenType::CloseParentheses)
-                {
-                    break;
-                }
-                begin++;
-                std::vector<Lexer::PPToken> result;
-                result.reserve(argumentList.size());
-                std::transform(argumentList.begin(), argumentList.end(), std::back_inserter(result),
-                               [](Lexer::PPTokenIterator iter) { return *iter; });
-                return DefineDirective{identifierPos, std::move(result), false, {identifierPos, identifierPos}};
-            }
-            auto string = (begin - 1)->getValue();
-            // Technically this is part of semantics and not the parser but I want to triggers such errors as early on
-            // as possible so we don't need to keep iterators around longer than we need
-            auto result = std::find_if(argumentList.begin(), argumentList.end(),
-                                       [string](Lexer::PPTokenIterator iter) { return string == iter->getValue(); });
-            if (result == argumentList.end())
-            {
-                argumentList.push_back(begin - 1);
-                continue;
-            }
-            context.log(Errors::PP::REDEFINITION_OF_MACRO_PARAMETER_N.args(*(begin - 1), context.getSourceInterface(),
-                                                                           *(begin - 1)));
-            context.log(Notes::PREVIOUSLY_DECLARED_HERE.args(**result, context.getSourceInterface(), **result));
-            continue;
-        }
-
-        if (begin->getTokenType() != Lexer::TokenType::Ellipse)
-        {
-            CLD_UNREACHABLE;
-        }
-        ellipse = true;
-        argumentList.push_back(begin);
-        begin++;
-        break;
-    }
-
-    expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-           Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP));
-    const auto* eol = findNewline(begin, end);
-    std::vector<Lexer::PPToken> result;
-    result.reserve(argumentList.size());
-    std::transform(argumentList.begin(), argumentList.end(), std::back_inserter(result),
-                   [](Lexer::PPTokenIterator iter) { return *iter; });
-    const auto* startLine = begin;
-    begin = eol;
-    expect(Lexer::TokenType::Newline, begin, end, context);
-    return DefineDirective{identifierPos, std::move(result), ellipse, {startLine, eol}};
-}
+// cld::PP::DefineDirective cld::PP::parseDefineDirective(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end,
+//                                                       Context& context)
+//{
+//    CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier && begin->getValue() ==
+//    "define"); begin++; if (!expect(Lexer::TokenType::Identifier, begin, end, context))
+//    {
+//        skipLine(begin, end);
+//        return {};
+//    }
+//    const auto* identifierPos = begin - 1;
+//    if (begin == end)
+//    {
+//        expect(Lexer::TokenType::Newline, begin, end, context);
+//        return {identifierPos, {}, false, {identifierPos, identifierPos}};
+//    }
+//
+//    if (begin->getTokenType() != Lexer::TokenType::OpenParentheses
+//        || begin->getOffset() != identifierPos->getOffset() + identifierPos->getLength())
+//    {
+//        if (begin->getTokenType() != Lexer::TokenType::Newline
+//            && begin->getOffset() == identifierPos->getOffset() + identifierPos->getLength())
+//        {
+//            context.log(Errors::PP::WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION.args(
+//                *begin, context.getSourceInterface(), *begin));
+//        }
+//        const auto* eol = findNewline(begin, end);
+//        const auto* startLine = begin;
+//        begin = eol;
+//        expect(Lexer::TokenType::Newline, begin, end, context);
+//        return DefineDirective{identifierPos, {}, false, {startLine, eol}};
+//    }
+//
+//    const auto* openP = begin++;
+//    if (begin == end || begin->getTokenType() == Lexer::TokenType::Newline)
+//    {
+//        expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+//               Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP));
+//        skipLine(begin, end);
+//        return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {identifierPos, identifierPos}};
+//    }
+//
+//    switch (begin->getTokenType())
+//    {
+//        case Lexer::TokenType::CloseParentheses:
+//        {
+//            begin++;
+//            const auto* eol = findNewline(begin, end);
+//            const auto* startLine = begin;
+//            begin = eol;
+//            expect(Lexer::TokenType::Newline, begin, end, context);
+//            return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {startLine, eol}};
+//        }
+//        case Lexer::TokenType::Ellipse:
+//        {
+//            auto argumentList = std::vector{*begin};
+//            begin++;
+//            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+//                        Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP)))
+//            {
+//                skipLine(begin, end);
+//                return DefineDirective{
+//                    identifierPos, {std::vector<Lexer::PPToken>()}, true, {identifierPos, identifierPos}};
+//            }
+//            const auto* eol = findNewline(begin, end);
+//            const auto* startLine = begin;
+//            begin = eol;
+//            expect(Lexer::TokenType::Newline, begin, end, context);
+//            return DefineDirective{identifierPos, {std::move(argumentList)}, true, {startLine, eol}};
+//        }
+//        default: break;
+//    }
+//
+//    if (!expect(Lexer::TokenType::Identifier, begin, end, context))
+//    {
+//        skipLine(begin, end);
+//        return DefineDirective{identifierPos, {std::vector<Lexer::PPToken>()}, false, {identifierPos, identifierPos}};
+//    }
+//
+//    std::vector<Lexer::PPTokenIterator> argumentList = {begin - 1};
+//    bool ellipse = false;
+//    while (begin != end && begin->getTokenType() == Lexer::TokenType::Comma)
+//    {
+//        begin++;
+//        if (begin == end || begin->getTokenType() == Lexer::TokenType::Identifier
+//            || begin->getTokenType() != Lexer::TokenType::Ellipse)
+//        {
+//            if (!expect(Lexer::TokenType::Identifier, begin, end, context))
+//            {
+//                skipUntil(begin, end, std::array{Lexer::TokenType::Newline, Lexer::TokenType::CloseParentheses});
+//                if (begin == end || begin->getTokenType() == Lexer::TokenType::CloseParentheses)
+//                {
+//                    break;
+//                }
+//                begin++;
+//                std::vector<Lexer::PPToken> result;
+//                result.reserve(argumentList.size());
+//                std::transform(argumentList.begin(), argumentList.end(), std::back_inserter(result),
+//                               [](Lexer::PPTokenIterator iter) { return *iter; });
+//                return DefineDirective{identifierPos, std::move(result), false, {identifierPos, identifierPos}};
+//            }
+//            auto string = (begin - 1)->getValue();
+//            // Technically this is part of semantics and not the parser but I want to triggers such errors as early on
+//            // as possible so we don't need to keep iterators around longer than we need
+//            auto result = std::find_if(argumentList.begin(), argumentList.end(),
+//                                       [string](Lexer::PPTokenIterator iter) { return string == iter->getValue(); });
+//            if (result == argumentList.end())
+//            {
+//                argumentList.push_back(begin - 1);
+//                continue;
+//            }
+//            context.log(Errors::PP::REDEFINITION_OF_MACRO_PARAMETER_N.args(*(begin - 1), context.getSourceInterface(),
+//                                                                           *(begin - 1)));
+//            context.log(Notes::PREVIOUSLY_DECLARED_HERE.args(**result, context.getSourceInterface(), **result));
+//            continue;
+//        }
+//
+//        if (begin->getTokenType() != Lexer::TokenType::Ellipse)
+//        {
+//            CLD_UNREACHABLE;
+//        }
+//        ellipse = true;
+//        argumentList.push_back(begin);
+//        begin++;
+//        break;
+//    }
+//
+//    expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+//           Notes::TO_MATCH_N_HERE.args(*openP, context.getSourceInterface(), *openP));
+//    const auto* eol = findNewline(begin, end);
+//    std::vector<Lexer::PPToken> result;
+//    result.reserve(argumentList.size());
+//    std::transform(argumentList.begin(), argumentList.end(), std::back_inserter(result),
+//                   [](Lexer::PPTokenIterator iter) { return *iter; });
+//    const auto* startLine = begin;
+//    begin = eol;
+//    expect(Lexer::TokenType::Newline, begin, end, context);
+//    return DefineDirective{identifierPos, std::move(result), ellipse, {startLine, eol}};
+//}
 
 cld::PP::IfSection cld::PP::parseIfSection(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context)
 {

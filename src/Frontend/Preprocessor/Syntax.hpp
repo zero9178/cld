@@ -63,6 +63,8 @@ struct IfSection final
  * OpenParentheses must immediately follow the define keyword for the alternative to be valid
  * otherwise its just another token inside of <TOKENS>
  *
+ * Due to conditional exclusion it must only be fully parsed in the semantics stage
+ *
  *  <DefineDirectives> ::= <TokenType::Pound> <Identifier=define> <TokenType::Identifier> [<TOKENS>]
  *                           <TokenType::Newline>
  *                       | <TokenType::Pound> <Identifier=define> <TokenType::Identifier> <TokenType::OpenParentheses>
@@ -76,13 +78,8 @@ struct IfSection final
  */
 struct DefineDirective final
 {
-    Lexer::PPTokenIterator identifierPos;
-    /**
-     * Its an optional to differentiate between an empty argument list and no argument list
-     */
-    std::optional<std::vector<Lexer::PPToken>> argumentList;
-    bool hasEllipse;
-    llvm::ArrayRef<Lexer::PPToken> replacement;
+    Lexer::PPTokenIterator defineToken;
+    llvm::ArrayRef<Lexer::PPToken> tokens;
 };
 
 /**
@@ -138,10 +135,15 @@ struct TextBlock final
     llvm::ArrayRef<Lexer::PPToken> tokens;
 };
 
+struct UnknownDirective
+{
+    Lexer::PPTokenIterator identifier;
+};
+
 /**
- * <GroupPart> ::= <IfSection> | <ControlLine> | <TextLine> | <NonDirective>
+ * <GroupPart> ::= <IfSection> | <ControlLine> | <TextLine> | <NonDirective> | <UnknownDirective>
  */
-using GroupPart = std::variant<IfSection, ControlLine, TextBlock, NonDirective>;
+using GroupPart = std::variant<IfSection, ControlLine, TextBlock, NonDirective, UnknownDirective>;
 
 /**
  * <Group> ::= <GroupPart> { <GroupPart> }
