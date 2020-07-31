@@ -11,7 +11,7 @@
 namespace cld
 {
 class Message;
-}
+} // namespace cld
 
 namespace cld::Semantics
 {
@@ -221,21 +221,18 @@ class RecordType final
 {
     std::string m_name;
     bool m_isUnion;
-    std::vector<std::tuple<Type, std::string, std::int64_t>> m_members;
+    std::uint64_t m_scope;
 
-    RecordType(std::string name, bool isUnion, std::vector<std::tuple<Type, std::string, std::int64_t>>&& names);
+    RecordType(std::string name, bool isUnion, std::uint64_t scope);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isUnion, const std::string& name,
-                       std::vector<std::tuple<Type, std::string, std::int64_t>>&& members = {});
+    static Type create(bool isConst, bool isVolatile, bool isUnion, const std::string& name, std::uint64_t scope);
 
     [[nodiscard]] const std::string& getName() const;
 
     [[nodiscard]] bool isUnion() const;
 
-    [[nodiscard]] const std::vector<std::tuple<Type, std::string, std::int64_t>>& getMembers() const;
-
-    [[nodiscard]] bool isDefinition() const;
+    uint64_t getScope() const;
 
     bool operator==(const RecordType& rhs) const;
 
@@ -245,21 +242,16 @@ public:
 class EnumType final
 {
     std::string m_name;
-    std::vector<std::pair<std::string, std::int32_t>> m_values;
+    std::uint64_t m_scope;
 
-    EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values);
+    EnumType(std::string name, std::uint64_t scope);
 
 public:
-    static Type create(bool isConst, bool isVolatile, const std::string& name,
-                       std::vector<std::pair<std::string, std::int32_t>> values);
-
-    [[nodiscard]] const std::vector<std::pair<std::string, int32_t>>& getValues() const;
-
-    [[nodiscard]] bool isDefinition() const;
-
-    [[nodiscard]] bool isAnonymous() const;
+    static Type create(bool isConst, bool isVolatile, const std::string& name, std::uint64_t scope);
 
     [[nodiscard]] const std::string& getName() const;
+
+    std::uint64_t getScope() const;
 
     bool operator==(const EnumType& rhs) const;
 
@@ -306,15 +298,13 @@ public:
 
     [[nodiscard]] bool isVolatile() const;
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] std::string_view getName() const;
 
-    void setName(const std::string& name);
+    void setName(std::string_view name);
 
-    [[nodiscard]] const std::string& getTypeName() const;
+    [[nodiscard]] std::string_view getTypeName() const;
 
     [[nodiscard]] bool isTypedef() const;
-
-    [[nodiscard]] std::string getFullFormattedTypeName() const;
 
     bool operator==(const Type& rhs) const;
 
@@ -333,9 +323,7 @@ enum class Linkage
 enum class Lifetime
 {
     Automatic,
-    Static,
-    Register,
-    Temporary
+    Static
 };
 
 class Declaration final
@@ -420,6 +408,33 @@ class LabelStatement final
 {
 };
 
+class RecordDefinition
+{
+public:
+    struct Field
+    {
+        Type type;
+        std::string name;
+        std::optional<std::uint64_t> bitFieldSize;
+    };
+
+private:
+    std::string m_name;
+    std::vector<Field> m_fields;
+
+public:
+    RecordDefinition(std::string_view name, std::vector<Field>&& fields);
+};
+
+class EnumDefinition
+{
+    std::string m_name;
+    Type m_type;
+
+public:
+    EnumDefinition(std::string_view name, Type type) : m_name(cld::to_string(name)), m_type(std::move(type)) {}
+};
+
 class FunctionDefinition final
 {
     FunctionType m_type;
@@ -446,7 +461,7 @@ public:
 class TranslationUnit final
 {
 public:
-    using Variant = std::variant<FunctionDefinition, Declaration>;
+    using Variant = std::variant<std::unique_ptr<FunctionDefinition>, std::unique_ptr<Declaration>>;
 
 private:
     std::vector<Variant> m_globals;
@@ -457,9 +472,7 @@ public:
     [[nodiscard]] const std::vector<Variant>& getGlobals() const;
 };
 
-using DeclarationTypedefEnums = std::variant<Semantics::Declaration, Semantics::Type, std::int32_t>;
-
-std::string declaratorToName(const cld::Syntax::Declarator& declarator);
+std::string_view declaratorToName(const cld::Syntax::Declarator& declarator);
 
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
@@ -479,12 +492,12 @@ struct StringConverter<Semantics::Type>
 {
     static std::string inFormat(const Semantics::Type& arg, const SourceInterface&)
     {
-        return "'" + arg.getTypeName() + "'";
+        return "'" + cld::to_string(arg.getTypeName()) + "'";
     }
 
     static std::string inArg(const Semantics::Type& arg, const SourceInterface&)
     {
-        return arg.getTypeName();
+        return cld::to_string(arg.getTypeName());
     }
 };
 
@@ -493,7 +506,8 @@ struct CustomFormat<U'f', U'u', U'l', U'l'>
 {
     std::string operator()(const Semantics::Type& arg)
     {
-        return arg.getFullFormattedTypeName();
+        return '\'' + cld::to_string(arg.getName()) + '\''
+               + (arg.isTypedef() ? "(aka '" + cld::to_string(arg.getTypeName()) + "')" : "");
     }
 };
 } // namespace cld::diag

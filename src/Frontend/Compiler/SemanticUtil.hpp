@@ -51,4 +51,20 @@ std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args..
                   });
     return {result, resultDepth};
 }
+
+constexpr auto DIRECT_DECL_NEXT_FN = [](auto&& value) -> const Syntax::DirectDeclarator* {
+    using T = std::decay_t<decltype(value)>;
+    if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParentheses>)
+    {
+        return &value.getDeclarator().getDirectDeclarator();
+    }
+    else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
+    {
+        return &value.getDirectDeclarator();
+    }
+    else
+    {
+        return nullptr;
+    }
+};
 } // namespace cld::Semantics

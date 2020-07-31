@@ -136,7 +136,7 @@ class ConstantEvaluator final
 {
     const SourceInterface& m_sourceInterface;
     std::function<Type(const Syntax::TypeName&)> m_typeCallback;
-    std::function<const DeclarationTypedefEnums*(std::string_view)> m_declarationCallback;
+    std::function<ConstRetType(std::string_view)> m_identifierCallback;
     std::function<void(const Message&)> m_loggerCallback;
 
 public:
@@ -155,7 +155,7 @@ private:
 public:
     explicit ConstantEvaluator(const SourceInterface& sourceInterface,
                                std::function<Type(const Syntax::TypeName&)> typeCallback = {},
-                               std::function<const DeclarationTypedefEnums*(std::string_view)> declarationCallback = {},
+                               std::function<ConstRetType(std::string_view)> identifierCallback = {},
                                std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
 
     ConstRetType visit(const Syntax::Expression& node);

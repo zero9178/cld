@@ -124,6 +124,35 @@ struct Y
 template <typename G>
 Y(G) -> Y<G>;
 
+template <class T>
+struct Identity
+{
+    using type = T;
+};
+
+template <typename G, class Ret>
+struct YWithRet
+{
+    template <typename... X>
+    Ret operator()(X&&... x) const&
+    {
+        if constexpr (std::is_void_v<std::decay_t<Ret>>)
+        {
+            g(*this, std::forward<X>(x)...);
+        }
+        else
+        {
+            return g(*this, std::forward<X>(x)...);
+        }
+    }
+
+    G g;
+    Identity<Ret> id;
+};
+
+template <typename G, class T>
+YWithRet(G, Identity<T>) -> YWithRet<G, T>;
+
 template <std::size_t i, class Callable, class Variant>
 decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 0 || i > 12)>* = nullptr)
 {
@@ -353,11 +382,39 @@ decltype(auto) match(Variant&& variant, Matchers&&... matchers)
     return detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
 
+template <class Ret, typename Variant, typename... Matchers>
+Ret match(Variant&& variant, Matchers&&... matchers)
+{
+    if constexpr (std::is_void_v<std::decay_t<Ret>>)
+    {
+        detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
+    }
+    else
+    {
+        return detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
+    }
+}
+
 template <typename Variant, typename... Matchers>
 decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
     return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
                          std::forward<Variant>(variant));
+}
+
+template <class Ret, typename Variant, typename... Matchers>
+Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
+{
+    if constexpr (std::is_void_v<std::decay_t<Ret>>)
+    {
+        detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
+                      std::forward<Variant>(variant));
+    }
+    else
+    {
+        return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
+                             std::forward<Variant>(variant));
+    }
 }
 
 template <typename T, typename... Ts>
@@ -380,6 +437,26 @@ struct IsTupleLike : std::false_type
 
 template <class T>
 struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::true_type
+{
+};
+
+template <class T>
+struct IsVariant : std::false_type
+{
+};
+
+template <class... T>
+struct IsVariant<std::variant<T...>> : std::true_type
+{
+};
+
+template <class T, class U, typename = void>
+struct IsEqualComparable : std::false_type
+{
+};
+
+template <class T, class U>
+struct IsEqualComparable<T, U, std::void_t<decltype(std::declval<T>() == std::declval<U>())>> : std::true_type
 {
 };
 

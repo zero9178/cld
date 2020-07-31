@@ -101,39 +101,21 @@ CREATE_ERROR(ONLY_ONE_STORAGE_SPECIFIER, "Only one storage specifier allowed in 
 CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
              "Only 'static' or 'extern' are allowed in function definition", Underline<0>);
 
-CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DECLARATION,
-             "Only 'static' or 'extern' are allowed in function definition");
+CREATE_ERROR(AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, "At least one type specifier required", Underline<0>);
 
-CREATE_ERROR(AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, "At least one type specifier required");
+CREATE_ERROR(VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT, "Value of enumeration constant must fit in type 'int'",
+             Underline<0>, Annotate<1, 2>);
 
-CREATE_ERROR(EXPECTED_ONLY_PRIMITIVES, "Expected only primitives after {}");
+CREATE_ERROR(CANNOT_COMBINE_N_WITH_N, "Cannot combine %0 with %1", Underline<2>);
 
-CREATE_ERROR(N_APPEARING_MORE_THAN_N, "{} appearing more than {}");
+CREATE_ERROR(CANNOT_COMBINE_N_WITH_TYPENAME, "Cannot combine %0 with typename", Underline<1>);
 
-CREATE_ERROR(CANNOT_COMBINE_N_WITH_N, "Cannot combine {} with {}");
+CREATE_ERROR(EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N, "Expected no further type specifiers after %0", Underline<1>);
 
-CREATE_ERROR(EXPECTED_NO_FURTHER_N_AFTER_N, "Expected no further {} after {}");
+CREATE_ERROR(EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_TYPENAME, "Expected no further type specifiers after typename",
+             Underline<0>);
 
-CREATE_ERROR(ONLY_POINTERS_CAN_BE_RESTRICTED, "Only pointers can be restricted");
-
-CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER, "Array size must be an integer");
-
-CREATE_ERROR(ONLY_REGISTER_ALLOWED_IN_FUNCTION_ARGUMENT,
-             "Only 'register' allowed as storage specifier for function argument");
-
-CREATE_ERROR(INLINE_ONLY_ALLOWED_IN_FRONT_OF_FUNCTION, "'inline' only allowed in front of a function");
-
-CREATE_ERROR(FUNCTION_PARAMETER_CANNOT_BE_VOID, "Function parameter cannot be 'void'");
-
-CREATE_ERROR(PARAMETER_IN_FUNCTION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
-             "Parameter in function not allowed to have initializer");
-
-CREATE_ERROR(FUNCTION_DECLARATION_NOT_ALLOWED_TO_HAVE_INITIALIZER,
-             "Function declaration not allowed to have initializer");
-
-CREATE_ERROR(DECLARATION_CANNNOT_BE_VOID, "Declaration cannot have type 'void'");
-
-CREATE_ERROR(N_APPEARING_IN_N_BUT_NOT_IN_N, "{} appearing in {} but not in {}");
+CREATE_ERROR(RESTRICT_CAN_ONLY_BE_APPLIED_TO_POINTERS, "'restrict' can only be applied to pointers", Underline<0>);
 
 CREATE_ERROR(EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, "Expected parameter list in function definition",
              Underline<0>);
@@ -141,14 +123,26 @@ CREATE_ERROR(EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, "Expected parameter
 CREATE_ERROR(DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, "Declarations only allowed with identifier list",
              Underline<0>);
 
-CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO_OR_REGISTER,
-             "Declarations at file scope cannot be 'auto' or 'register'");
+CREATE_ERROR(DECLARATION_DOES_NOT_DECLARE_ANYTHING, "Declaration does not declare anything", Underline<0>);
 
-CREATE_ERROR(STATIC_ONLY_ALLOWED_FOR_FUNCTION_DECLARATION_AT_FILE_SCOPE,
-             "'static' only allowed for function declaration at file scope");
+CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO, "Declarations at file scope cannot be 'auto'", Underline<0>);
 
-CREATE_ERROR(IDENTIFIER_LIST_NOT_ALLOWED_IN_FUNCTION_DECLARATION,
-             "Identifier list not allowed in function declaration");
+CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER, "Declarations at file scope cannot be 'register'",
+             Underline<0>);
+
+CREATE_ERROR(DECLARATION_MUST_HAVE_A_COMPLETE_TYPE, "Declaration must have a complete type", Annotate<0, 1>);
+
+CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must not be a function type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE, "Array element type must be a complete type", Annotate<0, 1>);
+
+CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE, "Array size must be an integer type", Annotate<0, 1>);
+
+CREATE_ERROR(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO, "Array size must be greater than 0", Annotate<0, 1>);
+
+CREATE_ERROR(ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE,
+             "Element type of pointer with restrict qualifier must not be a function type", Underline<0>, PointAt<1>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF, "Incomplete type %full0 in 'alignof'", Underline<1>);
 
@@ -199,8 +193,6 @@ CREATE_ERROR(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N, "Invalid cast from type %full0 
 
 CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER,
              "Integer must evaluate to null to be comparable with pointer", Underline<0>);
-
-CREATE_ERROR(UNKNOWN_TYPE_N, "Unknown type '{}'");
 } // namespace Semantics
 
 namespace Lexer

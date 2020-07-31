@@ -51,10 +51,10 @@ namespace
     llvm::raw_string_ostream ss(buffer);
     bool errors;
     auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
-    INFO(buffer);
+    UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     auto ctokens = cld::Lexer::toCTokens(result, &ss, &errors);
-    INFO(buffer);
+    UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     return ctokens;
 }
@@ -66,7 +66,7 @@ namespace
     llvm::raw_string_ostream ss(buffer);
     bool errors;
     auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
-    INFO(buffer);
+    UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     return result;
 }

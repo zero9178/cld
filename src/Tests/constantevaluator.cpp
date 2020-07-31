@@ -26,15 +26,13 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     cld::Parser::Context context(ctokens, &ss);
     const auto* ref = std::as_const(ctokens).data().data();
     auto parsing = cld::Parser::parseConditionalExpression(ref, ctokens.data().data() + ctokens.data().size(), context);
-    INFO(ss.str());
+    UNSCOPED_INFO(ss.str());
     REQUIRE((ss.str().empty()));
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     cld::Semantics::ConstantEvaluator evaluator(
         ctokens,
         [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
-            return analysis.declaratorsToType(
-                {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
-                typeName.getAbstractDeclarator());
+            return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
         },
         {}, [&ss](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
@@ -44,9 +42,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
         cld::Semantics::ConstantEvaluator(
             ctokens,
             [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
-                return analysis.declaratorsToType(
-                    {typeName.getSpecifierQualifiers().begin(), typeName.getSpecifierQualifiers().end()},
-                    typeName.getAbstractDeclarator());
+                return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
             },
             {}, [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);
@@ -626,16 +622,32 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         }
         SECTION("Arithmetic constant expressions")
         {
-            auto [value, error] = evaluateConstantExpression("(float)0", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
-            REQUIRE(error.empty());
-            REQUIRE(!value.isUndefined());
-            REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
-            auto result = std::get<llvm::APFloat>(value.getValue());
-            CHECK(result.convertToFloat() == 0.f);
-            CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
-            CHECK(value.getType().getName() == "float");
+            SECTION("From int")
+            {
+                auto [value, error] = evaluateConstantExpression("(float)0", cld::LanguageOptions::native(),
+                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
+                auto result = std::get<llvm::APFloat>(value.getValue());
+                CHECK(result.convertToFloat() == 0.f);
+                CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
+                CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
+                CHECK(value.getType().getName() == "float");
+            }
+            SECTION("From float")
+            {
+                auto [value, error] = evaluateConstantExpression("(float)5.3", cld::LanguageOptions::native(),
+                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
+                auto result = std::get<llvm::APFloat>(value.getValue());
+                CHECK(result.convertToFloat() == 5.3f);
+                CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
+                CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
+                CHECK(value.getType().getName() == "float");
+            }
         }
         SECTION("Initializer constant expressions")
         {
@@ -784,6 +796,18 @@ TEST_CASE("Const eval term", "[constEval]")
             }
             {
                 auto [value, error] = evaluateConstantExpression("3 * .55", cld::LanguageOptions::native(),
+                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                REQUIRE(error.empty());
+                REQUIRE(!value.isUndefined());
+                REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
+                auto result = std::get<llvm::APFloat>(value.getValue());
+                CHECK(result.convertToDouble() == 3 * .55);
+                CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
+                CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
+                CHECK(value.getType().getName() == "double");
+            }
+            {
+                auto [value, error] = evaluateConstantExpression("3.0f * .55", cld::LanguageOptions::native(),
                                                                  cld::Semantics::ConstantEvaluator::Arithmetic);
                 REQUIRE(error.empty());
                 REQUIRE(!value.isUndefined());

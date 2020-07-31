@@ -116,7 +116,8 @@ std::optional<cld::Syntax::ExternalDeclaration>
         expect(Lexer::TokenType::SemiColon, begin, end, context);
         return {};
     }
-    else if (begin->getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(*begin, context))
+
+    if (begin->getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(*begin, context))
     {
         std::vector<Declaration> declarations;
         while (begin < end && firstIsInDeclaration(*begin, context))
@@ -131,130 +132,102 @@ std::optional<cld::Syntax::ExternalDeclaration>
         }
 
         context.pushScope();
-        if (declarator)
+        if (!declarator)
         {
-            auto [parameters, parameterDepth] =
-                Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParentheseParameters>(
-                    declarator->getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
-                        using T = std::decay_t<decltype(value)>;
-                        if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
-                        {
-                            return &value.getDeclarator().getDirectDeclarator();
-                        }
-                        else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
-                        {
-                            return &value.getDirectDeclarator();
-                        }
-                        else
-                        {
-                            return nullptr;
-                        }
-                    });
+            parseCompoundStatement(begin, end, context, false);
+            context.popScope();
+            return {};
+        }
 
-            auto [identifierList, identiferDepth] =
-                Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParentheseIdentifiers>(
-                    declarator->getDirectDeclarator(), [](auto&& value) -> const Syntax::DirectDeclarator* {
-                        using T = std::decay_t<decltype(value)>;
-                        if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParenthese>)
-                        {
-                            return &value.getDeclarator().getDirectDeclarator();
-                        }
-                        else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
-                        {
-                            return &value.getDirectDeclarator();
-                        }
-                        else
-                        {
-                            return nullptr;
-                        }
-                    });
+        auto [parameters, parameterDepth] =
+            Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParenthesesParameters>(
+                declarator->getDirectDeclarator(), Semantics::DIRECT_DECL_NEXT_FN);
 
-            if (parameters && (!identifierList || parameterDepth > identiferDepth))
+        auto [identifierList, identiferDepth] =
+            Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParenthesesIdentifiers>(
+                declarator->getDirectDeclarator(), Semantics::DIRECT_DECL_NEXT_FN);
+
+        if (identifierList && (!parameters || identiferDepth > parameterDepth))
+        {
+            for (auto& [name, loc] : identifierList->getIdentifiers())
             {
-                auto& parameterDeclarations =
-                    parameters->getParameterTypeList().getParameterList().getParameterDeclarations();
-                std::unordered_set<std::string> addedByParameters;
-                for (auto& [specifiers, paramDeclarator] : parameterDeclarations)
+                context.addToScope(name, {start, begin, loc});
+            }
+        }
+        else if (parameters)
+        {
+            auto& parameterDeclarations = parameters->getParameterTypeList().getParameters();
+            std::unordered_set<std::string_view> addedByParameters;
+            for (auto& iter : parameterDeclarations)
+            {
+                if (parameterDeclarations.size() == 1 && iter.declarationSpecifiers.size() == 1
+                    && std::holds_alternative<TypeSpecifier>(iter.declarationSpecifiers[0]))
                 {
-                    if (parameterDeclarations.size() == 1 && specifiers.size() == 1
-                        && std::holds_alternative<TypeSpecifier>(specifiers[0]))
+                    auto* primitive = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(
+                        &cld::get<TypeSpecifier>(iter.declarationSpecifiers[0]).getVariant());
+                    if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
                     {
-                        auto* primitive = std::get_if<TypeSpecifier::PrimitiveTypeSpecifier>(
-                            &cld::get<TypeSpecifier>(specifiers[0]).getVariant());
-                        if (primitive && *primitive == TypeSpecifier::PrimitiveTypeSpecifier::Void)
-                        {
-                            break;
-                        }
+                        break;
                     }
+                }
 
-                    //
-                    // Any parameters that overshadow typedefs need to also affect later parameters
-                    //
-                    for (auto& iter : specifiers)
+                //
+                // Any parameters that overshadow typedefs need to also affect later parameters
+                //
+                for (auto& specifier : iter.declarationSpecifiers)
+                {
+                    auto* typeSpecifier = std::get_if<TypeSpecifier>(&specifier);
+                    if (!typeSpecifier)
                     {
-                        auto* typeSpecifier = std::get_if<TypeSpecifier>(&iter);
-                        if (!typeSpecifier)
-                        {
-                            continue;
-                        }
-                        auto* identifier = std::get_if<std::string>(&typeSpecifier->getVariant());
-                        if (!identifier)
-                        {
-                            continue;
-                        }
-                        if (addedByParameters.count(*identifier))
-                        {
-                            auto* loc = context.getLocationOf(*identifier);
-                            context.log(Errors::Parser::EXPECTED_TYPENAME_INSTEAD_OF_N.args(
-                                *typeSpecifier->begin(), context.getSourceInterface(), *typeSpecifier->begin()));
-                            if (loc)
-                            {
-                                context.log(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                                    *loc->identifier, context.getSourceInterface(), *loc->identifier));
-                            }
-                        }
-                    }
-
-                    if (auto* abstractDecl = std::get_if<std::unique_ptr<AbstractDeclarator>>(&paramDeclarator))
-                    {
-                        if (specifiers.empty())
-                        {
-                            continue;
-                        }
-
-                        const auto* const pos = nodeFromNodeDerivedVariant(specifiers.back()).begin();
-                        context.log(Errors::Parser::MISSING_PARAMETER_NAME.args(
-                            *pos, context.getSourceInterface(),
-                            std::forward_as_tuple(
-                                *pos, *(*abstractDecl ? (*abstractDecl)->end() - 1 :
-                                                        nodeFromNodeDerivedVariant(specifiers.back()).end() - 1))));
-
-                        if (specifiers.size() == 1 && std::holds_alternative<TypeSpecifier>(specifiers[0])
-                            && std::holds_alternative<std::string>(cld::get<TypeSpecifier>(specifiers[0]).getVariant()))
-                        {
-                            auto& typeSpecifier = cld::get<TypeSpecifier>(specifiers[0]);
-                            const auto& name = cld::get<std::string>(typeSpecifier.getVariant());
-                            auto* loc = context.getLocationOf(name);
-                            if (loc)
-                            {
-                                context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
-                                    *loc->identifier, context.getSourceInterface(), *loc->identifier));
-                            }
-                        }
                         continue;
                     }
-                    auto& decl = cld::get<std::unique_ptr<Declarator>>(paramDeclarator);
-                    auto result = Semantics::declaratorToName(*decl);
-                    context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
-                    addedByParameters.insert(result);
+                    auto* identifier = std::get_if<std::string>(&typeSpecifier->getVariant());
+                    if (!identifier)
+                    {
+                        continue;
+                    }
+                    if (addedByParameters.count(*identifier))
+                    {
+                        auto* loc = context.getLocationOf(*identifier);
+                        context.log(Errors::Parser::EXPECTED_TYPENAME_INSTEAD_OF_N.args(
+                            *typeSpecifier->begin(), context.getSourceInterface(), *typeSpecifier->begin()));
+                        if (loc)
+                        {
+                            context.log(Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                                *loc->identifier, context.getSourceInterface(), *loc->identifier));
+                        }
+                    }
                 }
-            }
-            else if (identifierList)
-            {
-                for (auto& [name, loc] : identifierList->getIdentifiers())
+
+                if (std::holds_alternative<std::unique_ptr<AbstractDeclarator>>(iter.declarator))
                 {
-                    context.addToScope(name, {start, begin, loc});
+                    if (iter.declarationSpecifiers.empty())
+                    {
+                        continue;
+                    }
+
+                    context.log(Errors::Parser::MISSING_PARAMETER_NAME.args(iter, context.getSourceInterface(), iter));
+
+                    if (iter.declarationSpecifiers.size() == 1
+                        && std::holds_alternative<TypeSpecifier>(iter.declarationSpecifiers[0])
+                        && std::holds_alternative<std::string>(
+                            cld::get<TypeSpecifier>(iter.declarationSpecifiers[0]).getVariant()))
+                    {
+                        auto& typeSpecifier = cld::get<TypeSpecifier>(iter.declarationSpecifiers[0]);
+                        const auto& name = cld::get<std::string>(typeSpecifier.getVariant());
+                        auto* loc = context.getLocationOf(name);
+                        if (loc)
+                        {
+                            context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
+                                *loc->identifier, context.getSourceInterface(), *loc->identifier));
+                        }
+                    }
+                    continue;
                 }
+                auto& decl = cld::get<std::unique_ptr<Declarator>>(iter.declarator);
+                auto result = Semantics::declaratorToName(*decl);
+                context.addToScope(cld::to_string(result), {start, begin, Semantics::declaratorToLoc(*decl)});
+                addedByParameters.insert(result);
             }
         }
         auto compoundStatement = parseCompoundStatement(begin, end, context, false);
@@ -264,94 +237,91 @@ std::optional<cld::Syntax::ExternalDeclaration>
         {
             return {};
         }
-        context.addToScope(Semantics::declaratorToName(*declarator),
+        context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
                            {start, compoundStatement->begin(), Semantics::declaratorToLoc(*declarator)});
         return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
                                   std::move(declarations), std::move(*compoundStatement));
     }
-    else
+
+    std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
+    if (!isTypedef && declarator)
     {
-        std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
-        if (!isTypedef && declarator)
+        context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+                           {start, begin, Semantics::declaratorToLoc(*declarator)});
+    }
+    if (begin->getTokenType() == Lexer::TokenType::Assignment)
+    {
+        begin++;
+        auto initializer = parseInitializer(
+            begin, end,
+            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
+        if (declarator && initializer)
         {
-            context.addToScope(Semantics::declaratorToName(*declarator),
-                               {start, begin, Semantics::declaratorToLoc(*declarator)});
-        }
-        if (begin->getTokenType() == Lexer::TokenType::Assignment)
-        {
-            begin++;
-            auto initializer = parseInitializer(begin, end,
-                                                context.withRecoveryTokens(Context::fromTokenTypes(
-                                                    Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
-            if (declarator && initializer)
-            {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                             std::make_unique<Initializer>(std::move(*initializer)));
-            }
-            else if (declarator)
-            {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
-            }
+            initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                         std::make_unique<Initializer>(std::move(*initializer)));
         }
         else if (declarator)
         {
             initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
         }
-
-        while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
-        {
-            begin++;
-            declarator = parseDeclarator(
-                begin, end,
-                context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::SemiColon,
-                                                                   Lexer::TokenType::Assignment)));
-            if (!isTypedef && declarator)
-            {
-                context.addToScope(Semantics::declaratorToName(*declarator),
-                                   {start, begin, Semantics::declaratorToLoc(*declarator)});
-            }
-            if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
-            {
-                if (declarator)
-                {
-                    initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
-                }
-            }
-            else
-            {
-                begin++;
-                auto initializer = parseInitializer(begin, end,
-                                                    context.withRecoveryTokens(Context::fromTokenTypes(
-                                                        Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
-                if (declarator && initializer)
-                {
-                    initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                                 std::make_unique<Initializer>(std::move(*initializer)));
-                }
-                else if (declarator)
-                {
-                    initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
-                }
-            }
-        }
-
-        if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
-        {
-            context.skipUntil(begin, end);
-            return {};
-        }
-
-        if (isTypedef)
-        {
-            for (auto& [initDeclarator, init] : initDeclarators)
-            {
-                context.addTypedef(Semantics::declaratorToName(*initDeclarator),
-                                   {start, begin, Semantics::declaratorToLoc(*initDeclarator)});
-            }
-        }
-
-        return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
     }
+    else if (declarator)
+    {
+        initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+    }
+
+    while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
+    {
+        begin++;
+        declarator =
+            parseDeclarator(begin, end,
+                            context.withRecoveryTokens(Context::fromTokenTypes(
+                                Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
+        if (!isTypedef && declarator)
+        {
+            context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+                               {start, begin, Semantics::declaratorToLoc(*declarator)});
+        }
+        if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
+        {
+            if (declarator)
+            {
+                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+            }
+            continue;
+        }
+
+        begin++;
+        auto initializer = parseInitializer(
+            begin, end,
+            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
+        if (declarator && initializer)
+        {
+            initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                         std::make_unique<Initializer>(std::move(*initializer)));
+        }
+        else if (declarator)
+        {
+            initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+        }
+    }
+
+    if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+    {
+        context.skipUntil(begin, end);
+        return {};
+    }
+
+    if (isTypedef)
+    {
+        for (auto& [initDeclarator, init] : initDeclarators)
+        {
+            context.addTypedef(cld::to_string(Semantics::declaratorToName(*initDeclarator)),
+                               {start, begin, Semantics::declaratorToLoc(*initDeclarator)});
+        }
+    }
+
+    return Declaration(start, begin, std::move(declarationSpecifiers), std::move(initDeclarators));
 }
 
 std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTokenIterator& begin,
@@ -410,7 +380,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
                                 Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
         if (!isTypedef && declarator)
         {
-            context.addToScope(Semantics::declaratorToName(*declarator),
+            context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
                                {start, begin, Semantics::declaratorToLoc(*declarator)});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
@@ -440,7 +410,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
 
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
-        auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
+        auto* loc = context.getLocationOf(cld::to_string(Semantics::declaratorToName(*initDeclarators[0].first)));
         std::optional<Message> note;
         if (loc)
         {
@@ -466,7 +436,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
     {
         for (auto& [declator, init] : initDeclarators)
         {
-            context.addTypedef(Semantics::declaratorToName(*declator),
+            context.addTypedef(cld::to_string(Semantics::declaratorToName(*declator)),
                                {start, begin, Semantics::declaratorToLoc(*declator)});
         }
     }
@@ -496,6 +466,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             case Lexer::TokenType::CharKeyword:
             case Lexer::TokenType::ShortKeyword:
             case Lexer::TokenType::IntKeyword:
+            case Lexer::TokenType::UnderlineBool:
             case Lexer::TokenType::LongKeyword:
             case Lexer::TokenType::FloatKeyword:
             case Lexer::TokenType::DoubleKeyword:
@@ -543,6 +514,9 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             case Lexer::TokenType::DoubleKeyword:
                 return Syntax::DeclarationSpecifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
+            case Lexer::TokenType::UnderlineBool:
+                return Syntax::DeclarationSpecifier{
+                    TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Bool)};
             case Lexer::TokenType::SignedKeyword:
                 return Syntax::DeclarationSpecifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Signed)};
@@ -633,15 +607,15 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         return {};
     }
 
-    auto name = begin->getTokenType() == Lexer::TokenType::Identifier ? cld::get<std::string>(begin->getValue()) : "";
-    if (!name.empty())
+    const auto* name = begin->getTokenType() == Lexer::TokenType::Identifier ? begin : nullptr;
+    if (name)
     {
         begin++;
     }
 
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
-        if (name.empty())
+        if (!name)
         {
             expect(Lexer::TokenType::Identifier, begin, end, context);
             context.skipUntil(begin, end);
@@ -752,6 +726,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
             case Lexer::TokenType::IntKeyword:
             case Lexer::TokenType::LongKeyword:
             case Lexer::TokenType::FloatKeyword:
+            case Lexer::TokenType::UnderlineBool:
             case Lexer::TokenType::DoubleKeyword:
             case Lexer::TokenType::SignedKeyword:
             case Lexer::TokenType::UnsignedKeyword: begin++;
@@ -783,6 +758,9 @@ std::optional<cld::Syntax::SpecifierQualifier>
             case Lexer::TokenType::FloatKeyword:
                 return Syntax::SpecifierQualifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Float)};
+            case Lexer::TokenType::UnderlineBool:
+                return Syntax::SpecifierQualifier{
+                    TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Bool)};
             case Lexer::TokenType::DoubleKeyword:
                 return Syntax::SpecifierQualifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Double)};
@@ -892,7 +870,7 @@ std::optional<cld::Syntax::DirectDeclarator>
         if (declarator)
         {
             directDeclarator = std::make_unique<DirectDeclarator>(
-                DirectDeclaratorParenthese(start, begin, std::make_unique<Declarator>(std::move(*declarator))));
+                DirectDeclaratorParentheses(start, begin, std::make_unique<Declarator>(std::move(*declarator))));
         }
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                     Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
@@ -940,7 +918,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
                     if (directDeclarator)
                     {
-                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheseParameters(
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthesesParameters(
                             start, begin, std::move(*directDeclarator), std::move(parameterTypeList)));
                     }
                 }
@@ -990,7 +968,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                     }
                     if (directDeclarator)
                     {
-                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheseIdentifiers(
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthesesIdentifiers(
                             start, begin, std::move(*directDeclarator), std::move(identifiers)));
                     }
                 }
@@ -1193,6 +1171,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
         {
             break;
         }
+        const auto* parameterBegin = begin;
         auto declarationSpecifiers = parseDeclarationSpecifierList(
             begin, end,
             context.withRecoveryTokens(firstAbstractDeclaratorSet | firstDeclaratorSet
@@ -1213,69 +1192,82 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
         if (result == end)
         {
             begin = result;
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
+            parameterDeclarations.push_back(ParameterDeclaration{
+                {parameterBegin, begin}, std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>{}});
             continue;
         }
 
-        if (result->getTokenType() == Lexer::TokenType::OpenSquareBracket)
+        switch (result->getTokenType())
         {
-            auto abstractDeclarator = parseAbstractDeclarator(
-                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
-                                               std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator)));
-        }
-        else if (result->getTokenType() == Lexer::TokenType::Identifier)
-        {
-            auto declarator = parseDeclarator(
-                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-            if (declarator)
+            default:
             {
-                parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
-                                                   std::make_unique<Declarator>(std::move(*declarator)));
+                parameterDeclarations.push_back(
+                    {{parameterBegin, begin}, std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>()});
+                break;
             }
-        }
-        else if (result->getTokenType() == Lexer::TokenType::OpenParentheses)
-        {
-            while (result < end && result->getTokenType() == Lexer::TokenType::OpenParentheses)
+            case Lexer::TokenType::OpenSquareBracket:
             {
-                // Ambiguous
-                result++;
-                result = std::find_if(result, end, [](const Lexer::CToken& token) {
-                    switch (token.getTokenType())
-                    {
-                        case Lexer::TokenType::Asterisk:
-                        case Lexer::TokenType::ConstKeyword:
-                        case Lexer::TokenType::VolatileKeyword:
-                        case Lexer::TokenType::RestrictKeyword: return false;
-                        default: break;
-                    }
-                    return true;
-                });
-                if (result < end && result->getTokenType() == Lexer::TokenType::Identifier)
-                {
-                    auto declarator = parseDeclarator(
-                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-                    if (declarator)
-                    {
-                        parameterDeclarations.emplace_back(std::move(declarationSpecifiers),
-                                                           std::make_unique<Declarator>(std::move(*declarator)));
-                    }
-                    break;
-                }
-                else if (result < end && result->getTokenType() != Lexer::TokenType::OpenParentheses)
-                {
-                    auto abstractDeclarator = parseAbstractDeclarator(
-                        begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-                    parameterDeclarations.emplace_back(
-                        std::move(declarationSpecifiers),
-                        std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator)));
-                    break;
-                }
+                auto abstractDeclarator = parseAbstractDeclarator(
+                    begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
+                parameterDeclarations.push_back({{parameterBegin, begin},
+                                                 std::move(declarationSpecifiers),
+                                                 std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))});
+                break;
             }
-        }
-        else
-        {
-            parameterDeclarations.emplace_back(std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>());
+            case Lexer::TokenType::Identifier:
+            {
+                auto declarator = parseDeclarator(
+                    begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
+                if (declarator)
+                {
+                    parameterDeclarations.push_back({{parameterBegin, begin},
+                                                     std::move(declarationSpecifiers),
+                                                     std::make_unique<Declarator>(std::move(*declarator))});
+                }
+                break;
+            }
+            case Lexer::TokenType::OpenParentheses:
+            {
+                while (result < end && result->getTokenType() == Lexer::TokenType::OpenParentheses)
+                {
+                    // Ambiguous
+                    result++;
+                    result = std::find_if(result, end, [](const Lexer::CToken& token) {
+                        switch (token.getTokenType())
+                        {
+                            case Lexer::TokenType::Asterisk:
+                            case Lexer::TokenType::ConstKeyword:
+                            case Lexer::TokenType::VolatileKeyword:
+                            case Lexer::TokenType::RestrictKeyword: return false;
+                            default: break;
+                        }
+                        return true;
+                    });
+                    if (result < end && result->getTokenType() == Lexer::TokenType::Identifier)
+                    {
+                        auto declarator = parseDeclarator(
+                            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
+                        if (declarator)
+                        {
+                            parameterDeclarations.push_back({{parameterBegin, begin},
+                                                             std::move(declarationSpecifiers),
+                                                             std::make_unique<Declarator>(std::move(*declarator))});
+                        }
+                        break;
+                    }
+                    else if (result < end && result->getTokenType() != Lexer::TokenType::OpenParentheses)
+                    {
+                        auto abstractDeclarator = parseAbstractDeclarator(
+                            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
+                        parameterDeclarations.push_back(
+                            {{parameterBegin, begin},
+                             std::move(declarationSpecifiers),
+                             std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))});
+                        break;
+                    }
+                }
+                break;
+            }
         }
     }
     if (first)
@@ -1371,7 +1363,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 {
                     auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                     directAbstractDeclarator =
-                        std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParenthese(
+                        std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParentheses(
                             start, begin, std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))));
                 }
                 else
@@ -1471,10 +1463,10 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         context.skipUntil(begin, end,
                           Context::fromTokenTypes(Lexer::TokenType::OpenBrace, Lexer::TokenType::Identifier));
     }
-    std::string name;
+    Lexer::CTokenIterator name = nullptr;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
     {
-        name = cld::get<std::string>(begin->getValue());
+        name = begin;
         begin++;
     }
     else if (begin == end)
@@ -1488,13 +1480,13 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
     const auto* openPpos = begin;
     if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
     {
-        if (name.empty())
+        if (!name)
         {
             expect(Lexer::TokenType::Identifier, begin, end, context);
             context.skipUntil(begin, end);
             return {};
         }
-        return EnumSpecifier(start, begin, std::move(name));
+        return EnumSpecifier(start, begin, cld::get<std::string>(name->getValue()));
     }
     else
     {
@@ -1502,15 +1494,14 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
     }
 
     bool inLoop = false;
-    std::vector<std::pair<std::string, std::optional<ConstantExpression>>> values;
+    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> values;
     while (
         begin < end
         && (begin->getTokenType() == Lexer::TokenType::Identifier || begin->getTokenType() == Lexer::TokenType::Comma))
     {
         inLoop = true;
         const auto* thisValueStart = begin;
-        std::string valueName;
-        if (!expect(Lexer::TokenType::Identifier, begin, end, context, valueName))
+        if (!expect(Lexer::TokenType::Identifier, begin, end, context))
         {
             context.skipUntil(begin, end,
                               Context::fromTokenTypes(Lexer::TokenType::Assignment, Lexer::TokenType::Comma,
@@ -1518,7 +1509,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         }
         else
         {
-            values.emplace_back(valueName, std::optional<ConstantExpression>{});
+            values.emplace_back(thisValueStart, std::optional<ConstantExpression>{});
         }
 
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Assignment)
@@ -1527,15 +1518,16 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
             auto constant = parseConditionalExpression(begin, end,
                                                        context.withRecoveryTokens(Context::fromTokenTypes(
                                                            Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)));
-            if (!valueName.empty())
+            if (thisValueStart->getTokenType() == Lexer::TokenType::Identifier)
             {
                 values.back().second = std::move(constant);
             }
         }
 
-        if (!valueName.empty())
+        if (thisValueStart->getTokenType() == Lexer::TokenType::Identifier)
         {
-            context.addToScope(valueName, {thisValueStart, begin, thisValueStart});
+            context.addToScope(cld::get<std::string>(thisValueStart->getValue()),
+                               {thisValueStart, begin, thisValueStart});
         }
 
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
@@ -1574,7 +1566,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         context.log(Errors::Parser::ENUM_REQUIRES_AT_LEAST_ONE_VALUE.args(
             *openPpos, context.getSourceInterface(), std::forward_as_tuple(*openPpos, *(begin - 1))));
     }
-    return EnumSpecifier(start, begin, EnumDeclaration(start, begin, std::move(name), std::move(values)));
+    return EnumSpecifier(start, begin, EnumDeclaration(start, begin, name, std::move(values)));
 }
 
 std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatement(Lexer::CTokenIterator& begin,

@@ -16,11 +16,11 @@
         llvm::raw_string_ostream ss(storage);                                                          \
         bool errorsOccurred = false;                                                                   \
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
+        UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
-        INFO(ss.str());                                                                                \
         auto ret = cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                       \
+        UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
-        INFO(ss.str());                                                                                \
         return ret;                                                                                    \
     }(source)
 
@@ -29,10 +29,10 @@
         std::string storage;                                           \
         llvm::raw_string_ostream ss(storage);                          \
         auto tokens = cld::Lexer::tokenize(str, languageOptions, &ss); \
-        INFO(ss.str());                                                \
+        UNSCOPED_INFO(ss.str());                                       \
         REQUIRE(ss.str().empty());                                     \
         auto ret = cld::PP::preprocess(std::move(tokens), &ss);        \
-        INFO(ss.str());                                                \
+        UNSCOPED_INFO(ss.str());                                       \
         REQUIRE(ss.str().empty());                                     \
         return ret;                                                    \
     }(source, option)
@@ -43,10 +43,10 @@
         std::string storage;                                                                            \
         llvm::raw_string_ostream ss(storage);                                                           \
         auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);                \
-        INFO(ss.str());                                                                                 \
+        UNSCOPED_INFO(ss.str());                                                                        \
         REQUIRE(ss.str().empty());                                                                      \
         auto ret = cld::PP::preprocess(std::move(tokens), &ss);                                         \
-        INFO(ss.str());                                                                                 \
+        UNSCOPED_INFO(ss.str());                                                                        \
         REQUIRE(ss.str().empty());                                                                      \
         auto str = cld::PP::reconstruct(ret.data().data(), ret.data().data() + ret.data().size(), ret); \
         CHECK_THAT(str, ProducesLines(resultSource));                                                   \
@@ -58,7 +58,7 @@
         std::string s;                                                                  \
         llvm::raw_string_ostream ss(s);                                                 \
         auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
-        INFO(ss.str());                                                                 \
+        UNSCOPED_INFO(ss.str());                                                        \
         REQUIRE(ss.str().empty());                                                      \
         cld::PP::preprocess(std::move(tokens), &ss);                                    \
         CHECK_THAT(s, match);                                                           \

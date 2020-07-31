@@ -29,8 +29,8 @@ bool cld::Semantics::ArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                        cld::Semantics::Type&& type, std::size_t size)
 {
-    auto name = type.getTypeName() + "[" + std::to_string(size) + "]";
-    return cld::Semantics::Type(isConst, isVolatile, name,
+    auto name = cld::to_string(type.getTypeName()) + "[" + std::to_string(size) + "]";
+    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
                                 ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
 }
 
@@ -54,12 +54,12 @@ bool cld::Semantics::Type::isVolatile() const
     return m_isVolatile;
 }
 
-const std::string& cld::Semantics::Type::getName() const
+std::string_view cld::Semantics::Type::getName() const
 {
     return m_name;
 }
 
-void cld::Semantics::Type::setName(const std::string& name)
+void cld::Semantics::Type::setName(std::string_view name)
 {
     m_name = name;
 }
@@ -103,7 +103,7 @@ bool cld::Semantics::Type::isUndefined() const
     return std::holds_alternative<std::monostate>(m_type);
 }
 
-const std::string& cld::Semantics::Type::getTypeName() const
+std::string_view cld::Semantics::Type::getTypeName() const
 {
     return m_typeName;
 }
@@ -111,11 +111,6 @@ const std::string& cld::Semantics::Type::getTypeName() const
 bool cld::Semantics::Type::isTypedef() const
 {
     return m_typeName != m_name;
-}
-
-std::string cld::Semantics::Type::getFullFormattedTypeName() const
-{
-    return '\'' + m_name + '\'' + (isTypedef() ? "(aka '" + m_typeName + "')" : "");
 }
 
 cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& elementType)
@@ -140,7 +135,9 @@ cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVo
     if (!elementType.isTypedef() && std::holds_alternative<FunctionType>(elementType.get()))
     {
         auto openParenthese = elementType.getName().find('(');
-        name = elementType.getName().substr(0, openParenthese) + "(*)" + elementType.getName().substr(openParenthese);
+        CLD_ASSERT(openParenthese != std::string_view::npos);
+        name = cld::to_string(elementType.getName().substr(0, openParenthese)) + "(*)"
+               + cld::to_string(elementType.getName().substr(openParenthese));
     }
     else if (!elementType.isTypedef()
              && (std::holds_alternative<ArrayType>(elementType.get())
@@ -148,17 +145,19 @@ cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVo
                  || std::holds_alternative<AbstractArrayType>(elementType.get())))
     {
         auto openBracket = elementType.getName().find('[');
-        name = elementType.getName().substr(0, openBracket) + "(*)" + elementType.getName().substr(openBracket);
+        CLD_ASSERT(openBracket != std::string_view::npos);
+        name = cld::to_string(elementType.getName().substr(0, openBracket)) + "(*)"
+               + cld::to_string(elementType.getName().substr(openBracket));
     }
     else
     {
-        name = elementType.getTypeName() + "*";
+        name = cld::to_string(elementType.getTypeName()) + "*";
     }
     if (isRestricted)
     {
         name += " restricted";
     }
-    return cld::Semantics::Type(isConst, isVolatile, name,
+    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
                                 PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
 }
 
@@ -172,30 +171,12 @@ bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& 
     return !(rhs == *this);
 }
 
-cld::Semantics::EnumType::EnumType(std::string name, std::vector<std::pair<std::string, std::int32_t>> values)
-    : m_name(std::move(name)), m_values(std::move(values))
-{
-}
-
-const std::vector<std::pair<std::string, int32_t>>& cld::Semantics::EnumType::getValues() const
-{
-    return m_values;
-}
-
-bool cld::Semantics::EnumType::isDefinition() const
-{
-    return !m_values.empty();
-}
-
-bool cld::Semantics::EnumType::isAnonymous() const
-{
-    return m_name.empty();
-}
+cld::Semantics::EnumType::EnumType(std::string name, std::uint64_t scope) : m_name(std::move(name)), m_scope(scope) {}
 
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
-                                                      std::vector<std::pair<std::string, std::int32_t>> values)
+                                                      std::uint64_t scope)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, std::move(values)));
+    return cld::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, scope));
 }
 
 bool cld::Semantics::EnumType::operator==(const cld::Semantics::EnumType& rhs) const
@@ -211,6 +192,11 @@ bool cld::Semantics::EnumType::operator!=(const cld::Semantics::EnumType& rhs) c
 const std::string& cld::Semantics::EnumType::getName() const
 {
     return m_name;
+}
+
+std::uint64_t cld::Semantics::EnumType::getScope() const
+{
+    return m_scope;
 }
 
 cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
@@ -372,8 +358,8 @@ bool cld::Semantics::ValArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                           cld::Semantics::Type&& type)
 {
-    auto name = type.getName() + "[*]";
-    return cld::Semantics::Type(isConst, isVolatile, name,
+    auto name = cld::to_string(type.getName()) + "[*]";
+    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
                                 ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
@@ -425,9 +411,9 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&&
             argumentsNames += ", ";
         }
     }
-    argumentsNames = returnType.getTypeName() + "(" + argumentsNames + ")";
+    argumentsNames = cld::to_string(returnType.getTypeName()) + "(" + argumentsNames + ")";
     return cld::Semantics::Type(
-        false, false, argumentsNames,
+        false, false, std::move(argumentsNames),
         FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, hasPrototype));
 }
 
@@ -469,8 +455,8 @@ bool cld::Semantics::AbstractArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                cld::Semantics::Type&& type)
 {
-    auto name = type.getTypeName() + "[]";
-    return cld::Semantics::Type(isConst, isVolatile, name,
+    auto name = cld::to_string(type.getTypeName()) + "[]";
+    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
                                 AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
@@ -484,18 +470,18 @@ bool cld::Semantics::AbstractArrayType::operator!=(const cld::Semantics::Abstrac
     return !(rhs == *this);
 }
 
-std::string cld::Semantics::declaratorToName(const cld::Syntax::Declarator& declarator)
+std::string_view cld::Semantics::declaratorToName(const cld::Syntax::Declarator& declarator)
 {
     return matchWithSelf(
         declarator.getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string { return name.getIdentifier(); },
-        [](auto&& self, const Syntax::DirectDeclaratorParenthese& declarator) -> std::string {
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string_view { return name.getIdentifier(); },
+        [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> std::string_view {
             return cld::match(declarator.getDeclarator().getDirectDeclarator(),
-                              [&self](auto&& value) -> std::string { return self(value); });
+                              [&self](auto&& value) -> std::string_view { return self(value); });
         },
-        [](auto&& self, auto&& value) -> std::string {
+        [](auto&& self, auto&& value) -> std::string_view {
             return cld::match(value.getDirectDeclarator(),
-                              [&self](auto&& value) -> std::string { return self(value); });
+                              [&self](auto&& value) -> std::string_view { return self(value); });
         });
 }
 
@@ -506,22 +492,18 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> cld::Lexer::CTokenIterator {
             return name.getIdentifierLoc();
         },
-        [](auto&& self,
-           const Syntax::DirectDeclaratorParenthese& declarator) -> cld::Lexer::CTokenIterator {
-            return cld::match(
-                declarator.getDeclarator().getDirectDeclarator(),
-                [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
+        [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> cld::Lexer::CTokenIterator {
+            return cld::match(declarator.getDeclarator().getDirectDeclarator(),
+                              [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
         },
         [](auto&& self, auto&& value) -> cld::Lexer::CTokenIterator {
-            return cld::match(
-                value.getDirectDeclarator(),
-                [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
+            return cld::match(value.getDirectDeclarator(),
+                              [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
         });
 }
 
-cld::Semantics::RecordType::RecordType(std::string name, bool isUnion,
-                                       std::vector<std::tuple<Type, std::string, std::int64_t>>&& names)
-    : m_name(std::move(name)), m_isUnion(isUnion), m_members(std::move(names))
+cld::Semantics::RecordType::RecordType(std::string name, bool isUnion, std::uint64_t scope)
+    : m_name(std::move(name)), m_isUnion(isUnion), m_scope(scope)
 {
 }
 
@@ -530,23 +512,11 @@ bool cld::Semantics::RecordType::isUnion() const
     return m_isUnion;
 }
 
-const std::vector<std::tuple<cld::Semantics::Type, std::string, std::int64_t>>&
-    cld::Semantics::RecordType::getMembers() const
-{
-    return m_members;
-}
-
-bool cld::Semantics::RecordType::isDefinition() const
-{
-    return !m_members.empty();
-}
-
-cld::Semantics::Type
-    cld::Semantics::RecordType::create(bool isConst, bool isVolatile, bool isUnion, const std::string& name,
-                                       std::vector<std::tuple<cld::Semantics::Type, std::string, int64_t>>&& members)
+cld::Semantics::Type cld::Semantics::RecordType::create(bool isConst, bool isVolatile, bool isUnion,
+                                                        const std::string& name, std::uint64_t scope)
 {
     return cld::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
-                                RecordType(name, isUnion, std::move(members)));
+                                RecordType(name, isUnion, scope));
 }
 
 bool cld::Semantics::RecordType::operator==(const cld::Semantics::RecordType& rhs) const
@@ -562,6 +532,11 @@ bool cld::Semantics::RecordType::operator!=(const cld::Semantics::RecordType& rh
 const std::string& cld::Semantics::RecordType::getName() const
 {
     return m_name;
+}
+
+std::uint64_t cld::Semantics::RecordType::getScope() const
+{
+    return m_scope;
 }
 
 cld::Expected<std::size_t, cld::Message> cld::Semantics::alignmentOf(const cld::Semantics::Type& type,
@@ -588,50 +563,55 @@ cld::Expected<std::size_t, cld::Message> cld::Semantics::alignmentOf(const cld::
             return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF.args(*node, sourceInterface, *node);
         },
         [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
-            if (recordType.getMembers().empty())
-            {
-                CLD_ASSERT(node);
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface, type, *node);
-            }
-            if (!recordType.isUnion())
-            {
-                std::size_t currentAlignment = 0;
-                for (auto& [subtype, name, bits] : recordType.getMembers())
-                {
-                    (void)name;
-                    (void)bits;
-                    auto result = alignmentOf(subtype, sourceInterface, node);
-                    if (!result)
-                    {
-                        return result;
-                    }
-                    currentAlignment = std::max(currentAlignment, *result);
-                }
-                return currentAlignment;
-            }
-            else
-            {
-                std::optional<Message> failure;
-                auto result = std::max_element(recordType.getMembers().begin(), recordType.getMembers().end(),
-                                               [&failure, &sourceInterface, &node](const auto& lhs, const auto& rhs) {
-                                                   auto lhsSize = sizeOf(std::get<0>(lhs), sourceInterface, node);
-                                                   if (!lhsSize)
-                                                   {
-                                                       failure = lhsSize.error();
-                                                   }
-                                                   auto rhsSize = sizeOf(std::get<0>(rhs), sourceInterface, node);
-                                                   if (!rhsSize)
-                                                   {
-                                                       failure = rhsSize.error();
-                                                   }
-                                                   return (lhsSize ? *lhsSize : 0) < (rhsSize ? *rhsSize : 0);
-                                               });
-                if (failure)
-                {
-                    return *failure;
-                }
-                return alignmentOf(std::get<0>(*result), sourceInterface, node);
-            }
+            //            if (!recordType.hasDefinition())
+            //            {
+            //                CLD_ASSERT(node);
+            //                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface,
+            //                type, *node);
+            //            }
+            // TODO:
+            //            if (!recordType.isUnion())
+            //            {
+            //                std::size_t currentAlignment = 0;
+            //                for (auto& [subtype, name, bits] : recordType.getMembers())
+            //                {
+            //                    (void)name;
+            //                    (void)bits;
+            //                    auto result = alignmentOf(subtype, sourceInterface, node);
+            //                    if (!result)
+            //                    {
+            //                        return result;
+            //                    }
+            //                    currentAlignment = std::max(currentAlignment, *result);
+            //                }
+            //                return currentAlignment;
+            //            }
+            //            else
+            //            {
+            //                std::optional<Message> failure;
+            //                auto result = std::max_element(recordType.getMembers().begin(),
+            //                recordType.getMembers().end(),
+            //                                               [&failure, &sourceInterface, &node](const auto& lhs, const
+            //                                               auto& rhs) {
+            //                                                   auto lhsSize = sizeOf(std::get<0>(lhs),
+            //                                                   sourceInterface, node); if (!lhsSize)
+            //                                                   {
+            //                                                       failure = lhsSize.error();
+            //                                                   }
+            //                                                   auto rhsSize = sizeOf(std::get<0>(rhs),
+            //                                                   sourceInterface, node); if (!rhsSize)
+            //                                                   {
+            //                                                       failure = rhsSize.error();
+            //                                                   }
+            //                                                   return (lhsSize ? *lhsSize : 0) < (rhsSize ? *rhsSize :
+            //                                                   0);
+            //                                               });
+            //                if (failure)
+            //                {
+            //                    return *failure;
+            //                }
+            //                return alignmentOf(std::get<0>(*result), sourceInterface, node);
+            //            }
         },
         [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
             return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
@@ -692,57 +672,58 @@ cld::Expected<std::size_t, cld::Message> cld::Semantics::sizeOf(const cld::Seman
             return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*node, sourceInterface, *node);
         },
         [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
-            if (recordType.getMembers().empty())
-            {
-                if (!node)
-                {
-                    return cld::Message{};
-                }
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type, *node);
-            }
-            if (!recordType.isUnion())
-            {
-                std::size_t currentSize = 0;
-                for (auto& [subtype, name, bits] : recordType.getMembers())
-                {
-                    // TODO: Shouldn't use node here but instead point at the individual members of the record
-                    (void)name;
-                    (void)bits;
-                    auto alignment = alignmentOf(subtype, sourceInterface, node);
-                    if (!alignment)
-                    {
-                        return alignment;
-                    }
-                    auto rest = currentSize % *alignment;
-                    if (rest != 0)
-                    {
-                        currentSize += *alignment - rest;
-                    }
-                    auto subSize = sizeOf(subtype, sourceInterface, node);
-                    if (!subSize)
-                    {
-                        return subSize;
-                    }
-                    currentSize += *subSize;
-                }
-                return currentSize;
-            }
-            else
-            {
-                std::size_t maxSize = 0;
-                for (auto& [subtype, name, bits] : recordType.getMembers())
-                {
-                    (void)name;
-                    (void)bits;
-                    auto subSize = sizeOf(subtype, sourceInterface, node);
-                    if (!subSize)
-                    {
-                        return subSize;
-                    }
-                    maxSize = std::max(maxSize, *subSize);
-                }
-                return maxSize;
-            }
+            return cld::Message{};
+            //            if (!recordType.hasDefinition())
+            //            {
+            //                if (!node)
+            //                {
+            //                    return cld::Message{};
+            //                }
+            //                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type,
+            //                *node);
+            //            }
+            // TODO:
+            //            if (!recordType.isUnion())
+            //            {
+            //                std::size_t currentSize = 0;
+            //                for (auto& [subtype, name, bits] : recordType.getMembers())
+            //                {
+            //                    // TODO: Shouldn't use node here but instead point at the individual members of the
+            //                    record (void)name; (void)bits; auto alignment = alignmentOf(subtype, sourceInterface,
+            //                    node); if (!alignment)
+            //                    {
+            //                        return alignment;
+            //                    }
+            //                    auto rest = currentSize % *alignment;
+            //                    if (rest != 0)
+            //                    {
+            //                        currentSize += *alignment - rest;
+            //                    }
+            //                    auto subSize = sizeOf(subtype, sourceInterface, node);
+            //                    if (!subSize)
+            //                    {
+            //                        return subSize;
+            //                    }
+            //                    currentSize += *subSize;
+            //                }
+            //                return currentSize;
+            //            }
+            //            else
+            //            {
+            //                std::size_t maxSize = 0;
+            //                for (auto& [subtype, name, bits] : recordType.getMembers())
+            //                {
+            //                    (void)name;
+            //                    (void)bits;
+            //                    auto subSize = sizeOf(subtype, sourceInterface, node);
+            //                    if (!subSize)
+            //                    {
+            //                        return subSize;
+            //                    }
+            //                    maxSize = std::max(maxSize, *subSize);
+            //                }
+            //                return maxSize;
+            //            }
         },
         [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
             return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
@@ -834,4 +815,9 @@ const std::vector<std::variant<cld::Semantics::Statement, cld::Semantics::Declar
     cld::Semantics::CompoundStatement::getCompoundItems() const
 {
     return m_compoundItems;
+}
+
+cld::Semantics::RecordDefinition::RecordDefinition(std::string_view name, std::vector<Field>&& fields)
+    : m_name(cld::to_string(name)), m_fields(std::move(fields))
+{
 }

@@ -121,7 +121,7 @@ class TypeSpecifier;
 
 class DirectDeclaratorIdentifier;
 
-class DirectDeclaratorParenthese;
+class DirectDeclaratorParentheses;
 
 class DirectDeclaratorNoStaticOrAsterisk;
 
@@ -129,13 +129,13 @@ class DirectDeclaratorStatic;
 
 class DirectDeclaratorAsterisk;
 
-class DirectDeclaratorParentheseParameters;
+class DirectDeclaratorParenthesesParameters;
 
-class DirectDeclaratorParentheseIdentifiers;
+class DirectDeclaratorParenthesesIdentifiers;
 
 class AbstractDeclarator;
 
-class DirectAbstractDeclaratorParenthese;
+class DirectAbstractDeclaratorParentheses;
 
 class DirectAbstractDeclaratorParameterTypeList;
 
@@ -1020,6 +1020,16 @@ public:
     [[nodiscard]] Specifiers getSpecifier() const;
 };
 
+inline bool operator==(const StorageClassSpecifier& storageClassSpecifier, StorageClassSpecifier::Specifiers specifier)
+{
+    return specifier == storageClassSpecifier.getSpecifier();
+}
+
+inline bool operator==(StorageClassSpecifier::Specifiers specifier, const StorageClassSpecifier& storageClassSpecifier)
+{
+    return specifier == storageClassSpecifier.getSpecifier();
+}
+
 /**
  * <FunctionSpecifier> ::= <TokenType::InlineKeyword>
  */
@@ -1157,20 +1167,20 @@ public:
  *                              | <DirectAbstractDeclaratorParameterTypeList>
  */
 using DirectAbstractDeclarator =
-    std::variant<DirectAbstractDeclaratorParenthese, DirectAbstractDeclaratorAssignmentExpression,
+    std::variant<DirectAbstractDeclaratorParentheses, DirectAbstractDeclaratorAssignmentExpression,
                  DirectAbstractDeclaratorAsterisk, DirectAbstractDeclaratorParameterTypeList>;
 
 /**
  * <DirectAbstractDeclaratorParenthese> ::= <TokenType::OpenParenthese> <AbstractDeclarator>
  * <TokenType::CloseParenthese>
  */
-class DirectAbstractDeclaratorParenthese final : public Node
+class DirectAbstractDeclaratorParentheses final : public Node
 {
     std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
 public:
-    DirectAbstractDeclaratorParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                       std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
+    DirectAbstractDeclaratorParentheses(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                        std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
     [[nodiscard]] const AbstractDeclarator& getAbstractDeclarator() const;
 };
@@ -1248,10 +1258,13 @@ public:
 
 /**
  * <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator>
- *                          | <DeclarationSpecifier> { <DelcarationSpecifier> } [ <AbstractDeclarator> ]
+ *                          | <DeclarationSpecifier> { <DeclarationSpecifier> } [ <AbstractDeclarator> ]
  */
-using ParameterDeclaration = std::pair<std::vector<DeclarationSpecifier>,
-                                       std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>>>;
+struct ParameterDeclaration : public Node
+{
+    std::vector<DeclarationSpecifier> declarationSpecifiers;
+    std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>> declarator;
+};
 
 /**
  * <ParameterList> ::= <ParameterDeclaration> { <TokenType::Comma> <ParameterDeclaration> }
@@ -1265,7 +1278,9 @@ public:
     ParameterList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                   std::vector<ParameterDeclaration>&& parameterList);
 
-    [[nodiscard]] const std::vector<ParameterDeclaration>& getParameterDeclarations() const;
+    [[nodiscard]] const std::vector<ParameterDeclaration>& getParameterDeclarations() const&;
+
+    [[nodiscard]] std::vector<ParameterDeclaration>&& getParameterDeclarations() &&;
 };
 
 /**
@@ -1273,21 +1288,21 @@ public:
  */
 class ParameterTypeList final : public Node
 {
-    ParameterList m_parameterList;
+    std::vector<ParameterDeclaration> m_parameterList;
     bool m_hasEllipse;
 
 public:
     ParameterTypeList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ParameterList&& parameterList,
                       bool hasEllipse);
 
-    [[nodiscard]] const ParameterList& getParameterList() const;
+    [[nodiscard]] const std::vector<ParameterDeclaration>& getParameters() const;
 
     [[nodiscard]] bool hasEllipse() const;
 };
 
 /**
  * <DirectDeclarator> ::= <DirectDeclaratorIdentifier>
- *                      | <DirectDeclaratorParenthese>
+ *                      | <DirectDeclaratorParentheses>
  *                      | <DirectDeclaratorNoStaticOrAsterisk>
  *                      | <DirectDeclaratorStatic>
  *                      | <DirectDeclaratorAsterisk>
@@ -1295,9 +1310,9 @@ public:
  *                      | <DirectDeclaratorParentheseIdentifier>
  */
 using DirectDeclarator =
-    std::variant<DirectDeclaratorIdentifier, DirectDeclaratorParenthese, DirectDeclaratorNoStaticOrAsterisk,
-                 DirectDeclaratorStatic, DirectDeclaratorAsterisk, DirectDeclaratorParentheseParameters,
-                 DirectDeclaratorParentheseIdentifiers>;
+    std::variant<DirectDeclaratorIdentifier, DirectDeclaratorParentheses, DirectDeclaratorNoStaticOrAsterisk,
+                 DirectDeclaratorStatic, DirectDeclaratorAsterisk, DirectDeclaratorParenthesesParameters,
+                 DirectDeclaratorParenthesesIdentifiers>;
 
 /**
  * <DirectDeclaratorIdentifier> ::= <TokenType::Identifier>
@@ -1317,31 +1332,31 @@ public:
 };
 
 /**
- * <DirectDeclaratorParenthese> ::= <TokenType::OpenParenthese> <DirectDeclarator> <TokenType::CloseParenthese>
+ * <DirectDeclaratorParentheses> ::= <TokenType::OpenParentheses> <DirectDeclarator> <TokenType::CloseParentheses>
  */
-class DirectDeclaratorParenthese final : public Node
+class DirectDeclaratorParentheses final : public Node
 {
     std::unique_ptr<Declarator> m_declarator;
 
 public:
-    DirectDeclaratorParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                               std::unique_ptr<Declarator>&& declarator);
+    DirectDeclaratorParentheses(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                std::unique_ptr<Declarator>&& declarator);
 
     [[nodiscard]] const Declarator& getDeclarator() const;
 };
 
 /**
- * <DirectDeclaratorParentheseParameters> ::= <DirectDeclarator> <TokenType::OpenParenthese> <ParameterTypeList>
- * <TokenType::CloseParenthese>
+ * <DirectDeclaratorParenthesesParameters> ::= <DirectDeclarator> <TokenType::OpenParentheses> <ParameterTypeList>
+ * <TokenType::CloseParentheses>
  */
-class DirectDeclaratorParentheseParameters final : public Node
+class DirectDeclaratorParenthesesParameters final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
     ParameterTypeList m_parameterTypeList;
 
 public:
-    DirectDeclaratorParentheseParameters(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                         DirectDeclarator&& directDeclarator, ParameterTypeList&& parameterTypeList);
+    DirectDeclaratorParenthesesParameters(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                          DirectDeclarator&& directDeclarator, ParameterTypeList&& parameterTypeList);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
@@ -1349,18 +1364,18 @@ public:
 };
 
 /**
- * <DirectDeclaratorParentheseIdentifiers> ::= <DirectDeclarator> <TokenType::OpenParenthese> [
- * <TokenType::Identifier> {<TokenType::Comma> <TokenType::Identifier>}] <TokenType::CloseParenthese>
+ * <DirectDeclaratorParenthesesIdentifiers> ::= <DirectDeclarator> <TokenType::OpenParentheses> [
+ * <TokenType::Identifier> {<TokenType::Comma> <TokenType::Identifier>}] <TokenType::CloseParentheses>
  */
-class DirectDeclaratorParentheseIdentifiers final : public Node
+class DirectDeclaratorParenthesesIdentifiers final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
     std::vector<std::pair<std::string, Lexer::CTokenIterator>> m_identifiers;
 
 public:
-    DirectDeclaratorParentheseIdentifiers(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                          DirectDeclarator&& directDeclarator,
-                                          std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers);
+    DirectDeclaratorParenthesesIdentifiers(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                           DirectDeclarator&& directDeclarator,
+                                           std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
@@ -1459,7 +1474,7 @@ public:
 class StructOrUnionSpecifier final : public Node
 {
     bool m_isUnion;
-    std::string m_identifier;
+    Lexer::CTokenIterator m_identifierLoc;
 
 public:
     /**
@@ -1479,12 +1494,12 @@ private:
     std::vector<StructDeclaration> m_structDeclarations;
 
 public:
-    StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, std::string identifier,
-                           std::vector<StructDeclaration>&& structDeclarations);
+    StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion,
+                           Lexer::CTokenIterator identifierLoc, std::vector<StructDeclaration>&& structDeclarations);
 
     [[nodiscard]] bool isUnion() const;
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifierLoc() const;
 
     [[nodiscard]] const std::vector<StructDeclaration>& getStructDeclarations() const;
 };
@@ -1497,16 +1512,17 @@ public:
  */
 class EnumDeclaration final : public Node
 {
-    std::string m_name;
-    std::vector<std::pair<std::string, std::optional<ConstantExpression>>> m_values;
+    Lexer::CTokenIterator m_name;
+    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> m_values;
 
 public:
-    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string name,
-                    std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values);
+    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator name,
+                    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values);
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] Lexer::CTokenIterator getName() const;
 
-    [[nodiscard]] const std::vector<std::pair<std::string, std::optional<ConstantExpression>>>& getValues() const;
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&
+        getValues() const;
 };
 
 /**
@@ -1541,18 +1557,19 @@ public:
 class TypeSpecifier final : public Node
 {
 public:
-    enum class PrimitiveTypeSpecifier
+    enum PrimitiveTypeSpecifier
     {
-        Void,
-        Char,
-        Short,
-        Int,
-        Long,
-        Float,
-        Double,
-        Signed,
-        Unsigned,
-        Bool,
+        Void = 0b1,
+        Char = 0b10,
+        Short = 0b100,
+        Int = 0b1000,
+        Long = 0b10000,
+        // LongLong = 0b100000, Only used in the Semantic stage. Obtained by Long + Long
+        Float = 0b1000000,
+        Double = 0b10000000,
+        Signed = 0b100000000,
+        Unsigned = 0b1000000000,
+        Bool = 0b10000000000,
     };
 
 private:
@@ -1667,63 +1684,4 @@ public:
 
     [[nodiscard]] const std::vector<ExternalDeclaration>& getGlobals() const;
 };
-
-namespace detail
-{
-template <class Test, template <typename...> class Ref>
-struct isSpecilization : std::false_type
-{
-};
-
-template <template <typename...> class Ref, typename... Args>
-struct isSpecilization<Ref<Args...>, Ref> : std::true_type
-{
-};
-
-template <class T>
-constexpr bool isVariant = isSpecilization<T, std::variant>{};
-
-template <class T>
-constexpr bool isReferenceWrapper = isSpecilization<T, std::reference_wrapper>{};
-} // namespace detail
-
-template <class... T>
-[[nodiscard]] Node& nodeFromNodeDerivedVariant(std::variant<T...>& variant)
-{
-    return cld::match(variant, [](auto&& value) -> Node& {
-        using U = std::decay_t<decltype(value)>;
-        if constexpr (detail::isVariant<U>)
-        {
-            return nodeFromNodeDerivedVariant(value);
-        }
-        else if constexpr (detail::isReferenceWrapper<U>)
-        {
-            return nodeFromNodeDerivedVariant(value.get());
-        }
-        else
-        {
-            return value;
-        }
-    });
-}
-
-template <class... T>
-[[nodiscard]] const Node& nodeFromNodeDerivedVariant(const std::variant<T...>& variant)
-{
-    return cld::match(variant, [](auto&& value) -> const Node& {
-        using U = std::decay_t<decltype(value)>;
-        if constexpr (detail::isVariant<U>)
-        {
-            return nodeFromNodeDerivedVariant(value);
-        }
-        else if constexpr (detail::isReferenceWrapper<U>)
-        {
-            return nodeFromNodeDerivedVariant(value.get());
-        }
-        else
-        {
-            return value;
-        }
-    });
-}
 } // namespace cld::Syntax

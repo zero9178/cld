@@ -969,18 +969,13 @@ class Preprocessor final : private cld::PPSourceInterface
         }
         cld::Semantics::ConstantEvaluator evaluator(
             *this, {},
-            [&](std::string_view macro) -> const cld::Semantics::DeclarationTypedefEnums* {
-                if (macro == "__FILE__" || macro == "__LINE__")
+            [&](std::string_view macro) -> cld::Semantics::ConstRetType {
+                if (macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0)
                 {
-                    return reinterpret_cast<const cld::Semantics::DeclarationTypedefEnums*>(0x1);
+                    return {llvm::APSInt(llvm::APInt(64, 1), false),
+                            cld::Semantics::PrimitiveType::createLongLong(false, false)};
                 }
-                if (m_defines.count(macro) == 0)
-                {
-                    return nullptr;
-                }
-                {
-                    return reinterpret_cast<const cld::Semantics::DeclarationTypedefEnums*>(0x1);
-                }
+                return {llvm::APSInt(64, false), cld::Semantics::PrimitiveType::createLongLong(false, false)};
             },
             [&](const cld::Message& message) {
                 if (message.getSeverity() == cld::Severity::Error)

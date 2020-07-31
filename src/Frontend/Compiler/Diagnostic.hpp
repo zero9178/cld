@@ -288,6 +288,12 @@ public:
     };
 
 private:
+    template <std::size_t... ints>
+    constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
+    {
+        return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
+    }
+
     constexpr static std::array<std::underlying_type_t<Constraint>, N> getConstraints();
 
     template <std::size_t... ints>
@@ -310,7 +316,22 @@ private:
     constexpr static bool locationConstraintCheck()
     {
         using U = std::decay_t<T>;
-        if constexpr (IsTupleLike<U>{})
+        if constexpr (IsVariant<U>{})
+        {
+            constexpr auto size = std::variant_size_v<U>;
+            return std::apply(
+                [](auto&&... values) {
+                    return ([](auto indexT) {
+                        constexpr auto index = decltype(indexT)::value;
+                        // Don't usually allow pointers except in variants.
+                        using V = std::remove_pointer_t<std::variant_alternative_t<index, U>>;
+                        return locationConstraintCheck<V>();
+                    }(values)
+                            && ...);
+                },
+                integerSequenceToTuple(std::make_index_sequence<size>{}));
+        }
+        else if constexpr (IsTupleLike<U>{})
         {
             if constexpr (std::tuple_size_v<U> == 2)
             {
@@ -338,10 +359,10 @@ private:
                 return false;
             }
         }
-        else if constexpr (IsIterable<T>{})
+        else if constexpr (IsIterable<U>{})
         {
-            using ValueType = typename std::iterator_traits<decltype(std::begin(std::declval<T>()))>::value_type;
-            return locationConstraintCheck<ValueType>();
+            using ValueType = typename std::iterator_traits<decltype(std::begin(std::declval<U>()))>::value_type;
+            return locationConstraintCheck<std::remove_pointer_t<ValueType>>();
         }
         else
         {
@@ -387,10 +408,32 @@ private:
         }
         else if constexpr (IsIterable<T>{})
         {
+            CLD_ASSERT(std::begin(arg) != std::end(arg));
             auto& first = *std::begin(arg);
             auto& last = *(std::end(arg) - 1);
-            return {{first.getOffset(), first.getFileId(), first.getMacroId()},
-                    {last.getOffset() + last.getLength(), last.getFileId(), last.getMacroId()}};
+            if constexpr (std::is_pointer_v<std::decay_t<decltype(first)>>)
+            {
+                return {getPointRange(*first).first, getPointRange(*last).second};
+            }
+            else
+            {
+                return {getPointRange(first).first, getPointRange(last).second};
+            }
+        }
+        else if constexpr (IsVariant<U>{})
+        {
+            return cld::match(arg, [](auto&& value) {
+                using V = std::decay_t<decltype(value)>;
+                if constexpr (std::is_pointer_v<V>)
+                {
+                    CLD_ASSERT(value);
+                    return getPointRange(*value);
+                }
+                else
+                {
+                    return getPointRange(value);
+                }
+            });
         }
         else if constexpr (std::tuple_size_v<U> == 2)
         {
@@ -459,12 +502,6 @@ private:
                                                        std::index_sequence<ints...>);
 
     std::string_view m_name;
-
-    template <std::size_t... ints>
-    constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
-    {
-        return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
-    }
 
     template <std::size_t i>
     constexpr static auto customModifiersFor()
@@ -562,7 +599,7 @@ private:
 namespace diag
 {
 std::tuple<const Lexer::TokenBase&, std::uint64_t> after(const Lexer::TokenBase& token);
-}
+} // namespace diag
 
 template <const auto& text, class... Args>
 constexpr auto makeDiagnostic(Severity category, std::string_view name)

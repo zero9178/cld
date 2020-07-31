@@ -39,7 +39,7 @@
         auto begin = std::as_const(ctokens).data().data();                                      \
         parser(begin, ctokens.data().data() + ctokens.data().size(), context);                  \
         {                                                                                       \
-            INFO("Function " #parser " with source " << source);                                \
+            UNSCOPED_INFO("Function " #parser " with source " << source);                       \
             CHECK((!string.empty() || begin == ctokens.data().data() + ctokens.data().size())); \
         }                                                                                       \
         CHECK_THAT(string, matches);                                                            \

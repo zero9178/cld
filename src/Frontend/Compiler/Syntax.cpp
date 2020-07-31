@@ -610,18 +610,18 @@ const typename cld::Syntax::InitializerList::vector&
 }
 
 cld::Syntax::EnumDeclaration::EnumDeclaration(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string name,
-    std::vector<std::pair<std::string, std::optional<ConstantExpression>>>&& values)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator name,
+    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values)
     : Node(begin, end), m_name(std::move(name)), m_values(std::move(values))
 {
 }
 
-const std::string& cld::Syntax::EnumDeclaration::getName() const
+cld::Lexer::CTokenIterator cld::Syntax::EnumDeclaration::getName() const
 {
     return m_name;
 }
 
-const std::vector<std::pair<std::string, std::optional<cld::Syntax::ConstantExpression>>>&
+const std::vector<std::pair<cld::Lexer::CTokenIterator, std::optional<cld::Syntax::ConstantExpression>>>&
     cld::Syntax::EnumDeclaration::getValues() const
 {
     return m_values;
@@ -689,11 +689,11 @@ const std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::uniqu
 }
 
 cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, std::string identifier,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, Lexer::CTokenIterator identifierLoc,
     std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&& structDeclarations)
     : Node(begin, end),
       m_isUnion(isUnion),
-      m_identifier(std::move(identifier)),
+      m_identifierLoc(std::move(identifierLoc)),
       m_structDeclarations(std::move(structDeclarations))
 {
 }
@@ -703,9 +703,9 @@ bool cld::Syntax::StructOrUnionSpecifier::isUnion() const
     return m_isUnion;
 }
 
-const std::string& cld::Syntax::StructOrUnionSpecifier::getIdentifier() const
+cld::Lexer::CTokenIterator cld::Syntax::StructOrUnionSpecifier::getIdentifierLoc() const
 {
-    return m_identifier;
+    return m_identifierLoc;
 }
 
 const std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&
@@ -720,18 +720,23 @@ cld::Syntax::ParameterList::ParameterList(Lexer::CTokenIterator begin, Lexer::CT
 {
 }
 
-const std::vector<cld::Syntax::ParameterDeclaration>& cld::Syntax::ParameterList::getParameterDeclarations() const
+const std::vector<cld::Syntax::ParameterDeclaration>& cld::Syntax::ParameterList::getParameterDeclarations() const&
 {
     return m_parameterList;
 }
 
+std::vector<cld::Syntax::ParameterDeclaration>&& cld::Syntax::ParameterList::getParameterDeclarations() &&
+{
+    return std::move(m_parameterList);
+}
+
 cld::Syntax::ParameterTypeList::ParameterTypeList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                   cld::Syntax::ParameterList&& parameterList, bool hasEllipse)
-    : Node(begin, end), m_parameterList(std::move(parameterList)), m_hasEllipse(hasEllipse)
+    : Node(begin, end), m_parameterList(std::move(parameterList).getParameterDeclarations()), m_hasEllipse(hasEllipse)
 {
 }
 
-const cld::Syntax::ParameterList& cld::Syntax::ParameterTypeList::getParameterList() const
+const std::vector<cld::Syntax::ParameterDeclaration>& cld::Syntax::ParameterTypeList::getParameters() const
 {
     return m_parameterList;
 }
@@ -828,7 +833,7 @@ const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::DirectDeclaratorAste
     return m_typeQualifiers;
 }
 
-cld::Syntax::DirectDeclaratorParentheseParameters::DirectDeclaratorParentheseParameters(
+cld::Syntax::DirectDeclaratorParenthesesParameters::DirectDeclaratorParenthesesParameters(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
     cld::Syntax::ParameterTypeList&& parameterTypeList)
     : Node(begin, end),
@@ -837,17 +842,17 @@ cld::Syntax::DirectDeclaratorParentheseParameters::DirectDeclaratorParenthesePar
 {
 }
 
-const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParentheseParameters::getDirectDeclarator() const
+const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParenthesesParameters::getDirectDeclarator() const
 {
     return *m_directDeclarator;
 }
 
-const cld::Syntax::ParameterTypeList& cld::Syntax::DirectDeclaratorParentheseParameters::getParameterTypeList() const
+const cld::Syntax::ParameterTypeList& cld::Syntax::DirectDeclaratorParenthesesParameters::getParameterTypeList() const
 {
     return m_parameterTypeList;
 }
 
-cld::Syntax::DirectDeclaratorParentheseIdentifiers::DirectDeclaratorParentheseIdentifiers(
+cld::Syntax::DirectDeclaratorParenthesesIdentifiers::DirectDeclaratorParenthesesIdentifiers(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
     std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers)
     : Node(begin, end),
@@ -856,13 +861,13 @@ cld::Syntax::DirectDeclaratorParentheseIdentifiers::DirectDeclaratorParentheseId
 {
 }
 
-const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParentheseIdentifiers::getDirectDeclarator() const
+const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParenthesesIdentifiers::getDirectDeclarator() const
 {
     return *m_directDeclarator;
 }
 
 const std::vector<std::pair<std::string, cld::Lexer::CTokenIterator>>&
-    cld::Syntax::DirectDeclaratorParentheseIdentifiers::getIdentifiers() const
+    cld::Syntax::DirectDeclaratorParenthesesIdentifiers::getIdentifiers() const
 {
     return m_identifiers;
 }
@@ -1086,26 +1091,26 @@ cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorIdentifier::getIdentifie
     return m_identifierLoc;
 }
 
-cld::Syntax::DirectDeclaratorParenthese::DirectDeclaratorParenthese(Lexer::CTokenIterator begin,
-                                                                    Lexer::CTokenIterator end,
-                                                                    std::unique_ptr<Declarator>&& declarator)
+cld::Syntax::DirectDeclaratorParentheses::DirectDeclaratorParentheses(Lexer::CTokenIterator begin,
+                                                                      Lexer::CTokenIterator end,
+                                                                      std::unique_ptr<Declarator>&& declarator)
     : Node(begin, end), m_declarator(std::move(declarator))
 {
     CLD_ASSERT(m_declarator);
 }
 
-const cld::Syntax::Declarator& cld::Syntax::DirectDeclaratorParenthese::getDeclarator() const
+const cld::Syntax::Declarator& cld::Syntax::DirectDeclaratorParentheses::getDeclarator() const
 {
     return *m_declarator;
 }
 
-cld::Syntax::DirectAbstractDeclaratorParenthese::DirectAbstractDeclaratorParenthese(
+cld::Syntax::DirectAbstractDeclaratorParentheses::DirectAbstractDeclaratorParentheses(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
     : Node(begin, end), m_abstractDeclarator(std::move(abstractDeclarator))
 {
 }
 
-const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorParenthese::getAbstractDeclarator() const
+const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorParentheses::getAbstractDeclarator() const
 {
     return *m_abstractDeclarator;
 }

@@ -18,42 +18,33 @@ cld::Semantics::Type getPtrdiffT(const cld::LanguageOptions& options)
         {
             return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
-        else if (options.sizeOfLong == 4)
+        if (options.sizeOfLong == 4)
         {
             return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
-        else if (options.sizeOfShort == 4)
+        if (options.sizeOfShort == 4)
         {
             return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
-        else
-        {
-            CLD_UNREACHABLE;
-        }
+        CLD_UNREACHABLE;
     }
-    else if (options.sizeOfVoidStar == 8)
+    if (options.sizeOfVoidStar == 8)
     {
         if (options.sizeOfInt == 8)
         {
             return cld::Semantics::PrimitiveType::createInt(false, false, options);
         }
-        else if (options.sizeOfLong == 8)
+        if (options.sizeOfLong == 8)
         {
             return cld::Semantics::PrimitiveType::createLong(false, false, options);
         }
-        else if (options.sizeOfShort == 8)
+        if (options.sizeOfShort == 8)
         {
             return cld::Semantics::PrimitiveType::createShort(false, false, options);
         }
-        else
-        {
-            return cld::Semantics::PrimitiveType::createLongLong(false, false);
-        }
+        return cld::Semantics::PrimitiveType::createLongLong(false, false);
     }
-    else
-    {
-        CLD_UNREACHABLE;
-    }
+    CLD_UNREACHABLE;
 }
 } // namespace
 
@@ -830,13 +821,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
         [this](const Syntax::PrimaryExpressionIdentifier& identifier) -> ConstRetType {
-            auto* decl = m_declarationCallback ? m_declarationCallback(identifier.getIdentifier()) : nullptr;
-            if (decl)
+            auto decl = m_identifierCallback ? m_identifierCallback(identifier.getIdentifier()) : ConstRetType{};
+            if (!decl.isUndefined())
             {
-                return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8,
-                                                 cld::get<std::int32_t>(*decl), true),
-                                     false),
-                        PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+                return decl;
             }
             log(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                 identifier, m_sourceInterface, identifier));
@@ -901,13 +889,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return visit(node.getConditionalExpression());
 }
 
-cld::Semantics::ConstantEvaluator::ConstantEvaluator(
-    const SourceInterface& sourceInterface, std::function<Type(const Syntax::TypeName&)> typeCallback,
-    std::function<const DeclarationTypedefEnums*(std::string_view)> declarationCallback,
-    std::function<void(const Message&)> loggerCallback, Mode mode)
+cld::Semantics::ConstantEvaluator::ConstantEvaluator(const SourceInterface& sourceInterface,
+                                                     std::function<Type(const Syntax::TypeName&)> typeCallback,
+                                                     std::function<ConstRetType(std::string_view)> identifierCallback,
+                                                     std::function<void(const Message&)> loggerCallback, Mode mode)
     : m_sourceInterface(sourceInterface),
       m_typeCallback(std::move(typeCallback)),
-      m_declarationCallback(std::move(declarationCallback)),
+      m_identifierCallback(std::move(identifierCallback)),
       m_loggerCallback(std::move(loggerCallback)),
       m_mode(mode)
 {
@@ -924,17 +912,7 @@ void cld::Semantics::ConstantEvaluator::log(const Message& message)
 cld::Semantics::ConstRetType
     cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionDefined& defined)
 {
-    const auto* result = m_declarationCallback(defined.getIdentifier());
-    if (result == nullptr)
-    {
-        return {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false),
-                PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
-    }
-    else
-    {
-        return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false),
-                PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
-    }
+    return m_identifierCallback(defined.getIdentifier());
 }
 
 cld::Semantics::ConstRetType::ConstRetType(const cld::Semantics::ConstRetType::ValueType& value,
@@ -1027,13 +1005,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                                                   const LanguageOptions& options, Issues* issues) const
 {
     auto copy = type.get();
-    auto nonLvalue = Type(false, false, type.getName(), std::move(copy));
+    auto nonLvalue = Type(false, false, cld::to_string(type.getName()), std::move(copy));
     return match(
         m_value, [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
-        [&nonLvalue, issues, this, &options](VoidStar address) -> ConstRetType {
+        [&](VoidStar address) -> ConstRetType {
             return match(
                 nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
-                [issues, address, &nonLvalue, this, &options](const PrimitiveType& primitiveType) -> ConstRetType {
+                [&](const PrimitiveType& primitiveType) -> ConstRetType {
                     if (primitiveType.isFloatingPoint())
                     {
                         CLD_UNREACHABLE;
@@ -1059,22 +1037,14 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                          !primitiveType.isSigned()),
                             nonLvalue};
                 },
-                [issues, &nonLvalue, address, &options](const EnumType&) -> ConstRetType {
-                    if (issues && llvm::APInt::getSignedMaxValue(options.sizeOfInt * 8).ugt(address.address))
-                    {
-                        *issues = Issues::NotRepresentable;
-                    }
-                    return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address), false), nonLvalue};
-                },
-                [&nonLvalue, address](const PointerType&) -> ConstRetType {
+                [&](const PointerType&) -> ConstRetType {
                     return {address, nonLvalue};
                 });
         },
-        [&nonLvalue, &options, this, issues](llvm::APFloat floating) -> ConstRetType {
+        [&](llvm::APFloat floating) -> ConstRetType {
             return match(
                 nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
-                [&nonLvalue, &floating, this, &options,
-                 issues](const PrimitiveType& primitiveType) mutable -> ConstRetType {
+                [&](const PrimitiveType& primitiveType) mutable -> ConstRetType {
                     bool response;
                     llvm::APFloat::opStatus op;
                     if (primitiveType.isFloatingPoint())
@@ -1119,22 +1089,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                         *issues = Issues::NotRepresentable;
                     }
                     return {result, nonLvalue};
-                },
-                [&options, &nonLvalue, &floating, issues](const EnumType&) -> ConstRetType {
-                    bool response;
-                    llvm::APSInt result(options.sizeOfInt * 8, false);
-                    auto op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
-                    if (issues && op == llvm::APFloat::opInvalidOp)
-                    {
-                        *issues = Issues::NotRepresentable;
-                    }
-                    return {result, nonLvalue};
                 });
         },
-        [&nonLvalue, issues, this, &options](const llvm::APSInt& integer) -> ConstRetType {
+        [&](const llvm::APSInt& integer) -> ConstRetType {
             return match(
                 nonLvalue.get(), [](const auto&) -> ConstRetType { CLD_UNREACHABLE; },
-                [issues, &nonLvalue, this, &integer, &options](const PrimitiveType& primitiveType) -> ConstRetType {
+                [&](const PrimitiveType& primitiveType) -> ConstRetType {
                     if (primitiveType.isFloatingPoint())
                     {
                         decltype(auto) semantics = [&primitiveType]() -> decltype(auto) {
@@ -1183,17 +1143,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                     apsInt.setIsSigned(primitiveType.isSigned());
                     return {apsInt, nonLvalue};
                 },
-                [issues, &nonLvalue, &options, &integer](const EnumType&) -> ConstRetType {
-                    if (issues && llvm::APInt::getSignedMaxValue(options.sizeOfInt * 8).ugt(integer))
-                    {
-                        *issues = Issues::NotRepresentable;
-                    }
-
-                    auto apsInt = integer.extOrTrunc(options.sizeOfInt * 8);
-                    apsInt.setIsSigned(true);
-                    return {apsInt, nonLvalue};
-                },
-                [&nonLvalue, &integer](const PointerType&) -> ConstRetType {
+                [&](const PointerType&) -> ConstRetType {
                     return {VoidStar{integer.getZExtValue()}, nonLvalue};
                 });
         });
