@@ -92,6 +92,9 @@ else ()
     endif ()
 endif ()
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    add_compile_options(-Wno-assume)
+endif ()
 if (NOT MSVC)
     find_package(Threads REQUIRED)
     link_libraries(Threads::Threads)
@@ -160,11 +163,6 @@ else ()
             # Promoted warnings to errors.
             -we4238 # Promote 'nonstandard extension used : class rvalue used as lvalue' to error.
             )
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-        add_compile_options(-Wno-assume)
-    else ()
-        #add_compile_options(/experimental:newLambdaProcessor)
-    endif ()
 endif ()
 
 llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)

@@ -217,26 +217,91 @@ public:
     bool operator!=(const FunctionType& rhs) const;
 };
 
-class RecordType final
+class StructType final
 {
     std::string m_name;
-    bool m_isUnion;
     std::uint64_t m_scope;
 
-    RecordType(std::string name, bool isUnion, std::uint64_t scope);
+    StructType(std::string_view name, std::uint64_t scope);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isUnion, const std::string& name, std::uint64_t scope);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] std::string_view getName() const;
 
-    [[nodiscard]] bool isUnion() const;
+    std::uint64_t getScope() const;
 
-    uint64_t getScope() const;
+    bool operator==(const StructType& rhs) const;
 
-    bool operator==(const RecordType& rhs) const;
+    bool operator!=(const StructType& rhs) const;
+};
 
-    bool operator!=(const RecordType& rhs) const;
+class UnionType final
+{
+    std::string m_name;
+    std::uint64_t m_scope;
+
+    UnionType(std::string_view name, std::uint64_t scope);
+
+public:
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
+
+    [[nodiscard]] std::string_view getName() const;
+
+    std::uint64_t getScope() const;
+
+    bool operator==(const UnionType& rhs) const;
+
+    bool operator!=(const UnionType& rhs) const;
+};
+
+struct Field
+{
+    std::shared_ptr<const Type> type;
+    std::string name;
+    std::optional<std::uint64_t> bitFieldSize;
+
+    bool operator==(const Field& rhs) const;
+
+    bool operator!=(const Field& rhs) const;
+};
+
+class AnonymousStructType final
+{
+    std::vector<Field> m_fields;
+
+    AnonymousStructType(std::vector<Field>&& fields);
+
+public:
+    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields);
+
+    const std::vector<Field>& getFields() const
+    {
+        return m_fields;
+    }
+
+    bool operator==(const AnonymousStructType& rhs) const;
+
+    bool operator!=(const AnonymousStructType& rhs) const;
+};
+
+class AnonymousUnionType final
+{
+    std::vector<Field> m_fields;
+
+    AnonymousUnionType(std::vector<Field>&& fields);
+
+public:
+    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields);
+
+    const std::vector<Field>& getFields() const
+    {
+        return m_fields;
+    }
+
+    bool operator==(const AnonymousUnionType& rhs) const;
+
+    bool operator!=(const AnonymousUnionType& rhs) const;
 };
 
 class EnumType final
@@ -256,6 +321,25 @@ public:
     bool operator==(const EnumType& rhs) const;
 
     bool operator!=(const EnumType& rhs) const;
+};
+
+class AnonymousEnumType
+{
+    std::shared_ptr<const Type> m_type;
+
+    AnonymousEnumType(std::shared_ptr<const Type> type);
+
+public:
+    static Type create(bool isConst, bool isVolatile, Type&& type);
+
+    bool operator==(const AnonymousEnumType& rhs) const;
+
+    bool operator!=(const AnonymousEnumType& rhs) const;
+
+    const Type& getType() const
+    {
+        return *m_type;
+    }
 };
 
 class PointerType final
@@ -284,13 +368,14 @@ class Type final
     std::string m_name;
     std::string m_typeName;
     using variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
-                                 FunctionType, RecordType, EnumType, PointerType>;
+                                 FunctionType, StructType, UnionType, EnumType, PointerType, AnonymousEnumType,
+                                 AnonymousStructType, AnonymousUnionType>;
 
     variant m_type;
 
 public:
     explicit Type(bool isConst = false, bool isVolatile = false, std::string name = "<undefined>",
-                  variant&& type = std::monostate{});
+                  variant type = std::monostate{});
 
     [[nodiscard]] const variant& get() const;
 
@@ -408,22 +493,49 @@ class LabelStatement final
 {
 };
 
-class RecordDefinition
+class StructDefinition
 {
-public:
-    struct Field
-    {
-        Type type;
-        std::string name;
-        std::optional<std::uint64_t> bitFieldSize;
-    };
-
-private:
     std::string m_name;
     std::vector<Field> m_fields;
 
 public:
-    RecordDefinition(std::string_view name, std::vector<Field>&& fields);
+    StructDefinition(std::string_view name, std::vector<Field>&& fields);
+
+    std::string_view getName() const
+    {
+        return m_name;
+    }
+
+    const std::vector<Field>& getFields() const
+    {
+        return m_fields;
+    }
+
+    bool operator==(const StructDefinition& rhs) const;
+
+    bool operator!=(const StructDefinition& rhs) const;
+};
+
+class UnionDefinition
+{
+    std::string m_name;
+    std::vector<Field> m_fields;
+
+public:
+    UnionDefinition(std::string_view name, std::vector<Field>&& fields);
+
+    std::string_view getName() const
+    {
+        return m_name;
+    }
+
+    const std::vector<Field>& getFields() const
+    {
+        return m_fields;
+    }
+
+    bool operator==(const UnionDefinition& rhs) const;
+    bool operator!=(const UnionDefinition& rhs) const;
 };
 
 class EnumDefinition
@@ -433,6 +545,16 @@ class EnumDefinition
 
 public:
     EnumDefinition(std::string_view name, Type type) : m_name(cld::to_string(name)), m_type(std::move(type)) {}
+
+    std::string_view getName() const
+    {
+        return m_name;
+    }
+
+    const Type& getType() const
+    {
+        return m_type;
+    }
 };
 
 class FunctionDefinition final
@@ -475,12 +597,6 @@ public:
 std::string_view declaratorToName(const cld::Syntax::Declarator& declarator);
 
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
-
-cld::Expected<std::size_t, Message> sizeOf(const Type& type, const SourceInterface& sourceInterface,
-                                           const Syntax::Node* node);
-
-cld::Expected<std::size_t, Message> alignmentOf(const Type& type, const SourceInterface& sourceInterface,
-                                                const Syntax::Node* node);
 
 bool isVoid(const Type& type);
 } // namespace cld::Semantics

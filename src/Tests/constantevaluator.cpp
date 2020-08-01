@@ -34,7 +34,16 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
         [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
             return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
         },
-        {}, [&ss](const cld::Message& message) { ss << message; }, mode);
+        {},
+        [&analysis](cld::Semantics::ConstantEvaluator::TypeInfo info, const cld::Semantics::Type& type,
+                    llvm::ArrayRef<cld::Lexer::CToken> loc) -> cld::Expected<std::size_t, cld::Message> {
+            switch (info)
+            {
+                case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
+                case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
+            }
+        },
+        [&ss](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
     auto string = ss.str();
     if (!string.empty())
@@ -44,7 +53,16 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
             [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
                 return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
             },
-            {}, [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
+            {},
+            [&analysis](cld::Semantics::ConstantEvaluator::TypeInfo info, const cld::Semantics::Type& type,
+                        llvm::ArrayRef<cld::Lexer::CToken> loc) -> cld::Expected<std::size_t, cld::Message> {
+                switch (info)
+                {
+                    case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
+                    case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
+                }
+            },
+            [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);
     }
     return {ret, string};
@@ -520,7 +538,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                                     SIZEPAIR(float),
                                     SIZEPAIR(double),
                                     SIZEPAIR(long double),
-                                    std::pair{"float[0]", static_cast<std::size_t>(0ull)},
                                     SIZEPAIR(int[5]),
                                     std::pair{"struct Test"
                                               "{"
@@ -529,7 +546,21 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                                               "char c[24];"
                                               "}",
                                               sizeof(Test)},
+                                    std::pair{"struct"
+                                              "{"
+                                              "int f;"
+                                              "float r[5];"
+                                              "char c[24];"
+                                              "}",
+                                              sizeof(Test)},
                                     std::pair{"union Test"
+                                              "{"
+                                              "int f;"
+                                              "float r[5];"
+                                              "char c[24];"
+                                              "}",
+                                              sizeof(TestU)},
+                                    std::pair{"union"
                                               "{"
                                               "int f;"
                                               "float r[5];"

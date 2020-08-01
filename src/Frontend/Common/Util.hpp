@@ -9,7 +9,16 @@
 
     #ifndef CLD_USE_ASSERTS
 
-        #ifndef _MSC_VER
+        #ifdef __clang__
+
+            #define CLD_UNREACHABLE          \
+                do                           \
+                    __builtin_unreachable(); \
+                while (0)
+
+            #define CLD_ASSERT(x) __builtin_assume(bool(x))
+
+        #elif defined(__GNUC__)
 
             #define CLD_UNREACHABLE          \
                 do                           \
@@ -22,7 +31,7 @@
                 else              \
                     __builtin_unreachable()
 
-        #else
+        #elif defined(_MSC_VER)
 
             #define CLD_UNREACHABLE  \
                 do                   \
@@ -30,6 +39,12 @@
                 while (0)
 
             #define CLD_ASSERT(x) __assume((bool)(x))
+
+        #else
+
+            #define CLD_UNREACHABLE
+
+            #define CLD_ASSERT(x)
 
         #endif
 

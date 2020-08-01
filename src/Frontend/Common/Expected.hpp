@@ -2,6 +2,8 @@
 
 #include <variant>
 
+#include "Util.hpp"
+
 namespace cld
 {
 /**
@@ -89,22 +91,22 @@ public:
      * @throws std::bad_variant_access if this does not contain ValueType
      * @return Reference to contained ValueType
      */
-    constexpr const ValueType& operator*() const&;
+    constexpr const ValueType& operator*() const& noexcept;
 
     /**
      * @copydoc operator*() const &
      */
-    constexpr ValueType& operator*() &;
+    constexpr ValueType& operator*() & noexcept;
 
     /**
      * @copydoc operator*() const &
      */
-    constexpr const ValueType&& operator*() const&&;
+    constexpr const ValueType&& operator*() const&& noexcept;
 
     /**
      * @copydoc operator*() const &
      */
-    constexpr ValueType&& operator*() &&;
+    constexpr ValueType&& operator*() && noexcept;
 
     /**
      * @return True if this contains ValueType
@@ -125,22 +127,22 @@ public:
      * @throws std::bad_variant_access if this does not contain ErrorType
      * @return Contained ErrorType
      */
-    constexpr ErrorType& error() &;
+    constexpr ErrorType& error() & noexcept;
 
     /**
      * @copydoc error() &
      */
-    constexpr const ErrorType& error() const&;
+    constexpr const ErrorType& error() const& noexcept;
 
     /**
      * @copydoc error() &
      */
-    constexpr ErrorType&& error() &&;
+    constexpr ErrorType&& error() && noexcept;
 
     /**
      * @copydoc error() &
      */
-    constexpr const ErrorType&& error() const&&;
+    constexpr const ErrorType&& error() const&& noexcept;
 };
 
 template <class T, class E>
@@ -198,27 +200,27 @@ constexpr typename Expected<T, E>::ValueType* Expected<T, E>::operator->() noexc
 }
 
 template <class T, class E>
-constexpr const typename Expected<T, E>::ValueType& Expected<T, E>::operator*() const&
+constexpr const typename Expected<T, E>::ValueType& Expected<T, E>::operator*() const& noexcept
 {
-    return std::get<0>(m_value);
+    return cld::get<0>(m_value);
 }
 
 template <class T, class E>
-constexpr typename Expected<T, E>::ValueType& Expected<T, E>::operator*() &
+constexpr typename Expected<T, E>::ValueType& Expected<T, E>::operator*() & noexcept
 {
-    return std::get<0>(m_value);
+    return cld::get<0>(m_value);
 }
 
 template <class T, class E>
-constexpr const typename Expected<T, E>::ValueType&& Expected<T, E>::operator*() const&&
+constexpr const typename Expected<T, E>::ValueType&& Expected<T, E>::operator*() const&& noexcept
 {
-    return std::move(std::get<0>(m_value));
+    return std::move(cld::get<0>(m_value));
 }
 
 template <class T, class E>
-constexpr typename Expected<T, E>::ValueType&& Expected<T, E>::operator*() &&
+constexpr typename Expected<T, E>::ValueType&& Expected<T, E>::operator*() && noexcept
 {
-    return std::move(std::get<0>(m_value));
+    return std::move(cld::get<0>(m_value));
 }
 
 template <class T, class E>
@@ -240,27 +242,27 @@ constexpr bool Expected<T, E>::hasError() const noexcept
 }
 
 template <class T, class E>
-constexpr typename Expected<T, E>::ErrorType& Expected<T, E>::error() &
+constexpr typename Expected<T, E>::ErrorType& Expected<T, E>::error() & noexcept
 {
-    return std::get<1>(m_value);
+    return cld::get<1>(m_value);
 }
 
 template <class T, class E>
-constexpr const typename Expected<T, E>::ErrorType& Expected<T, E>::error() const&
+constexpr const typename Expected<T, E>::ErrorType& Expected<T, E>::error() const& noexcept
 {
-    return std::get<1>(m_value);
+    return cld::get<1>(m_value);
 }
 
 template <class T, class E>
-constexpr typename Expected<T, E>::ErrorType&& Expected<T, E>::error() &&
+constexpr typename Expected<T, E>::ErrorType&& Expected<T, E>::error() && noexcept
 {
-    return std::move(std::get<1>(m_value));
+    return std::move(cld::get<1>(m_value));
 }
 
 template <class T, class E>
-constexpr const typename Expected<T, E>::ErrorType&& Expected<T, E>::error() const&&
+constexpr const typename Expected<T, E>::ErrorType&& Expected<T, E>::error() const&& noexcept
 {
-    return std::move(std::get<1>(m_value));
+    return std::move(cld::get<1>(m_value));
 }
 
 template <class T, class E>

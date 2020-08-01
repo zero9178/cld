@@ -15,13 +15,7 @@ std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const CSour
 
 void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
 {
-    auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, true});
-    if (!inserted && iter->second.isTypedef)
-    {
-        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceInterface, *declarator.identifier));
-        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceInterface,
-                                                 *iter->second.location.identifier));
-    }
+    m_currentScope.back().emplace(name, Declaration{declarator, true});
 }
 
 bool cld::Parser::Context::isTypedef(const std::string& name) const
@@ -51,13 +45,7 @@ void cld::Parser::Context::log(const Message& message)
 void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
 {
     CLD_ASSERT(!name.empty());
-    auto [iter, inserted] = m_currentScope.back().emplace(name, Declaration{declarator, false});
-    if (!inserted && iter->second.isTypedef)
-    {
-        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*declarator.identifier, m_sourceInterface, *declarator.identifier));
-        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*iter->second.location.identifier, m_sourceInterface,
-                                                 *iter->second.location.identifier));
-    }
+    m_currentScope.back().emplace(name, Declaration{declarator, false});
 }
 
 void cld::Parser::Context::pushScope()

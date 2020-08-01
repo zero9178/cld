@@ -142,7 +142,7 @@ TEST_CASE("Parser typedef scoping and resolution", "[parser]")
     treeProduces("typedef signed int t;t f(t (t));", ProducesNothing());
     treeProduces("typedef int aa;"
                  "enum {aa,};",
-                 ProducesError(REDEFINITION_OF_SYMBOL_N, "'aa'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+                 ProducesNothing());
 }
 
 TEST_CASE("Parse Declaration Specifiers", "[parser]")

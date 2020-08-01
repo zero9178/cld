@@ -977,6 +977,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 return {llvm::APSInt(64, false), cld::Semantics::PrimitiveType::createLongLong(false, false)};
             },
+            {},
             [&](const cld::Message& message) {
                 if (message.getSeverity() == cld::Severity::Error)
                 {

@@ -1530,7 +1530,7 @@ public:
  */
 class EnumSpecifier final : public Node
 {
-    using variant = std::variant<EnumDeclaration, std::string>;
+    using variant = std::variant<EnumDeclaration, Lexer::CTokenIterator>;
 
     variant m_variant;
 

@@ -285,11 +285,21 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         const auto* loc = declaratorToLoc(*declarator);
         auto name = declaratorToName(*declarator);
         auto result = declaratorsToType(node.getDeclarationSpecifiers(), *declarator);
-        if (!isCompleteType(result))
+        result.setName(name);
+        if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
         {
-            log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc, result));
+            auto [prev, noRedefinition] =
+                getCurrentScope().declarations.insert({name, DeclarationInScope{loc, result}});
+            if (!noRedefinition
+                && (!std::holds_alternative<Type>(prev->second.declared)
+                    || !typesAreCompatible(result, cld::get<Type>(prev->second.declared))))
+            {
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
         }
-        if (auto* functionType = std::get_if<FunctionType>(&result.get()))
+        else if (auto* functionType = std::get_if<FunctionType>(&result.get()))
         {
             if (declarationSpecifierHas(node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
                                         Syntax::StorageClassSpecifier::Typedef, Syntax::StorageClassSpecifier::Auto,
@@ -343,6 +353,11 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         else
         {
+            if (!isCompleteType(result))
+            {
+                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                  result));
+            }
             Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
             Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
             if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
@@ -581,6 +596,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(
                         *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
                         *noStaticOrAsterisk.getAssignmentExpression(), result->getType()));
+                    type = Type{};
                     return;
                 }
                 if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
@@ -591,6 +607,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                             *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
                             *noStaticOrAsterisk.getAssignmentExpression(),
                             cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+                        type = Type{};
                         return;
                     }
                 }
@@ -600,6 +617,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
                         *noStaticOrAsterisk.getAssignmentExpression(),
                         cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+                    type = Type{};
                     return;
                 }
                 auto size = result->toUInt();
@@ -644,6 +662,131 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     }
                     type = PointerType::create(isConst, isVolatile, restricted, std::move(type));
                 }
+            },
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAsterisk& asterisk) {
+                if (asterisk.getDirectAbstractDeclarator())
+                {
+                    cld::match(*asterisk.getDirectAbstractDeclarator(), self);
+                }
+                if (std::holds_alternative<FunctionType>(type.get()))
+                {
+                    if (asterisk.getDirectAbstractDeclarator())
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            *asterisk.getDirectAbstractDeclarator(), m_sourceInterface,
+                            *asterisk.getDirectAbstractDeclarator(), type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
+                            type));
+                    }
+                    type = Type{};
+                    return;
+                }
+                else if (!isCompleteType(type))
+                {
+                    if (asterisk.getDirectAbstractDeclarator())
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
+                            *asterisk.getDirectAbstractDeclarator(), m_sourceInterface,
+                            *asterisk.getDirectAbstractDeclarator(), type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
+                            type));
+                    }
+                    type = Type{};
+                    return;
+                }
+
+                type = ValArrayType::create(false, false, false, std::move(type));
+            },
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
+                if (expression.getDirectAbstractDeclarator())
+                {
+                    cld::match(*expression.getDirectAbstractDeclarator(), self);
+                }
+                if (std::holds_alternative<FunctionType>(type.get()))
+                {
+                    if (expression.getDirectAbstractDeclarator())
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            *expression.getDirectAbstractDeclarator(), m_sourceInterface,
+                            *expression.getDirectAbstractDeclarator(), type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
+                            type));
+                    }
+                    type = Type{};
+                    return;
+                }
+                else if (!isCompleteType(type))
+                {
+                    if (expression.getDirectAbstractDeclarator())
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
+                            *expression.getDirectAbstractDeclarator(), m_sourceInterface,
+                            *expression.getDirectAbstractDeclarator(), type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
+                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
+                            type));
+                    }
+                    type = Type{};
+                    return;
+                }
+
+                if (!expression.getAssignmentExpression())
+                {
+                    type = AbstractArrayType::create(false, false, false, std::move(type));
+                    return;
+                }
+                auto result =
+                    evaluateConstantExpression(*expression.getAssignmentExpression(), ConstantEvaluator::Arithmetic);
+                if (!result)
+                {
+                    type = ValArrayType::create(false, false, false, std::move(type));
+                    return;
+                }
+                if (!result->isInteger())
+                {
+                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(
+                        *expression.getAssignmentExpression(), m_sourceInterface, *expression.getAssignmentExpression(),
+                        result->getType()));
+                    type = Type{};
+                    return;
+                }
+                if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
+                {
+                    if (result->toInt() <= 0)
+                    {
+                        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
+                            *expression.getAssignmentExpression(), m_sourceInterface,
+                            *expression.getAssignmentExpression(),
+                            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+                        type = Type{};
+                        return;
+                    }
+                }
+                else if (result->toUInt() == 0)
+                {
+                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
+                        *expression.getAssignmentExpression(), m_sourceInterface, *expression.getAssignmentExpression(),
+                        cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+                    type = Type{};
+                    return;
+                }
+                auto size = result->toUInt();
+                type = ArrayType::create(false, false, false, std::move(type), size);
             });
     }
     return type;
@@ -667,7 +810,7 @@ cld::Semantics::Type
         }
         const auto* type = getTypedef(*name);
         CLD_ASSERT(type);
-        return *type;
+        return Type(isConst, isVolatile, cld::to_string(type->getName()), type->get());
     }
     if (auto* structOrUnionPtr =
             std::get_if<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(&typeSpec[0]->getVariant()))
@@ -683,22 +826,79 @@ cld::Semantics::Type
         if (structOrUnion->getStructDeclarations().empty())
         {
             CLD_ASSERT(structOrUnion->getIdentifierLoc());
-            return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
-                                      cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
-                                      m_currentScope);
+            if (structOrUnion->isUnion())
+            {
+                auto [prev, notRedefined] = getCurrentScope().types.insert(
+                    {cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                     TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::UnionDecl{}}});
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType)
+                    && !std::holds_alternative<UnionDefinition>(prev->second.tagType))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion->getIdentifierLoc()));
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
+                return UnionType::create(isConst, isVolatile,
+                                         cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                                         m_currentScope);
+            }
+            else
+            {
+                auto [prev, notRedefined] = getCurrentScope().types.insert(
+                    {cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                     TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
+                    && !std::holds_alternative<StructDefinition>(prev->second.tagType))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion->getIdentifierLoc()));
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
+                return StructType::create(isConst, isVolatile,
+                                          cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                                          m_currentScope);
+            }
         }
-        // TODO: Anonymous struct
-        auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
-        auto [prev, notRedefined] = getCurrentScope().types.insert(
-            {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), RecordDefinition(name, {})}});
-        if (!notRedefined)
+        std::optional<decltype(getCurrentScope().types)::iterator> recordDefInScope;
+        if (structOrUnion->getIdentifierLoc())
         {
-            log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                      *structOrUnion->getIdentifierLoc()));
-            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                     *prev->second.identifier));
+            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
+            if (structOrUnion->isUnion())
+            {
+                auto [prev, notRedefined] = getCurrentScope().types.insert(
+                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::UnionDecl{}}});
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion->getIdentifierLoc()));
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
+                else
+                {
+                    recordDefInScope = prev;
+                }
+            }
+            else
+            {
+                auto [prev, notRedefined] = getCurrentScope().types.insert(
+                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion->getIdentifierLoc()));
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
+                else
+                {
+                    recordDefInScope = prev;
+                }
+            }
         }
-        std::vector<RecordDefinition::Field> fields;
+        std::vector<Field> fields;
         for (auto& [specifiers, declarators] : structOrUnion->getStructDeclarations())
         {
             for (auto& [declarator, size] : declarators)
@@ -712,15 +912,39 @@ cld::Semantics::Type
                 auto fieldName = declaratorToName(*declarator);
                 // TODO: bitfields, constraints, etc.
                 (void)size;
-                fields.push_back({std::move(type), cld::to_string(fieldName), {}});
+                fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), {}});
             }
         }
-        if (!notRedefined)
+        if (structOrUnion->getIdentifierLoc())
         {
-            prev->second.tagType = RecordDefinition(name, std::move(fields));
+            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
+            if (structOrUnion->isUnion())
+            {
+                if (recordDefInScope)
+                {
+                    (*recordDefInScope)->second.tagType = UnionDefinition(name, std::move(fields));
+                }
+                return UnionType::create(isConst, isVolatile,
+                                         cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                                         m_currentScope);
+            }
+            if (recordDefInScope)
+            {
+                (*recordDefInScope)->second.tagType = StructDefinition(name, std::move(fields));
+            }
+            return StructType::create(isConst, isVolatile,
+                                      cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                                      m_currentScope);
         }
-        return RecordType::create(isConst, isVolatile, structOrUnion->isUnion(),
-                                  cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()), m_currentScope);
+
+        if (structOrUnion->isUnion())
+        {
+            return AnonymousUnionType::create(isConst, isVolatile, std::move(fields));
+        }
+        else
+        {
+            return AnonymousStructType::create(isConst, isVolatile, std::move(fields));
+        }
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
     if (typeSpec.size() != 1)
@@ -729,20 +953,37 @@ cld::Semantics::Type
             *typeSpec[1], m_sourceInterface, Lexer::TokenType::EnumKeyword, llvm::ArrayRef(typeSpec).drop_front()));
     }
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
-    if (auto* string = std::get_if<std::string>(&enumDecl->getVariant()))
+    if (auto* loc = std::get_if<Lexer::CTokenIterator>(&enumDecl->getVariant()))
     {
-        return EnumType::create(isConst, isVolatile, *string, m_currentScope);
+        auto [prev, notRedefined] = getCurrentScope().types.insert(
+            {cld::get<std::string>((*loc)->getValue()), TagTypeInScope{*loc, TagTypeInScope::EnumDecl{}}});
+        if (!notRedefined && !std::holds_alternative<TagTypeInScope::EnumDecl>(prev->second.tagType)
+            && !std::holds_alternative<EnumDefinition>(prev->second.tagType))
+        {
+            log(Errors::REDEFINITION_OF_SYMBOL_N.args(**loc, m_sourceInterface, **loc));
+            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                     *prev->second.identifier));
+        }
+        return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()), m_currentScope);
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
-    // TODO: Anonymous enum tag, type depending on values as an extension
-    auto& name = cld::get<std::string>(enumDef.getName()->getValue());
-    auto [prev, notRedefined] =
-        getCurrentScope().types.insert({name, TagTypeInScope{enumDef.getName(), EnumDefinition(name, Type{})}});
-    if (!notRedefined)
+    // TODO: Type depending on values as an extension
+    std::optional<decltype(getCurrentScope().types)::iterator> enumDefInScope;
+    if (enumDef.getName())
     {
-        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*enumDef.getName(), m_sourceInterface, *enumDef.getName()));
-        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                 *prev->second.identifier));
+        auto& name = cld::get<std::string>(enumDef.getName()->getValue());
+        auto [prev, notRedefined] =
+            getCurrentScope().types.insert({name, TagTypeInScope{enumDef.getName(), EnumDefinition(name, Type{})}});
+        if (!notRedefined)
+        {
+            log(Errors::REDEFINITION_OF_SYMBOL_N.args(*enumDef.getName(), m_sourceInterface, *enumDef.getName()));
+            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                     *prev->second.identifier));
+        }
+        else
+        {
+            enumDefInScope = prev;
+        }
     }
     static ConstRetType one = {
         llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false),
@@ -778,7 +1019,7 @@ cld::Semantics::Type
         {
             value = nextValue;
         }
-        nextValue = value.plus(one, m_sourceInterface, nullptr);
+        nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
         auto [prevValue, notRedefined] = getCurrentScope().declarations.insert(
             {cld::get<std::string>(loc->getValue()), DeclarationInScope{loc, std::move(value)}});
         if (!notRedefined)
@@ -788,12 +1029,18 @@ cld::Semantics::Type
                                                      *prevValue->second.identifier));
         }
     }
-    if (notRedefined)
+    if (enumDef.getName())
     {
-        prev->second.tagType =
-            EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
+        auto& name = cld::get<std::string>(enumDef.getName()->getValue());
+        if (enumDefInScope)
+        {
+            (*enumDefInScope)->second.tagType =
+                EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
+        }
+        return EnumType::create(isConst, isVolatile, name, m_currentScope);
     }
-    return EnumType::create(isConst, isVolatile, name, m_currentScope);
+    return AnonymousEnumType::create(isConst, isVolatile,
+                                     PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(
@@ -948,6 +1195,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
             case Syntax::TypeSpecifier::Unsigned: return "unsigned";
             case Syntax::TypeSpecifier::Bool: return "_Bool";
         }
+        CLD_UNREACHABLE;
     };
 
     std::string text = "'";
@@ -1000,9 +1248,9 @@ bool cld::Semantics::SemanticAnalysis::isCompleteType(const Type& type) const
         auto& enumType = cld::get<EnumType>(type.get());
         return lookupType(enumType.getName(), enumType.getScope());
     }
-    if (std::holds_alternative<RecordType>(type.get()))
+    if (std::holds_alternative<StructType>(type.get()))
     {
-        auto& recordType = cld::get<RecordType>(type.get());
+        auto& recordType = cld::get<StructType>(type.get());
         return lookupType(recordType.getName(), recordType.getScope());
     }
     return true;
@@ -1013,4 +1261,214 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
 {
     // TODO:
     return lhs == rhs;
+}
+
+cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::sizeOf(const Type& type,
+                                                                             llvm::ArrayRef<Lexer::CToken> loc) const
+{
+    using RetType = Expected<std::size_t, Message>;
+    return match(
+        type.get(), [](const PrimitiveType& primitiveType) -> RetType { return primitiveType.getByteCount(); },
+        [&](const ArrayType& arrayType) -> RetType {
+            auto result = sizeOf(arrayType.getType(), loc);
+            if (!result)
+            {
+                return result;
+            }
+            return *result * arrayType.getSize();
+        },
+        [&](const AbstractArrayType&) -> RetType {
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
+        },
+        [&](const ValArrayType&) -> RetType {
+            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
+                loc, m_sourceInterface, loc);
+        },
+        [&](const FunctionType&) -> RetType {
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(loc, m_sourceInterface, loc);
+        },
+        [&](const StructType& structType) -> RetType {
+            const auto* result = lookupType(structType.getName(), structType.getScope());
+            if (!result || !std::holds_alternative<StructDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& recDef = cld::get<StructDefinition>(*result);
+            std::size_t currentSize = 0;
+            for (auto& [type, name, bits] : recDef.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto alignment = alignOf(*type, loc);
+                CLD_ASSERT(alignment);
+                auto rest = currentSize % *alignment;
+                if (rest != 0)
+                {
+                    currentSize += *alignment - rest;
+                }
+                auto subSize = sizeOf(*type, loc);
+                CLD_ASSERT(subSize);
+                currentSize += *subSize;
+            }
+            return currentSize;
+        },
+        [&](const UnionType& unionType) -> RetType {
+            const auto* result = lookupType(unionType.getName(), unionType.getScope());
+            if (!result || !std::holds_alternative<UnionDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& recDef = cld::get<UnionDefinition>(*result);
+            std::size_t maxSize = 0;
+            for (auto& [type, name, bits] : recDef.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto subSize = sizeOf(*type, loc);
+                CLD_ASSERT(subSize); // A struct must always have a valid size otherwise we shouldn't even have a
+                // StructType
+                maxSize = std::max(maxSize, *subSize);
+            }
+            return maxSize;
+        },
+        [&](const AnonymousStructType& structType) -> RetType {
+            std::size_t currentSize = 0;
+            for (auto& [type, name, bits] : structType.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto alignment = alignOf(*type, loc);
+                CLD_ASSERT(alignment);
+                auto rest = currentSize % *alignment;
+                if (rest != 0)
+                {
+                    currentSize += *alignment - rest;
+                }
+                auto subSize = sizeOf(*type, loc);
+                CLD_ASSERT(subSize);
+                currentSize += *subSize;
+            }
+            return currentSize;
+        },
+        [&](const AnonymousUnionType& unionType) -> RetType {
+            std::size_t maxSize = 0;
+            for (auto& [type, name, bits] : unionType.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto subSize = sizeOf(*type, loc);
+                CLD_ASSERT(subSize); // A struct must always have a valid size otherwise we shouldn't even have a
+                // StructType
+                maxSize = std::max(maxSize, *subSize);
+            }
+            return maxSize;
+        },
+        [&](const AnonymousEnumType& enumType) -> RetType { return sizeOf(enumType.getType(), loc); },
+        [&](const EnumType& enumType) -> RetType {
+            const auto* result = lookupType(enumType.getName(), enumType.getScope());
+            if (!result || std::holds_alternative<EnumDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& enumDef = cld::get<EnumDefinition>(*result);
+            return sizeOf(enumDef.getType(), loc);
+        },
+        [&](const PointerType&) -> RetType {
+            return std::size_t{m_sourceInterface.getLanguageOptions().sizeOfVoidStar};
+        },
+        [](std::monostate) -> RetType { CLD_UNREACHABLE; });
+}
+
+cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::alignOf(const cld::Semantics::Type& type,
+                                                                              llvm::ArrayRef<Lexer::CToken> loc) const
+{
+    using RetType = Expected<std::size_t, Message>;
+    return match(
+        type.get(), [](const PrimitiveType& primitiveType) -> RetType { return primitiveType.getByteCount(); },
+        [&](const ArrayType& arrayType) -> RetType { return alignOf(arrayType.getType(), loc); },
+        [&](const AbstractArrayType&) -> RetType {
+            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
+        },
+        [&](const ValArrayType& arrayType) -> RetType { return alignOf(arrayType.getType(), loc); },
+        [&](const FunctionType&) -> RetType {
+            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, loc);
+        },
+        [&](const StructType& recordType) -> RetType {
+            const auto* result = lookupType(recordType.getName(), recordType.getScope());
+            if (!result || !std::holds_alternative<StructDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& recDef = cld::get<StructDefinition>(*result);
+            std::size_t currentAlignment = 0;
+            for (auto& [type, name, bits] : recDef.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto alignment = alignOf(*type, loc);
+                CLD_ASSERT(alignment);
+                currentAlignment = std::max(currentAlignment, *alignment);
+            }
+            return currentAlignment;
+        },
+        [&](const UnionType& unionType) -> RetType {
+            const auto* result = lookupType(unionType.getName(), unionType.getScope());
+            if (!result || !std::holds_alternative<UnionDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& recDef = cld::get<UnionDefinition>(*result);
+            auto maxElement = std::max_element(recDef.getFields().begin(), recDef.getFields().end(),
+                                               [&](const Field& lhs, const Field& rhs) {
+                                                   auto lhsSize = sizeOf(*lhs.type, loc);
+                                                   CLD_ASSERT(lhsSize);
+                                                   auto rhsSize = sizeOf(*rhs.type, loc);
+                                                   CLD_ASSERT(rhsSize);
+                                                   return *lhsSize < *rhsSize;
+                                               });
+            return alignOf(*maxElement->type, loc);
+        },
+        [&](const AnonymousStructType& structType) -> RetType {
+            std::size_t currentAlignment = 0;
+            for (auto& [type, name, bits] : structType.getFields())
+            {
+                (void)name;
+                (void)bits;
+                // TODO: Bitfield
+                auto alignment = alignOf(*type, loc);
+                CLD_ASSERT(alignment);
+                currentAlignment = std::max(currentAlignment, *alignment);
+            }
+            return currentAlignment;
+        },
+        [&](const AnonymousUnionType& unionType) {
+            auto maxElement = std::max_element(unionType.getFields().begin(), unionType.getFields().end(),
+                                               [&](const Field& lhs, const Field& rhs) {
+                                                   auto lhsSize = sizeOf(*lhs.type, loc);
+                                                   CLD_ASSERT(lhsSize);
+                                                   auto rhsSize = sizeOf(*rhs.type, loc);
+                                                   CLD_ASSERT(rhsSize);
+                                                   return *lhsSize < *rhsSize;
+                                               });
+            return alignOf(*maxElement->type, loc);
+        },
+        [&](const AnonymousEnumType& enumType) -> RetType { return sizeOf(enumType.getType(), loc); },
+        [&](const EnumType& enumType) -> RetType {
+            const auto* result = lookupType(enumType.getName(), enumType.getScope());
+            if (!result || std::holds_alternative<EnumDefinition>(*result))
+            {
+                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
+            }
+            auto& enumDef = cld::get<EnumDefinition>(*result);
+            return alignOf(enumDef.getType(), loc);
+        },
+        [&](const PointerType&) -> RetType {
+            return std::size_t{m_sourceInterface.getLanguageOptions().sizeOfVoidStar};
+        },
+        [](std::monostate) -> RetType { CLD_UNREACHABLE; });
 }

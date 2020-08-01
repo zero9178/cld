@@ -1486,7 +1486,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
             context.skipUntil(begin, end);
             return {};
         }
-        return EnumSpecifier(start, begin, cld::get<std::string>(name->getValue()));
+        return EnumSpecifier(start, begin, name);
     }
     else
     {

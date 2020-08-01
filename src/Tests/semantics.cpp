@@ -204,6 +204,41 @@ TEST_CASE("Semantics declarations", "[semantics]")
             SEMA_PRODUCES("register int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER));
         }
     }
+    SECTION("Typedef")
+    {
+        SECTION("Simple")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
+                                                               "ld d;");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+            CHECK(decl->getName() == "d");
+            CHECK(decl->getType()
+                  == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native()));
+        }
+        SECTION("Stacking const volatile")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
+                                                               "const volatile ld d;");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+            CHECK(decl->getName() == "d");
+            CHECK(decl->getType()
+                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+        }
+        SEMA_PRODUCES("typedef int i;\n"
+                      "typedef float i;",
+                      ProducesError(REDEFINITION_OF_SYMBOL_N, "'i'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+        SEMA_PRODUCES("typedef int i;\n"
+                      "typedef int i;",
+                      ProducesNothing());
+    }
     SEMA_PRODUCES("int;", ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
     SEMA_PRODUCES("struct f;", !ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
     SEMA_PRODUCES("int i;\n"

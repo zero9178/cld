@@ -69,7 +69,7 @@ const cld::Semantics::Type::variant& cld::Semantics::Type::get() const
     return m_type;
 }
 
-cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::variant&& type)
+cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::variant type)
     : m_isConst(isConst),
       m_isVolatile(isVolatile),
       m_name([name = std::move(name), isConst, isVolatile]() mutable {
@@ -502,124 +502,66 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::RecordType::RecordType(std::string name, bool isUnion, std::uint64_t scope)
-    : m_name(std::move(name)), m_isUnion(isUnion), m_scope(scope)
+cld::Semantics::StructType::StructType(std::string_view name, std::uint64_t scope)
+    : m_name(cld::to_string(name)), m_scope(scope)
 {
 }
 
-bool cld::Semantics::RecordType::isUnion() const
+cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
+                                                        std::uint64_t scope)
 {
-    return m_isUnion;
+    return cld::Semantics::Type(isConst, isVolatile, "struct " + cld::to_string(name), StructType(name, scope));
 }
 
-cld::Semantics::Type cld::Semantics::RecordType::create(bool isConst, bool isVolatile, bool isUnion,
-                                                        const std::string& name, std::uint64_t scope)
+bool cld::Semantics::StructType::operator==(const cld::Semantics::StructType& rhs) const
 {
-    return cld::Semantics::Type(isConst, isVolatile, (isUnion ? "union " : "struct ") + name,
-                                RecordType(name, isUnion, scope));
+    return std::tie(m_name, m_scope) == std::tie(rhs.m_name, rhs.m_scope);
 }
 
-bool cld::Semantics::RecordType::operator==(const cld::Semantics::RecordType& rhs) const
-{
-    return std::tie(m_isUnion, m_name) == std::tie(rhs.m_isUnion, rhs.m_name);
-}
-
-bool cld::Semantics::RecordType::operator!=(const cld::Semantics::RecordType& rhs) const
+bool cld::Semantics::StructType::operator!=(const cld::Semantics::StructType& rhs) const
 {
     return !(rhs == *this);
 }
 
-const std::string& cld::Semantics::RecordType::getName() const
+std::string_view cld::Semantics::StructType::getName() const
 {
     return m_name;
 }
 
-std::uint64_t cld::Semantics::RecordType::getScope() const
+std::uint64_t cld::Semantics::StructType::getScope() const
 {
     return m_scope;
 }
 
-cld::Expected<std::size_t, cld::Message> cld::Semantics::alignmentOf(const cld::Semantics::Type& type,
-                                                                     const SourceInterface& sourceInterface,
-                                                                     const Syntax::Node* node)
+cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t scope)
+    : m_name(cld::to_string(name)), m_scope(scope)
 {
-    return match(
-        type.get(),
-        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, cld::Message> {
-            return primitiveType.getByteCount();
-        },
-        [&](const ArrayType& arrayType) -> Expected<std::size_t, cld::Message> {
-            return alignmentOf(arrayType.getType(), sourceInterface, node);
-        },
-        [&](const AbstractArrayType&) -> Expected<std::size_t, cld::Message> {
-            CLD_ASSERT(node);
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface, type, *node);
-        },
-        [&sourceInterface, &node](const ValArrayType& valArrayType) -> Expected<std::size_t, cld::Message> {
-            return alignmentOf(valArrayType.getType(), sourceInterface, node);
-        },
-        [&](const FunctionType&) -> Expected<std::size_t, cld::Message> {
-            CLD_ASSERT(node);
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF.args(*node, sourceInterface, *node);
-        },
-        [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
-            //            if (!recordType.hasDefinition())
-            //            {
-            //                CLD_ASSERT(node);
-            //                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(*node, sourceInterface,
-            //                type, *node);
-            //            }
-            // TODO:
-            //            if (!recordType.isUnion())
-            //            {
-            //                std::size_t currentAlignment = 0;
-            //                for (auto& [subtype, name, bits] : recordType.getMembers())
-            //                {
-            //                    (void)name;
-            //                    (void)bits;
-            //                    auto result = alignmentOf(subtype, sourceInterface, node);
-            //                    if (!result)
-            //                    {
-            //                        return result;
-            //                    }
-            //                    currentAlignment = std::max(currentAlignment, *result);
-            //                }
-            //                return currentAlignment;
-            //            }
-            //            else
-            //            {
-            //                std::optional<Message> failure;
-            //                auto result = std::max_element(recordType.getMembers().begin(),
-            //                recordType.getMembers().end(),
-            //                                               [&failure, &sourceInterface, &node](const auto& lhs, const
-            //                                               auto& rhs) {
-            //                                                   auto lhsSize = sizeOf(std::get<0>(lhs),
-            //                                                   sourceInterface, node); if (!lhsSize)
-            //                                                   {
-            //                                                       failure = lhsSize.error();
-            //                                                   }
-            //                                                   auto rhsSize = sizeOf(std::get<0>(rhs),
-            //                                                   sourceInterface, node); if (!rhsSize)
-            //                                                   {
-            //                                                       failure = rhsSize.error();
-            //                                                   }
-            //                                                   return (lhsSize ? *lhsSize : 0) < (rhsSize ? *rhsSize :
-            //                                                   0);
-            //                                               });
-            //                if (failure)
-            //                {
-            //                    return *failure;
-            //                }
-            //                return alignmentOf(std::get<0>(*result), sourceInterface, node);
-            //            }
-        },
-        [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
-            return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
-        },
-        [&sourceInterface](const PointerType&) -> Expected<std::size_t, cld::Message> {
-            return std::size_t{sourceInterface.getLanguageOptions().sizeOfVoidStar};
-        },
-        [](std::monostate) -> Expected<std::size_t, cld::Message> { CLD_UNREACHABLE; });
+}
+
+cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
+                                                       std::uint64_t scope)
+{
+    return cld::Semantics::Type(isConst, isVolatile, "struct " + cld::to_string(name), UnionType(name, scope));
+}
+
+bool cld::Semantics::UnionType::operator==(const cld::Semantics::UnionType& rhs) const
+{
+    return std::tie(m_name, m_scope) == std::tie(rhs.m_name, rhs.m_scope);
+}
+
+bool cld::Semantics::UnionType::operator!=(const cld::Semantics::UnionType& rhs) const
+{
+    return !(rhs == *this);
+}
+
+std::string_view cld::Semantics::UnionType::getName() const
+{
+    return m_name;
+}
+
+std::uint64_t cld::Semantics::UnionType::getScope() const
+{
+    return m_scope;
 }
 
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
@@ -630,108 +572,6 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
         return false;
     }
     return primitive->getBitCount() == 0;
-}
-
-cld::Expected<std::size_t, cld::Message> cld::Semantics::sizeOf(const cld::Semantics::Type& type,
-                                                                const SourceInterface& sourceInterface,
-                                                                const Syntax::Node* node)
-{
-    return match(
-        type.get(),
-        [](const PrimitiveType& primitiveType) -> Expected<std::size_t, cld::Message> {
-            return primitiveType.getByteCount();
-        },
-        [&](const ArrayType& arrayType) -> Expected<std::size_t, cld::Message> {
-            auto result = sizeOf(arrayType.getType(), sourceInterface, node);
-            if (!result)
-            {
-                return result;
-            }
-            return *result * arrayType.getSize();
-        },
-        [&](const AbstractArrayType&) -> Expected<std::size_t, cld::Message> {
-            if (!node)
-            {
-                return cld::Message{};
-            }
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type, *node);
-        },
-        [&](const ValArrayType&) -> Expected<std::size_t, cld::Message> {
-            if (!node)
-            {
-                return cld::Message{};
-            }
-            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
-                *node, sourceInterface, *node);
-        },
-        [&](const FunctionType&) -> Expected<std::size_t, cld::Message> {
-            if (!node)
-            {
-                return cld::Message{};
-            }
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*node, sourceInterface, *node);
-        },
-        [&](const RecordType& recordType) -> Expected<std::size_t, cld::Message> {
-            return cld::Message{};
-            //            if (!recordType.hasDefinition())
-            //            {
-            //                if (!node)
-            //                {
-            //                    return cld::Message{};
-            //                }
-            //                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*node, sourceInterface, type,
-            //                *node);
-            //            }
-            // TODO:
-            //            if (!recordType.isUnion())
-            //            {
-            //                std::size_t currentSize = 0;
-            //                for (auto& [subtype, name, bits] : recordType.getMembers())
-            //                {
-            //                    // TODO: Shouldn't use node here but instead point at the individual members of the
-            //                    record (void)name; (void)bits; auto alignment = alignmentOf(subtype, sourceInterface,
-            //                    node); if (!alignment)
-            //                    {
-            //                        return alignment;
-            //                    }
-            //                    auto rest = currentSize % *alignment;
-            //                    if (rest != 0)
-            //                    {
-            //                        currentSize += *alignment - rest;
-            //                    }
-            //                    auto subSize = sizeOf(subtype, sourceInterface, node);
-            //                    if (!subSize)
-            //                    {
-            //                        return subSize;
-            //                    }
-            //                    currentSize += *subSize;
-            //                }
-            //                return currentSize;
-            //            }
-            //            else
-            //            {
-            //                std::size_t maxSize = 0;
-            //                for (auto& [subtype, name, bits] : recordType.getMembers())
-            //                {
-            //                    (void)name;
-            //                    (void)bits;
-            //                    auto subSize = sizeOf(subtype, sourceInterface, node);
-            //                    if (!subSize)
-            //                    {
-            //                        return subSize;
-            //                    }
-            //                    maxSize = std::max(maxSize, *subSize);
-            //                }
-            //                return maxSize;
-            //            }
-        },
-        [&sourceInterface](const EnumType&) -> Expected<std::size_t, cld::Message> {
-            return std::size_t{sourceInterface.getLanguageOptions().sizeOfInt};
-        },
-        [&sourceInterface](const PointerType&) -> Expected<std::size_t, cld::Message> {
-            return std::size_t{sourceInterface.getLanguageOptions().sizeOfVoidStar};
-        },
-        [](std::monostate) -> Expected<std::size_t, cld::Message> { CLD_UNREACHABLE; });
 }
 
 cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,
@@ -817,7 +657,95 @@ const std::vector<std::variant<cld::Semantics::Statement, cld::Semantics::Declar
     return m_compoundItems;
 }
 
-cld::Semantics::RecordDefinition::RecordDefinition(std::string_view name, std::vector<Field>&& fields)
+cld::Semantics::StructDefinition::StructDefinition(std::string_view name, std::vector<Field>&& fields)
     : m_name(cld::to_string(name)), m_fields(std::move(fields))
 {
+}
+
+bool cld::Semantics::StructDefinition::operator==(const cld::Semantics::StructDefinition& rhs) const
+{
+    return std::tie(m_name, m_fields) == std::tie(rhs.m_name, rhs.m_fields);
+}
+
+bool cld::Semantics::StructDefinition::operator!=(const cld::Semantics::StructDefinition& rhs) const
+{
+    return !(rhs == *this);
+}
+
+cld::Semantics::UnionDefinition::UnionDefinition(std::string_view name, std::vector<Field>&& fields)
+    : m_name(cld::to_string(name)), m_fields(std::move(fields))
+{
+}
+
+bool cld::Semantics::UnionDefinition::operator==(const cld::Semantics::UnionDefinition& rhs) const
+{
+    return std::tie(m_name, m_fields) == std::tie(rhs.m_name, rhs.m_fields);
+}
+
+bool cld::Semantics::UnionDefinition::operator!=(const cld::Semantics::UnionDefinition& rhs) const
+{
+    return !(rhs == *this);
+}
+
+cld::Semantics::AnonymousStructType::AnonymousStructType(std::vector<Field>&& fields) : m_fields(std::move(fields)) {}
+
+bool cld::Semantics::AnonymousStructType::operator==(const cld::Semantics::AnonymousStructType& rhs) const
+{
+    return m_fields == rhs.m_fields;
+}
+
+bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::AnonymousStructType& rhs) const
+{
+    return !(rhs == *this);
+}
+
+cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile,
+                                                                 std::vector<Field> fields)
+{
+    return cld::Semantics::Type(isConst, isVolatile, "struct <undefined>", AnonymousStructType(std::move(fields)));
+}
+
+cld::Semantics::AnonymousUnionType::AnonymousUnionType(std::vector<Field>&& fields) : m_fields(std::move(fields)) {}
+
+bool cld::Semantics::AnonymousUnionType::operator==(const cld::Semantics::AnonymousUnionType& rhs) const
+{
+    return m_fields == rhs.m_fields;
+}
+
+bool cld::Semantics::AnonymousUnionType::operator!=(const cld::Semantics::AnonymousUnionType& rhs) const
+{
+    return !(rhs == *this);
+}
+
+cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile,
+                                                                std::vector<Field> fields)
+{
+    return cld::Semantics::Type(isConst, isVolatile, "union <undefined>", AnonymousUnionType(std::move(fields)));
+}
+
+cld::Semantics::AnonymousEnumType::AnonymousEnumType(std::shared_ptr<const Type> type) : m_type(std::move(type)) {}
+
+bool cld::Semantics::AnonymousEnumType::operator==(const cld::Semantics::AnonymousEnumType& rhs) const
+{
+    return *m_type == *rhs.m_type;
+}
+
+bool cld::Semantics::AnonymousEnumType::operator!=(const cld::Semantics::AnonymousEnumType& rhs) const
+{
+    return !(rhs == *this);
+}
+
+cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, bool isVolatile, Type&& type)
+{
+    return Type(isConst, isVolatile, "enum <undefined>", AnonymousEnumType(std::make_shared<Type>(std::move(type))));
+}
+
+bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
+{
+    return std::tie(type, name, bitFieldSize) == std::tie(rhs.type, rhs.name, rhs.bitFieldSize);
+}
+
+bool cld::Semantics::Field::operator!=(const cld::Semantics::Field& rhs) const
+{
+    return !(rhs == *this);
 }

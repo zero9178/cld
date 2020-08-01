@@ -1,5 +1,6 @@
 #pragma once
 
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/ScopeExit.h>
 
 #include <unordered_map>
@@ -23,7 +24,17 @@ class SemanticAnalysis final
     struct TagTypeInScope
     {
         Lexer::CTokenIterator identifier;
-        using Variant = std::variant<RecordDefinition, EnumDefinition>;
+        struct EnumDecl
+        {
+        };
+        struct StructDecl
+        {
+        };
+        struct UnionDecl
+        {
+        };
+        using Variant =
+            std::variant<EnumDecl, StructDecl, UnionDecl, StructDefinition, UnionDefinition, EnumDefinition>;
         Variant tagType;
     };
     const SourceInterface& m_sourceInterface;
@@ -62,14 +73,32 @@ class SemanticAnalysis final
                 }
                 return cld::get<ConstRetType>(*result);
             },
-            [&](const Message& message) { messages.push_back(message); }, mode);
+            [&](ConstantEvaluator::TypeInfo info, const Type& type,
+                llvm::ArrayRef<Lexer::CToken> loc) -> Expected<std::size_t, Message> {
+                switch (info)
+                {
+                    case ConstantEvaluator::TypeInfo::Size: return sizeOf(type, loc);
+                    case ConstantEvaluator::TypeInfo::Alignment: return alignOf(type, loc);
+                }
+                CLD_UNREACHABLE;
+            },
+            [&](const Message& message) {
+                if (message.getSeverity() == Severity::Error)
+                {
+                    messages.push_back(message);
+                }
+                else
+                {
+                    log(message);
+                }
+            },
+            mode);
         auto result = evaluator.visit(constantExpression);
-        if (std::any_of(messages.begin(), messages.end(),
-                        [](const Message& message) { return message.getSeverity() == cld::Severity ::Error; }))
+        if (messages.empty())
         {
-            return messages;
+            return result;
         }
-        return result;
+        return std::move(messages);
     }
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;
@@ -159,6 +188,10 @@ public:
                        });
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations);
     }
+
+    Expected<std::size_t, Message> sizeOf(const Type& structType, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
+
+    Expected<std::size_t, Message> alignOf(const Type& structType, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 

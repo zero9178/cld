@@ -568,8 +568,8 @@ std::optional<cld::Syntax::TypeName> cld::Parser::parseTypeName(Lexer::CTokenIte
 
     if (begin < end && firstIsInAbstractDeclarator(*begin, context))
     {
-        return TypeName(start, begin, std::move(specifierQualifiers),
-                        std::make_unique<AbstractDeclarator>(parseAbstractDeclarator(begin, end, context)));
+        auto abstractDeclarator = std::make_unique<AbstractDeclarator>(parseAbstractDeclarator(begin, end, context));
+        return TypeName(start, begin, std::move(specifierQualifiers), std::move(abstractDeclarator));
     }
 
     return TypeName(start, begin, std::move(specifierQualifiers), nullptr);
