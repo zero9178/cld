@@ -1199,8 +1199,11 @@ cld::Semantics::Type
         }
         const auto* type = getTypedef(*name);
         CLD_ASSERT(type);
-        auto ret = Type(isConst, isVolatile, cld::to_string(type->getTypeName()), type->get());
-        ret.setName(type->getName());
+        auto ret = Type(isConst, isVolatile, type->get());
+        if (std::tuple(type->isConst(), type->isVolatile()) == std::tuple(isConst, isVolatile))
+        {
+            ret.setName(type->getName());
+        }
         return ret;
     }
     if (auto* structOrUnionPtr =
@@ -1740,7 +1743,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
                 }
                 for (auto& iter : paramFunc.getArguments())
                 {
-                    auto nonQualifiedType = Type(false, false, cld::to_string(iter.first.getName()), iter.first.get());
+                    auto nonQualifiedType = Type(false, false, iter.first.get());
                     auto ret = defaultArgumentPromotion(nonQualifiedType);
                     if (!typesAreCompatible(nonQualifiedType, ret))
                     {
@@ -1763,8 +1766,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             {
                 auto kandRType = adjustParameterType(kandRFunc.getArguments()[i].first);
                 auto paramType = adjustParameterType(paramFunc.getArguments()[i].first);
-                auto nonQualifiedkandR = Type(false, false, cld::to_string(kandRType.getName()), kandRType.get());
-                auto nonQualifiedParam = Type(false, false, cld::to_string(paramType.getName()), paramType.get());
+                auto nonQualifiedkandR = Type(false, false, kandRType.get());
+                auto nonQualifiedParam = Type(false, false, paramType.get());
                 if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR),
                                         defaultArgumentPromotion(nonQualifiedParam)))
                 {
@@ -1789,8 +1792,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             auto lhsType = adjustParameterType(lhsFtype.getArguments()[i].first);
             auto rhsType = adjustParameterType(rhsFtype.getArguments()[i].first);
-            auto nonQualifiedLhs = Type(false, false, cld::to_string(lhsType.getName()), lhsType.get());
-            auto nonQualifiedRhs = Type(false, false, cld::to_string(rhsType.getName()), rhsType.get());
+            auto nonQualifiedLhs = Type(false, false, lhsType.get());
+            auto nonQualifiedRhs = Type(false, false, rhsType.get());
             if (!typesAreCompatible(nonQualifiedLhs, nonQualifiedRhs))
             {
                 return false;

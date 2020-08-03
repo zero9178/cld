@@ -125,6 +125,8 @@ public:
 
     [[nodiscard]] std::uint8_t getBitCount() const;
 
+    Kind getKind() const;
+
     bool operator==(const PrimitiveType& rhs) const;
 
     bool operator!=(const PrimitiveType& rhs) const;
@@ -372,7 +374,6 @@ class Type final
     bool m_isConst;
     bool m_isVolatile;
     std::string m_name;
-    std::string m_typeName;
 
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
@@ -383,8 +384,7 @@ private:
     Variant m_type;
 
 public:
-    explicit Type(bool isConst = false, bool isVolatile = false, std::string name = "<undefined>",
-                  Variant type = std::monostate{});
+    explicit Type(bool isConst = false, bool isVolatile = false, Variant type = std::monostate{});
 
     [[nodiscard]] const Variant& get() const;
 
@@ -395,8 +395,6 @@ public:
     [[nodiscard]] std::string_view getName() const;
 
     void setName(std::string_view name);
-
-    [[nodiscard]] std::string_view getTypeName() const;
 
     [[nodiscard]] bool isTypedef() const;
 
@@ -617,24 +615,18 @@ namespace cld::diag
 template <>
 struct StringConverter<Semantics::Type>
 {
-    static std::string inFormat(const Semantics::Type& arg, const SourceInterface&)
+    static std::string inFormat(const Semantics::Type& arg, const SourceInterface& sourceInterface)
     {
-        return "'" + cld::to_string(arg.getTypeName()) + "'";
+        return "'" + inArg(arg, sourceInterface) + "'";
     }
 
-    static std::string inArg(const Semantics::Type& arg, const SourceInterface&)
-    {
-        return cld::to_string(arg.getTypeName());
-    }
+    static std::string inArg(const Semantics::Type& arg, const SourceInterface&);
 };
 
 template <>
 struct CustomFormat<U'f', U'u', U'l', U'l'>
 {
-    std::string operator()(const Semantics::Type& arg)
-    {
-        return '\'' + cld::to_string(arg.getName()) + '\''
-               + (arg.isTypedef() ? "(aka '" + cld::to_string(arg.getTypeName()) + "')" : "");
-    }
+    std::string operator()(const Semantics::Type& arg);
 };
+
 } // namespace cld::diag

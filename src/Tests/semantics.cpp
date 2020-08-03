@@ -655,3 +655,92 @@ TEST_CASE("Semantics composite type", "[semantics]")
                   false, false));
     }
 }
+
+TEST_CASE("Semantics type printing", "[semantics]")
+{
+    using namespace cld::Semantics;
+    auto toStr = [](const Type& type) {
+        cld::CSourceObject object;
+        return cld::diag::StringConverter<Type>::inArg(type, object);
+    };
+    SECTION("Primitives")
+    {
+        CHECK(toStr(PrimitiveType::createVoid(false, false)) == "void");
+        CHECK(toStr(PrimitiveType::createVoid(true, false)) == "const void");
+        CHECK(toStr(PrimitiveType::createVoid(false, true)) == "volatile void");
+        CHECK(toStr(PrimitiveType::createVoid(true, true)) == "const volatile void");
+        CHECK(toStr(PrimitiveType::createChar(false, false, cld::LanguageOptions::native())) == "char");
+        CHECK(toStr(PrimitiveType::createSignedChar(false, false)) == "signed char");
+        CHECK(toStr(PrimitiveType::createUnsignedChar(false, false)) == "unsigned char");
+        CHECK(toStr(PrimitiveType::createShort(false, false, cld::LanguageOptions::native())) == "short");
+        CHECK(toStr(PrimitiveType::createUnsignedShort(false, false, cld::LanguageOptions::native()))
+              == "unsigned short");
+        CHECK(toStr(PrimitiveType::createInt(false, false, cld::LanguageOptions::native())) == "int");
+        CHECK(toStr(PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native())) == "unsigned int");
+        CHECK(toStr(PrimitiveType::createLong(false, false, cld::LanguageOptions::native())) == "long");
+        CHECK(toStr(PrimitiveType::createUnsignedLong(false, false, cld::LanguageOptions::native()))
+              == "unsigned long");
+        CHECK(toStr(PrimitiveType::createLongLong(false, false)) == "long long");
+        CHECK(toStr(PrimitiveType::createUnsignedLongLong(false, false)) == "unsigned long long");
+        CHECK(toStr(PrimitiveType::createFloat(false, false)) == "float");
+        CHECK(toStr(PrimitiveType::createDouble(false, false)) == "double");
+        CHECK(toStr(PrimitiveType::createUnderlineBool(false, false)) == "_Bool");
+        CHECK(toStr(PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native())) == "long double");
+    }
+    SECTION("Pointers")
+    {
+        std::string result = "void*";
+        auto ptrIsConst = GENERATE(false, true);
+        auto ptrIsVolatile = GENERATE(false, true);
+        auto ptrIsRestricted = GENERATE(false, true);
+        auto elemntIsConst = GENERATE(false, true);
+        auto elemntIsVolatile = GENERATE(false, true);
+        if (elemntIsVolatile)
+        {
+            result = "volatile " + result;
+        }
+        if (elemntIsConst)
+        {
+            result = "const " + result;
+        }
+        if (ptrIsRestricted)
+        {
+            result += " restrict";
+        }
+        if (ptrIsConst)
+        {
+            result += " const";
+        }
+        if (ptrIsVolatile)
+        {
+            result += " volatile";
+        }
+        CHECK(toStr(PointerType::create(ptrIsConst, ptrIsVolatile, ptrIsRestricted,
+                                        PrimitiveType::createVoid(elemntIsConst, elemntIsVolatile)))
+              == result);
+    }
+    SECTION("Array")
+    {
+        CHECK(toStr(ArrayType::create(false, false, false, false,
+                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 4))
+              == "int[4]");
+        CHECK(toStr(ArrayType::create(false, false, false, true,
+                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 4))
+              == "int[static 4]");
+        CHECK(toStr(ArrayType::create(false, false, true, false,
+                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 4))
+              == "int[restrict 4]");
+        CHECK(toStr(ArrayType::create(false, true, false, false,
+                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 4))
+              == "int[volatile 4]");
+        CHECK(toStr(ArrayType::create(true, false, false, false,
+                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 4))
+              == "int[const 4]");
+        CHECK(toStr(ArrayType::create(
+                  false, false, false, false,
+                  ArrayType::create(false, false, false, false,
+                                    PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 6),
+                  4))
+              == "int[4][6]");
+    }
+}

@@ -1019,7 +1019,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstRetType::castTo(const cld::Sem
                                                                   const LanguageOptions& options, Issues* issues) const
 {
     auto copy = type.get();
-    auto nonLvalue = Type(false, false, cld::to_string(type.getName()), std::move(copy));
+    auto nonLvalue = Type(false, false, std::move(copy));
     return match(
         m_value, [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
         [&](VoidStar address) -> ConstRetType {

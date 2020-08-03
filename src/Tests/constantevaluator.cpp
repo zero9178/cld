@@ -85,7 +85,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "int");
     }
     SECTION("unsigned int")
     {
@@ -99,7 +98,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "unsigned int");
     }
     SECTION("long")
     {
@@ -112,7 +110,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == 32);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x86linux));
-        CHECK(value.getType().getName() == "long");
     }
     SECTION("unsigned long")
     {
@@ -125,7 +122,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == 32);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLong(false, false, cld::Tests::x86linux));
-        CHECK(value.getType().getName() == "unsigned long");
     }
     SECTION("long long")
     {
@@ -138,7 +134,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == 64);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createLongLong(false, false));
-        CHECK(value.getType().getName() == "long long");
     }
     SECTION("unsigned long long")
     {
@@ -151,7 +146,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == 64);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
-        CHECK(value.getType().getName() == "unsigned long long");
     }
     SECTION("float")
     {
@@ -163,7 +157,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.convertToFloat() == 0.f);
         CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK(value.getType().getName() == "float");
     }
     SECTION("double")
     {
@@ -175,7 +168,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.convertToDouble() == 0.0);
         CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
         CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-        CHECK(value.getType().getName() == "double");
     }
     SECTION("long double")
     {
@@ -190,7 +182,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::Tests::x64windowsMsvc));
-            CHECK(value.getType().getName() == "long double");
         }
         SECTION("Gnu")
         {
@@ -203,7 +194,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
             CHECK(result.compare(llvm::APFloat(llvm::APFloat::x87DoubleExtended(), "0.0")));
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::Tests::x64windowsGnu));
-            CHECK(value.getType().getName() == "long double");
         }
     }
     SECTION("String literal")
@@ -224,7 +214,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "int");
     }
     SECTION("Identifier")
     {
@@ -291,7 +280,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("+(signed char)0");
@@ -304,7 +292,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("+(unsigned char)0");
@@ -317,7 +304,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Floating point")
@@ -339,7 +325,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.convertToDouble() == 0.0);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
         SECTION("Pointer")
@@ -364,7 +349,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Floating point")
         {
@@ -385,7 +369,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.convertToDouble() == -.1);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
         SECTION("Pointer")
@@ -410,7 +393,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "unsigned int");
         }
         SECTION("Floating point")
         {
@@ -450,7 +432,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Floating point")
         {
@@ -473,7 +454,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Pointer")
@@ -490,7 +470,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("!(void*)5", cld::LanguageOptions::native(),
@@ -504,7 +483,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
     }
@@ -585,7 +563,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                         CHECK(result.isUnsigned());
                         CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
                         CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
-                        CHECK(value.getType().getName() == "unsigned long long");
                     }
                 }
             }
@@ -630,7 +607,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
             CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
-            CHECK(value.getType().getName() == "unsigned long long");
         }
         {
             auto [value, error] = evaluateConstantExpression("(unsigned long long)0.5");
@@ -642,7 +618,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
             CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
-            CHECK(value.getType().getName() == "unsigned long long");
         }
     }
     SECTION("Float")
@@ -666,7 +641,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                 CHECK(result.convertToFloat() == 0.f);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
-                CHECK(value.getType().getName() == "float");
             }
             SECTION("From float")
             {
@@ -679,7 +653,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                 CHECK(result.convertToFloat() == 5.3f);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
-                CHECK(value.getType().getName() == "float");
             }
         }
         SECTION("Initializer constant expressions")
@@ -701,7 +674,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             CHECK(result.convertToFloat() == std::numeric_limits<float>::infinity());
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
             CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
-            CHECK(value.getType().getName() == "float");
         }
         SECTION("Warnings")
         {
@@ -742,7 +714,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                 CHECK(value.getType()
                       == cld::Semantics::PointerType::create(false, false, false,
                                                              cld::Semantics::PrimitiveType::createVoid(false, false)));
-                CHECK(value.getType().getName() == "void*");
             }
             {
                 auto [value, error] = evaluateConstantExpression("(float*)(void*)0", cld::LanguageOptions::native(),
@@ -754,7 +725,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
                 CHECK(value.getType()
                       == cld::Semantics::PointerType::create(false, false, false,
                                                              cld::Semantics::PrimitiveType::createFloat(false, false)));
-                CHECK(value.getType().getName() == "float*");
             }
             {
                 auto [value, error] = evaluateConstantExpression("(void*)0.0", cld::LanguageOptions::native(),
@@ -782,7 +752,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Divide")
         {
@@ -796,7 +765,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Modulo")
         {
@@ -810,7 +778,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -837,7 +804,6 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK(result.convertToDouble() == 3 * .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
             {
                 auto [value, error] = evaluateConstantExpression("3.0f * .55", cld::LanguageOptions::native(),
@@ -849,7 +815,6 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK(result.convertToDouble() == 3 * .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
         SECTION("Divide")
@@ -874,7 +839,6 @@ TEST_CASE("Const eval term", "[constEval]")
                 CHECK(result.convertToDouble() == 3 / .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
         SECTION("Rest")
@@ -944,7 +908,6 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Minus")
         {
@@ -959,7 +922,6 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -987,7 +949,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(result.convertToDouble() == 3.55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
         SECTION("Minus")
@@ -1013,7 +974,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(result.convertToDouble() == 3 - .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
                 CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
-                CHECK(value.getType().getName() == "double");
             }
         }
     }
@@ -1033,7 +993,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                       == cld::Semantics::PointerType::create(
                           false, false, false,
                           cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
-                CHECK(value.getType().getName() == "int*");
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + 3", cld::Tests::x64linux,
@@ -1047,7 +1006,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                       == cld::Semantics::PointerType::create(
                           false, false, false,
                           cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
-                CHECK(value.getType().getName() == "int*");
             }
             {
                 auto [value, error] = evaluateConstantExpression("3.0 + (int*)5", cld::Tests::x64linux,
@@ -1094,7 +1052,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 64);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x64linux));
-                    CHECK(value.getType().getName() == "long");
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("(int* const)20 - (int*)4", cld::Tests::x64linux,
@@ -1109,7 +1066,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 64);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x64linux));
-                    CHECK(value.getType().getName() == "long");
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("(int*)20 - (const int*)4", cld::Tests::x64linux,
@@ -1124,7 +1080,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 64);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x64linux));
-                    CHECK(value.getType().getName() == "long");
                 }
             }
             SECTION("32 bit")
@@ -1142,7 +1097,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 32);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x86linux));
-                    CHECK(value.getType().getName() == "int");
                 }();
                 {
                     auto [value, error] = evaluateConstantExpression("(int* const)20 - (int*)4", cld::Tests::x86linux,
@@ -1157,7 +1111,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 32);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x86linux));
-                    CHECK(value.getType().getName() == "int");
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("(int*)20 - (const int*)4", cld::Tests::x86linux,
@@ -1172,7 +1125,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                     CHECK(result.getBitWidth() == 32);
                     CHECK(value.getType()
                           == cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x86linux));
-                    CHECK(value.getType().getName() == "int");
                 }
             }
             {
@@ -1194,7 +1146,6 @@ TEST_CASE("Const eval additive", "[constEval]")
                       == cld::Semantics::PointerType::create(
                           false, false, false,
                           cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
-                CHECK(value.getType().getName() == "int*");
             }
             {
                 auto [value, error] =
@@ -1243,7 +1194,6 @@ TEST_CASE("Const eval shift", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Right")
         {
@@ -1257,7 +1207,6 @@ TEST_CASE("Const eval shift", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -1338,7 +1287,6 @@ TEST_CASE("Const eval bitand", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
     {
@@ -1384,7 +1332,6 @@ TEST_CASE("Const eval bitxor", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
     {
@@ -1430,7 +1377,6 @@ TEST_CASE("Const eval bitor", "[constEval]")
         CHECK(result.getBitWidth() == sizeof(int) * 8);
         CHECK(value.getType()
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(value.getType().getName() == "int");
     }
     SECTION("Float")
     {
@@ -1477,7 +1423,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("5 && 0");
@@ -1490,7 +1435,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -1517,7 +1461,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("0 && .55", cld::LanguageOptions::native(),
@@ -1531,7 +1474,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Pointers")
@@ -1548,7 +1490,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("0 && (int*)5", cld::LanguageOptions::native(),
@@ -1562,7 +1503,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
 }
@@ -1582,7 +1522,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || 0");
@@ -1595,7 +1534,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -1622,7 +1560,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || .0", cld::LanguageOptions::native(),
@@ -1636,7 +1573,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Pointer")
@@ -1653,7 +1589,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || (void*)0", cld::LanguageOptions::native(),
@@ -1667,7 +1602,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
 }
@@ -1688,7 +1622,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than")
         {
@@ -1702,7 +1635,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Less than or equal")
         {
@@ -1716,7 +1648,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than or equal")
         {
@@ -1730,7 +1661,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
     SECTION("Float")
@@ -1759,7 +1689,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Greater than")
@@ -1786,7 +1715,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Less than or equal")
@@ -1813,7 +1741,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Greater than or equal")
@@ -1840,7 +1767,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
     }
@@ -1859,7 +1785,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than")
         {
@@ -1875,7 +1800,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Less than or equal")
         {
@@ -1891,7 +1815,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
         SECTION("Greater than or equal")
         {
@@ -1906,7 +1829,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result.getBitWidth() == sizeof(int) * 8);
             CHECK(value.getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(value.getType().getName() == "int");
         }
     }
 }
@@ -1928,7 +1850,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("4 == 4");
@@ -1941,7 +1862,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Not equal")
@@ -1957,7 +1877,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("4 != 4");
@@ -1970,7 +1889,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
     }
@@ -2000,7 +1918,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression(".55 == .55", cld::LanguageOptions::native(),
@@ -2014,7 +1931,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
         SECTION("Not equal")
@@ -2041,7 +1957,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression(".55 != .55", cld::LanguageOptions::native(),
@@ -2055,7 +1970,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
         }
     }
@@ -2076,7 +1990,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2091,7 +2004,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2106,7 +2018,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2121,7 +2032,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2136,7 +2046,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2144,7 +2053,7 @@ TEST_CASE("Const eval equal", "[constEval]")
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'=='",
-                                                "'float*'", "'int const*'"));
+                                                "'float*'", "'const int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 == (const int*)4", cld::LanguageOptions::native(),
@@ -2158,7 +2067,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("(void*)5 == 0", cld::LanguageOptions::native(),
@@ -2172,7 +2080,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("5 == (const int*)4", cld::LanguageOptions::native(),
@@ -2202,7 +2109,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2217,7 +2123,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2232,7 +2137,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2247,7 +2151,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2262,7 +2165,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] =
@@ -2270,7 +2172,7 @@ TEST_CASE("Const eval equal", "[constEval]")
                                                cld::Semantics::ConstantEvaluator::Initialization);
                 CHECK(value.isUndefined());
                 CHECK_THAT(error, ProducesError(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N, "'!='",
-                                                "'float*'", "'int const*'"));
+                                                "'float*'", "'const int*'"));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 != (const int*)4", cld::LanguageOptions::native(),
@@ -2284,7 +2186,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("(void*)5 != 0", cld::LanguageOptions::native(),
@@ -2298,7 +2199,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
                 CHECK(value.getType()
                       == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-                CHECK(value.getType().getName() == "int");
             }
             {
                 auto [value, error] = evaluateConstantExpression("5 != (const int*)4", cld::LanguageOptions::native(),

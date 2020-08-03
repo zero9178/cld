@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "ErrorMessages.hpp"
+#include "SemanticUtil.hpp"
 
 const cld::Semantics::Type& cld::Semantics::ArrayType::getType() const
 {
@@ -30,8 +31,7 @@ bool cld::Semantics::ArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
                                                        cld::Semantics::Type&& type, std::size_t size)
 {
-    auto name = cld::to_string(type.getTypeName()) + "[" + std::to_string(size) + "]";
-    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
+    return cld::Semantics::Type(isConst, isVolatile,
                                 ArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), size));
 }
 
@@ -75,22 +75,8 @@ const cld::Semantics::Type::Variant& cld::Semantics::Type::get() const
     return m_type;
 }
 
-cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::Variant type)
-    : m_isConst(isConst),
-      m_isVolatile(isVolatile),
-      m_name([name = std::move(name), isConst, isVolatile]() mutable {
-          if (isConst)
-          {
-              name += " const";
-          }
-          if (isVolatile)
-          {
-              name += " volatile";
-          }
-          return name;
-      }()),
-      m_typeName(m_name),
-      m_type(std::move(type))
+cld::Semantics::Type::Type(bool isConst, bool isVolatile, cld::Semantics::Type::Variant type)
+    : m_isConst(isConst), m_isVolatile(isVolatile), m_type(std::move(type))
 {
 }
 
@@ -120,14 +106,9 @@ bool cld::Semantics::Type::isUndefined() const
     return std::holds_alternative<std::monostate>(m_type);
 }
 
-std::string_view cld::Semantics::Type::getTypeName() const
-{
-    return m_typeName;
-}
-
 bool cld::Semantics::Type::isTypedef() const
 {
-    return m_typeName != m_name;
+    return !m_name.empty();
 }
 
 cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& elementType)
@@ -148,33 +129,7 @@ bool cld::Semantics::PointerType::isRestricted() const
 cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                          cld::Semantics::Type&& elementType)
 {
-    std::string name;
-    if (!elementType.isTypedef() && std::holds_alternative<FunctionType>(elementType.get()))
-    {
-        auto openParenthese = elementType.getName().find('(');
-        CLD_ASSERT(openParenthese != std::string_view::npos);
-        name = cld::to_string(elementType.getName().substr(0, openParenthese)) + "(*)"
-               + cld::to_string(elementType.getName().substr(openParenthese));
-    }
-    else if (!elementType.isTypedef()
-             && (std::holds_alternative<ArrayType>(elementType.get())
-                 || std::holds_alternative<ValArrayType>(elementType.get())
-                 || std::holds_alternative<AbstractArrayType>(elementType.get())))
-    {
-        auto openBracket = elementType.getName().find('[');
-        CLD_ASSERT(openBracket != std::string_view::npos);
-        name = cld::to_string(elementType.getName().substr(0, openBracket)) + "(*)"
-               + cld::to_string(elementType.getName().substr(openBracket));
-    }
-    else
-    {
-        name = cld::to_string(elementType.getTypeName()) + "*";
-    }
-    if (isRestricted)
-    {
-        name += " restricted";
-    }
-    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
+    return cld::Semantics::Type(isConst, isVolatile,
                                 PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
 }
 
@@ -193,7 +148,7 @@ cld::Semantics::EnumType::EnumType(std::string name, std::uint64_t scope) : m_na
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
                                                       std::uint64_t scope)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "enum " + name, EnumType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scope));
 }
 
 bool cld::Semantics::EnumType::operator==(const cld::Semantics::EnumType& rhs) const
@@ -250,8 +205,7 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool is
                                                            bool isSigned, std::uint8_t bitCount, std::string name,
                                                            Kind kind)
 {
-    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
-                                PrimitiveType(isFloatingPoint, isSigned, bitCount, kind));
+    return cld::Semantics::Type(isConst, isVolatile, PrimitiveType(isFloatingPoint, isSigned, bitCount, kind));
 }
 
 bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
@@ -357,6 +311,11 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
     return create(isConst, isVolatile, false, true, 0, "void", Kind::Void);
 }
 
+cld::Semantics::PrimitiveType::Kind cld::Semantics::PrimitiveType::getKind() const
+{
+    return m_kind;
+}
+
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
                                            std::shared_ptr<cld::Semantics::Type>&& type)
     : m_restricted(isRestricted), m_static(isStatic), m_type(std::move(type))
@@ -381,8 +340,7 @@ bool cld::Semantics::ValArrayType::isStatic() const
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                           bool isStatic, cld::Semantics::Type&& type)
 {
-    auto name = cld::to_string(type.getName()) + "[*]";
-    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
+    return cld::Semantics::Type(isConst, isVolatile,
                                 ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type))));
 }
 
@@ -425,18 +383,8 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&&
                                                           std::vector<std::pair<Type, std::string>>&& arguments,
                                                           bool lastIsVararg, bool isKandR)
 {
-    std::string argumentsNames;
-    for (std::size_t i = 0; i < arguments.size(); i++)
-    {
-        argumentsNames += arguments[i].first.getTypeName();
-        if (i + 1 < arguments.size())
-        {
-            argumentsNames += ", ";
-        }
-    }
-    argumentsNames = cld::to_string(returnType.getTypeName()) + "(" + argumentsNames + ")";
     return cld::Semantics::Type(
-        false, false, std::move(argumentsNames),
+        false, false,
         FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, isKandR));
 }
 
@@ -482,8 +430,7 @@ bool cld::Semantics::AbstractArrayType::isRestricted() const
 cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                                cld::Semantics::Type&& type)
 {
-    auto name = cld::to_string(type.getTypeName()) + "[]";
-    return cld::Semantics::Type(isConst, isVolatile, std::move(name),
+    return cld::Semantics::Type(isConst, isVolatile,
                                 AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
 }
 
@@ -539,7 +486,7 @@ cld::Semantics::StructType::StructType(std::string_view name, std::uint64_t scop
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
                                                         std::uint64_t scope)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "struct " + cld::to_string(name), StructType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, StructType(name, scope));
 }
 
 bool cld::Semantics::StructType::operator==(const cld::Semantics::StructType& rhs) const
@@ -570,7 +517,7 @@ cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t scope)
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
                                                        std::uint64_t scope)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "struct " + cld::to_string(name), UnionType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, scope));
 }
 
 bool cld::Semantics::UnionType::operator==(const cld::Semantics::UnionType& rhs) const
@@ -737,7 +684,7 @@ bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::Anony
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile,
                                                                  std::vector<Field> fields)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "struct <undefined>", AnonymousStructType(std::move(fields)));
+    return cld::Semantics::Type(isConst, isVolatile, AnonymousStructType(std::move(fields)));
 }
 
 cld::Semantics::AnonymousUnionType::AnonymousUnionType(std::vector<Field>&& fields) : m_fields(std::move(fields)) {}
@@ -755,7 +702,7 @@ bool cld::Semantics::AnonymousUnionType::operator!=(const cld::Semantics::Anonym
 cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile,
                                                                 std::vector<Field> fields)
 {
-    return cld::Semantics::Type(isConst, isVolatile, "union <undefined>", AnonymousUnionType(std::move(fields)));
+    return cld::Semantics::Type(isConst, isVolatile, AnonymousUnionType(std::move(fields)));
 }
 
 cld::Semantics::AnonymousEnumType::AnonymousEnumType(std::shared_ptr<const Type> type) : m_type(std::move(type)) {}
@@ -772,7 +719,7 @@ bool cld::Semantics::AnonymousEnumType::operator!=(const cld::Semantics::Anonymo
 
 cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, bool isVolatile, Type&& type)
 {
-    return Type(isConst, isVolatile, "enum <undefined>", AnonymousEnumType(std::make_shared<Type>(std::move(type))));
+    return Type(isConst, isVolatile, AnonymousEnumType(std::make_shared<Type>(std::move(type))));
 }
 
 bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
@@ -783,4 +730,280 @@ bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
 bool cld::Semantics::Field::operator!=(const cld::Semantics::Field& rhs) const
 {
     return !(rhs == *this);
+}
+
+namespace
+{
+using namespace cld::Semantics;
+
+std::string typeToString(const Type& arg)
+{
+    std::string string;
+    if (arg.isTypedef())
+    {
+        string = arg.getName();
+    }
+    else
+    {
+        string = cld::match(
+            arg.get(),
+            [&](const PrimitiveType& primitiveType) -> std::string {
+                std::string result;
+                if (arg.isConst())
+                {
+                    result += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    result += "volatile ";
+                }
+                switch (primitiveType.getKind())
+                {
+                    case PrimitiveType::Kind::Char: result += "char"; break;
+                    case PrimitiveType::Kind::SignedChar: result += "signed char"; break;
+                    case PrimitiveType::Kind::UnsignedChar: result += "unsigned char"; break;
+                    case PrimitiveType::Kind::Bool: result += "_Bool"; break;
+                    case PrimitiveType::Kind::Short: result += "short"; break;
+                    case PrimitiveType::Kind::UnsignedShort: result += "unsigned short"; break;
+                    case PrimitiveType::Kind::Int: result += "int"; break;
+                    case PrimitiveType::Kind::UnsignedInt: result += "unsigned int"; break;
+                    case PrimitiveType::Kind::Long: result += "long"; break;
+                    case PrimitiveType::Kind::UnsignedLong: result += "unsigned long"; break;
+                    case PrimitiveType::Kind::LongLong: result += "long long"; break;
+                    case PrimitiveType::Kind::UnsignedLongLong: result += "unsigned long long"; break;
+                    case PrimitiveType::Kind::Float: result += "float"; break;
+                    case PrimitiveType::Kind::Double: result += "double"; break;
+                    case PrimitiveType::Kind::LongDouble: result += "long double"; break;
+                    case PrimitiveType::Kind::Void: result += "void"; break;
+                }
+                return result;
+            },
+            [&](const PointerType& pointerType) -> std::string {
+                auto result = typeToString(pointerType.getElementType()) + "*";
+                if (pointerType.isRestricted())
+                {
+                    result += " restrict";
+                }
+                if (arg.isConst())
+                {
+                    result += " const";
+                }
+                if (arg.isVolatile())
+                {
+                    result += " volatile";
+                }
+                return result;
+            },
+            [&](const ValArrayType& valArrayType) -> std::string {
+                auto result = typeToString(valArrayType.getType());
+                auto index = result.find('[');
+                if (index == result.npos)
+                {
+                    index = result.size();
+                }
+                else
+                {
+                    CLD_ASSERT(index);
+                    index--;
+                }
+                std::string toInsert = "[";
+                if (valArrayType.isStatic())
+                {
+                    toInsert += "static ";
+                }
+                if (valArrayType.isRestricted())
+                {
+                    toInsert += "restrict ";
+                }
+                if (arg.isConst())
+                {
+                    toInsert += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    toInsert += "volatile ";
+                }
+                toInsert += "*]";
+                result.insert(index, toInsert);
+                return result;
+            },
+            [&](const ArrayType& arrayType) -> std::string {
+                auto result = typeToString(arrayType.getType());
+                auto index = result.find('[');
+                if (index == result.npos)
+                {
+                    index = result.size();
+                }
+                std::string toInsert = "[";
+                if (arrayType.isStatic())
+                {
+                    toInsert += "static ";
+                }
+                if (arrayType.isRestricted())
+                {
+                    toInsert += "restrict ";
+                }
+                if (arg.isConst())
+                {
+                    toInsert += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    toInsert += "volatile ";
+                }
+                toInsert += cld::to_string(arrayType.getSize());
+                toInsert += "]";
+                result.insert(index, toInsert);
+                return result;
+            },
+            [&](const AbstractArrayType& arrayType) -> std::string {
+                auto result = typeToString(arrayType.getType());
+                auto index = result.find('[');
+                if (index == result.npos)
+                {
+                    index = result.size();
+                }
+                std::string toInsert = "[";
+                if (arrayType.isRestricted())
+                {
+                    toInsert += "restrict ";
+                }
+                if (arg.isConst())
+                {
+                    toInsert += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    toInsert += "volatile ";
+                }
+                toInsert += "]";
+                result.insert(index, toInsert);
+                return result;
+            },
+            [&](const FunctionType& functionType) -> std::string {
+                auto result = typeToString(functionType.getReturnType());
+                result += "(";
+                if (functionType.getArguments().empty())
+                {
+                    if (!functionType.isKandR())
+                    {
+                        result += "void";
+                    }
+                    result += ")";
+                    return result;
+                }
+                result += typeToString(functionType.getArguments()[0].first);
+                for (auto& iter : llvm::ArrayRef(functionType.getArguments()).drop_front())
+                {
+                    result += ", " + typeToString(iter.first);
+                }
+                if (functionType.isLastVararg())
+                {
+                    result += ",...";
+                }
+                return result + ")";
+            },
+            [&](const StructType& structType) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "struct " + cld::to_string(structType.getName());
+            },
+            [&](const UnionType& unionType) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "union " + cld::to_string(unionType.getName());
+            },
+            [&](const EnumType& enumType) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "struct " + cld::to_string(enumType.getName());
+            },
+            [&](const AnonymousStructType&) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "struct <anonymous>";
+            },
+            [&](const AnonymousUnionType&) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "union <anonymous>";
+            },
+            [&](const AnonymousEnumType&) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "enum <anonymous>";
+            },
+            [&](std::monostate) -> std::string {
+                std::string prefix;
+                if (arg.isConst())
+                {
+                    prefix += "const ";
+                }
+                if (arg.isVolatile())
+                {
+                    prefix += "volatile ";
+                }
+                return prefix + "<undefined>";
+            });
+    }
+    return string;
+}
+} // namespace
+
+std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg,
+                                                                    const SourceInterface& sourceInterface)
+{
+    return typeToString(arg);
+}
+
+std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l'>::operator()(const Semantics::Type& arg)
+{
+    auto result = typeToString(arg);
+    if (arg.isTypedef())
+    {
+        return "'" + cld::to_string(arg.getName()) + "' (aka '" + result + "')";
+    }
+    return "'" + result + "'";
 }

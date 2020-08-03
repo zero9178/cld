@@ -288,8 +288,7 @@ struct StringMaker<cld::Semantics::Type>
 {
     static std::string convert(const cld::Semantics::Type& type)
     {
-        return '\'' + cld::to_string(type.getName()) + '\''
-               + (type.isTypedef() ? "(aka '" + cld::to_string(type.getTypeName()) + "')" : "");
+        return cld::diag::CustomFormat<U'f', U'u', U'l', U'l'>{}(type);
     }
 };
 
