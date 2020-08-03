@@ -132,6 +132,8 @@ CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER, "Declarations at fil
 
 CREATE_ERROR(DECLARATION_MUST_HAVE_A_COMPLETE_TYPE, "Declaration must have a complete type", Annotate<0, 1>);
 
+CREATE_ERROR(INLINE_ONLY_ALLOWED_FOR_FUNCTIONS, "'inline' only allowed for functions", PointAt<0>);
+
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must not be a function type",
              Annotate<0, 1>);
 
@@ -140,6 +142,35 @@ CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE, "Array element type mus
 CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE, "Array size must be an integer type", Annotate<0, 1>);
 
 CREATE_ERROR(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO, "Array size must be greater than 0", Annotate<0, 1>);
+
+CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC,
+             "Array outside of function parameter may not be 'static'", PointAt<0>);
+
+CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED,
+             "Array outside of function parameter may not be qualified", PointAt<0>);
+
+CREATE_ERROR(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE, "Variable length array not allowed at file scope",
+             Underline<0>);
+
+CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_ANY_LINKAGE, "Variable length array must not have any linkage",
+             PointAt<0>);
+
+CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME, "Variable length array must not have static lifetime",
+             PointAt<0>);
+
+CREATE_ERROR(FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION, "Function return type must not be a function type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY, "Function return type must not be an array type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER,"Function prototype must not have an initializer",Underline<0>);
+
+CREATE_ERROR(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION,
+             "Identifier list only allowed as part of a function definition", Underline<0>);
+
+CREATE_ERROR(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER,
+             "No storage class specifier allowed in parameter besides 'register'", Underline<0>);
 
 CREATE_ERROR(ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE,
              "Element type of pointer with restrict qualifier must not be a function type", Underline<0>, PointAt<1>);

@@ -96,9 +96,9 @@ class SemanticAnalysis final
         auto result = evaluator.visit(constantExpression);
         if (messages.empty())
         {
-            return result;
+            return {std::move(result)};
         }
-        return std::move(messages);
+        return {std::move(messages)};
     }
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;
@@ -134,7 +134,7 @@ class SemanticAnalysis final
     Type typeSpecifiersToType(bool isConst, bool isVolatile, const std::vector<const Syntax::TypeSpecifier*>& typeSpec);
 
     Type declaratorsToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                               const PossiblyAbstractQualifierRef& parentheses = {},
+                               const PossiblyAbstractQualifierRef& parameterList = {},
                                const std::vector<Syntax::Declaration>& declarations = {});
 
     Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,

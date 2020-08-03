@@ -42,6 +42,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                 case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
                 case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
             }
+            CLD_UNREACHABLE;
         },
         [&ss](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
@@ -61,6 +62,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
                     case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
                     case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
                 }
+                CLD_UNREACHABLE;
             },
             [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);

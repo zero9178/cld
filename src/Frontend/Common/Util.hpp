@@ -400,14 +400,8 @@ decltype(auto) match(Variant&& variant, Matchers&&... matchers)
 template <class Ret, typename Variant, typename... Matchers>
 Ret match(Variant&& variant, Matchers&&... matchers)
 {
-    if constexpr (std::is_void_v<std::decay_t<Ret>>)
-    {
-        detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
-    }
-    else
-    {
-        return detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
-    }
+    static_assert(std::is_void_v<Ret>,"Only explicit return type of void allowed");
+    detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
 
 template <typename Variant, typename... Matchers>
@@ -420,16 +414,9 @@ decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
 template <class Ret, typename Variant, typename... Matchers>
 Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
-    if constexpr (std::is_void_v<std::decay_t<Ret>>)
-    {
-        detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
-                      std::forward<Variant>(variant));
-    }
-    else
-    {
-        return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
-                             std::forward<Variant>(variant));
-    }
+    static_assert(std::is_void_v<Ret>,"Only explicit return type of void allowed");
+    detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
+                  std::forward<Variant>(variant));
 }
 
 template <typename T, typename... Ts>

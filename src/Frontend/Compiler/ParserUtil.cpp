@@ -1,5 +1,33 @@
 #include "ParserUtil.hpp"
 
+#include "ErrorMessages.hpp"
+
+bool cld::Parser::expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
+                                   std::string_view& value, std::optional<Message> additional)
+{
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::Identifier)
+    {
+        if (begin == end)
+        {
+            context.log(cld::Errors::Parser::EXPECTED_N.args(*(end - 1), context.getSourceInterface(),
+                                                             Lexer::TokenType::Identifier, *(end - 1)));
+        }
+        else
+        {
+            context.log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
+                                                                          Lexer::TokenType::Identifier, *begin));
+        }
+        if (additional)
+        {
+            context.log(*additional);
+        }
+        return false;
+    }
+    value = cld::get<std::string>(begin->getValue());
+    begin++;
+    return true;
+}
+
 bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                          Context& context, std::optional<Message> additional)
 {
@@ -65,6 +93,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
         case Lexer::TokenType::IntKeyword:
         case Lexer::TokenType::LongKeyword:
         case Lexer::TokenType::FloatKeyword:
+        case Lexer::TokenType::UnderlineBool:
         case Lexer::TokenType::DoubleKeyword:
         case Lexer::TokenType::SignedKeyword:
         case Lexer::TokenType::UnsignedKeyword:
@@ -90,6 +119,7 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
         case Lexer::TokenType::IntKeyword:
         case Lexer::TokenType::LongKeyword:
         case Lexer::TokenType::FloatKeyword:
+        case Lexer::TokenType::UnderlineBool:
         case Lexer::TokenType::DoubleKeyword:
         case Lexer::TokenType::SignedKeyword:
         case Lexer::TokenType::UnsignedKeyword:

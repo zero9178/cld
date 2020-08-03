@@ -30,7 +30,7 @@ class Context final
         DeclarationLocation location;
         bool isTypedef{};
     };
-    std::vector<std::unordered_map<std::string, Declaration>> m_currentScope{1};
+    std::vector<std::unordered_map<std::string_view, Declaration>> m_currentScope{1};
     std::size_t m_errorCount = 0;
     bool m_inPreprocessor;
 
@@ -72,6 +72,24 @@ private:
     std::uint64_t m_squareBracketDepth = 0;
     std::uint64_t m_braceDepth = 0;
 
+    class Decrementer
+    {
+        std::uint64_t& m_value;
+
+    public:
+        explicit Decrementer(std::uint64_t& value) : m_value(value) {}
+
+        ~Decrementer()
+        {
+            m_value--;
+        }
+
+        Decrementer(const Decrementer&) = delete;
+        Decrementer& operator=(const Decrementer&) = delete;
+        Decrementer(Decrementer&&) = delete;
+        Decrementer& operator=(Decrementer&&) = delete;
+    };
+
 public:
     template <class... Args>
     constexpr static TokenBitSet fromTokenTypes(Args&&... tokenTypes);
@@ -93,17 +111,17 @@ public:
 
     TokenBitReseter withRecoveryTokens(const TokenBitSet& tokenBitSet);
 
-    void addTypedef(const std::string& name, DeclarationLocation declarator);
+    void addTypedef(std::string_view name, DeclarationLocation declarator);
 
-    [[nodiscard]] bool isTypedef(const std::string& name) const;
+    [[nodiscard]] bool isTypedef(std::string_view name) const;
 
-    [[nodiscard]] bool isTypedefInScope(const std::string& name) const;
+    [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
     void log(const Message& message);
 
-    void addToScope(const std::string& name, DeclarationLocation declarator);
+    void addToScope(std::string_view name, DeclarationLocation declarator);
 
-    [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(const std::string& name) const;
+    [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(std::string_view name) const;
 
     void pushScope();
 
@@ -115,17 +133,11 @@ public:
 
     void skipUntil(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, TokenBitSet additional = {});
 
-    void parenthesesEntered(Lexer::CTokenIterator bracket);
+    [[nodiscard]] Decrementer parenthesesEntered(Lexer::CTokenIterator bracket);
 
-    void parenthesesLeft();
+    [[nodiscard]] Decrementer squareBracketEntered(Lexer::CTokenIterator bracket);
 
-    void squareBracketEntered(Lexer::CTokenIterator bracket);
-
-    void squareBracketLeft();
-
-    void braceEntered(Lexer::CTokenIterator bracket);
-
-    void braceLeft();
+    [[nodiscard]] Decrementer braceEntered(Lexer::CTokenIterator bracket);
 
     std::uint64_t getBracketMax() const;
 

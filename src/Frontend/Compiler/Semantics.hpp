@@ -133,19 +133,22 @@ public:
 class ArrayType final
 {
     bool m_restricted;
+    bool m_static;
     std::shared_ptr<const Type> m_type;
     std::size_t m_size;
 
-    ArrayType(bool isRestricted, std::shared_ptr<Type>&& type, std::size_t size);
+    ArrayType(bool isRestricted,bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type, std::size_t size);
+    static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type, std::size_t size);
 
     [[nodiscard]] const Type& getType() const;
 
     [[nodiscard]] std::size_t getSize() const;
 
     [[nodiscard]] bool isRestricted() const;
+
+    [[nodiscard]] bool isStatic() const;
 
     bool operator==(const ArrayType& rhs) const;
 
@@ -174,16 +177,19 @@ public:
 class ValArrayType final
 {
     bool m_restricted;
+    bool m_static;
     std::shared_ptr<const Type> m_type;
 
-    ValArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type);
+    ValArrayType(bool isRestricted,bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
+    static Type create(bool isConst, bool isVolatile, bool isRestricted,bool isStatic, Type&& type);
 
     [[nodiscard]] const Type& getType() const;
 
     [[nodiscard]] bool isRestricted() const;
+
+    [[nodiscard]] bool isStatic() const;
 
     bool operator==(const ValArrayType& rhs) const;
 
@@ -195,14 +201,14 @@ class FunctionType final
     std::shared_ptr<const Type> m_returnType;
     std::vector<std::pair<Type, std::string>> m_arguments;
     bool m_lastIsVararg;
-    bool m_hasPrototype;
+    bool m_isKandR;
 
     FunctionType(std::shared_ptr<Type>&& returnType, std::vector<std::pair<Type, std::string>> arguments,
-                 bool lastIsVararg, bool hasPrototype);
+                 bool lastIsVararg, bool isKandR);
 
 public:
     static Type create(cld::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
-                       bool lastIsVararg, bool hasPrototype);
+                       bool lastIsVararg, bool isKandR);
 
     [[nodiscard]] const Type& getReturnType() const;
 
@@ -210,7 +216,7 @@ public:
 
     [[nodiscard]] bool isLastVararg() const;
 
-    [[nodiscard]] bool hasPrototype() const;
+    [[nodiscard]] bool isKandR() const;
 
     bool operator==(const FunctionType& rhs) const;
 
@@ -367,17 +373,20 @@ class Type final
     bool m_isVolatile;
     std::string m_name;
     std::string m_typeName;
-    using variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
+
+public:
+    using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
                                  FunctionType, StructType, UnionType, EnumType, PointerType, AnonymousEnumType,
                                  AnonymousStructType, AnonymousUnionType>;
 
-    variant m_type;
+private:
+    Variant m_type;
 
 public:
     explicit Type(bool isConst = false, bool isVolatile = false, std::string name = "<undefined>",
-                  variant type = std::monostate{});
+                  Variant type = std::monostate{});
 
-    [[nodiscard]] const variant& get() const;
+    [[nodiscard]] const Variant& get() const;
 
     [[nodiscard]] bool isConst() const;
 
@@ -559,23 +568,23 @@ public:
 
 class FunctionDefinition final
 {
-    FunctionType m_type;
+    Type m_type;
     std::string m_name;
     std::vector<Declaration> m_parameterDeclarations;
     Linkage m_linkage;
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(FunctionType type, std::string name, std::vector<Declaration> parameterDeclarations,
+    FunctionDefinition(Type type, std::string name, std::vector<Declaration> parameterDeclarations,
                        Linkage linkage, CompoundStatement&& compoundStatement);
 
     [[nodiscard]] const std::string& getName() const;
 
-    [[nodiscard]] const FunctionType& getType() const;
+    [[nodiscard]] const Type& getType() const;
 
     [[nodiscard]] const std::vector<Declaration>& getParameterDeclarations() const;
 
-    [[nodiscard]] bool hasPrototype() const;
+    [[nodiscard]] bool isKandR() const;
 
     [[nodiscard]] Linkage getLinkage() const;
 };

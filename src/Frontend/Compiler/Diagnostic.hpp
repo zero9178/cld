@@ -341,10 +341,10 @@ private:
                        || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
                        || (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>)
-                       || (std::is_base_of_v<
-                               Lexer::TokenBase,
-                               std::remove_pointer_t<
-                                   T1>> && std::is_base_of_v<Lexer::TokenBase, std::remove_pointer_t<T2>>);
+                       || (std::is_base_of_v<Lexer::TokenBase,
+                                             std::remove_pointer_t<
+                                                 T1>> && std::is_base_of_v<Lexer::TokenBase, std::remove_pointer_t<T2>>)
+                       || (locationConstraintCheck<T1>() && locationConstraintCheck<T2>());
             }
             else if constexpr (std::tuple_size_v<U> == 3)
             {
@@ -479,7 +479,10 @@ private:
             }
             else
             {
-                CLD_UNREACHABLE;
+                auto& [arg1, arg2] = arg;
+                auto first = getPointRange(arg1);
+                auto second = getPointRange(arg2);
+                return {first.first, second.second};
             }
         }
         else

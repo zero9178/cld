@@ -327,15 +327,15 @@ public:
 class PostFixExpressionDot final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
-    std::string m_identifier;
+    Lexer::CTokenIterator m_identifier;
 
 public:
     PostFixExpressionDot(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                         std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
+                         std::unique_ptr<PostFixExpression>&& postFixExpression, Lexer::CTokenIterator identifier);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifier() const;
 };
 
 /**
@@ -344,15 +344,15 @@ public:
 class PostFixExpressionArrow final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
-    std::string m_identifier;
+    Lexer::CTokenIterator m_identifier;
 
 public:
     PostFixExpressionArrow(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                           std::unique_ptr<PostFixExpression>&& postFixExpression, std::string identifier);
+                           std::unique_ptr<PostFixExpression>&& postFixExpression, Lexer::CTokenIterator identifier);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifier() const;
 };
 
 /**
@@ -479,12 +479,12 @@ public:
  */
 class UnaryExpressionDefined final : public Node
 {
-    std::string m_identifier;
+    std::string_view m_identifier;
 
 public:
-    UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
+    UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string_view identifier);
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] std::string_view getIdentifier() const;
 };
 
 /**
@@ -1152,12 +1152,12 @@ public:
  */
 class GotoStatement final : public Node
 {
-    std::string m_identifier;
+    Lexer::CTokenIterator m_identifier;
 
 public:
-    GotoStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
+    GotoStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifier);
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifier() const;
 };
 
 /**
@@ -1319,14 +1319,10 @@ using DirectDeclarator =
  */
 class DirectDeclaratorIdentifier final : public Node
 {
-    std::string m_identifier;
     Lexer::CTokenIterator m_identifierLoc;
 
 public:
-    DirectDeclaratorIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier,
-                               Lexer::CTokenIterator identifierLoc);
-
-    [[nodiscard]] const std::string& getIdentifier() const;
+    DirectDeclaratorIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifierLoc);
 
     [[nodiscard]] Lexer::CTokenIterator getIdentifierLoc() const;
 };
@@ -1370,16 +1366,16 @@ public:
 class DirectDeclaratorParenthesesIdentifiers final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
-    std::vector<std::pair<std::string, Lexer::CTokenIterator>> m_identifiers;
+    std::vector<Lexer::CTokenIterator> m_identifiers;
 
 public:
     DirectDeclaratorParenthesesIdentifiers(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                            DirectDeclarator&& directDeclarator,
-                                           std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers);
+                                           std::vector<Lexer::CTokenIterator>&& identifiers);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
-    [[nodiscard]] const std::vector<std::pair<std::string, Lexer::CTokenIterator>>& getIdentifiers() const;
+    [[nodiscard]] const std::vector<Lexer::CTokenIterator>& getIdentifiers() const;
 };
 
 /**
@@ -1432,12 +1428,13 @@ public:
 class DirectDeclaratorStatic final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
+    Lexer::CTokenIterator m_staticLoc;
     std::vector<TypeQualifier> m_typeQualifiers;
     AssignmentExpression m_assignmentExpression;
 
 public:
     DirectDeclaratorStatic(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                           std::unique_ptr<DirectDeclarator>&& directDeclarator,
+                           std::unique_ptr<DirectDeclarator>&& directDeclarator, Lexer::CTokenIterator staticLoc,
                            std::vector<TypeQualifier>&& typeQualifiers, AssignmentExpression&& assignmentExpression);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
@@ -1445,6 +1442,8 @@ public:
     [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
 
     [[nodiscard]] const AssignmentExpression& getAssignmentExpression() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getStaticLoc() const;
 };
 
 /**
@@ -1609,7 +1608,7 @@ public:
      * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
      *                | <TokenType::Dot> <TokenType::Identifier>
      */
-    using Designator = std::variant<ConstantExpression, std::string>;
+    using Designator = std::variant<ConstantExpression, std::string_view>;
 
     /**
      * <DesignatorList> ::= <Designator> { <Designator> }

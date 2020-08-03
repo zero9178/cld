@@ -2,10 +2,9 @@
 
 #include <llvm/Support/ConvertUTF.h>
 
-#include <Frontend/Compiler/SourceObject.hpp>
-
 #include <algorithm>
 
+#include "ErrorMessages.hpp"
 #include "ParserUtil.hpp"
 
 using namespace cld::Syntax;
@@ -600,7 +599,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
     {
         if (begin->getTokenType() == cld::Lexer::TokenType::OpenParentheses)
         {
-            context.parenthesesEntered(begin);
+            auto scope = context.parenthesesEntered(begin);
             const auto* openPpos = begin;
             begin++;
             std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
@@ -644,11 +643,10 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                 current = std::make_unique<PostFixExpression>(
                     PostFixExpressionFunctionCall(start, begin, std::move(current), std::move(nonCommaExpressions)));
             }
-            context.parenthesesLeft();
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::OpenSquareBracket)
         {
-            context.squareBracketEntered(begin);
+            auto scope = context.squareBracketEntered(begin);
             const auto* openPpos = begin;
             begin++;
             auto expression = parseExpression(begin, end,
@@ -665,7 +663,6 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                 current = std::make_unique<PostFixExpression>(
                     PostFixExpressionSubscript(start, begin, std::move(current), std::move(expression)));
             }
-            context.squareBracketLeft();
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Increment)
         {
@@ -687,30 +684,30 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Dot)
         {
-            begin++;
-            std::string name;
-            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context, name))
+            const auto* id = ++begin;
+            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context))
             {
+                id = nullptr;
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
             if (current)
             {
                 current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionDot(start, begin, std::move(current), name));
+                    std::make_unique<PostFixExpression>(PostFixExpressionDot(start, begin, std::move(current), id));
             }
         }
         else
         {
-            begin++;
-            std::string name;
-            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context, name))
+            const auto* id = ++begin;
+            if (!expect(cld::Lexer::TokenType::Identifier, begin, end, context))
             {
+                id = nullptr;
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
             if (current)
             {
                 current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionArrow(start, begin, std::move(current), name));
+                    std::make_unique<PostFixExpression>(PostFixExpressionArrow(start, begin, std::move(current), id));
             }
         }
     }
@@ -847,8 +844,8 @@ std::optional<cld::Syntax::UnaryExpression>
             openP = begin;
             begin++;
         }
-        std::string identifier;
-        if (!expect(Lexer::TokenType::Identifier, begin, end, context, identifier))
+        std::string_view identifier;
+        if (!expectIdentifier(begin, end, context, identifier))
         {
             context.skipUntil(begin, end,
                               openP ? Context::fromTokenTypes(Lexer::TokenType::CloseParentheses) :
@@ -1062,7 +1059,7 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
         {
-            context.parenthesesEntered(begin);
+            auto scope = context.parenthesesEntered(begin);
             const auto* openPpos = begin++;
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
@@ -1072,7 +1069,6 @@ std::optional<cld::Syntax::PostFixExpression>
                 context.skipUntil(begin, end);
             }
             newPrimary = PrimaryExpression(PrimaryExpressionParenthese(start, begin, std::move(expression)));
-            context.parenthesesLeft();
         }
         else
         {

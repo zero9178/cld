@@ -2,7 +2,9 @@
 
 #include <algorithm>
 
+#include "ErrorMessages.hpp"
 #include "ParserUtil.hpp"
+#include "SourceObject.hpp"
 
 std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const CSourceObject& sourceObject,
                                                                      llvm::raw_ostream* reporter)
@@ -13,12 +15,12 @@ std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const CSour
             context.getCurrentErrorCount() == 0};
 }
 
-void cld::Parser::Context::addTypedef(const std::string& name, DeclarationLocation declarator)
+void cld::Parser::Context::addTypedef(std::string_view name, DeclarationLocation declarator)
 {
     m_currentScope.back().emplace(name, Declaration{declarator, true});
 }
 
-bool cld::Parser::Context::isTypedef(const std::string& name) const
+bool cld::Parser::Context::isTypedef(std::string_view name) const
 {
     for (auto& iter : m_currentScope)
     {
@@ -42,7 +44,7 @@ void cld::Parser::Context::log(const Message& message)
     }
 }
 
-void cld::Parser::Context::addToScope(const std::string& name, DeclarationLocation declarator)
+void cld::Parser::Context::addToScope(std::string_view name, DeclarationLocation declarator)
 {
     CLD_ASSERT(!name.empty());
     m_currentScope.back().emplace(name, Declaration{declarator, false});
@@ -63,7 +65,7 @@ std::size_t cld::Parser::Context::getCurrentErrorCount() const
     return m_errorCount;
 }
 
-const cld::Parser::Context::DeclarationLocation* cld::Parser::Context::getLocationOf(const std::string& name) const
+const cld::Parser::Context::DeclarationLocation* cld::Parser::Context::getLocationOf(std::string_view name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -75,7 +77,7 @@ const cld::Parser::Context::DeclarationLocation* cld::Parser::Context::getLocati
     return nullptr;
 }
 
-bool cld::Parser::Context::isTypedefInScope(const std::string& name) const
+bool cld::Parser::Context::isTypedefInScope(std::string_view name) const
 {
     for (auto iter = m_currentScope.rbegin(); iter != m_currentScope.rend(); iter++)
     {
@@ -116,11 +118,11 @@ void cld::Parser::Context::skipUntil(Lexer::CTokenIterator& begin, Lexer::CToken
     });
 }
 
-void cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)
+auto cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket) -> Decrementer
 {
     if (++m_parenthesesDepth <= m_bracketMax)
     {
-        return;
+        return Decrementer(m_parenthesesDepth);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -130,16 +132,11 @@ void cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)
 #endif
 }
 
-void cld::Parser::Context::parenthesesLeft()
-{
-    m_parenthesesDepth--;
-}
-
-void cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket)
+auto cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket) -> Decrementer
 {
     if (++m_squareBracketDepth <= m_bracketMax)
     {
-        return;
+        return Decrementer(m_squareBracketDepth);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -149,16 +146,11 @@ void cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket)
 #endif
 }
 
-void cld::Parser::Context::squareBracketLeft()
-{
-    m_squareBracketDepth--;
-}
-
-void cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket)
+auto cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket) -> Decrementer
 {
     if (++m_braceDepth <= m_bracketMax)
     {
-        return;
+        return Decrementer(m_braceDepth);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -166,11 +158,6 @@ void cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket)
 #else
     std::terminate();
 #endif
-}
-
-void cld::Parser::Context::braceLeft()
-{
-    m_braceDepth--;
 }
 
 const cld::SourceInterface& cld::Parser::Context::getSourceInterface() const

@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <unordered_set>
 
+#include "ErrorMessages.hpp"
 #include "ParserUtil.hpp"
-#include "SemanticUtil.hpp"
 
 using namespace cld::Syntax;
 
@@ -34,6 +34,38 @@ std::vector<DeclarationSpecifier> parseDeclarationSpecifierList(cld::Lexer::CTok
              && (begin->getTokenType() != cld::Lexer::TokenType::Identifier || !seenTypeSpecifier));
     return declarationSpecifiers;
 }
+
+template <class T>
+std::pair<const T*, std::uint64_t> findDirectDeclWithDepth(const cld::Syntax::DirectDeclarator& variant)
+{
+    const T* result = nullptr;
+    std::uint64_t resultDepth = 0;
+    std::uint64_t currentDepth = 0;
+    const cld::Syntax::DirectDeclarator* curr = &variant;
+    while (curr)
+    {
+        cld::match<void>(*curr, [&](auto&& value) {
+            using ValueType = std::decay_t<decltype(value)>;
+            currentDepth++;
+            if constexpr (std::is_same_v<ValueType, T>)
+            {
+                resultDepth = currentDepth;
+                result = &value;
+            }
+        });
+        curr = cld::match(
+            *curr,
+            [](const cld::Syntax::DirectDeclaratorParentheses& parentheses) -> const cld::Syntax::DirectDeclarator* {
+                return &parentheses.getDeclarator().getDirectDeclarator();
+            },
+            [](const cld::Syntax::DirectDeclaratorIdentifier&) -> const cld::Syntax::DirectDeclarator* {
+                return nullptr;
+            },
+            [](const auto& value) -> const cld::Syntax::DirectDeclarator* { return &value.getDirectDeclarator(); });
+    }
+    return {result, resultDepth};
+}
+
 } // namespace
 
 std::vector<cld::Syntax::SpecifierQualifier>
@@ -140,18 +172,16 @@ std::optional<cld::Syntax::ExternalDeclaration>
         }
 
         auto [parameters, parameterDepth] =
-            Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParenthesesParameters>(
-                declarator->getDirectDeclarator(), Semantics::DIRECT_DECL_NEXT_FN);
+            findDirectDeclWithDepth<Syntax::DirectDeclaratorParenthesesParameters>(declarator->getDirectDeclarator());
 
         auto [identifierList, identiferDepth] =
-            Semantics::findRecursivelyWithDepth<Syntax::DirectDeclaratorParenthesesIdentifiers>(
-                declarator->getDirectDeclarator(), Semantics::DIRECT_DECL_NEXT_FN);
+            findDirectDeclWithDepth<Syntax::DirectDeclaratorParenthesesIdentifiers>(declarator->getDirectDeclarator());
 
         if (identifierList && (!parameters || identiferDepth > parameterDepth))
         {
-            for (auto& [name, loc] : identifierList->getIdentifiers())
+            for (auto& iter : identifierList->getIdentifiers())
             {
-                context.addToScope(name, {start, begin, loc});
+                context.addToScope(cld::get<std::string>(iter->getValue()), {start, begin, iter});
             }
         }
         else if (parameters)
@@ -226,7 +256,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                 }
                 auto& decl = cld::get<std::unique_ptr<Declarator>>(iter.declarator);
                 auto result = Semantics::declaratorToName(*decl);
-                context.addToScope(cld::to_string(result), {start, begin, Semantics::declaratorToLoc(*decl)});
+                context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
                 addedByParameters.insert(result);
             }
         }
@@ -237,7 +267,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
         {
             return {};
         }
-        context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+        context.addToScope(Semantics::declaratorToName(*declarator),
                            {start, compoundStatement->begin(), Semantics::declaratorToLoc(*declarator)});
         return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
                                   std::move(declarations), std::move(*compoundStatement));
@@ -246,7 +276,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
     if (!isTypedef && declarator)
     {
-        context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+        context.addToScope(Semantics::declaratorToName(*declarator),
                            {start, begin, Semantics::declaratorToLoc(*declarator)});
     }
     if (begin->getTokenType() == Lexer::TokenType::Assignment)
@@ -279,7 +309,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                                 Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
         if (!isTypedef && declarator)
         {
-            context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+            context.addToScope(Semantics::declaratorToName(*declarator),
                                {start, begin, Semantics::declaratorToLoc(*declarator)});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
@@ -316,7 +346,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
     {
         for (auto& [initDeclarator, init] : initDeclarators)
         {
-            context.addTypedef(cld::to_string(Semantics::declaratorToName(*initDeclarator)),
+            context.addTypedef(Semantics::declaratorToName(*initDeclarator),
                                {start, begin, Semantics::declaratorToLoc(*initDeclarator)});
         }
     }
@@ -380,7 +410,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
                                 Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
         if (!isTypedef && declarator)
         {
-            context.addToScope(cld::to_string(Semantics::declaratorToName(*declarator)),
+            context.addToScope(Semantics::declaratorToName(*declarator),
                                {start, begin, Semantics::declaratorToLoc(*declarator)});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
@@ -410,7 +440,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
 
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
-        auto* loc = context.getLocationOf(cld::to_string(Semantics::declaratorToName(*initDeclarators[0].first)));
+        auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
         std::optional<Message> note;
         if (loc)
         {
@@ -436,7 +466,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
     {
         for (auto& [declator, init] : initDeclarators)
         {
-            context.addTypedef(cld::to_string(Semantics::declaratorToName(*declator)),
+            context.addTypedef(Semantics::declaratorToName(*declator),
                                {start, begin, Semantics::declaratorToLoc(*declator)});
         }
     }
@@ -857,12 +887,11 @@ std::optional<cld::Syntax::DirectDeclarator>
     {
         const auto* currToken = begin;
         begin++;
-        directDeclarator = std::make_unique<DirectDeclarator>(
-            DirectDeclaratorIdentifier(start, begin, cld::get<std::string>(currToken->getValue()), currToken));
+        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorIdentifier(start, begin, currToken));
     }
     else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
     {
-        context.parenthesesEntered(begin);
+        auto scope = context.parenthesesEntered(begin);
         const auto* openPpos = begin;
         begin++;
         auto declarator = parseDeclarator(
@@ -879,7 +908,6 @@ std::optional<cld::Syntax::DirectDeclarator>
                 begin, end,
                 Context::fromTokenTypes(Lexer::TokenType::OpenParentheses, Lexer::TokenType::OpenSquareBracket));
         }
-        context.parenthesesLeft();
     }
     else
     {
@@ -908,7 +936,7 @@ std::optional<cld::Syntax::DirectDeclarator>
         {
             case Lexer::TokenType::OpenParentheses:
             {
-                context.parenthesesEntered(begin);
+                auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
                 begin++;
                 if (begin < end && firstIsInParameterTypeList(*begin, context))
@@ -924,10 +952,10 @@ std::optional<cld::Syntax::DirectDeclarator>
                 }
                 else if (begin < end)
                 {
-                    std::vector<std::pair<std::string, Lexer::CTokenIterator>> identifiers;
+                    std::vector<Lexer::CTokenIterator> identifiers;
                     if (begin->getTokenType() == Lexer::TokenType::Identifier)
                     {
-                        identifiers.emplace_back(cld::get<std::string>(begin->getValue()), begin);
+                        identifiers.push_back(begin);
                         begin++;
                         while (begin < end
                                && (begin->getTokenType() == Lexer::TokenType::Comma
@@ -939,30 +967,28 @@ std::optional<cld::Syntax::DirectDeclarator>
                                                   Context::fromTokenTypes(Lexer::TokenType::Identifier,
                                                                           Lexer::TokenType::CloseParentheses));
                             }
-                            std::string name;
-                            if (!expect(Lexer::TokenType::Identifier, begin, end, context, name))
+                            std::string_view name;
+                            if (!expectIdentifier(begin, end, context, name))
                             {
                                 context.skipUntil(begin, end,
                                                   Context::fromTokenTypes(Lexer::TokenType::Comma,
                                                                           Lexer::TokenType::CloseParentheses));
+                                continue;
                             }
-                            else
+
+                            if (!context.isTypedef(name))
                             {
-                                if (context.isTypedef(name))
-                                {
-                                    context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_TYPENAME.args(
-                                        *(begin - 1), context.getSourceInterface(), Lexer::TokenType::Identifier,
-                                        *(begin - 1)));
-                                    if (auto* loc = context.getLocationOf(name))
-                                    {
-                                        context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
-                                            *loc->identifier, context.getSourceInterface(), *loc->identifier));
-                                    }
-                                }
-                                else
-                                {
-                                    identifiers.emplace_back(name, begin);
-                                }
+                                identifiers.push_back(begin - 1);
+                                continue;
+                            }
+
+                            context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_TYPENAME.args(
+                                *(begin - 1), context.getSourceInterface(), Lexer::TokenType::Identifier,
+                                *(begin - 1)));
+                            if (auto* loc = context.getLocationOf(name))
+                            {
+                                context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
+                                    *loc->identifier, context.getSourceInterface(), *loc->identifier));
                             }
                         }
                     }
@@ -979,25 +1005,23 @@ std::optional<cld::Syntax::DirectDeclarator>
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
                                                               Lexer::TokenType::OpenSquareBracket));
                 }
-                context.parenthesesLeft();
                 break;
             }
             case Lexer::TokenType::OpenSquareBracket:
             {
-                context.squareBracketEntered(begin);
+                auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
                 begin++;
                 if (begin == end)
                 {
                     expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos));
-                    context.squareBracketLeft();
                     return {};
                 }
 
                 if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
                 {
-                    begin++;
+                    const auto* staticLoc = begin++;
                     std::vector<TypeQualifier> typeQualifiers;
                     while (begin < end
                            && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
@@ -1025,8 +1049,8 @@ std::optional<cld::Syntax::DirectDeclarator>
                     if (assignmentExpression && directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(
-                            DirectDeclaratorStatic(start, begin, std::move(directDeclarator), std::move(typeQualifiers),
-                                                   std::move(*assignmentExpression)));
+                            DirectDeclaratorStatic(start, begin, std::move(directDeclarator), staticLoc,
+                                                   std::move(typeQualifiers), std::move(*assignmentExpression)));
                     }
                 }
                 else
@@ -1056,7 +1080,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                     {
                         if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
                         {
-                            begin++;
+                            const auto* staticLoc = begin++;
                             auto assignmentExpression = cld::Parser::parseAssignmentExpression(
                                 begin, end,
                                 context.withRecoveryTokens(
@@ -1064,7 +1088,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                             if (assignmentExpression && directDeclarator)
                             {
                                 directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorStatic(
-                                    start, begin, std::move(directDeclarator), std::move(typeQualifiers),
+                                    start, begin, std::move(directDeclarator), staticLoc, std::move(typeQualifiers),
                                     std::move(*assignmentExpression)));
                             }
                         }
@@ -1109,11 +1133,9 @@ std::optional<cld::Syntax::DirectDeclarator>
                         || (begin->getTokenType() != Lexer::TokenType::OpenParentheses
                             && begin->getTokenType() != Lexer::TokenType::OpenSquareBracket))
                     {
-                        context.squareBracketLeft();
                         return {};
                     }
                 }
-                context.squareBracketLeft();
                 break;
             }
             default: break;
@@ -1346,7 +1368,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
         {
             case Lexer::TokenType::OpenParentheses:
             {
-                context.parenthesesEntered(begin);
+                auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
                 begin++;
                 if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
@@ -1379,12 +1401,11 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
                                                               Lexer::TokenType::OpenSquareBracket));
                 }
-                context.parenthesesLeft();
                 break;
             }
             case Lexer::TokenType::OpenSquareBracket:
             {
-                context.squareBracketEntered(begin);
+                auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
                 begin++;
                 if (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
@@ -1423,7 +1444,6 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                                       Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
                                                               Lexer::TokenType::OpenSquareBracket));
                 }
-                context.squareBracketLeft();
                 break;
             }
             default: break;
@@ -1575,7 +1595,7 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
                                                                                   bool pushScope)
 {
     const auto* start = begin;
-    context.braceEntered(begin);
+    auto scope = context.braceEntered(begin);
     bool braceSeen = true;
     if (!expect(Lexer::TokenType::OpenBrace, begin, end, context))
     {
@@ -1610,7 +1630,6 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
     {
         context.skipUntil(begin, end);
     }
-    context.braceLeft();
     return CompoundStatement(start, begin, std::move(items));
 }
 
@@ -1628,15 +1647,13 @@ std::optional<cld::Syntax::CompoundItem> cld::Parser::parseCompoundItem(Lexer::C
         }
         return CompoundItem(std::move(*declaration));
     }
-    else
+
+    auto statement = parseStatement(begin, end, context);
+    if (!statement)
     {
-        auto statement = parseStatement(begin, end, context);
-        if (!statement)
-        {
-            return {};
-        }
-        return CompoundItem(std::move(*statement));
+        return {};
     }
+    return CompoundItem(std::move(*statement));
 }
 
 std::optional<cld::Syntax::Initializer> cld::Parser::parseInitializer(Lexer::CTokenIterator& begin,
@@ -1652,28 +1669,25 @@ std::optional<cld::Syntax::Initializer> cld::Parser::parseInitializer(Lexer::CTo
         }
         return Initializer(start, begin, std::move(*assignment));
     }
-    else
+
+    auto scope = context.braceEntered(begin);
+    begin++;
+    auto initializerList = parseInitializerList(
+        begin, end,
+        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)));
+    if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
     {
-        context.braceEntered(begin);
         begin++;
-        auto initializerList = parseInitializerList(
-            begin, end,
-            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)));
-        if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
-        {
-            begin++;
-        }
-        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
-        {
-            context.skipUntil(begin, end);
-        }
-        context.braceLeft();
-        if (!initializerList)
-        {
-            return {};
-        }
-        return Initializer{start, begin, std::move(*initializerList)};
     }
+    if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
+    {
+        context.skipUntil(begin, end);
+    }
+    if (!initializerList)
+    {
+        return {};
+    }
+    return Initializer{start, begin, std::move(*initializerList)};
 }
 
 std::optional<cld::Syntax::InitializerList>
@@ -1693,7 +1707,7 @@ std::optional<cld::Syntax::InitializerList>
             expect(Lexer::TokenType::Comma, begin, end, context);
         }
 
-        std::vector<std::variant<ConstantExpression, std::string>> designation;
+        std::vector<std::variant<ConstantExpression, std::string_view>> designation;
         bool hasDesignation = false;
         while (begin < end
                && (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket
@@ -1702,7 +1716,7 @@ std::optional<cld::Syntax::InitializerList>
             hasDesignation = true;
             if (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
             {
-                context.squareBracketEntered(begin);
+                auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
                 begin++;
                 auto constant = parseConditionalExpression(
@@ -1717,13 +1731,12 @@ std::optional<cld::Syntax::InitializerList>
                                                               Lexer::TokenType::OpenSquareBracket,
                                                               Lexer::TokenType::Dot));
                 }
-                context.squareBracketLeft();
             }
             else
             {
                 begin++;
-                std::string name;
-                if (!expect(Lexer::TokenType::Identifier, begin, end, context, name))
+                std::string_view name;
+                if (!expectIdentifier(begin, end, context, name))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::Assignment,
@@ -1873,10 +1886,10 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             }
             case Lexer::TokenType::GotoKeyword:
             {
-                begin++;
-                std::string name;
-                if (!expect(Lexer::TokenType::Identifier, begin, end, context, name))
+                const auto* id = ++begin;
+                if (!expect(Lexer::TokenType::Identifier, begin, end, context))
                 {
+                    id = nullptr;
                     if (begin < end && begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::SemiColon)
                     {
                         begin++;
@@ -1890,7 +1903,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                 {
                     context.skipUntil(begin, end);
                 }
-                return Statement(GotoStatement(start, begin, name));
+                return Statement(GotoStatement(start, begin, id));
             }
             case Lexer::TokenType::Identifier:
             {

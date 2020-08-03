@@ -6,65 +6,117 @@
 
 namespace cld::Semantics
 {
-template <class T, class F, template <class...> class Variant, class... Args>
-const T* findRecursively(const Variant<Args...>& variant, F&& getNextFunc)
+template <class TopType, class Callable>
+class RecursiveVisitor
 {
-    static_assert(std::disjunction_v<std::is_same<Args, T>...>, "Variant does not contain T");
-    const T* result = nullptr;
-    matchWithSelf(variant, [&result, getNextFunc = std::forward<F>(getNextFunc)](auto&& self, auto&& value) -> void {
-        using ValueType = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<ValueType, T>)
+    const TopType& m_start;
+    Callable m_nextFunc;
+
+    class Iterator
+    {
+        const TopType* m_curr;
+        const Callable* m_nextFunc;
+
+    public:
+        using reference = const TopType&;
+        using value_type = const TopType;
+        using pointer = const TopType*;
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type = void;
+
+        Iterator() = default;
+
+        Iterator(const TopType* curr, const Callable* nextFunc) : m_curr(curr), m_nextFunc(nextFunc) {}
+
+        bool operator==(const Iterator& rhs) const noexcept
         {
-            result = &value;
+            return m_curr == rhs.m_curr;
         }
-        auto* next = getNextFunc(value);
-        if (next)
+
+        bool operator!=(const Iterator& rhs) const noexcept
         {
-            cld::match(*next, [&self](auto&& value) { return self(value); });
+            return !(*this == rhs);
+        }
+
+        const TopType& operator*() const noexcept
+        {
+            CLD_ASSERT(m_curr);
+            return *m_curr;
+        }
+
+        const TopType* operator->() const noexcept
+        {
+            return m_curr;
+        }
+
+        Iterator& operator++(int) noexcept
+        {
+            CLD_ASSERT(m_curr && m_nextFunc);
+            m_curr = (*m_nextFunc)(*m_curr);
+            return *this;
+        }
+
+        Iterator operator++() noexcept
+        {
+            auto before = *this;
+            CLD_ASSERT(m_curr && m_nextFunc);
+            m_curr = (*m_nextFunc)(*m_curr);
+            return before;
+        }
+    };
+
+public:
+    RecursiveVisitor(const TopType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc)) {}
+
+    using value_type = const TopType;
+    using reference = const TopType&;
+    using const_reference = const TopType&;
+    using const_iterator = Iterator;
+    using iterator = Iterator;
+
+    const_iterator begin() const
+    {
+        return Iterator(&m_start, &m_nextFunc);
+    }
+
+    const_iterator cbegin() const
+    {
+        return begin();
+    }
+
+    const_iterator end() const
+    {
+        return Iterator(nullptr, &m_nextFunc);
+    }
+
+    const_iterator cend() const
+    {
+        return end();
+    }
+};
+
+constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -> const Syntax::DirectDeclarator* {
+    return cld::match(
+        value,
+        [](const Syntax::DirectDeclaratorParentheses& parentheses) -> const Syntax::DirectDeclarator* {
+            return &parentheses.getDeclarator().getDirectDeclarator();
+        },
+        [](const Syntax::DirectDeclaratorIdentifier&) -> const Syntax::DirectDeclarator* { return nullptr; },
+        [](const auto& value) -> const Syntax::DirectDeclarator* { return &value.getDirectDeclarator(); });
+};
+
+constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
+    return cld::match(type.get(), [](auto&& value) -> const Type* {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<ArrayType,
+                                     T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+        {
+            return &value.getType();
+        }
+        else
+        {
+            return nullptr;
         }
     });
-    return result;
-}
-
-template <class T, class F, template <class...> class Variant, class... Args>
-std::pair<const T*, std::uint64_t> findRecursivelyWithDepth(const Variant<Args...>& variant, F&& getNextFunc)
-{
-    static_assert(std::disjunction_v<std::is_same<Args, T>...>, "Variant does not contain T");
-    const T* result = nullptr;
-    std::uint64_t resultDepth = 0;
-    std::uint64_t currentDepth = 0;
-    matchWithSelf(variant,
-                  [&result, &currentDepth, &resultDepth,
-                   getNextFunc = std::forward<F>(getNextFunc)](auto&& self, auto&& value) -> void {
-                      using ValueType = std::decay_t<decltype(value)>;
-                      currentDepth++;
-                      if constexpr (std::is_same_v<ValueType, T>)
-                      {
-                          resultDepth = currentDepth;
-                          result = &value;
-                      }
-                      auto* next = getNextFunc(value);
-                      if (next)
-                      {
-                          cld::match(*next, [&self](auto&& value) { return self(value); });
-                      }
-                  });
-    return {result, resultDepth};
-}
-
-constexpr auto DIRECT_DECL_NEXT_FN = [](auto&& value) -> const Syntax::DirectDeclarator* {
-    using T = std::decay_t<decltype(value)>;
-    if constexpr (std::is_same_v<T, Syntax::DirectDeclaratorParentheses>)
-    {
-        return &value.getDeclarator().getDirectDeclarator();
-    }
-    else if constexpr (!std::is_same_v<T, Syntax::DirectDeclaratorIdentifier>)
-    {
-        return &value.getDirectDeclarator();
-    }
-    else
-    {
-        return nullptr;
-    }
 };
 } // namespace cld::Semantics

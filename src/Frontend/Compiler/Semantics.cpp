@@ -16,8 +16,9 @@ std::size_t cld::Semantics::ArrayType::getSize() const
     return m_size;
 }
 
-cld::Semantics::ArrayType::ArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type, std::size_t size)
-    : m_restricted(isRestricted), m_type(std::move(type)), m_size(size)
+cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
+                                     std::size_t size)
+    : m_restricted(isRestricted), m_static(isStatic), m_type(std::move(type)), m_size(size)
 {
 }
 
@@ -26,12 +27,12 @@ bool cld::Semantics::ArrayType::isRestricted() const
     return m_restricted;
 }
 
-cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
+cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
                                                        cld::Semantics::Type&& type, std::size_t size)
 {
     auto name = cld::to_string(type.getTypeName()) + "[" + std::to_string(size) + "]";
     return cld::Semantics::Type(isConst, isVolatile, std::move(name),
-                                ArrayType(isRestricted, std::make_shared<Type>(std::move(type)), size));
+                                ArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), size));
 }
 
 bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
@@ -42,6 +43,11 @@ bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs)
 bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs) const
 {
     return !(rhs == *this);
+}
+
+bool cld::Semantics::ArrayType::isStatic() const
+{
+    return m_static;
 }
 
 bool cld::Semantics::Type::isConst() const
@@ -64,12 +70,12 @@ void cld::Semantics::Type::setName(std::string_view name)
     m_name = name;
 }
 
-const cld::Semantics::Type::variant& cld::Semantics::Type::get() const
+const cld::Semantics::Type::Variant& cld::Semantics::Type::get() const
 {
     return m_type;
 }
 
-cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::variant type)
+cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld::Semantics::Type::Variant type)
     : m_isConst(isConst),
       m_isVolatile(isVolatile),
       m_name([name = std::move(name), isConst, isVolatile]() mutable {
@@ -340,8 +346,9 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
     return create(isConst, isVolatile, false, true, 0, "void", Kind::Void);
 }
 
-cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
-    : m_restricted(isRestricted), m_type(std::move(type))
+cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
+                                           std::shared_ptr<cld::Semantics::Type>&& type)
+    : m_restricted(isRestricted), m_static(isStatic), m_type(std::move(type))
 {
 }
 
@@ -355,12 +362,17 @@ bool cld::Semantics::ValArrayType::isRestricted() const
     return m_restricted;
 }
 
+bool cld::Semantics::ValArrayType::isStatic() const
+{
+    return m_static;
+}
+
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                          cld::Semantics::Type&& type)
+                                                          bool isStatic, cld::Semantics::Type&& type)
 {
     auto name = cld::to_string(type.getName()) + "[*]";
     return cld::Semantics::Type(isConst, isVolatile, std::move(name),
-                                ValArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
+                                ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type))));
 }
 
 bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const
@@ -375,11 +387,11 @@ bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType
 
 cld::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
                                            std::vector<std::pair<Type, std::string>> arguments, bool lastIsVararg,
-                                           bool hasPrototype)
+                                           bool isKandR)
     : m_returnType(std::move(returnType)),
       m_arguments(std::move(arguments)),
       m_lastIsVararg(lastIsVararg),
-      m_hasPrototype(hasPrototype)
+      m_isKandR(isKandR)
 {
 }
 
@@ -400,7 +412,7 @@ bool cld::Semantics::FunctionType::isLastVararg() const
 
 cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&& returnType,
                                                           std::vector<std::pair<Type, std::string>>&& arguments,
-                                                          bool lastIsVararg, bool hasPrototype)
+                                                          bool lastIsVararg, bool isKandR)
 {
     std::string argumentsNames;
     for (std::size_t i = 0; i < arguments.size(); i++)
@@ -414,17 +426,21 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&&
     argumentsNames = cld::to_string(returnType.getTypeName()) + "(" + argumentsNames + ")";
     return cld::Semantics::Type(
         false, false, std::move(argumentsNames),
-        FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, hasPrototype));
+        FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, isKandR));
 }
 
 bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
 {
-    std::vector<Type> thisTypes, rhsTypes;
-    auto pairFirst = [](const auto& pair) { return pair.first; };
-    std::transform(m_arguments.begin(), m_arguments.end(), std::back_inserter(thisTypes), pairFirst);
-    std::transform(rhs.m_arguments.begin(), rhs.m_arguments.end(), std::back_inserter(rhsTypes), pairFirst);
-    return std::tie(*m_returnType, thisTypes, m_lastIsVararg)
-           == std::tie(*rhs.m_returnType, rhsTypes, rhs.m_lastIsVararg);
+    if (*m_returnType != *rhs.m_returnType)
+    {
+        return false;
+    }
+    if (!std::equal(m_arguments.begin(), m_arguments.end(), rhs.m_arguments.begin(), rhs.m_arguments.end(),
+                    [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; }))
+    {
+        return false;
+    }
+    return m_lastIsVararg == rhs.m_lastIsVararg;
 }
 
 bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType& rhs) const
@@ -432,9 +448,9 @@ bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType
     return !(rhs == *this);
 }
 
-bool cld::Semantics::FunctionType::hasPrototype() const
+bool cld::Semantics::FunctionType::isKandR() const
 {
-    return m_hasPrototype;
+    return m_isKandR;
 }
 
 cld::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
@@ -474,7 +490,9 @@ std::string_view cld::Semantics::declaratorToName(const cld::Syntax::Declarator&
 {
     return matchWithSelf(
         declarator.getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string_view { return name.getIdentifier(); },
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string_view {
+            return cld::get<std::string>(name.getIdentifierLoc()->getValue());
+        },
         [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> std::string_view {
             return cld::match(declarator.getDeclarator().getDirectDeclarator(),
                               [&self](auto&& value) -> std::string_view { return self(value); });
@@ -574,7 +592,7 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
     return primitive->getBitCount() == 0;
 }
 
-cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::string name,
+cld::Semantics::FunctionDefinition::FunctionDefinition(Type type, std::string name,
                                                        std::vector<Declaration> parameterDeclarations, Linkage linkage,
                                                        CompoundStatement&& compoundStatement)
     : m_type(std::move(type)),
@@ -585,14 +603,14 @@ cld::Semantics::FunctionDefinition::FunctionDefinition(FunctionType type, std::s
 {
 }
 
-const cld::Semantics::FunctionType& cld::Semantics::FunctionDefinition::getType() const
+const cld::Semantics::Type& cld::Semantics::FunctionDefinition::getType() const
 {
     return m_type;
 }
 
-bool cld::Semantics::FunctionDefinition::hasPrototype() const
+bool cld::Semantics::FunctionDefinition::isKandR() const
 {
-    return m_type.hasPrototype();
+    return cld::get<FunctionType>(m_type.get()).isKandR();
 }
 
 const std::string& cld::Semantics::FunctionDefinition::getName() const

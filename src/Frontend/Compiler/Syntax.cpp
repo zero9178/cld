@@ -110,8 +110,8 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionDecrement::g
 
 cld::Syntax::PostFixExpressionDot::PostFixExpressionDot(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, std::string identifier)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
+    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, Lexer::CTokenIterator identifier)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(identifier)
 {
 }
 
@@ -120,15 +120,15 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionDot::getPost
     return *m_postFixExpression;
 }
 
-const std::string& cld::Syntax::PostFixExpressionDot::getIdentifier() const
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionDot::getIdentifier() const
 {
     return m_identifier;
 }
 
 cld::Syntax::PostFixExpressionArrow::PostFixExpressionArrow(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, std::string identifier)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(std::move(identifier))
+    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, Lexer::CTokenIterator identifier)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_identifier(identifier)
 {
 }
 
@@ -137,7 +137,7 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionArrow::getPo
     return *m_postFixExpression;
 }
 
-const std::string& cld::Syntax::PostFixExpressionArrow::getIdentifier() const
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionArrow::getIdentifier() const
 {
     return m_identifier;
 }
@@ -789,10 +789,11 @@ const std::unique_ptr<cld::Syntax::AssignmentExpression>&
 
 cld::Syntax::DirectDeclaratorStatic::DirectDeclaratorStatic(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<cld::Syntax::DirectDeclarator>&& directDeclarator,
+    std::unique_ptr<cld::Syntax::DirectDeclarator>&& directDeclarator, Lexer::CTokenIterator staticLoc,
     std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers, cld::Syntax::AssignmentExpression&& assignmentExpression)
     : Node(begin, end),
       m_directDeclarator(std::move(directDeclarator)),
+      m_staticLoc(staticLoc),
       m_typeQualifiers(std::move(typeQualifiers)),
       m_assignmentExpression(std::move(assignmentExpression))
 {
@@ -812,6 +813,11 @@ const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::DirectDeclaratorStat
 const cld::Syntax::AssignmentExpression& cld::Syntax::DirectDeclaratorStatic::getAssignmentExpression() const
 {
     return m_assignmentExpression;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorStatic::getStaticLoc() const
+{
+    return m_staticLoc;
 }
 
 cld::Syntax::DirectDeclaratorAsterisk::DirectDeclaratorAsterisk(
@@ -854,7 +860,7 @@ const cld::Syntax::ParameterTypeList& cld::Syntax::DirectDeclaratorParenthesesPa
 
 cld::Syntax::DirectDeclaratorParenthesesIdentifiers::DirectDeclaratorParenthesesIdentifiers(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
-    std::vector<std::pair<std::string, Lexer::CTokenIterator>>&& identifiers)
+    std::vector<Lexer::CTokenIterator>&& identifiers)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
       m_identifiers(std::move(identifiers))
@@ -866,7 +872,7 @@ const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorParenthesesIde
     return *m_directDeclarator;
 }
 
-const std::vector<std::pair<std::string, cld::Lexer::CTokenIterator>>&
+const std::vector<cld::Lexer::CTokenIterator>&
     cld::Syntax::DirectDeclaratorParenthesesIdentifiers::getIdentifiers() const
 {
     return m_identifiers;
@@ -970,12 +976,12 @@ const cld::Syntax::AbstractDeclarator* cld::Syntax::TypeName::getAbstractDeclara
 }
 
 cld::Syntax::GotoStatement::GotoStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                          std::string identifier)
-    : Node(begin, end), m_identifier(std::move(identifier))
+                                          Lexer::CTokenIterator identifier)
+    : Node(begin, end), m_identifier(identifier)
 {
 }
 
-const std::string& cld::Syntax::GotoStatement::getIdentifier() const
+cld::Lexer::CTokenIterator cld::Syntax::GotoStatement::getIdentifier() const
 {
     return m_identifier;
 }
@@ -1075,15 +1081,10 @@ cld::Syntax::FunctionSpecifier::FunctionSpecifier(Lexer::CTokenIterator begin, L
 }
 
 cld::Syntax::DirectDeclaratorIdentifier::DirectDeclaratorIdentifier(Lexer::CTokenIterator begin,
-                                                                    Lexer::CTokenIterator end, std::string identifier,
+                                                                    Lexer::CTokenIterator end,
                                                                     Lexer::CTokenIterator identifierLoc)
-    : Node(begin, end), m_identifier(std::move(identifier)), m_identifierLoc(identifierLoc)
+    : Node(begin, end), m_identifierLoc(identifierLoc)
 {
-}
-
-const std::string& cld::Syntax::DirectDeclaratorIdentifier::getIdentifier() const
-{
-    return m_identifier;
 }
 
 cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorIdentifier::getIdentifierLoc() const
@@ -1144,12 +1145,12 @@ const std::vector<std::pair<cld::Syntax::AssignmentExpression::AssignOperator, c
 }
 
 cld::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                            std::string identifier)
+                                                            std::string_view identifier)
     : Node(begin, end), m_identifier(std::move(identifier))
 {
 }
 
-const std::string& cld::Syntax::UnaryExpressionDefined::getIdentifier() const
+std::string_view cld::Syntax::UnaryExpressionDefined::getIdentifier() const
 {
     return m_identifier;
 }

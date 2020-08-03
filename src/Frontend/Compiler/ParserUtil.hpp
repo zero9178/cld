@@ -3,42 +3,17 @@
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Common/Util.hpp>
 
+#include <optional>
 #include <utility>
 
-#include "ErrorMessages.hpp"
 #include "Parser.hpp"
-#include "SourceObject.hpp"
 
 namespace cld::Parser
 {
 bool isAssignment(Lexer::TokenType type);
 
-template <class T>
-bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
-            T& value, std::optional<Message> additional = {})
-{
-    if (begin == end || begin->getTokenType() != expected)
-    {
-        if (begin == end)
-        {
-            context.log(
-                cld::Errors::Parser::EXPECTED_N.args(*(end - 1), context.getSourceInterface(), expected, *(end - 1)));
-        }
-        else
-        {
-            context.log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
-                                                                          expected, *begin));
-        }
-        if (additional)
-        {
-            context.log(*additional);
-        }
-        return false;
-    }
-    value = cld::get<T>(begin->getValue());
-    begin++;
-    return true;
-}
+bool expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
+                      std::string_view& value, std::optional<Message> additional = {});
 
 bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
             std::optional<Message> additional = {});
@@ -56,20 +31,20 @@ constexpr Context::TokenBitSet assignmentSet = Context::fromTokenTypes(
 constexpr Context::TokenBitSet firstSpecifierQualifierSet = Context::fromTokenTypes(
     Lexer::TokenType::VoidKeyword, Lexer::TokenType::CharKeyword, Lexer::TokenType::ShortKeyword,
     Lexer::TokenType::IntKeyword, Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword,
-    Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword,
-    Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword,
-    Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword,
-    Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
+    Lexer::TokenType::UnderlineBool, Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword,
+    Lexer::TokenType::UnsignedKeyword, Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword,
+    Lexer::TokenType::UnionKeyword, Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword,
+    Lexer::TokenType::VolatileKeyword, Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
 
 constexpr Context::TokenBitSet firstDeclarationSpecifierSet = Context::fromTokenTypes(
     Lexer::TokenType::TypedefKeyword, Lexer::TokenType::ExternKeyword, Lexer::TokenType::StaticKeyword,
     Lexer::TokenType::AutoKeyword, Lexer::TokenType::RegisterKeyword, Lexer::TokenType::VoidKeyword,
     Lexer::TokenType::CharKeyword, Lexer::TokenType::ShortKeyword, Lexer::TokenType::IntKeyword,
-    Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword, Lexer::TokenType::DoubleKeyword,
-    Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword, Lexer::TokenType::EnumKeyword,
-    Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword, Lexer::TokenType::ConstKeyword,
-    Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword, Lexer::TokenType::InlineKeyword,
-    Lexer::TokenType::Identifier);
+    Lexer::TokenType::UnderlineBool, Lexer::TokenType::LongKeyword, Lexer::TokenType::FloatKeyword,
+    Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword,
+    Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword,
+    Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword,
+    Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
 
 constexpr Context::TokenBitSet firstPointerSet = Context::fromTokenTypes(Lexer::TokenType::Asterisk);
 
