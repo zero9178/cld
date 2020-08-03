@@ -202,8 +202,7 @@ std::uint8_t cld::Semantics::PrimitiveType::getBitCount() const
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                           bool isSigned, std::uint8_t bitCount, std::string name,
-                                                           Kind kind)
+                                                           bool isSigned, std::uint8_t bitCount, Kind kind)
 {
     return cld::Semantics::Type(isConst, isVolatile, PrimitiveType(isFloatingPoint, isSigned, bitCount, kind));
 }
@@ -226,89 +225,89 @@ bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveTy
 cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, options.charIsSigned, 8, "char", Kind::Char);
+    return create(isConst, isVolatile, false, options.charIsSigned, 8, Kind::Char);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 8, "signed char", Kind::SignedChar);
+    return create(isConst, isVolatile, false, true, 8, Kind::SignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 8, "unsigned char", Kind::UnsignedChar);
+    return create(isConst, isVolatile, false, false, 8, Kind::UnsignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 1, "_Bool", Kind::Bool);
+    return create(isConst, isVolatile, false, false, 1, Kind::Bool);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
                                                                 const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, "short", Kind::Short);
+    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, Kind::Short);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
                                                                         const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, "unsigned short", Kind::UnsignedShort);
+    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, Kind::UnsignedShort);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
                                                               const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, "int", Kind::Int);
+    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, Kind::Int);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
                                                                       const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, "unsigned int", Kind::UnsignedInt);
+    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, Kind::UnsignedInt);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, "long", Kind::Long);
+    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, Kind::Long);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
                                                                        const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, "unsigned long", Kind::UnsignedLong);
+    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, Kind::UnsignedLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 64, "long long", Kind::LongLong);
+    return create(isConst, isVolatile, false, true, 64, Kind::LongLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 64, "unsigned long long", Kind::UnsignedLongLong);
+    return create(isConst, isVolatile, false, false, 64, Kind::UnsignedLongLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 32, "float", Kind::Float);
+    return create(isConst, isVolatile, true, true, 32, Kind::Float);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 64, "double", Kind::Double);
+    return create(isConst, isVolatile, true, true, 64, Kind::Double);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, "long double", Kind::LongDouble);
+    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, Kind::LongDouble);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 0, "void", Kind::Void);
+    return create(isConst, isVolatile, false, true, 0, Kind::Void);
 }
 
 cld::Semantics::PrimitiveType::Kind cld::Semantics::PrimitiveType::getKind() const
@@ -992,8 +991,7 @@ std::string typeToString(const Type& arg)
 }
 } // namespace
 
-std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg,
-                                                                    const SourceInterface& sourceInterface)
+std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg, const SourceInterface&)
 {
     return typeToString(arg);
 }

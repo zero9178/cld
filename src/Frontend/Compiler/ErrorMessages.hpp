@@ -173,6 +173,20 @@ CREATE_ERROR(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "'static' only allowed in o
 
 CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER, "Void type not allowed as function parameter", Underline<0>);
 
+CREATE_ERROR(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "Incomplete type %full0 not allowed in struct", Underline<1>,
+             Annotate<2, 0>);
+
+CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_IN_STRUCT, "Void type not allowed in struct", Underline<0>, Underline<1>);
+
+CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT, "Function type not allowed in struct", Underline<0>, Annotate<1, 2>);
+
+CREATE_ERROR(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "Incomplete type %full0 not allowed in union", Underline<1>,
+             Annotate<2, 0>);
+
+CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_IN_UNION, "Incomplete type not allowed in union", Underline<0>, Underline<1>);
+
+CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_UNION, "Function type not allowed in union", Underline<0>, Annotate<1, 2>);
+
 CREATE_ERROR(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION,
              "Identifier list only allowed as part of a function definition", Underline<0>);
 

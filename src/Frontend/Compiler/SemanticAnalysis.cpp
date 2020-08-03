@@ -1293,16 +1293,62 @@ cld::Semantics::Type
             }
         }
         std::vector<Field> fields;
-        for (auto& [specifiers, declarators] : structOrUnion->getStructDeclarations())
+        for (auto iter = structOrUnion->getStructDeclarations().begin();
+             iter != structOrUnion->getStructDeclarations().end(); iter++)
         {
-            for (auto& [declarator, size] : declarators)
+            auto& [specifiers, declarators] = *iter;
+            for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
             {
+                bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
+                bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
+                auto& [declarator, size] = *iter2;
                 if (!declarator)
                 {
+                    CLD_ASSERT(size);
                     // TODO: Check if last and has size, otherwise error
                     continue;
                 }
                 auto type = declaratorsToType(specifiers, *declarator, {});
+                if (isVoid(type))
+                {
+                    if (structOrUnion->isUnion())
+                    {
+                        log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
+                                                                                   specifiers, *declarator));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
+                                                                                    specifiers, *declarator));
+                    }
+                }
+                else if (!isCompleteType(type)
+                         && !(last && !first && std::holds_alternative<AbstractArrayType>(type.get())))
+                {
+                    if (structOrUnion->isUnion())
+                    {
+                        log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION.args(
+                            *declarator, m_sourceInterface, type, specifiers, *declarator));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(
+                            *declarator, m_sourceInterface, type, specifiers, *declarator));
+                    }
+                }
+                else if (std::holds_alternative<FunctionType>(type.get()))
+                {
+                    if (structOrUnion->isUnion())
+                    {
+                        log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
+                                                                                       specifiers, *declarator, type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
+                                                                                        specifiers, *declarator, type));
+                    }
+                }
                 auto fieldName = declaratorToName(*declarator);
                 // TODO: bitfields, constraints, etc.
                 (void)size;
@@ -1636,12 +1682,20 @@ bool cld::Semantics::SemanticAnalysis::isCompleteType(const Type& type) const
     if (std::holds_alternative<EnumType>(type.get()))
     {
         auto& enumType = cld::get<EnumType>(type.get());
-        return lookupType(enumType.getName(), enumType.getScope());
+        auto* lookup = lookupType(enumType.getName(), enumType.getScope());
+        return lookup && std::holds_alternative<EnumDefinition>(*lookup);
     }
     if (std::holds_alternative<StructType>(type.get()))
     {
-        auto& recordType = cld::get<StructType>(type.get());
-        return lookupType(recordType.getName(), recordType.getScope());
+        auto& structType = cld::get<StructType>(type.get());
+        auto* lookup = lookupType(structType.getName(), structType.getScope());
+        return lookup && std::holds_alternative<StructDefinition>(*lookup);
+    }
+    if (std::holds_alternative<UnionType>(type.get()))
+    {
+        auto& unionType = cld::get<UnionType>(type.get());
+        auto* lookup = lookupType(unionType.getName(), unionType.getScope());
+        return lookup && std::holds_alternative<UnionDefinition>(*lookup);
     }
     return true;
 }

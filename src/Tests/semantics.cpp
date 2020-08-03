@@ -484,6 +484,86 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
     SEMA_PRODUCES("int (f(int a))(float);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION));
 }
 
+TEST_CASE("Semantics struct and union type", "[semantics]")
+{
+    SECTION("Simple struct")
+    {
+        auto [translationUnit, errors] = generateSemantics("struct A{ int i; float f, r; } a;");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        CHECK(decl->getName() == "a");
+        REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().get()));
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getName() == "A");
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getScope() == 0);
+    }
+    SECTION("Simple union")
+    {
+        auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        CHECK(decl->getName() == "a");
+        REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().get()));
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getName() == "A");
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getScope() == 0);
+    }
+    SECTION("Anonymous struct")
+    {
+        auto [translationUnit, errors] = generateSemantics("struct { int i; float f, r; } a;");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        CHECK(decl->getName() == "a");
+        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().get()));
+        auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().get());
+        CHECK(anon.getFields().size() == 3);
+        CHECK(anon.getFields()[0].name == "i");
+        CHECK(*anon.getFields()[0].type
+              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK_FALSE(anon.getFields()[0].bitFieldSize);
+        CHECK(anon.getFields()[1].name == "f");
+        CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields()[1].bitFieldSize);
+        CHECK(anon.getFields()[2].name == "r");
+        CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields()[2].bitFieldSize);
+    }
+    SECTION("Anonymous union")
+    {
+        auto [translationUnit, errors] = generateSemantics("union { int i; float f, r; } a;");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        CHECK(decl->getName() == "a");
+        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().get()));
+        auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().get());
+        CHECK(anon.getFields().size() == 3);
+        CHECK(anon.getFields()[0].name == "i");
+        CHECK(*anon.getFields()[0].type
+              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK_FALSE(anon.getFields()[0].bitFieldSize);
+        CHECK(anon.getFields()[1].name == "f");
+        CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields()[1].bitFieldSize);
+        CHECK(anon.getFields()[2].name == "r");
+        CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields()[2].bitFieldSize);
+    }
+    SEMA_PRODUCES("struct A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_STRUCT));
+    SEMA_PRODUCES("union A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_UNION));
+    SEMA_PRODUCES("struct A{ struct r f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'struct r'"));
+    SEMA_PRODUCES("union A{ struct r f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'struct r'"));
+    SEMA_PRODUCES("struct A{ struct A f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'struct A'"));
+    SEMA_PRODUCES("union A{ union A f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'union A'"));
+    SEMA_PRODUCES("struct A{ int f(); };", ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT));
+    SEMA_PRODUCES("union A{ int f(); };", ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_UNION));
+}
+
 TEST_CASE("Semantics type compatibility", "[semantics]")
 {
     SECTION("Qualifiers")

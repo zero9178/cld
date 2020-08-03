@@ -82,8 +82,8 @@ private:
     PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
-                       std::string name, Kind kind);
+    static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                       std::uint8_t bitCount, Kind kind);
 
     static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 
