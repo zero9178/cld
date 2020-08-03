@@ -450,36 +450,38 @@ TEST_CASE("Semantics array declarations", "[semantics]")
 
 TEST_CASE("Semantics function prototypes", "[semantics]")
 {
-    SECTION("Function declarations")
+    SECTION("Simple")
     {
-        SECTION("Simple")
-        {
-            auto [translationUnit, errors] = generateSemantics("int f(int,float);");
-            REQUIRE_THAT(errors, ProducesNothing());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "f");
-            CHECK(decl->getType()
-                  == cld::Semantics::FunctionType::create(
-                      cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
-                      {{cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), ""},
-                       {cld::Semantics::PrimitiveType::createFloat(false, false), ""}},
-                      false, false));
-        }
-        SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
-        SEMA_PRODUCES("inline int f(int);", ProducesNothing());
-        SEMA_PRODUCES("int f(int a,float a);", ProducesNothing());
-        SEMA_PRODUCES("int f(register int a);", ProducesNothing());
+        auto [translationUnit, errors] = generateSemantics("int f(int,float);");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        CHECK(decl->getName() == "f");
+        CHECK(decl->getType()
+              == cld::Semantics::FunctionType::create(
+                  cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                  {{cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), ""},
+                   {cld::Semantics::PrimitiveType::createFloat(false, false), ""}},
+                  false, false));
+    }
+    SECTION("Parameters")
+    {
         SEMA_PRODUCES("int f(int a[]);", ProducesNothing());
         SEMA_PRODUCES("int f(void);", ProducesNothing());
+        SEMA_PRODUCES("int f(const void);", ProducesError(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER));
         SEMA_PRODUCES("int f(int a[*]);", ProducesNothing());
-        SEMA_PRODUCES("int f(extern int a);",
-                      ProducesError(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER));
-        SEMA_PRODUCES("int (f(int a)[10]);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY));
-        SEMA_PRODUCES("int (f(int a))(float);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION));
+        SEMA_PRODUCES("int f(int a,float a);", ProducesNothing());
+        SEMA_PRODUCES("int f(register int a);", ProducesNothing());
+        SEMA_PRODUCES("int f(int a[static 6]);", ProducesNothing());
+        SEMA_PRODUCES("int f(int a[6][static 5]);", ProducesError(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
     }
+    SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
+    SEMA_PRODUCES("inline int f(int);", ProducesNothing());
+    SEMA_PRODUCES("int f(extern int a);",
+                  ProducesError(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER));
+    SEMA_PRODUCES("int (f(int a)[10]);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY));
+    SEMA_PRODUCES("int (f(int a))(float);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION));
 }
 
 TEST_CASE("Semantics type compatibility", "[semantics]")
@@ -618,5 +620,38 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
         SEMA_PRODUCES("int foo(float (*a)(int));\n"
                       "int foo(float a(int));",
                       ProducesNothing());
+    }
+}
+
+TEST_CASE("Semantics composite type", "[semantics]")
+{
+    SECTION("Standard example")
+    {
+        auto [translationUnit, errors] = generateSemantics("int f(int (*)(),double (*)[3]);\n"
+                                                           "int f(int (*)(char *),double (*)[]);");
+        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE(translationUnit.getGlobals().size() == 2);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
+        CHECK(decl->getName() == "f");
+        CHECK(decl->getType()
+              == cld::Semantics::FunctionType::create(
+                  cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                  {{cld::Semantics::PointerType::create(
+                        false, false, false,
+                        cld::Semantics::FunctionType::create(
+                            cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                            {{cld::Semantics::PointerType::create(false, false, false,
+                                                                  cld::Semantics::PrimitiveType::createChar(
+                                                                      false, false, cld::LanguageOptions::native())),
+                              ""}},
+                            false, false)),
+                    ""},
+                   {cld::Semantics::PointerType::create(
+                        false, false, false,
+                        cld::Semantics::ArrayType::create(
+                            false, false, false, false, cld::Semantics::PrimitiveType::createDouble(false, false), 3)),
+                    ""}},
+                  false, false));
     }
 }

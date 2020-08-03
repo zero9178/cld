@@ -230,6 +230,7 @@ TEST_CASE("Parse enums", "[parser]")
 
 TEST_CASE("Parse Declaration", "[parser]")
 {
+    treeProduces("int f(int (*)(char *),double (*)[]);", ProducesNothing());
     functionProduces(parseDeclaration, "int foo;", ProducesNothing());
     functionProduces(parseDeclaration, "int;", ProducesNothing());
     functionProduces(parseDeclaration, "int foo,bar;", ProducesNothing());

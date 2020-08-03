@@ -101,6 +101,9 @@ class SemanticAnalysis final
         return {std::move(messages)};
     }
 
+    template <class T>
+    void handleParameterList(Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc);
+
     [[nodiscard]] bool isTypedef(std::string_view name) const;
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
@@ -159,6 +162,8 @@ class SemanticAnalysis final
     Type integerPromotion(const Type& type) const;
 
     Type adjustParameterType(const Type& type) const;
+
+    Type compositeType(const Type& lhs, const Type& rhs) const;
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = nullptr)

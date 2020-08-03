@@ -166,7 +166,12 @@ CREATE_ERROR(FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION, "Function return type 
 CREATE_ERROR(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY, "Function return type must not be an array type",
              Annotate<0, 1>);
 
-CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER,"Function prototype must not have an initializer",Underline<0>);
+CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER, "Function prototype must not have an initializer",
+             Underline<0>);
+
+CREATE_ERROR(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "'static' only allowed in outermost array", Underline<0>);
+
+CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER, "Void type not allowed as function parameter", Underline<0>);
 
 CREATE_ERROR(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION,
              "Identifier list only allowed as part of a function definition", Underline<0>);

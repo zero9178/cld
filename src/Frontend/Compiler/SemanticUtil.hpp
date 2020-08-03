@@ -4,6 +4,8 @@
 
 #include <variant>
 
+#include "Semantics.hpp"
+
 namespace cld::Semantics
 {
 template <class TopType, class Callable>

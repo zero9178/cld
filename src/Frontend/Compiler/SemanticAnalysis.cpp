@@ -298,7 +298,19 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                // TODO: Complicated merge logic
+                else if (std::holds_alternative<const Declaration*>(prev->second.declared))
+                {
+                    auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
+                    auto composite = compositeType(otherType, declaration->getType());
+                    declaration =
+                        std::make_unique<Declaration>(std::move(composite), linkage, lifetime, cld::to_string(name));
+                    prev->second.declared = declaration.get();
+                    decls.push_back(std::move(declaration));
+                }
+                else
+                {
+                    decls.push_back(std::move(declaration));
+                }
             }
             else
             {
@@ -317,7 +329,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             }
             if (std::holds_alternative<AbstractArrayType>(result.get()) && initializer)
             {
-                // TODO: size deduction but not initializer list computation
+                // TODO: size deduction
             }
             bool errors = false;
             Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
@@ -565,6 +577,117 @@ std::tuple<bool, bool, bool>
         }
     }
     return std::make_tuple(isConst, isVolatile, isRestricted);
+}
+
+template <class T>
+void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
+                                                           const Syntax::ParameterTypeList* parameterTypeList,
+                                                           T&& returnTypeLoc)
+{
+    if (std::holds_alternative<FunctionType>(type.get()))
+    {
+        log(cld::Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
+                                                                                     returnTypeLoc, type));
+        type = Type{};
+        return;
+    }
+    else if (std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<AbstractArrayType>(type.get())
+             || std::holds_alternative<ValArrayType>(type.get()))
+    {
+        log(cld::Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(returnTypeLoc, m_sourceInterface,
+                                                                                   returnTypeLoc, type));
+        type = Type{};
+        return;
+    }
+    if (std::holds_alternative<FunctionType>(type.get()))
+    {
+        log(cld::Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
+                                                                                     returnTypeLoc, type));
+        type = Type{};
+        return;
+    }
+    else if (std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<AbstractArrayType>(type.get())
+             || std::holds_alternative<ValArrayType>(type.get()))
+    {
+        log(cld::Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(returnTypeLoc, m_sourceInterface,
+                                                                                   returnTypeLoc, type));
+        type = Type{};
+        return;
+    }
+    if (!parameterTypeList)
+    {
+        type = FunctionType::create(std::move(type), {}, false, true);
+        return;
+    }
+    std::vector<std::pair<Type, std::string>> parameters;
+    for (auto& iter : parameterTypeList->getParameters())
+    {
+        for (auto& specs : iter.declarationSpecifiers)
+        {
+            auto* storageSpec = std::get_if<cld::Syntax::StorageClassSpecifier>(&specs);
+            if (!storageSpec)
+            {
+                continue;
+            }
+            if (storageSpec->getSpecifier() != cld::Syntax::StorageClassSpecifier::Register)
+            {
+                log(cld::Errors::Semantics::NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER.args(
+                    *storageSpec, m_sourceInterface, *storageSpec));
+            }
+        }
+        auto paramType = cld::match(
+            iter.declarator,
+            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr) {
+                return declaratorsToType(iter.declarationSpecifiers, *ptr);
+            },
+            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
+                return declaratorsToType(iter.declarationSpecifiers, ptr.get());
+            });
+        if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
+            && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
+            && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
+        {
+            type = FunctionType::create(std::move(type), {}, false, false);
+            return;
+        }
+        if (isVoid(paramType))
+        {
+            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER.args(
+                iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
+        }
+        auto visitor = RecursiveVisitor(paramType, ARRAY_TYPE_NEXT_FN);
+        auto begin = visitor.begin();
+        begin++;
+        auto result = std::find_if(begin, visitor.end(), [](const Type& type) {
+            if (std::holds_alternative<ValArrayType>(type.get()))
+            {
+                return cld::get<ValArrayType>(type.get()).isStatic();
+            }
+            else if (std::holds_alternative<ArrayType>(type.get()))
+            {
+                return cld::get<ArrayType>(type.get()).isStatic();
+            }
+            return false;
+        });
+        if (result != visitor.end())
+        {
+            log(Errors::Semantics::STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY.args(iter.declarator, m_sourceInterface,
+                                                                               iter.declarator));
+        }
+        std::string name;
+        if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
+        {
+            name = declaratorToName(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
+        }
+        // Not transforming array types to pointers here as we might still want to use that information
+        // to warn callers.
+        if (std::holds_alternative<FunctionType>(paramType.get()))
+        {
+            paramType = PointerType::create(false, false, false, std::move(paramType));
+        }
+        parameters.emplace_back(std::move(paramType), std::move(name));
+    }
+    type = FunctionType::create(std::move(type), std::move(parameters), parameterTypeList->hasEllipse(), false);
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
@@ -872,69 +995,9 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesParameters& parameterList) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(parameterList.getDirectDeclarator(), self); });
-                if (std::holds_alternative<FunctionType>(type.get()))
-                {
-                    log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        parameterList.getDirectDeclarator(), m_sourceInterface, parameterList, type));
-                    type = Type{};
-                    return;
-                }
-                else if (std::holds_alternative<ArrayType>(type.get())
-                         || std::holds_alternative<AbstractArrayType>(type.get())
-                         || std::holds_alternative<ValArrayType>(type.get()))
-                {
-                    log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
-                        parameterList.getDirectDeclarator(), m_sourceInterface, parameterList, type));
-                    type = Type{};
-                    return;
-                }
-                std::vector<std::pair<Type, std::string>> parameters;
-                for (auto& iter : parameterList.getParameterTypeList().getParameters())
-                {
-                    for (auto& specs : iter.declarationSpecifiers)
-                    {
-                        auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
-                        if (!storageSpec)
-                        {
-                            continue;
-                        }
-                        if (storageSpec->getSpecifier() != Syntax::StorageClassSpecifier::Register)
-                        {
-                            log(Errors::Semantics::NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER
-                                    .args(*storageSpec, m_sourceInterface, *storageSpec));
-                        }
-                    }
-                    auto paramType = cld::match(
-                        iter.declarator,
-                        [&](const std::unique_ptr<Syntax::Declarator>& ptr) {
-                            return declaratorsToType(iter.declarationSpecifiers, *ptr);
-                        },
-                        [&](const std::unique_ptr<Syntax::AbstractDeclarator>& ptr) {
-                            return declaratorsToType(iter.declarationSpecifiers, ptr.get());
-                        });
-                    if (isVoid(paramType)
-                        && !std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator)
-                        && parameterList.getParameterTypeList().getParameters().size() == 1
-                        && !parameterList.getParameterTypeList().hasEllipse())
-                    {
-                        type = FunctionType::create(std::move(type), {}, false, false);
-                        return;
-                    }
-                    std::string name;
-                    if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
-                    {
-                        name = declaratorToName(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
-                    }
-                    // Not transforming array types to pointers here as we might still want to use that information
-                    // to warn callers.
-                    if (std::holds_alternative<FunctionType>(paramType.get()))
-                    {
-                        paramType = PointerType::create(false, false, false, std::move(paramType));
-                    }
-                    parameters.emplace_back(std::move(paramType), std::move(name));
-                }
-                type = FunctionType::create(std::move(type), std::move(parameters),
-                                            parameterList.getParameterTypeList().hasEllipse(), false);
+                handleParameterList(
+                    type, &parameterList.getParameterTypeList(),
+                    std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()));
             });
     }
     else
@@ -1112,88 +1175,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
                     }
                 });
-                if (std::holds_alternative<FunctionType>(type.get()))
-                {
-                    if (parameterTypeList.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            std::forward_as_tuple(declarationOrSpecifierQualifiers[0],
-                                                  *parameterTypeList.getDirectAbstractDeclarator()),
-                            m_sourceInterface,
-                            std::forward_as_tuple(declarationOrSpecifierQualifiers[0],
-                                                  *parameterTypeList.getDirectAbstractDeclarator()),
-                            type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
-                }
-                else if (std::holds_alternative<ArrayType>(type.get())
-                         || std::holds_alternative<AbstractArrayType>(type.get())
-                         || std::holds_alternative<ValArrayType>(type.get()))
-                {
-                    if (parameterTypeList.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
-                            std::forward_as_tuple(declarationOrSpecifierQualifiers[0],
-                                                  *parameterTypeList.getDirectAbstractDeclarator()),
-                            m_sourceInterface,
-                            std::forward_as_tuple(declarationOrSpecifierQualifiers[0],
-                                                  *parameterTypeList.getDirectAbstractDeclarator()),
-                            type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
-                }
-                if (!parameterTypeList.getParameterTypeList())
-                {
-                    type = FunctionType::create(std::move(type), {}, false, false);
-                    return;
-                }
-                std::vector<std::pair<Type, std::string>> parameters;
-                for (auto& iter : parameterTypeList.getParameterTypeList()->getParameters())
-                {
-                    for (auto& specs : iter.declarationSpecifiers)
-                    {
-                        auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
-                        if (!storageSpec)
-                        {
-                            continue;
-                        }
-                        if (storageSpec->getSpecifier() != Syntax::StorageClassSpecifier::Register)
-                        {
-                            log(Errors::Semantics::NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER
-                                    .args(*storageSpec, m_sourceInterface, *storageSpec));
-                        }
-                    }
-                    auto paramType = cld::match(
-                        iter.declarator,
-                        [&](const std::unique_ptr<Syntax::Declarator>& ptr) {
-                            return declaratorsToType(iter.declarationSpecifiers, *ptr);
-                        },
-                        [&](const std::unique_ptr<Syntax::AbstractDeclarator>& ptr) {
-                            return declaratorsToType(iter.declarationSpecifiers, ptr.get());
-                        });
-                    std::string name;
-                    if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
-                    {
-                        name = declaratorToName(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
-                    }
-                    parameters.emplace_back(std::move(paramType), std::move(name));
-                }
-                type = FunctionType::create(std::move(type), std::move(parameters),
-                                            parameterTypeList.getParameterTypeList()->hasEllipse(), false);
+                handleParameterList(type, parameterTypeList.getParameterTypeList(), declarationOrSpecifierQualifiers);
             });
     }
     return type;
@@ -2095,4 +2077,84 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::adjustParameterType(const
         return PointerType::create(type.isConst(), type.isVolatile(), restrict, std::move(elementType));
     }
     return type;
+}
+
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::Semantics::Type& lhs,
+                                                                     const cld::Semantics::Type& rhs) const
+{
+    if (isArray(lhs) || isArray(rhs))
+    {
+        auto getElementType = [](const Type& type) -> const Type& {
+            return cld::match(type.get(), [](auto&& value) -> const Type& {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<
+                                  ArrayType,
+                                  T> || std::is_same_v<ValArrayType, T> || std::is_same_v<AbstractArrayType, T>)
+                {
+                    return value.getType();
+                }
+                else if constexpr (std::is_same_v<PointerType, T>)
+                {
+                    return value.getElementType();
+                }
+                CLD_UNREACHABLE;
+            });
+        };
+        if (auto* array = std::get_if<ArrayType>(&lhs.get()))
+        {
+            return ArrayType::create(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
+                                     compositeType(array->getType(), getElementType(rhs)), array->getSize());
+        }
+        if (auto* array = std::get_if<ArrayType>(&rhs.get()))
+        {
+            return ArrayType::create(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
+                                     compositeType(array->getType(), getElementType(lhs)), array->getSize());
+        }
+        if (auto* valArray = std::get_if<ValArrayType>(&lhs.get()))
+        {
+            return ValArrayType::create(lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
+                                        compositeType(valArray->getType(), getElementType(rhs)));
+        }
+        if (auto* valArray = std::get_if<ValArrayType>(&rhs.get()))
+        {
+            return ValArrayType::create(rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
+                                        compositeType(valArray->getType(), getElementType(lhs)));
+        }
+        auto& abstractArray = std::holds_alternative<AbstractArrayType>(lhs.get()) ? lhs : rhs;
+        return AbstractArrayType::create(rhs.isConst(), rhs.isVolatile(),
+                                         cld::get<AbstractArrayType>(abstractArray.get()).isRestricted(),
+                                         compositeType(getElementType(lhs), getElementType(rhs)));
+    }
+    if (std::holds_alternative<FunctionType>(lhs.get()))
+    {
+        auto& lhsFtype = cld::get<FunctionType>(lhs.get());
+        auto& rhsFtype = cld::get<FunctionType>(rhs.get());
+        if (lhsFtype.isKandR() && !rhsFtype.isKandR())
+        {
+            return rhs;
+        }
+        if (!lhsFtype.isKandR() && rhsFtype.isKandR())
+        {
+            return lhs;
+        }
+        if (lhsFtype.isKandR() && rhsFtype.isKandR())
+        {
+            return rhs;
+        }
+        std::vector<std::pair<Type, std::string>> parameters;
+        for (std::size_t i = 0; i < rhsFtype.getArguments().size(); i++)
+        {
+            parameters.emplace_back(compositeType(lhsFtype.getArguments()[i].first, rhsFtype.getArguments()[i].first),
+                                    rhsFtype.getArguments()[i].second);
+        }
+        return FunctionType::create(compositeType(lhsFtype.getReturnType(), rhsFtype.getReturnType()),
+                                    std::move(parameters), rhsFtype.isLastVararg(), false);
+    }
+    if (std::holds_alternative<PointerType>(lhs.get()))
+    {
+        return PointerType::create(rhs.isConst(), rhs.isVolatile(), cld::get<PointerType>(rhs.get()).isRestricted(),
+                                   compositeType(cld::get<PointerType>(lhs.get()).getElementType(),
+                                                 cld::get<PointerType>(rhs.get()).getElementType()));
+    }
+    return rhs;
 }

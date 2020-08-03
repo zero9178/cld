@@ -325,7 +325,14 @@ private:
                         constexpr auto index = decltype(indexT)::value;
                         // Don't usually allow pointers except in variants.
                         using V = std::remove_pointer_t<std::variant_alternative_t<index, U>>;
-                        return locationConstraintCheck<V>();
+                        if constexpr (IsSmartPtr<V>{})
+                        {
+                            return locationConstraintCheck<typename V::element_type>();
+                        }
+                        else
+                        {
+                            return locationConstraintCheck<V>();
+                        }
                     }(values)
                             && ...);
                 },
@@ -415,7 +422,8 @@ private:
             CLD_ASSERT(std::begin(arg) != std::end(arg));
             auto& first = *std::begin(arg);
             auto& last = *(std::end(arg) - 1);
-            if constexpr (std::is_pointer_v<std::decay_t<decltype(first)>>)
+            if constexpr (std::is_pointer_v<
+                              std::decay_t<decltype(first)>> || IsSmartPtr<std::decay_t<decltype(first)>>{})
             {
                 return {getPointRange(*first).first, getPointRange(*last).second};
             }
@@ -428,7 +436,7 @@ private:
         {
             return cld::match(arg, [](auto&& value) {
                 using V = std::decay_t<decltype(value)>;
-                if constexpr (std::is_pointer_v<V>)
+                if constexpr (std::is_pointer_v<V> || IsSmartPtr<V>{})
                 {
                     CLD_ASSERT(value);
                     return getPointRange(*value);

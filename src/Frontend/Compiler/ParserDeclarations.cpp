@@ -1230,9 +1230,14 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
         {
             default:
             {
-                parameterDeclarations.push_back(
-                    {{parameterBegin, begin}, std::move(declarationSpecifiers), std::unique_ptr<AbstractDeclarator>()});
-                break;
+                if (result == begin)
+                {
+                    parameterDeclarations.push_back({{parameterBegin, begin},
+                                                     std::move(declarationSpecifiers),
+                                                     std::unique_ptr<AbstractDeclarator>()});
+                    break;
+                }
+                [[fallthrough]];
             }
             case Lexer::TokenType::OpenSquareBracket:
             {
@@ -1377,12 +1382,22 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
+                auto closeParenth = std::optional{llvm::make_scope_exit([&] {
+                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    {
+                        context.skipUntil(begin, end,
+                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                  Lexer::TokenType::OpenSquareBracket));
+                    }
+                })};
                 begin++;
                 if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
                     auto parameterTypeList = parseParameterTypeList(
                         begin, end,
                         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+                    closeParenth.reset();
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParameterTypeList(
                             start, begin, std::move(directAbstractDeclarator),
@@ -1391,66 +1406,66 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 else if (begin < end && first && firstIsInAbstractDeclarator(*begin, context))
                 {
                     auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
+                    closeParenth.reset();
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParentheses(
                             start, begin, std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))));
                 }
                 else
                 {
+                    closeParenth.reset();
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParameterTypeList(
                             start, begin, std::move(directAbstractDeclarator), nullptr));
                 }
-                if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
-                {
-                    context.skipUntil(begin, end,
-                                      Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                              Lexer::TokenType::OpenSquareBracket));
-                }
+
                 break;
             }
             case Lexer::TokenType::OpenSquareBracket:
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
+                auto closeParenth = std::optional{llvm::make_scope_exit([&] {
+                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    {
+                        context.skipUntil(begin, end,
+                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                  Lexer::TokenType::OpenSquareBracket));
+                    }
+                })};
                 begin++;
                 if (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
                     begin++;
+                    closeParenth.reset();
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                         DirectAbstractDeclaratorAsterisk(start, begin, std::move(directAbstractDeclarator)));
+                    break;
                 }
-                else
+
+                if (begin < end && firstIsInAssignmentExpression(*begin, context))
                 {
-                    if (begin < end && firstIsInAssignmentExpression(*begin, context))
-                    {
-                        auto assignment = parseAssignmentExpression(
-                            begin, end,
-                            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-                        if (assignment)
-                        {
-                            directAbstractDeclarator =
-                                std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAssignmentExpression(
-                                    start, begin, std::move(directAbstractDeclarator),
-                                    std::make_unique<AssignmentExpression>(std::move(*assignment))));
-                        }
-                    }
-                    else
+                    auto assignment = parseAssignmentExpression(
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+                    closeParenth.reset();
+                    if (assignment)
                     {
                         directAbstractDeclarator =
                             std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAssignmentExpression(
-                                start, begin, std::move(directAbstractDeclarator), nullptr));
+                                start, begin, std::move(directAbstractDeclarator),
+                                std::make_unique<AssignmentExpression>(std::move(*assignment))));
                     }
                 }
-
-                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                else
                 {
-                    context.skipUntil(begin, end,
-                                      Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                              Lexer::TokenType::OpenSquareBracket));
+                    closeParenth.reset();
+                    directAbstractDeclarator =
+                        std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAssignmentExpression(
+                            start, begin, std::move(directAbstractDeclarator), nullptr));
                 }
+
                 break;
             }
             default: break;
