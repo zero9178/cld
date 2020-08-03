@@ -154,6 +154,12 @@ class SemanticAnalysis final
 
     bool typesAreCompatible(const Type& lhs, const Type& rhs) const;
 
+    Type defaultArgumentPromotion(const Type& type) const;
+
+    Type integerPromotion(const Type& type) const;
+
+    Type adjustParameterType(const Type& type) const;
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = nullptr)
         : m_sourceInterface(sourceInterface), m_reporter(reporter)

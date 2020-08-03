@@ -851,20 +851,20 @@ TEST_CASE("Parser limits", "[parser]")
     SECTION("Parenthese expression")
     {
         auto source = "int main(void){" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
-        //        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED,
-        //                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED,
+                                           cld::Limits::Parser::MAX_BRACKET_DEPTH));
     }
     SECTION("Direct Declarator")
     {
         auto source = "int" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
-        //        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED,
-        //                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED,
+                                           cld::Limits::Parser::MAX_BRACKET_DEPTH));
     }
     SECTION("Compound statement")
     {
         auto source = "int main(void)" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '{');
-        //        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_N_DEPTH_OF_N_EXCEEDED,
-        //                                 "bracket", cld::Limits::Parser::MAX_BRACKET_DEPTH)));
+        treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED,
+                                           cld::Limits::Parser::MAX_BRACKET_DEPTH));
     }
 }
 #endif
@@ -957,7 +957,7 @@ I=')");
     // Causes stack overflow when using address sanitizer due to address sanitizer possibly using 3x as much stack space
     // according to documentations
     // Also causes __chckstk to throw on windows when compiling in debug mode
-#ifdef UNRESTRICTED_STACK
+#if defined(UNRESTRICTED_STACK) && defined(LLVM_ENABLE_EXCEPTIONS)
     excludeFromAddressSanitizer();
 #endif
     parse("V=V==L+E");

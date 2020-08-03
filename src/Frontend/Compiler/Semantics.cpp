@@ -96,7 +96,18 @@ cld::Semantics::Type::Type(bool isConst, bool isVolatile, std::string name, cld:
 
 bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
 {
-    return std::tie(m_isConst, m_isVolatile, m_type) == std::tie(rhs.m_isConst, rhs.m_isVolatile, rhs.m_type);
+    if (std::tie(m_isConst, m_isVolatile) != std::tie(rhs.m_isConst, rhs.m_isVolatile))
+    {
+        return false;
+    }
+    if (m_type.index() != rhs.m_type.index())
+    {
+        return false;
+    }
+    return cld::match(m_type, [&](auto&& value) -> bool {
+        using T = std::decay_t<decltype(value)>;
+        return value == cld::get<T>(rhs.m_type);
+    });
 }
 
 bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
@@ -590,6 +601,12 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
         return false;
     }
     return primitive->getBitCount() == 0;
+}
+
+bool cld::Semantics::isArray(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<ValArrayType>(type.get())
+           || std::holds_alternative<AbstractArrayType>(type.get());
 }
 
 cld::Semantics::FunctionDefinition::FunctionDefinition(Type type, std::string name,

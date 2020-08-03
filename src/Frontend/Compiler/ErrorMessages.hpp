@@ -132,6 +132,8 @@ CREATE_ERROR(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER, "Declarations at fil
 
 CREATE_ERROR(DECLARATION_MUST_HAVE_A_COMPLETE_TYPE, "Declaration must have a complete type", Annotate<0, 1>);
 
+CREATE_ERROR(DECLARATION_MUST_NOT_BE_VOID, "Declaration must not be void", Underline<0>);
+
 CREATE_ERROR(INLINE_ONLY_ALLOWED_FOR_FUNCTIONS, "'inline' only allowed for functions", PointAt<0>);
 
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must not be a function type",

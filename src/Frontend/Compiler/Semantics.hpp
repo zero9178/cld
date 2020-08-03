@@ -608,6 +608,8 @@ std::string_view declaratorToName(const cld::Syntax::Declarator& declarator);
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
 bool isVoid(const Type& type);
+
+bool isArray(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag

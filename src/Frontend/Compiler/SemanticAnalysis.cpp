@@ -317,15 +317,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             }
             if (std::holds_alternative<AbstractArrayType>(result.get()) && initializer)
             {
-                // TODO: size deduction
+                // TODO: size deduction but not initializer list computation
             }
             bool errors = false;
-            if (!isCompleteType(result))
-            {
-                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
-                                                                                  result));
-                errors = true;
-            }
             Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
             Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
             if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
@@ -341,6 +335,17 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             {
                 linkage = Linkage::External;
                 lifetime = Lifetime::Static;
+            }
+            if (linkage == Linkage::None && !isCompleteType(result))
+            {
+                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                  result));
+                errors = true;
+            }
+            else if (isVoid(result))
+            {
+                log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
+                errors = true;
             }
             auto typeVisitor = RecursiveVisitor(result, ARRAY_TYPE_NEXT_FN);
             if (std::any_of(typeVisitor.begin(), typeVisitor.end(),
@@ -870,10 +875,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 if (std::holds_alternative<FunctionType>(type.get()))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], parameterList.getDirectDeclarator()),
-                        m_sourceInterface,
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], parameterList.getDirectDeclarator()),
-                        type));
+                        parameterList.getDirectDeclarator(), m_sourceInterface, parameterList, type));
                     type = Type{};
                     return;
                 }
@@ -882,10 +884,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                          || std::holds_alternative<ValArrayType>(type.get()))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], parameterList.getDirectDeclarator()),
-                        m_sourceInterface,
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], parameterList.getDirectDeclarator()),
-                        type));
+                        parameterList.getDirectDeclarator(), m_sourceInterface, parameterList, type));
                     type = Type{};
                     return;
                 }
@@ -1665,7 +1664,158 @@ bool cld::Semantics::SemanticAnalysis::isCompleteType(const Type& type) const
 bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::Type& lhs,
                                                           const cld::Semantics::Type& rhs) const
 {
-    // TODO:
+    if (lhs.isUndefined() || rhs.isUndefined())
+    {
+        return true;
+    }
+    // C99 6.7.3§9: For two qualified types to be compatible, both shall have the identically qualified version
+    // of a compatible type; the order of type qualifiers within a list of specifiers or qualifiers
+    // does not affect the specified type.
+    if (std::tuple(lhs.isConst(), lhs.isVolatile()) != std::tuple(rhs.isConst(), rhs.isVolatile()))
+    {
+        return false;
+    }
+    if (isArray(lhs) && isArray(rhs))
+    {
+        const auto& lhsType = cld::match(lhs.get(), [](auto&& value) -> const Type& {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.getType();
+            }
+            CLD_UNREACHABLE;
+        });
+        const auto& rhsType = cld::match(rhs.get(), [](auto&& value) -> const Type& {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.getType();
+            }
+            CLD_UNREACHABLE;
+        });
+        if (!typesAreCompatible(lhsType, rhsType))
+        {
+            return false;
+        }
+        if (!std::holds_alternative<ArrayType>(lhs.get()) || !std::holds_alternative<ArrayType>(rhs.get()))
+        {
+            return true;
+        }
+        return cld::get<ArrayType>(lhs.get()).getSize() == cld::get<ArrayType>(rhs.get()).getSize();
+    }
+    if (lhs.get().index() != rhs.get().index())
+    {
+        return false;
+    }
+    if (std::holds_alternative<PointerType>(lhs.get()))
+    {
+        auto& lhsType = cld::get<PointerType>(lhs.get());
+        auto& rhsType = cld::get<PointerType>(rhs.get());
+        if (lhsType.isRestricted() != rhsType.isRestricted())
+        {
+            return false;
+        }
+        return typesAreCompatible(lhsType.getElementType(), rhsType.getElementType());
+    }
+    if (std::holds_alternative<FunctionType>(lhs.get()))
+    {
+        // C99 6.7.5.3§15:
+        // (In the determination of type
+        // compatibility and of a composite type, each parameter declared with function or array
+        // type is taken as having the adjusted type and each parameter declared with qualified type
+        // is taken as having the unqualified version of its declared type.)
+        auto& lhsFtype = cld::get<FunctionType>(lhs.get());
+        auto& rhsFtype = cld::get<FunctionType>(rhs.get());
+        if (!typesAreCompatible(lhsFtype.getReturnType(), rhsFtype.getReturnType()))
+        {
+            return false;
+        }
+        if (lhsFtype.isKandR() || rhsFtype.isKandR())
+        {
+            if (lhsFtype.isKandR() && rhsFtype.isKandR())
+            {
+                // This case isn't even mentioned?
+                // But it's kinda not possible either with the exception
+                // of a pre declaration using an empty identifier list so true should be correct
+                return true;
+            }
+            auto& kandRFunc = lhsFtype.isKandR() ? lhsFtype : rhsFtype;
+            auto& paramFunc = lhsFtype.isKandR() ? rhsFtype : lhsFtype;
+            // TODO: empty k&r func needs to know if it's from a definition or a declaration
+            if (kandRFunc.getArguments().empty())
+            {
+                // C99 6.7.5.3§15:
+                // If one type has a parameter type list and the other type is specified by a
+                // function declarator that is not part of a function definition and that contains an empty
+                // identifier list, the parameter list shall not have an ellipsis terminator and the type of each
+                // parameter shall be compatible with the type that results from the application of the
+                // default argument promotions
+                if (paramFunc.isLastVararg())
+                {
+                    return false;
+                }
+                for (auto& iter : paramFunc.getArguments())
+                {
+                    auto nonQualifiedType = Type(false, false, cld::to_string(iter.first.getName()), iter.first.get());
+                    auto ret = defaultArgumentPromotion(nonQualifiedType);
+                    if (!typesAreCompatible(nonQualifiedType, ret))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            // C99 6.7.5.3§15:
+            // If one type has a parameter type list and the other type is
+            // specified by a function definition that contains a (possibly empty) identifier list, both shall
+            // agree in the number of parameters, and the type of each prototype parameter shall be
+            // compatible with the type that results from the application of the default argument
+            // promotions to the type of the corresponding identifier
+            if (kandRFunc.getArguments().size() != paramFunc.getArguments().size())
+            {
+                return false;
+            }
+            for (std::size_t i = 0; i < kandRFunc.getArguments().size(); i++)
+            {
+                auto kandRType = adjustParameterType(kandRFunc.getArguments()[i].first);
+                auto paramType = adjustParameterType(paramFunc.getArguments()[i].first);
+                auto nonQualifiedkandR = Type(false, false, cld::to_string(kandRType.getName()), kandRType.get());
+                auto nonQualifiedParam = Type(false, false, cld::to_string(paramType.getName()), paramType.get());
+                if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR),
+                                        defaultArgumentPromotion(nonQualifiedParam)))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // C99 6.7.5.3§15:
+        // Moreover, the parameter type lists, if both are present, shall agree in the number of
+        // parameters and in use of the ellipsis terminator; corresponding parameters shall have
+        // compatible types.
+        if (lhsFtype.getArguments().size() != rhsFtype.getArguments().size())
+        {
+            return false;
+        }
+        if (lhsFtype.isLastVararg() != rhsFtype.isLastVararg())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < lhsFtype.getArguments().size(); i++)
+        {
+            auto lhsType = adjustParameterType(lhsFtype.getArguments()[i].first);
+            auto rhsType = adjustParameterType(rhsFtype.getArguments()[i].first);
+            auto nonQualifiedLhs = Type(false, false, cld::to_string(lhsType.getName()), lhsType.get());
+            auto nonQualifiedRhs = Type(false, false, cld::to_string(rhsType.getName()), rhsType.get());
+            if (!typesAreCompatible(nonQualifiedLhs, nonQualifiedRhs))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
     return lhs == rhs;
 }
 
@@ -1877,4 +2027,72 @@ cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::alignOf(co
             return std::size_t{m_sourceInterface.getLanguageOptions().sizeOfVoidStar};
         },
         [](std::monostate) -> RetType { CLD_UNREACHABLE; });
+}
+
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(const cld::Semantics::Type& type) const
+{
+    if (!std::holds_alternative<PrimitiveType>(type.get()))
+    {
+        return type;
+    }
+    auto& prim = cld::get<PrimitiveType>(type.get());
+    if (prim.isFloatingPoint())
+    {
+        if (prim.getBitCount() == 32)
+        {
+            return PrimitiveType::createDouble(type.isConst(), type.isVolatile());
+        }
+        return type;
+    }
+    return integerPromotion(type);
+}
+
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Type& type) const
+{
+    if (!std::holds_alternative<PrimitiveType>(type.get()))
+    {
+        return type;
+    }
+    auto& prim = cld::get<PrimitiveType>(type.get());
+    if (prim.isFloatingPoint())
+    {
+        return type;
+    }
+    if (prim.getBitCount() == 0)
+    {
+        return type;
+    }
+    if (prim.getBitCount() < m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
+    {
+        return PrimitiveType::createInt(type.isConst(), type.isVolatile(), m_sourceInterface.getLanguageOptions());
+    }
+    return type;
+}
+
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::adjustParameterType(const cld::Semantics::Type& type) const
+{
+    if (std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<AbstractArrayType>(type.get())
+        || std::holds_alternative<ValArrayType>(type.get()))
+    {
+        auto elementType = cld::match(type.get(), [](auto&& value) -> Type {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.getType();
+            }
+            CLD_UNREACHABLE;
+        });
+        bool restrict = cld::match(type.get(), [](auto&& value) -> bool {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.isRestricted();
+            }
+            CLD_UNREACHABLE;
+        });
+        return PointerType::create(type.isConst(), type.isVolatile(), restrict, std::move(elementType));
+    }
+    return type;
 }

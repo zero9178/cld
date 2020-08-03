@@ -1,5 +1,7 @@
 #include "Parser.hpp"
 
+#include <llvm/ADT/ScopeExit.h>
+
 #include <Frontend/Compiler/Semantics.hpp>
 
 #include <algorithm>
@@ -172,10 +174,10 @@ std::optional<cld::Syntax::ExternalDeclaration>
         }
 
         auto [parameters, parameterDepth] =
-            findDirectDeclWithDepth<Syntax::DirectDeclaratorParenthesesParameters>(declarator->getDirectDeclarator());
+            findDirectDeclWithDepth<DirectDeclaratorParenthesesParameters>(declarator->getDirectDeclarator());
 
         auto [identifierList, identiferDepth] =
-            findDirectDeclWithDepth<Syntax::DirectDeclaratorParenthesesIdentifiers>(declarator->getDirectDeclarator());
+            findDirectDeclWithDepth<DirectDeclaratorParenthesesIdentifiers>(declarator->getDirectDeclarator());
 
         if (identifierList && (!parameters || identiferDepth > parameterDepth))
         {
@@ -938,72 +940,78 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
+                auto checkForClose = std::optional{llvm::make_scope_exit([&] {
+                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    {
+                        context.skipUntil(begin, end,
+                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                  Lexer::TokenType::OpenSquareBracket));
+                    }
+                })};
                 begin++;
                 if (begin < end && firstIsInParameterTypeList(*begin, context))
                 {
                     auto parameterTypeList = parseParameterTypeList(
                         begin, end,
                         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+                    checkForClose.reset();
                     if (directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthesesParameters(
                             start, begin, std::move(*directDeclarator), std::move(parameterTypeList)));
                     }
+                    break;
                 }
-                else if (begin < end)
+                if (begin == end)
                 {
-                    std::vector<Lexer::CTokenIterator> identifiers;
-                    if (begin->getTokenType() == Lexer::TokenType::Identifier)
+                    break;
+                }
+
+                std::vector<Lexer::CTokenIterator> identifiers;
+                if (begin->getTokenType() == Lexer::TokenType::Identifier)
+                {
+                    identifiers.push_back(begin);
+                    begin++;
+                    while (begin < end
+                           && (begin->getTokenType() == Lexer::TokenType::Comma
+                               || begin->getTokenType() == Lexer::TokenType::Identifier))
                     {
-                        identifiers.push_back(begin);
-                        begin++;
-                        while (begin < end
-                               && (begin->getTokenType() == Lexer::TokenType::Comma
-                                   || begin->getTokenType() == Lexer::TokenType::Identifier))
+                        if (!expect(Lexer::TokenType::Comma, begin, end, context))
                         {
-                            if (!expect(Lexer::TokenType::Comma, begin, end, context))
-                            {
-                                context.skipUntil(begin, end,
-                                                  Context::fromTokenTypes(Lexer::TokenType::Identifier,
-                                                                          Lexer::TokenType::CloseParentheses));
-                            }
-                            std::string_view name;
-                            if (!expectIdentifier(begin, end, context, name))
-                            {
-                                context.skipUntil(begin, end,
-                                                  Context::fromTokenTypes(Lexer::TokenType::Comma,
-                                                                          Lexer::TokenType::CloseParentheses));
-                                continue;
-                            }
+                            context.skipUntil(begin, end,
+                                              Context::fromTokenTypes(Lexer::TokenType::Identifier,
+                                                                      Lexer::TokenType::CloseParentheses));
+                        }
+                        std::string_view name;
+                        if (!expectIdentifier(begin, end, context, name))
+                        {
+                            context.skipUntil(
+                                begin, end,
+                                Context::fromTokenTypes(Lexer::TokenType::Comma, Lexer::TokenType::CloseParentheses));
+                            continue;
+                        }
 
-                            if (!context.isTypedef(name))
-                            {
-                                identifiers.push_back(begin - 1);
-                                continue;
-                            }
+                        if (!context.isTypedef(name))
+                        {
+                            identifiers.push_back(begin - 1);
+                            continue;
+                        }
 
-                            context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_TYPENAME.args(
-                                *(begin - 1), context.getSourceInterface(), Lexer::TokenType::Identifier,
-                                *(begin - 1)));
-                            if (auto* loc = context.getLocationOf(name))
-                            {
-                                context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
-                                    *loc->identifier, context.getSourceInterface(), *loc->identifier));
-                            }
+                        context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_TYPENAME.args(
+                            *(begin - 1), context.getSourceInterface(), Lexer::TokenType::Identifier, *(begin - 1)));
+                        if (auto* loc = context.getLocationOf(name))
+                        {
+                            context.log(Notes::IDENTIFIER_IS_TYPEDEF.args(
+                                *loc->identifier, context.getSourceInterface(), *loc->identifier));
                         }
                     }
-                    if (directDeclarator)
-                    {
-                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthesesIdentifiers(
-                            start, begin, std::move(*directDeclarator), std::move(identifiers)));
-                    }
                 }
-                if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                checkForClose.reset();
+                if (directDeclarator)
                 {
-                    context.skipUntil(begin, end,
-                                      Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                              Lexer::TokenType::OpenSquareBracket));
+                    directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParenthesesIdentifiers(
+                        start, begin, std::move(*directDeclarator), std::move(identifiers)));
                 }
                 break;
             }
@@ -1011,11 +1019,18 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
+                auto checkForClose = std::optional{llvm::make_scope_exit([&] {
+                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    {
+                        context.skipUntil(begin, end,
+                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                  Lexer::TokenType::OpenSquareBracket));
+                    }
+                })};
                 begin++;
                 if (begin == end)
                 {
-                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                           Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos));
                     return {};
                 }
 
@@ -1046,94 +1061,86 @@ std::optional<cld::Syntax::DirectDeclarator>
                     auto assignmentExpression = cld::Parser::parseAssignmentExpression(
                         begin, end,
                         context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
+                    checkForClose.reset();
                     if (assignmentExpression && directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(
                             DirectDeclaratorStatic(start, begin, std::move(directDeclarator), staticLoc,
                                                    std::move(typeQualifiers), std::move(*assignmentExpression)));
                     }
+                    break;
+                }
+
+                std::vector<TypeQualifier> typeQualifiers;
+                while (begin < end
+                       && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
+                           || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
+                           || begin->getTokenType() == Lexer::TokenType::VolatileKeyword))
+                {
+                    switch (begin->getTokenType())
+                    {
+                        case Lexer::TokenType::ConstKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                            break;
+                        case Lexer::TokenType::RestrictKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                            break;
+                        case Lexer::TokenType::VolatileKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                            break;
+                        default: CLD_UNREACHABLE;
+                    }
+                    begin++;
+                }
+                if (begin == end)
+                {
+                    break;
+                }
+
+                if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
+                {
+                    const auto* staticLoc = begin++;
+                    auto assignment = cld::Parser::parseAssignmentExpression(
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
+                    checkForClose.reset();
+                    if (assignment && directDeclarator)
+                    {
+                        directDeclarator = std::make_unique<DirectDeclarator>(
+                            DirectDeclaratorStatic(start, begin, std::move(directDeclarator), staticLoc,
+                                                   std::move(typeQualifiers), std::move(*assignment)));
+                    }
+                }
+                else if (begin->getTokenType() == Lexer::TokenType::Asterisk)
+                {
+                    begin++;
+                    checkForClose.reset();
+                    if (directDeclarator)
+                    {
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorAsterisk(
+                            start, begin, std::move(*directDeclarator), std::move(typeQualifiers)));
+                    }
+                }
+                else if (firstIsInAssignmentExpression(*begin, context))
+                {
+                    auto assignment = cld::Parser::parseAssignmentExpression(
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
+                    checkForClose.reset();
+                    if (assignment && directDeclarator)
+                    {
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
+                            start, begin, std::move(directDeclarator), std::move(typeQualifiers),
+                            std::make_unique<AssignmentExpression>(std::move(*assignment))));
+                    }
                 }
                 else
                 {
-                    std::vector<TypeQualifier> typeQualifiers;
-                    while (begin < end
-                           && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
-                               || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
-                               || begin->getTokenType() == Lexer::TokenType::VolatileKeyword))
+                    checkForClose.reset();
+                    if (directDeclarator)
                     {
-                        switch (begin->getTokenType())
-                        {
-                            case Lexer::TokenType::ConstKeyword:
-                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
-                                break;
-                            case Lexer::TokenType::RestrictKeyword:
-                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
-                                break;
-                            case Lexer::TokenType::VolatileKeyword:
-                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
-                                break;
-                            default: CLD_UNREACHABLE;
-                        }
-                        begin++;
-                    }
-                    if (begin < end)
-                    {
-                        if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
-                        {
-                            const auto* staticLoc = begin++;
-                            auto assignmentExpression = cld::Parser::parseAssignmentExpression(
-                                begin, end,
-                                context.withRecoveryTokens(
-                                    Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
-                            if (assignmentExpression && directDeclarator)
-                            {
-                                directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorStatic(
-                                    start, begin, std::move(directDeclarator), staticLoc, std::move(typeQualifiers),
-                                    std::move(*assignmentExpression)));
-                            }
-                        }
-                        else if (begin->getTokenType() == Lexer::TokenType::Asterisk)
-                        {
-                            begin++;
-                            if (directDeclarator)
-                            {
-                                directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorAsterisk(
-                                    start, begin, std::move(*directDeclarator), std::move(typeQualifiers)));
-                            }
-                        }
-                        else if (firstIsInAssignmentExpression(*begin, context))
-                        {
-                            auto assignment = cld::Parser::parseAssignmentExpression(
-                                begin, end,
-                                context.withRecoveryTokens(
-                                    Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
-                            if (assignment && directDeclarator)
-                            {
-                                directDeclarator =
-                                    std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
-                                        start, begin, std::move(directDeclarator), std::move(typeQualifiers),
-                                        std::make_unique<AssignmentExpression>(std::move(*assignment))));
-                            }
-                        }
-                        else if (directDeclarator)
-                        {
-                            directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
-                                start, begin, std::move(directDeclarator), std::move(typeQualifiers), nullptr));
-                        }
-                    }
-                }
-
-                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
-                {
-                    context.skipUntil(begin, end,
-                                      Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                              Lexer::TokenType::OpenSquareBracket));
-                    if (begin == end
-                        || (begin->getTokenType() != Lexer::TokenType::OpenParentheses
-                            && begin->getTokenType() != Lexer::TokenType::OpenSquareBracket))
-                    {
-                        return {};
+                        directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorNoStaticOrAsterisk(
+                            start, begin, std::move(directDeclarator), std::move(typeQualifiers), nullptr));
                     }
                 }
                 break;
