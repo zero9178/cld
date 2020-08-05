@@ -737,257 +737,249 @@ using namespace cld::Semantics;
 
 std::string typeToString(const Type& arg)
 {
-    std::string string;
     if (arg.isTypedef())
     {
-        string = arg.getName();
+        return cld::to_string(arg.getName());
     }
-    else
+    std::string qualifiersAndSpecifiers;
+    std::string declarators;
+    std::optional<Type> maybeCurr = arg;
+    while (maybeCurr)
     {
-        string = cld::match(
-            arg.get(),
-            [&](const PrimitiveType& primitiveType) -> std::string {
-                std::string result;
-                if (arg.isConst())
+        maybeCurr = cld::match(
+            maybeCurr->get(),
+            [&](const PrimitiveType& primitiveType) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    result += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    result += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
                 switch (primitiveType.getKind())
                 {
-                    case PrimitiveType::Kind::Char: result += "char"; break;
-                    case PrimitiveType::Kind::SignedChar: result += "signed char"; break;
-                    case PrimitiveType::Kind::UnsignedChar: result += "unsigned char"; break;
-                    case PrimitiveType::Kind::Bool: result += "_Bool"; break;
-                    case PrimitiveType::Kind::Short: result += "short"; break;
-                    case PrimitiveType::Kind::UnsignedShort: result += "unsigned short"; break;
-                    case PrimitiveType::Kind::Int: result += "int"; break;
-                    case PrimitiveType::Kind::UnsignedInt: result += "unsigned int"; break;
-                    case PrimitiveType::Kind::Long: result += "long"; break;
-                    case PrimitiveType::Kind::UnsignedLong: result += "unsigned long"; break;
-                    case PrimitiveType::Kind::LongLong: result += "long long"; break;
-                    case PrimitiveType::Kind::UnsignedLongLong: result += "unsigned long long"; break;
-                    case PrimitiveType::Kind::Float: result += "float"; break;
-                    case PrimitiveType::Kind::Double: result += "double"; break;
-                    case PrimitiveType::Kind::LongDouble: result += "long double"; break;
-                    case PrimitiveType::Kind::Void: result += "void"; break;
+                    case PrimitiveType::Kind::Char: qualifiersAndSpecifiers += "char"; break;
+                    case PrimitiveType::Kind::SignedChar: qualifiersAndSpecifiers += "signed char"; break;
+                    case PrimitiveType::Kind::UnsignedChar: qualifiersAndSpecifiers += "unsigned char"; break;
+                    case PrimitiveType::Kind::Bool: qualifiersAndSpecifiers += "_Bool"; break;
+                    case PrimitiveType::Kind::Short: qualifiersAndSpecifiers += "short"; break;
+                    case PrimitiveType::Kind::UnsignedShort: qualifiersAndSpecifiers += "unsigned short"; break;
+                    case PrimitiveType::Kind::Int: qualifiersAndSpecifiers += "int"; break;
+                    case PrimitiveType::Kind::UnsignedInt: qualifiersAndSpecifiers += "unsigned int"; break;
+                    case PrimitiveType::Kind::Long: qualifiersAndSpecifiers += "long"; break;
+                    case PrimitiveType::Kind::UnsignedLong: qualifiersAndSpecifiers += "unsigned long"; break;
+                    case PrimitiveType::Kind::LongLong: qualifiersAndSpecifiers += "long long"; break;
+                    case PrimitiveType::Kind::UnsignedLongLong: qualifiersAndSpecifiers += "unsigned long long"; break;
+                    case PrimitiveType::Kind::Float: qualifiersAndSpecifiers += "float"; break;
+                    case PrimitiveType::Kind::Double: qualifiersAndSpecifiers += "double"; break;
+                    case PrimitiveType::Kind::LongDouble: qualifiersAndSpecifiers += "long double"; break;
+                    case PrimitiveType::Kind::Void: qualifiersAndSpecifiers += "void"; break;
                 }
-                return result;
+                return {};
             },
-            [&](const PointerType& pointerType) -> std::string {
-                auto result = typeToString(pointerType.getElementType()) + "*";
-                if (pointerType.isRestricted())
+            [&](const PointerType&) -> std::optional<Type> {
+                std::string temp;
+                auto curr = arg;
+                while (auto* pointerType = std::get_if<PointerType>(&curr.get()))
                 {
-                    result += " restrict";
+                    temp += "*";
+                    if (pointerType->isRestricted())
+                    {
+                        temp += " restrict";
+                    }
+                    if (curr.isConst())
+                    {
+                        temp += " const";
+                    }
+                    if (maybeCurr->isVolatile())
+                    {
+                        temp += " volatile";
+                    }
+                    curr = pointerType->getElementType();
                 }
-                if (arg.isConst())
+                if (std::holds_alternative<AbstractArrayType>(curr.get())
+                    || std::holds_alternative<ValArrayType>(curr.get()) || std::holds_alternative<ArrayType>(curr.get())
+                    || std::holds_alternative<FunctionType>(curr.get()))
                 {
-                    result += " const";
-                }
-                if (arg.isVolatile())
-                {
-                    result += " volatile";
-                }
-                return result;
-            },
-            [&](const ValArrayType& valArrayType) -> std::string {
-                auto result = typeToString(valArrayType.getType());
-                auto index = result.find('[');
-                if (index == result.npos)
-                {
-                    index = result.size();
+                    temp = "(" + temp + ")";
+                    declarators += temp;
+                    return {std::move(curr)};
                 }
                 else
                 {
-                    CLD_ASSERT(index);
-                    index--;
+                    qualifiersAndSpecifiers = typeToString(curr) + temp;
+                    return {};
                 }
-                std::string toInsert = "[";
+            },
+            [&](const ValArrayType& valArrayType) -> std::optional<Type> {
+                declarators += "[";
                 if (valArrayType.isStatic())
                 {
-                    toInsert += "static ";
+                    declarators += "static ";
                 }
                 if (valArrayType.isRestricted())
                 {
-                    toInsert += "restrict ";
+                    declarators += "restrict ";
                 }
-                if (arg.isConst())
+                if (maybeCurr->isConst())
                 {
-                    toInsert += "const ";
+                    declarators += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    toInsert += "volatile ";
+                    declarators += "volatile ";
                 }
-                toInsert += "*]";
-                result.insert(index, toInsert);
-                return result;
+                declarators += "*]";
+                return valArrayType.getType();
             },
-            [&](const ArrayType& arrayType) -> std::string {
-                auto result = typeToString(arrayType.getType());
-                auto index = result.find('[');
-                if (index == result.npos)
-                {
-                    index = result.size();
-                }
-                std::string toInsert = "[";
+            [&](const ArrayType& arrayType) -> std::optional<Type> {
+                declarators += "[";
                 if (arrayType.isStatic())
                 {
-                    toInsert += "static ";
+                    declarators += "static ";
                 }
                 if (arrayType.isRestricted())
                 {
-                    toInsert += "restrict ";
+                    declarators += "restrict ";
                 }
-                if (arg.isConst())
+                if (maybeCurr->isConst())
                 {
-                    toInsert += "const ";
+                    declarators += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    toInsert += "volatile ";
+                    declarators += "volatile ";
                 }
-                toInsert += cld::to_string(arrayType.getSize());
-                toInsert += "]";
-                result.insert(index, toInsert);
-                return result;
+                declarators += cld::to_string(arrayType.getSize()) + "]";
+                return arrayType.getType();
             },
-            [&](const AbstractArrayType& arrayType) -> std::string {
-                auto result = typeToString(arrayType.getType());
-                auto index = result.find('[');
-                if (index == result.npos)
-                {
-                    index = result.size();
-                }
-                std::string toInsert = "[";
+            [&](const AbstractArrayType& arrayType) -> std::optional<Type> {
+                declarators += "[";
                 if (arrayType.isRestricted())
                 {
-                    toInsert += "restrict ";
+                    declarators += "restrict ";
                 }
-                if (arg.isConst())
+                if (maybeCurr->isConst())
                 {
-                    toInsert += "const ";
+                    declarators += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    toInsert += "volatile ";
+                    declarators += "volatile ";
                 }
-                toInsert += "]";
-                result.insert(index, toInsert);
-                return result;
+                declarators += "]";
+                return arrayType.getType();
             },
-            [&](const FunctionType& functionType) -> std::string {
-                auto result = typeToString(functionType.getReturnType());
-                result += "(";
+            [&](const FunctionType& functionType) -> std::optional<Type> {
+                declarators += "(";
                 if (functionType.getArguments().empty())
                 {
                     if (!functionType.isKandR())
                     {
-                        result += "void";
+                        declarators += "void";
                     }
-                    result += ")";
-                    return result;
+                    declarators += ")";
+                    return functionType.getReturnType();
                 }
-                result += typeToString(functionType.getArguments()[0].first);
+                declarators += typeToString(functionType.getArguments()[0].first);
                 for (auto& iter : llvm::ArrayRef(functionType.getArguments()).drop_front())
                 {
-                    result += ", " + typeToString(iter.first);
+                    declarators += ", " + typeToString(iter.first);
                 }
                 if (functionType.isLastVararg())
                 {
-                    result += ",...";
+                    declarators += ",...";
                 }
-                return result + ")";
+                declarators += ")";
+                return functionType.getReturnType();
             },
-            [&](const StructType& structType) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const StructType& structType) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "struct " + cld::to_string(structType.getName());
+                qualifiersAndSpecifiers += "struct " + cld::to_string(structType.getName());
+                return {};
             },
-            [&](const UnionType& unionType) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const UnionType& unionType) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "union " + cld::to_string(unionType.getName());
+                qualifiersAndSpecifiers += "union " + cld::to_string(unionType.getName());
+                return {};
             },
-            [&](const EnumType& enumType) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const EnumType& enumType) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "struct " + cld::to_string(enumType.getName());
+                qualifiersAndSpecifiers += "struct " + cld::to_string(enumType.getName());
+                return {};
             },
-            [&](const AnonymousStructType&) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const AnonymousStructType&) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "struct <anonymous>";
+                qualifiersAndSpecifiers += "struct <anonymous>";
+                return {};
             },
-            [&](const AnonymousUnionType&) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const AnonymousUnionType&) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "union <anonymous>";
+                qualifiersAndSpecifiers += "union <anonymous>";
+                return {};
             },
-            [&](const AnonymousEnumType&) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](const AnonymousEnumType&) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "enum <anonymous>";
+                qualifiersAndSpecifiers += "enum <anonymous>";
+                return {};
             },
-            [&](std::monostate) -> std::string {
-                std::string prefix;
-                if (arg.isConst())
+            [&](std::monostate) -> std::optional<Type> {
+                if (maybeCurr->isConst())
                 {
-                    prefix += "const ";
+                    qualifiersAndSpecifiers += "const ";
                 }
-                if (arg.isVolatile())
+                if (maybeCurr->isVolatile())
                 {
-                    prefix += "volatile ";
+                    qualifiersAndSpecifiers += "volatile ";
                 }
-                return prefix + "<undefined>";
+                qualifiersAndSpecifiers += "<undefined>";
+                return {};
             });
     }
-    return string;
+    return qualifiersAndSpecifiers + declarators;
 }
 } // namespace
 
