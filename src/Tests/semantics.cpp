@@ -427,6 +427,10 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         SEMA_PRODUCES("int f[5.0];", ProducesError(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE));
         SEMA_PRODUCES("int f[1]();", ProducesError(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION));
         SEMA_PRODUCES("void f[1];", ProducesError(ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE));
+        SEMA_PRODUCES("struct {\n"
+                      " int r,f[];\n"
+                      "} f[1];",
+                      ProducesError(ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER));
         SEMA_PRODUCES("int f[static 1];", ProducesError(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC));
         SEMA_PRODUCES("int f[const 1];", ProducesError(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED));
         SEMA_PRODUCES("int f[];", ProducesNothing());
@@ -554,6 +558,66 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
         CHECK_FALSE(anon.getFields()[2].bitFieldSize);
     }
+    SECTION("Flexible array member")
+    {
+        SEMA_PRODUCES("struct A{ int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
+        SEMA_PRODUCES("struct A{ int r;int f[],c; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
+        SEMA_PRODUCES("struct A{ int r,f[]; };", ProducesNothing());
+        SEMA_PRODUCES("union A{ int r,f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'int[]'"));
+        SEMA_PRODUCES("struct A{ int r;int f[]; };", ProducesNothing());
+        SEMA_PRODUCES("union A{ int r;int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'int[]'"));
+        SEMA_PRODUCES("struct A {\n"
+                      " int r;\n"
+                      " int f[];\n"
+                      "};\n"
+                      "struct B {\n"
+                      " struct A a;\n"
+                      "};",
+                      ProducesError(STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT));
+        SEMA_PRODUCES("struct A {\n"
+                      " int r;\n"
+                      " int f[];\n"
+                      "};\n"
+                      "union B {\n"
+                      " struct A a;\n"
+                      "};",
+                      ProducesNothing());
+        SEMA_PRODUCES(
+            "struct A {\n"
+            " int r;\n"
+            " int f[];\n"
+            "};\n"
+            "union B {\n"
+            " struct A a;\n"
+            "};\n"
+            "struct C {\n"
+            " union B r;\n"
+            "};",
+            ProducesError(UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT));
+    }
+    SECTION("Bitfields")
+    {
+        SEMA_PRODUCES("struct A {\n"
+                      " float i :5;\n"
+                      "};",
+                      ProducesError(BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i[3] :5;\n"
+                      "};",
+                      ProducesError(BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i : -5;\n"
+                      "};",
+                      ProducesError(BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i : 1 << 7;\n"
+                      "};",
+                      ProducesError(BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i : 0;\n"
+                      "};",
+                      ProducesError(BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME));
+    }
     SEMA_PRODUCES("struct A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_STRUCT));
     SEMA_PRODUCES("union A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_UNION));
     SEMA_PRODUCES("struct A{ struct r f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'struct r'"));
@@ -562,6 +626,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SEMA_PRODUCES("union A{ union A f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'union A'"));
     SEMA_PRODUCES("struct A{ int f(); };", ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT));
     SEMA_PRODUCES("union A{ int f(); };", ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_UNION));
+    SEMA_PRODUCES("struct A{ int f[*]; };", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT));
+    SEMA_PRODUCES("union A{ int f[*]; };", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION));
 }
 
 TEST_CASE("Semantics type compatibility", "[semantics]")

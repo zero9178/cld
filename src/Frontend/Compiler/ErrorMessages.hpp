@@ -141,6 +141,9 @@ CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must
 
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE, "Array element type must be a complete type", Annotate<0, 1>);
 
+CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER,
+             "Array element type must not contain a flexible array member", Underline<0>);
+
 CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE, "Array size must be an integer type", Annotate<0, 1>);
 
 CREATE_ERROR(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO, "Array size must be greater than 0", Annotate<0, 1>);
@@ -178,14 +181,36 @@ CREATE_ERROR(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "Incomplete type %full0 not 
 
 CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_IN_STRUCT, "Void type not allowed in struct", Underline<0>, Underline<1>);
 
+CREATE_ERROR(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT, "Variably modified type not allowed in struct", Underline<0>,
+             Underline<1>);
+
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT, "Function type not allowed in struct", Underline<0>, Annotate<1, 2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "Incomplete type %full0 not allowed in union", Underline<1>,
              Annotate<2, 0>);
 
+CREATE_ERROR(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION, "Variably modified type not allowed in union", Underline<0>,
+             Underline<1>);
+
+CREATE_ERROR(STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT,
+             "Struct with flexible array member not allowed in struct", Underline<0>);
+
+CREATE_ERROR(UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT,
+             "Union with struct or union containing a flexible array member is not allowed in struct", Underline<0>);
+
 CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_IN_UNION, "Incomplete type not allowed in union", Underline<0>, Underline<1>);
 
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_UNION, "Function type not allowed in union", Underline<0>, Annotate<1, 2>);
+
+CREATE_ERROR(BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL, "Bit-field may only be of type (unsigned) int or _Bool",
+             Underline<0>);
+
+CREATE_ERROR(BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER, "Bit-field must be of size 0 or greater", Annotate<0, 1>);
+
+CREATE_ERROR(BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE,
+             "Bit-field must not have a greater width than the type", Annotate<0, 1>, Annotate<2, 3>);
+
+CREATE_ERROR(BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME, "Bit-field with size 0 may not have a name", Underline<0>);
 
 CREATE_ERROR(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION,
              "Identifier list only allowed as part of a function definition", Underline<0>);

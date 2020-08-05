@@ -104,6 +104,11 @@ class SemanticAnalysis final
     template <class T>
     void handleParameterList(Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc);
 
+    template <class T>
+    void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
+                     const Syntax::AssignmentExpression* assignmentExpression, bool isStatic, bool valarray,
+                     T&& returnTypeLoc);
+
     [[nodiscard]] bool isTypedef(std::string_view name) const;
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
@@ -155,6 +160,10 @@ class SemanticAnalysis final
 
     bool isCompleteType(const Type& type) const;
 
+    bool isVariablyModified(const Type& type) const;
+
+    bool hasFlexibleArrayMember(const Type& type) const;
+
     bool typesAreCompatible(const Type& lhs, const Type& rhs) const;
 
     Type defaultArgumentPromotion(const Type& type) const;
@@ -200,9 +209,9 @@ public:
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations);
     }
 
-    Expected<std::size_t, Message> sizeOf(const Type& structType, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
+    Expected<std::size_t, Message> sizeOf(const Type& type, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
 
-    Expected<std::size_t, Message> alignOf(const Type& structType, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
+    Expected<std::size_t, Message> alignOf(const Type& type, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 

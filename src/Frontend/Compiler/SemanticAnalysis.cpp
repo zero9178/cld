@@ -359,9 +359,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
                 errors = true;
             }
-            auto typeVisitor = RecursiveVisitor(result, ARRAY_TYPE_NEXT_FN);
-            if (std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                            [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); }))
+            if (isVariablyModified(result))
             {
                 if (m_currentScope == 0)
                 {
@@ -384,6 +382,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     errors = true;
                 }
             }
+            auto typeVisitor = RecursiveVisitor(result, ARRAY_TYPE_NEXT_FN);
             if (std::any_of(typeVisitor.begin(), typeVisitor.end(), [](const Type& type) {
                     return cld::match(
                         type.get(), [](const ArrayType& arrayType) { return arrayType.isStatic(); },
@@ -762,146 +761,18 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
             },
             [&](auto&& self, const Syntax::DirectDeclaratorNoStaticOrAsterisk& noStaticOrAsterisk) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
-                if (std::holds_alternative<FunctionType>(type.get()))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        noStaticOrAsterisk.getDirectDeclarator(), m_sourceInterface,
-                        noStaticOrAsterisk.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-                else if (!isCompleteType(type))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
-                        noStaticOrAsterisk.getDirectDeclarator(), m_sourceInterface,
-                        noStaticOrAsterisk.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-
-                auto [isConst, isVolatile, restricted] = getQualifiers(noStaticOrAsterisk.getTypeQualifiers());
-                if (!noStaticOrAsterisk.getAssignmentExpression())
-                {
-                    type = AbstractArrayType::create(isConst, isVolatile, restricted, std::move(type));
-                    return;
-                }
-                auto result = evaluateConstantExpression(*noStaticOrAsterisk.getAssignmentExpression(),
-                                                         ConstantEvaluator::Arithmetic);
-                if (!result)
-                {
-                    type = ValArrayType::create(isConst, isVolatile, restricted, false, std::move(type));
-                    return;
-                }
-                if (!result->isInteger())
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(
-                        *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
-                        *noStaticOrAsterisk.getAssignmentExpression(), result->getType()));
-                    type = Type{};
-                    return;
-                }
-                if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
-                {
-                    if (result->toInt() <= 0)
-                    {
-                        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                            *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
-                            *noStaticOrAsterisk.getAssignmentExpression(),
-                            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                        type = Type{};
-                        return;
-                    }
-                }
-                else if (result->toUInt() == 0)
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                        *noStaticOrAsterisk.getAssignmentExpression(), m_sourceInterface,
-                        *noStaticOrAsterisk.getAssignmentExpression(),
-                        cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                    type = Type{};
-                    return;
-                }
-                auto size = result->toUInt();
-                type = ArrayType::create(isConst, isVolatile, restricted, false, std::move(type), size);
+                handleArray(type, noStaticOrAsterisk.getTypeQualifiers(),
+                            noStaticOrAsterisk.getAssignmentExpression().get(), false, false,
+                            noStaticOrAsterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
-                if (std::holds_alternative<FunctionType>(type.get()))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        declaratorStatic.getDirectDeclarator(), m_sourceInterface,
-                        declaratorStatic.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-                else if (!isCompleteType(type))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
-                        declaratorStatic.getDirectDeclarator(), m_sourceInterface,
-                        declaratorStatic.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-
-                auto [isConst, isVolatile, restricted] = getQualifiers(declaratorStatic.getTypeQualifiers());
-                auto result = evaluateConstantExpression(declaratorStatic.getAssignmentExpression(),
-                                                         ConstantEvaluator::Arithmetic);
-                if (!result)
-                {
-                    type = ValArrayType::create(isConst, isVolatile, restricted, true, std::move(type));
-                    return;
-                }
-                if (!result->isInteger())
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(
-                        declaratorStatic.getAssignmentExpression(), m_sourceInterface,
-                        declaratorStatic.getAssignmentExpression(), result->getType()));
-                    type = Type{};
-                    return;
-                }
-                if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
-                {
-                    if (result->toInt() <= 0)
-                    {
-                        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                            declaratorStatic.getAssignmentExpression(), m_sourceInterface,
-                            declaratorStatic.getAssignmentExpression(),
-                            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                        type = Type{};
-                        return;
-                    }
-                }
-                else if (result->toUInt() == 0)
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                        declaratorStatic.getAssignmentExpression(), m_sourceInterface,
-                        declaratorStatic.getAssignmentExpression(),
-                        cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                    type = Type{};
-                    return;
-                }
-                auto size = result->toUInt();
-                type = ArrayType::create(isConst, isVolatile, restricted, true, std::move(type), size);
+                handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
+                            true, false, declaratorStatic.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
-                if (std::holds_alternative<FunctionType>(type.get()))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        asterisk.getDirectDeclarator(), m_sourceInterface, asterisk.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-                else if (!isCompleteType(type))
-                {
-                    log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
-                        asterisk.getDirectDeclarator(), m_sourceInterface, asterisk.getDirectDeclarator(), type));
-                    type = Type{};
-                    return;
-                }
-
-                auto [isConst, isVolatile, restricted] = getQualifiers(asterisk.getTypeQualifiers());
-                type = ValArrayType::create(isConst, isVolatile, restricted, false, std::move(type));
+                handleArray(type, asterisk.getTypeQualifiers(), nullptr, false, true, asterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
@@ -1046,42 +917,14 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         cld::match(*asterisk.getDirectAbstractDeclarator(), self);
                     }
                 });
-                if (std::holds_alternative<FunctionType>(type.get()))
+                if (asterisk.getDirectAbstractDeclarator())
                 {
-                    if (asterisk.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            *asterisk.getDirectAbstractDeclarator(), m_sourceInterface,
-                            *asterisk.getDirectAbstractDeclarator(), type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
+                    handleArray(type, {}, nullptr, false, true, *asterisk.getDirectAbstractDeclarator());
                 }
-                else if (!isCompleteType(type))
+                else
                 {
-                    if (asterisk.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
-                            *asterisk.getDirectAbstractDeclarator(), m_sourceInterface,
-                            *asterisk.getDirectAbstractDeclarator(), type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
+                    handleArray(type, {}, nullptr, false, true, declarationOrSpecifierQualifiers);
                 }
-
-                type = ValArrayType::create(false, false, false, false, std::move(type));
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
                 auto scope = llvm::make_scope_exit([&] {
@@ -1090,83 +933,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         cld::match(*expression.getDirectAbstractDeclarator(), self);
                     }
                 });
-                if (std::holds_alternative<FunctionType>(type.get()))
+                if (expression.getDirectAbstractDeclarator())
                 {
-                    if (expression.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            *expression.getDirectAbstractDeclarator(), m_sourceInterface,
-                            *expression.getDirectAbstractDeclarator(), type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
+                    handleArray(type, {}, expression.getAssignmentExpression(), false, false,
+                                *expression.getDirectAbstractDeclarator());
                 }
-                else if (!isCompleteType(type))
+                else
                 {
-                    if (expression.getDirectAbstractDeclarator())
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(
-                            *expression.getDirectAbstractDeclarator(), m_sourceInterface,
-                            *expression.getDirectAbstractDeclarator(), type));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers,
-                            type));
-                    }
-                    type = Type{};
-                    return;
+                    handleArray(type, {}, expression.getAssignmentExpression(), false, false,
+                                declarationOrSpecifierQualifiers);
                 }
-
-                if (!expression.getAssignmentExpression())
-                {
-                    type = AbstractArrayType::create(false, false, false, std::move(type));
-                    return;
-                }
-                auto result =
-                    evaluateConstantExpression(*expression.getAssignmentExpression(), ConstantEvaluator::Arithmetic);
-                if (!result)
-                {
-                    type = ValArrayType::create(false, false, false, false, std::move(type));
-                    return;
-                }
-                if (!result->isInteger())
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(
-                        *expression.getAssignmentExpression(), m_sourceInterface, *expression.getAssignmentExpression(),
-                        result->getType()));
-                    type = Type{};
-                    return;
-                }
-                if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
-                {
-                    if (result->toInt() <= 0)
-                    {
-                        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                            *expression.getAssignmentExpression(), m_sourceInterface,
-                            *expression.getAssignmentExpression(),
-                            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                        type = Type{};
-                        return;
-                    }
-                }
-                else if (result->toUInt() == 0)
-                {
-                    log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                        *expression.getAssignmentExpression(), m_sourceInterface, *expression.getAssignmentExpression(),
-                        cld::get<llvm::APSInt>(result->getValue()).toString(10)));
-                    type = Type{};
-                    return;
-                }
-                auto size = result->toUInt();
-                type = ArrayType::create(false, false, false, false, std::move(type), size);
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
                 auto scope = llvm::make_scope_exit([&] {
@@ -1302,12 +1078,6 @@ cld::Semantics::Type
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
                 auto& [declarator, size] = *iter2;
-                if (!declarator)
-                {
-                    CLD_ASSERT(size);
-                    // TODO: Check if last and has size, otherwise error
-                    continue;
-                }
                 auto type = declaratorsToType(specifiers, *declarator, {});
                 if (isVoid(type))
                 {
@@ -1321,9 +1091,25 @@ cld::Semantics::Type
                         log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
                                                                                     specifiers, *declarator));
                     }
+                    type = Type{};
+                }
+                else if (isVariablyModified(type))
+                {
+                    if (structOrUnion->isUnion())
+                    {
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION.args(
+                            *declarator, m_sourceInterface, specifiers, *declarator));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT.args(
+                            *declarator, m_sourceInterface, specifiers, *declarator));
+                    }
+                    type = Type{};
                 }
                 else if (!isCompleteType(type)
-                         && !(last && !first && std::holds_alternative<AbstractArrayType>(type.get())))
+                         && !(!structOrUnion->isUnion() && last && !first
+                              && std::holds_alternative<AbstractArrayType>(type.get())))
                 {
                     if (structOrUnion->isUnion())
                     {
@@ -1335,6 +1121,7 @@ cld::Semantics::Type
                         log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(
                             *declarator, m_sourceInterface, type, specifiers, *declarator));
                     }
+                    type = Type{};
                 }
                 else if (std::holds_alternative<FunctionType>(type.get()))
                 {
@@ -1348,11 +1135,86 @@ cld::Semantics::Type
                         log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
                                                                                         specifiers, *declarator, type));
                     }
+                    type = Type{};
+                }
+                else if (!structOrUnion->isUnion() && hasFlexibleArrayMember(type))
+                {
+                    if (std::holds_alternative<StructType>(type.get()))
+                    {
+                        log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
+                            specifiers, m_sourceInterface, specifiers));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::
+                                UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT
+                                    .args(specifiers, m_sourceInterface, specifiers));
+                    }
+                    type = Type{};
+                }
+                std::optional<std::uint8_t> value;
+                if (size)
+                {
+                    bool hadValidType = true;
+                    if (!std::holds_alternative<PrimitiveType>(type.get()))
+                    {
+                        log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
+                            specifiers, m_sourceInterface, specifiers));
+                        hadValidType = false;
+                    }
+                    else
+                    {
+                        auto& primitive = cld::get<PrimitiveType>(type.get());
+                        switch (primitive.getKind())
+                        {
+                            case PrimitiveType::Kind::Bool:
+                            case PrimitiveType::Kind::Int:
+                            case PrimitiveType::Kind::UnsignedInt: break;
+                            default:
+                            {
+                                log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
+                                    specifiers, m_sourceInterface, specifiers));
+                                hadValidType = false;
+                            }
+                        }
+                    }
+                    auto result = evaluateConstantExpression(*size, ConstantEvaluator::Integer);
+                    if (!result)
+                    {
+                        for (auto& message : result.error())
+                        {
+                            log(message);
+                        }
+                        continue;
+                    }
+                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(result->getType().get()));
+                    if (cld::get<PrimitiveType>(result->getType().get()).isSigned() && result->toInt() < 0)
+                    {
+                        log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
+                                                                                             *size, result->toInt()));
+                        continue;
+                    }
+                    if (!hadValidType)
+                    {
+                        continue;
+                    }
+                    auto objectSize = sizeOf(type);
+                    CLD_ASSERT(objectSize);
+                    if (result->toUInt() > *objectSize * 8)
+                    {
+                        log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
+                            *size, m_sourceInterface, specifiers, *objectSize * 8, *size, result->toUInt()));
+                    }
+                    if (result->toUInt() == 0 && declarator)
+                    {
+                        log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
+                            *declarator, m_sourceInterface, *declarator));
+                    }
+                    value = result->toUInt();
                 }
                 auto fieldName = declaratorToName(*declarator);
-                // TODO: bitfields, constraints, etc.
-                (void)size;
-                fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), {}});
+
+                fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), value});
             }
         }
         if (structOrUnion->getIdentifierLoc())
@@ -2214,4 +2076,141 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
                                                  cld::get<PointerType>(rhs.get()).getElementType()));
     }
     return rhs;
+}
+
+bool cld::Semantics::SemanticAnalysis::isVariablyModified(const cld::Semantics::Type& type) const
+{
+    auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+}
+
+bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) const
+{
+    if (std::holds_alternative<StructType>(type.get()))
+    {
+        auto* maybeStructDef =
+            lookupType(cld::get<StructType>(type.get()).getName(), cld::get<StructType>(type.get()).getScope());
+        if (maybeStructDef && std::holds_alternative<StructDefinition>(*maybeStructDef))
+        {
+            auto& structDef = cld::get<StructDefinition>(*maybeStructDef);
+            return !structDef.getFields().empty()
+                   && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().type->get());
+        }
+    }
+    else if (std::holds_alternative<UnionType>(type.get()))
+    {
+        auto* maybeUnionDef =
+            lookupType(cld::get<UnionType>(type.get()).getName(), cld::get<UnionType>(type.get()).getScope());
+        if (maybeUnionDef && std::holds_alternative<UnionDefinition>(*maybeUnionDef))
+        {
+            auto& unionDef = cld::get<UnionDefinition>(*maybeUnionDef);
+            for (auto& iter : unionDef.getFields())
+            {
+                if (std::holds_alternative<AbstractArrayType>(iter.type->get()))
+                {
+                    return true;
+                }
+                if (hasFlexibleArrayMember(*iter.type))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+    else if (std::holds_alternative<AnonymousStructType>(type.get()))
+    {
+        auto& structDef = cld::get<AnonymousStructType>(type.get());
+        return !structDef.getFields().empty()
+               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().type->get());
+    }
+    else if (std::holds_alternative<AnonymousUnionType>(type.get()))
+    {
+        auto& unionDef = cld::get<AnonymousUnionType>(type.get());
+        for (auto& iter : unionDef.getFields())
+        {
+            if (std::holds_alternative<AbstractArrayType>(iter.type->get()))
+            {
+                return true;
+            }
+            if (hasFlexibleArrayMember(*iter.type))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+template <class T>
+void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
+                                                   const std::vector<Syntax::TypeQualifier>& typeQualifiers,
+                                                   const cld::Syntax::AssignmentExpression* assignmentExpression,
+                                                   bool isStatic, bool valarray, T&& returnTypeLoc)
+{
+    if (std::holds_alternative<FunctionType>(type.get()))
+    {
+        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
+                                                                              returnTypeLoc, type));
+        type = Type{};
+    }
+    else if (!isCompleteType(type))
+    {
+        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(returnTypeLoc, m_sourceInterface,
+                                                                               returnTypeLoc, type));
+        type = Type{};
+    }
+    else if (hasFlexibleArrayMember(type))
+    {
+        log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER.args(
+            returnTypeLoc, m_sourceInterface, returnTypeLoc));
+        type = Type{};
+    }
+
+    auto [isConst, isVolatile, restricted] = getQualifiers(typeQualifiers);
+    if (valarray)
+    {
+        type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type));
+        return;
+    }
+    if (!assignmentExpression)
+    {
+        type = AbstractArrayType::create(isConst, isVolatile, restricted, std::move(type));
+        return;
+    }
+    auto result = evaluateConstantExpression(*assignmentExpression, ConstantEvaluator::Arithmetic);
+    if (!result)
+    {
+        type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type));
+        return;
+    }
+    if (!result->isInteger())
+    {
+        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(*assignmentExpression, m_sourceInterface,
+                                                                       *assignmentExpression, result->getType()));
+        type = Type{};
+        return;
+    }
+    if (cld::get<PrimitiveType>(result->getType().get()).isSigned())
+    {
+        if (result->toInt() <= 0)
+        {
+            log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
+                *assignmentExpression, m_sourceInterface, *assignmentExpression,
+                cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+            type = Type{};
+            return;
+        }
+    }
+    else if (result->toUInt() == 0)
+    {
+        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
+            *assignmentExpression, m_sourceInterface, *assignmentExpression,
+            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+        type = Type{};
+        return;
+    }
+    auto size = result->toUInt();
+    type = ArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type), size);
 }

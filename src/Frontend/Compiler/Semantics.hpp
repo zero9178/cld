@@ -267,7 +267,7 @@ struct Field
 {
     std::shared_ptr<const Type> type;
     std::string name;
-    std::optional<std::uint64_t> bitFieldSize;
+    std::optional<std::uint8_t> bitFieldSize;
 
     bool operator==(const Field& rhs) const;
 
