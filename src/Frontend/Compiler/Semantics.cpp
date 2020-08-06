@@ -780,7 +780,7 @@ std::string typeToString(const Type& arg)
             },
             [&](const PointerType&) -> std::optional<Type> {
                 std::string temp;
-                auto curr = arg;
+                auto curr = *maybeCurr;
                 while (auto* pointerType = std::get_if<PointerType>(&curr.get()))
                 {
                     temp += "*";
@@ -802,8 +802,7 @@ std::string typeToString(const Type& arg)
                     || std::holds_alternative<ValArrayType>(curr.get()) || std::holds_alternative<ArrayType>(curr.get())
                     || std::holds_alternative<FunctionType>(curr.get()))
                 {
-                    temp = "(" + temp + ")";
-                    declarators += temp;
+                    declarators = "(" + temp + declarators + ")";
                     return {std::move(curr)};
                 }
                 else

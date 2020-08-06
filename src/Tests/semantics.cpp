@@ -864,6 +864,14 @@ TEST_CASE("Semantics type printing", "[semantics]")
         CHECK(toStr(PointerType::create(ptrIsConst, ptrIsVolatile, ptrIsRestricted,
                                         PrimitiveType::createVoid(elemntIsConst, elemntIsVolatile)))
               == result);
+        CHECK(toStr(PointerType::create(
+                  false, false, false,
+                  ArrayType::create(false, false, false, false, PrimitiveType::createSignedChar(false, false), 5)))
+              == "signed char(*)[5]");
+        CHECK(toStr(PointerType::create(
+                  false, false, false,
+                  FunctionType::create(PrimitiveType::createSignedChar(false, false), {}, false, false)))
+              == "signed char(*)(void)");
     }
     SECTION("Array")
     {
@@ -888,5 +896,54 @@ TEST_CASE("Semantics type printing", "[semantics]")
                                     PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), 6),
                   4))
               == "int[4][6]");
+        CHECK(
+            toStr(ArrayType::create(
+                false, false, false, false,
+                PointerType::create(false, false, false,
+                                    FunctionType::create(
+                                        PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                                        {{PrimitiveType::createChar(false, false, cld::LanguageOptions::native()), ""}},
+                                        false, false)),
+                5))
+            == "int(*[5])(char)");
+    }
+    SECTION("Functions")
+    {
+        CHECK(toStr(FunctionType::create(PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), {},
+                                         false, false))
+              == "int(void)");
+        CHECK(toStr(FunctionType::create(PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), {},
+                                         false, true))
+              == "int()");
+        CHECK(toStr(FunctionType::create(PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                                         {{PrimitiveType::createInt(false, false, cld::LanguageOptions::native()), ""}},
+                                         true, false))
+              == "int(int,...)");
+        CHECK(toStr(FunctionType::create(
+                  PointerType::create(
+                      false, false, false,
+                      FunctionType::create(PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                                           {{PrimitiveType::createFloat(false, false), ""}}, false, false)),
+                  {{PrimitiveType::createChar(false, false, cld::LanguageOptions::native()), ""}}, false, false))
+              == "int(*(char))(float)");
+        CHECK(toStr(AbstractArrayType::create(
+                  false, false, false,
+                  ArrayType::create(
+                      false, false, false, false,
+                      PointerType::create(
+                          false, false, false,
+                          PointerType::create(
+                              false, false, false,
+                              FunctionType::create(
+                                  PointerType::create(
+                                      false, false, false,
+                                      AbstractArrayType::create(
+                                          false, false, false,
+                                          PointerType::create(false, false, false,
+                                                              PrimitiveType::createChar(
+                                                                  false, false, cld::LanguageOptions::native())))),
+                                  {}, false, true))),
+                      8)))
+              == "char*(*(**[][8])())[]");
     }
 }
