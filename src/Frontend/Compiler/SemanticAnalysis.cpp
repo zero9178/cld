@@ -1078,7 +1078,8 @@ cld::Semantics::Type
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
                 auto& [declarator, size] = *iter2;
-                auto type = declaratorsToType(specifiers, *declarator, {});
+                auto type = declarator ? declaratorsToType(specifiers, *declarator, {}) :
+                                         declaratorsToType(specifiers, nullptr, {});
                 if (isVoid(type))
                 {
                     if (structOrUnion->isUnion())
@@ -1212,8 +1213,7 @@ cld::Semantics::Type
                     }
                     value = result->toUInt();
                 }
-                auto fieldName = declaratorToName(*declarator);
-
+                std::string_view fieldName = declarator ? declaratorToName(*declarator) : "";
                 fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), value});
             }
         }
@@ -1752,21 +1752,71 @@ cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::sizeOf(con
             }
             auto& recDef = cld::get<StructDefinition>(*result);
             std::size_t currentSize = 0;
-            for (auto& [type, name, bits] : recDef.getFields())
+            std::size_t currentAlignment = 0;
+            for (auto iter = recDef.getFields().begin(); iter != recDef.getFields().end();)
             {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto alignment = alignOf(*type, loc);
-                CLD_ASSERT(alignment);
-                auto rest = currentSize % *alignment;
-                if (rest != 0)
+                if (!iter->bitFieldSize)
                 {
-                    currentSize += *alignment - rest;
+                    auto alignment = alignOf(*iter->type, loc);
+                    CLD_ASSERT(alignment);
+                    currentAlignment = std::max(currentAlignment, *alignment);
+                    auto rest = currentSize % *alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += *alignment - rest;
+                    }
+                    auto subSize = sizeOf(*iter->type, loc);
+                    CLD_ASSERT(subSize);
+                    currentSize += *subSize;
+                    iter++;
+                    continue;
                 }
-                auto subSize = sizeOf(*type, loc);
-                CLD_ASSERT(subSize);
-                currentSize += *subSize;
+                bool lastWasZero = false;
+                std::uint64_t storageLeft = 0;
+                std::uint64_t prevSize = 0;
+                for (; iter != recDef.getFields().end() && iter->bitFieldSize; iter++)
+                {
+                    if (*iter->bitFieldSize == 0)
+                    {
+                        lastWasZero = true;
+                        continue;
+                    }
+                    Expected<std::size_t, Message> size;
+                    if (m_sourceInterface.getLanguageOptions().discreteBitfields)
+                    {
+                        size = sizeOf(*iter->type, loc);
+                        CLD_ASSERT(size);
+                    }
+                    if (!lastWasZero && storageLeft > *iter->bitFieldSize
+                        && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == *size))
+                    {
+                        storageLeft -= *iter->bitFieldSize;
+                        continue;
+                    }
+                    lastWasZero = false;
+                    currentSize += prevSize;
+                    auto alignment = alignOf(*iter->type, loc);
+                    CLD_ASSERT(alignment);
+                    currentAlignment = std::max(currentAlignment, *alignment);
+                    auto rest = currentSize % *alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += *alignment - rest;
+                    }
+                    if (!m_sourceInterface.getLanguageOptions().discreteBitfields)
+                    {
+                        size = sizeOf(*iter->type, loc);
+                        CLD_ASSERT(size);
+                    }
+                    prevSize = *size;
+                    storageLeft = (*size * 8) - *iter->bitFieldSize;
+                }
+                currentSize += prevSize;
+            }
+            auto rest = currentSize % currentAlignment;
+            if (rest != 0)
+            {
+                currentSize += currentAlignment - rest;
             }
             return currentSize;
         },

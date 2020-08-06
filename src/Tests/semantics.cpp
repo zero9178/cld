@@ -597,6 +597,57 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     }
     SECTION("Bitfields")
     {
+        SECTION("sizeof")
+        {
+            SECTION("Discrete bitfields")
+            {
+                // Windows uses discrete bitfields
+                auto [translationUnit, errors] = generateSemantics("struct A\n"
+                                                                   "{\n"
+                                                                   "    int a : 8;\n"
+                                                                   "    int b : 3;\n"
+                                                                   "    int c : 1;\n"
+                                                                   "    int d : 1;\n"
+                                                                   "    int e : 1;\n"
+                                                                   "    _Bool f : 1;\n"
+                                                                   "};\n"
+                                                                   "\n"
+                                                                   "int a[sizeof(struct A)];",
+                                                                   x64windowsMsvc);
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == 8);
+            }
+            SECTION("System V bitfields")
+            {
+                // Windows uses discrete bitfields
+                auto [translationUnit, errors] = generateSemantics("struct A\n"
+                                                                   "{\n"
+                                                                   "    int a : 8;\n"
+                                                                   "    int b : 3;\n"
+                                                                   "    int c : 1;\n"
+                                                                   "    int d : 1;\n"
+                                                                   "    int e : 1;\n"
+                                                                   "    _Bool f : 1;\n"
+                                                                   "};\n"
+                                                                   "\n"
+                                                                   "int a[sizeof(struct A)];",
+                                                                   x64linux);
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == 4);
+            }
+        }
         SEMA_PRODUCES("struct A {\n"
                       " float i :5;\n"
                       "};",

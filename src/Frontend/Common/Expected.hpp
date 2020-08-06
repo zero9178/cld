@@ -25,6 +25,8 @@ public:
         std::is_move_constructible_v<
             ValueType> && std::is_move_assignable_v<ValueType> && std::is_move_constructible_v<ErrorType> && std::is_move_assignable_v<ErrorType>);
 
+    constexpr Expected() = default;
+
     /**
      * Implicit move constructor with value
      * @param value Moveable value

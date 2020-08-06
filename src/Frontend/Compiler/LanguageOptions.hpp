@@ -25,6 +25,7 @@ struct LanguageOptions
     std::uint8_t sizeOfLong;
     std::uint8_t sizeOfLongDoubleBits;
     std::uint8_t sizeOfVoidStar;
+    bool discreteBitfields;
     std::vector<std::string> includeDirectories{};
     std::vector<std::string> includeQuoteDirectories{};
     std::unordered_set<std::string> disabledWarnings{};

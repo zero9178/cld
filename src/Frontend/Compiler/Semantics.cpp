@@ -188,12 +188,12 @@ bool cld::Semantics::PrimitiveType::isSigned() const
 
 std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
 {
-    // Round up to the next highest power 2
-    std::uint8_t temp = m_bitCount - 1;
-    temp |= temp >> 1;
-    temp |= temp >> 2;
-    temp |= temp >> 4;
-    return (temp + 1) / 8;
+    int remainder = m_bitCount % 8;
+    if (!remainder)
+    {
+        return m_bitCount / 8;
+    }
+    return (m_bitCount + 8 - remainder) / 8;
 }
 
 std::uint8_t cld::Semantics::PrimitiveType::getBitCount() const
