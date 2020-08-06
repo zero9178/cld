@@ -188,12 +188,17 @@ bool cld::Semantics::PrimitiveType::isSigned() const
 
 std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
 {
-    int remainder = m_bitCount % 8;
-    if (!remainder)
+    auto value = m_bitCount;
+    auto remainder = value % 8;
+    if (remainder)
     {
-        return m_bitCount / 8;
+        value += 8 - remainder;
     }
-    return (m_bitCount + 8 - remainder) / 8;
+    std::uint8_t temp = (value / 8) - 1;
+    temp |= temp >> 1;
+    temp |= temp >> 2;
+    temp |= temp >> 4;
+    return (temp + 1);
 }
 
 std::uint8_t cld::Semantics::PrimitiveType::getBitCount() const
