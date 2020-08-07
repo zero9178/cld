@@ -319,21 +319,21 @@ public:
 class StructType final
 {
     std::string m_name;
-    std::uint64_t m_scope;
+    std::int64_t m_scopeOrId;
 
-    StructType(std::string_view name, std::uint64_t scope);
+    StructType(std::string_view name, std::int64_t scope);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scope);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    std::uint64_t getScope() const
+    std::int64_t getScopeOrId() const
     {
-        return m_scope;
+        return m_scopeOrId;
     }
 
     std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
@@ -348,21 +348,21 @@ public:
 class UnionType final
 {
     std::string m_name;
-    std::uint64_t m_scope;
+    std::int64_t m_scopeOrId;
 
-    UnionType(std::string_view name, std::uint64_t scope);
+    UnionType(std::string_view name, std::int64_t scopeOrId);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrId);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    std::uint64_t getScope() const
+    std::int64_t getScopeOrId() const
     {
-        return m_scope;
+        return m_scopeOrId;
     }
 
     std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
@@ -440,21 +440,21 @@ public:
 class EnumType final
 {
     std::string m_name;
-    std::uint64_t m_scope;
+    std::int64_t m_scopeOrId;
 
-    EnumType(std::string name, std::uint64_t scope);
+    EnumType(std::string name, std::int64_t scopeOrId);
 
 public:
-    static Type create(bool isConst, bool isVolatile, const std::string& name, std::uint64_t scope);
+    static Type create(bool isConst, bool isVolatile, const std::string& name, std::int64_t scopeOrId);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    std::uint64_t getScope() const
+    std::int64_t getScopeOrId() const
     {
-        return m_scope;
+        return m_scopeOrId;
     }
 
     std::size_t getSizeOf(const SemanticAnalysis& analysis) const;

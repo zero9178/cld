@@ -132,12 +132,15 @@ std::size_t cld::Semantics::PointerType::getAlignOf(const SemanticAnalysis& anal
     return analysis.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string name, std::uint64_t scope) : m_name(std::move(name)), m_scope(scope) {}
+cld::Semantics::EnumType::EnumType(std::string name, int64_t scopeOrId)
+    : m_name(std::move(name)), m_scopeOrId(scopeOrId)
+{
+}
 
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
-                                                      std::uint64_t scope)
+                                                      int64_t scopeOrId)
 {
-    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scopeOrId));
 }
 
 bool cld::Semantics::EnumType::operator==(const cld::Semantics::EnumType& rhs) const
@@ -152,16 +155,16 @@ bool cld::Semantics::EnumType::operator!=(const cld::Semantics::EnumType& rhs) c
 
 std::size_t cld::Semantics::EnumType::getSizeOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<EnumDefinition>(*def));
-    return cld::get<EnumDefinition>(*def).getType().getSizeOf(analysis);
+    auto* def = analysis.getEnumDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getType().getSizeOf(analysis);
 }
 
 std::size_t cld::Semantics::EnumType::getAlignOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<EnumDefinition>(*def));
-    return cld::get<EnumDefinition>(*def).getType().getAlignOf(analysis);
+    auto* def = analysis.getEnumDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getType().getAlignOf(analysis);
 }
 
 cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
@@ -410,20 +413,20 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, std::uint64_t scope)
-    : m_name(cld::to_string(name)), m_scope(scope)
+cld::Semantics::StructType::StructType(std::string_view name, int64_t scope)
+    : m_name(cld::to_string(name)), m_scopeOrId(scope)
 {
 }
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        std::uint64_t scope)
+                                                        int64_t scope)
 {
     return cld::Semantics::Type(isConst, isVolatile, StructType(name, scope));
 }
 
 bool cld::Semantics::StructType::operator==(const cld::Semantics::StructType& rhs) const
 {
-    return std::tie(m_name, m_scope) == std::tie(rhs.m_name, rhs.m_scope);
+    return std::tie(m_name, m_scopeOrId) == std::tie(rhs.m_name, rhs.m_scopeOrId);
 }
 
 bool cld::Semantics::StructType::operator!=(const cld::Semantics::StructType& rhs) const
@@ -433,32 +436,32 @@ bool cld::Semantics::StructType::operator!=(const cld::Semantics::StructType& rh
 
 std::size_t cld::Semantics::StructType::getSizeOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<StructDefinition>(*def));
-    return cld::get<StructDefinition>(*def).getSizeOf();
+    auto* def = analysis.getStructDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getSizeOf();
 }
 
 std::size_t cld::Semantics::StructType::getAlignOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<StructDefinition>(*def));
-    return cld::get<StructDefinition>(*def).getAlignOf();
+    auto* def = analysis.getStructDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getAlignOf();
 }
 
-cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t scope)
-    : m_name(cld::to_string(name)), m_scope(scope)
+cld::Semantics::UnionType::UnionType(std::string_view name, int64_t scopeOrId)
+    : m_name(cld::to_string(name)), m_scopeOrId(scopeOrId)
 {
 }
 
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                       std::uint64_t scope)
+                                                       int64_t scopeOrId)
 {
-    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, scopeOrId));
 }
 
 bool cld::Semantics::UnionType::operator==(const cld::Semantics::UnionType& rhs) const
 {
-    return std::tie(m_name, m_scope) == std::tie(rhs.m_name, rhs.m_scope);
+    return std::tie(m_name, m_scopeOrId) == std::tie(rhs.m_name, rhs.m_scopeOrId);
 }
 
 bool cld::Semantics::UnionType::operator!=(const cld::Semantics::UnionType& rhs) const
@@ -468,16 +471,16 @@ bool cld::Semantics::UnionType::operator!=(const cld::Semantics::UnionType& rhs)
 
 std::size_t cld::Semantics::UnionType::getSizeOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<UnionDefinition>(*def));
-    return cld::get<UnionDefinition>(*def).getSizeOf();
+    auto* def = analysis.getUnionDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getSizeOf();
 }
 
 std::size_t cld::Semantics::UnionType::getAlignOf(const SemanticAnalysis& analysis) const
 {
-    auto* def = analysis.lookupType(m_name, m_scope);
-    CLD_ASSERT(def && std::holds_alternative<UnionDefinition>(*def));
-    return cld::get<UnionDefinition>(*def).getAlignOf();
+    auto* def = analysis.getUnionDefinition(m_name, m_scopeOrId);
+    CLD_ASSERT(def);
+    return def->getAlignOf();
 }
 
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)

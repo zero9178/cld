@@ -500,7 +500,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getName() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().get()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getScope() == 0);
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getScopeOrId() == 0);
     }
     SECTION("Simple union")
     {
@@ -512,7 +512,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getName() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().get()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getScope() == 0);
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getScopeOrId() == 0);
     }
     SECTION("Anonymous struct")
     {
@@ -680,6 +680,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SEMA_PRODUCES("struct A{ int f[*]; };", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT));
     SEMA_PRODUCES("union A{ int f[*]; };", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION));
 }
+
+TEST_CASE("Semantics enums", "[semantics]") {}
 
 TEST_CASE("Semantics type compatibility", "[semantics]")
 {

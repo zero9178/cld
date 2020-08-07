@@ -238,6 +238,8 @@ CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in
 CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
              "Size of variably modified type cannot be determined in constant expression", Underline<0>);
 
+CREATE_ERROR(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED, "Forward declaring an enum is not allowed", Underline<0>);
+
 CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "%tokenType0 not allowed in constant expression", PointAt<0>);
 
 CREATE_ERROR(STRING_LITERALS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "String literals not allowed in constant expression",

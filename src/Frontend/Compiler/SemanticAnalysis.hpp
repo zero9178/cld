@@ -12,6 +12,15 @@
 
 namespace cld::Semantics
 {
+enum class StructDefTag : std::size_t
+{
+};
+enum class UnionDefTag : std::size_t
+{
+};
+enum class EnumDefTag : std::size_t
+{
+};
 class SemanticAnalysis final
 {
     struct DeclarationInScope
@@ -24,17 +33,13 @@ class SemanticAnalysis final
     struct TagTypeInScope
     {
         Lexer::CTokenIterator identifier;
-        struct EnumDecl
-        {
-        };
         struct StructDecl
         {
         };
         struct UnionDecl
         {
         };
-        using Variant =
-            std::variant<EnumDecl, StructDecl, UnionDecl, StructDefinition, UnionDefinition, EnumDefinition>;
+        using Variant = std::variant<StructDecl, UnionDecl, StructDefTag, UnionDefTag, EnumDefTag>;
         Variant tagType;
     };
     const SourceInterface& m_sourceInterface;
@@ -47,6 +52,9 @@ class SemanticAnalysis final
     };
     std::int64_t m_currentScope = 0;
     std::vector<Scope> m_scopes = {Scope{-1, {}, {}}};
+    std::vector<StructDefinition> m_structDefinitions;
+    std::vector<UnionDefinition> m_unionDefinitions;
+    std::vector<EnumDefinition> m_enumDefinitions;
 
     auto pushScope()
     {
@@ -196,12 +204,46 @@ public:
         return m_sourceInterface.getLanguageOptions();
     }
 
-    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name) const
+    template <class T>
+    [[nodiscard]] const T* lookupType(std::string_view name) const
     {
-        return lookupType(name, m_currentScope);
+        return lookupType<T>(name, m_currentScope);
     }
 
-    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name, std::int64_t scope) const;
+    template <class T>
+    [[nodiscard]] const T* lookupType(std::string_view name, std::int64_t scope) const
+    {
+        auto curr = scope;
+        while (curr >= 0)
+        {
+            auto result = m_scopes[curr].types.find(name);
+            if (result != m_scopes[curr].types.end())
+            {
+                if (auto* ptr = std::get_if<T>(&result->second.tagType))
+                {
+                    return ptr;
+                }
+            }
+            curr = m_scopes[curr].previousScope;
+        }
+        return nullptr;
+    }
+
+    StructDefinition* getStructDefinition(std::string_view name, std::int64_t scopeOrId,
+                                          std::uint64_t* idOut = nullptr);
+
+    const StructDefinition* getStructDefinition(std::string_view name, std::int64_t scopeOrId,
+                                                std::uint64_t* idOut = nullptr) const;
+
+    EnumDefinition* getEnumDefinition(std::string_view name, std::int64_t scopeOrId, std::uint64_t* idOut = nullptr);
+
+    const EnumDefinition* getEnumDefinition(std::string_view name, std::int64_t scopeOrId,
+                                            std::uint64_t* idOut = nullptr) const;
+
+    UnionDefinition* getUnionDefinition(std::string_view name, std::int64_t scopeOrId, std::uint64_t* idOut = nullptr);
+
+    const UnionDefinition* getUnionDefinition(std::string_view name, std::int64_t scopeOrId,
+                                              std::uint64_t* idOut = nullptr) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 
