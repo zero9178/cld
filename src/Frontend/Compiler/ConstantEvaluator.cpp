@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "ErrorMessages.hpp"
+#include "SemanticAnalysis.hpp"
 
 namespace
 {
@@ -183,21 +184,33 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return match(
         node.getVariant(),
         [this](const std::unique_ptr<Syntax::TypeName>& typeName) -> cld::Semantics::ConstRetType {
-            CLD_ASSERT(m_typeCallback);
-            auto type = m_typeCallback(*typeName);
+            CLD_ASSERT(m_analyser);
+            auto type =
+                m_analyser->declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator());
             if (type.isUndefined())
             {
-                // Here we rely on the implementation of the callback to log the error somehow
                 return {};
             }
-            CLD_ASSERT(m_typeInfoCallback);
-            auto size = m_typeInfoCallback(TypeInfo::Size, type, {typeName->begin(), typeName->end()});
-            if (!size)
+            if (!m_analyser->isCompleteType(type))
             {
-                log(size.error());
+                log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*typeName, m_sourceInterface, type,
+                                                                         *typeName));
                 return {};
             }
-            return {llvm::APSInt(llvm::APInt(64, *size)), PrimitiveType::createUnsignedLongLong(false, false)};
+            if (m_analyser->isVariablyModified(type))
+            {
+                log(Errors::Semantics::SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
+                    *typeName, m_sourceInterface, *typeName));
+                return {};
+            }
+            if (std::holds_alternative<FunctionType>(type.get()))
+            {
+                log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
+                                                                                 *typeName));
+                return {};
+            }
+            auto size = type.getSizeOf(*m_analyser);
+            return {llvm::APSInt(llvm::APInt(64, size)), PrimitiveType::createUnsignedLongLong(false, false)};
         },
         [](auto &&) -> cld::Semantics::ConstRetType {
             CLD_ASSERT(false && "Not implemented yet");
@@ -216,7 +229,9 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             {
                 return value;
             }
-            auto type = m_typeCallback ? m_typeCallback(cast.first) : Type{};
+            CLD_ASSERT(m_analyser);
+            auto type =
+                m_analyser->declaratorsToType(cast.first.getSpecifierQualifiers(), cast.first.getAbstractDeclarator());
             if (type.isUndefined())
             {
                 return {};
@@ -372,12 +387,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
                     auto& elementType = cld::get<PointerType>(ptr.getType().get()).getElementType();
-                    CLD_ASSERT(m_typeInfoCallback);
-                    auto result =
-                        m_typeInfoCallback(TypeInfo::Size, elementType,
-                                           value.isArithmetic() ? llvm::ArrayRef(exp.begin(), exp.end()) :
-                                                                  llvm::ArrayRef(node.begin(), exp.begin() - 1));
-                    if (!result)
+                    if (!m_analyser->isCompleteType(elementType))
                     {
                         auto loc = value.isArithmetic() ? std::forward_as_tuple(*exp.begin(), *(exp.end() - 1)) :
                                                           std::forward_as_tuple(*node.begin(), *(exp.begin() - 2));
@@ -386,8 +396,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                         return {};
                     }
                 }
-                value.plusAssign(other, m_sourceInterface.getLanguageOptions(),
-                                 [&](const Type& type) { return *m_typeInfoCallback(TypeInfo::Size, type, {}); });
+                value.plusAssign(other, m_sourceInterface.getLanguageOptions(), m_analyser);
             }
             break;
             case Syntax::AdditiveExpression::BinaryDashOperator::BinaryMinus:
@@ -414,12 +423,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 {
                     auto& ptr = value.isArithmetic() ? other : value;
                     auto& elementType = cld::get<PointerType>(ptr.getType().get()).getElementType();
-                    CLD_ASSERT(m_typeInfoCallback);
-                    auto result =
-                        m_typeInfoCallback(TypeInfo::Size, elementType,
-                                           value.isArithmetic() ? llvm::ArrayRef(exp.begin(), exp.end()) :
-                                                                  llvm::ArrayRef(node.begin(), exp.begin() - 1));
-                    if (!result)
+                    if (!m_analyser->isCompleteType(elementType))
                     {
                         auto lhs = std::forward_as_tuple(*node.begin(), *(exp.begin() - 2));
                         auto rhs = std::forward_as_tuple(*exp.begin(), *(exp.end() - 1));
@@ -428,8 +432,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                         return {};
                     }
                 }
-                value.minusAssign(other, m_sourceInterface.getLanguageOptions(),
-                                  [&](const Type& type) { return *m_typeInfoCallback(TypeInfo::Size, type, {}); });
+                value.minusAssign(other, m_sourceInterface.getLanguageOptions(), m_analyser);
             }
             break;
         }
@@ -902,14 +905,12 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 }
 
 cld::Semantics::ConstantEvaluator::ConstantEvaluator(const SourceInterface& sourceInterface,
-                                                     std::function<Type(const Syntax::TypeName&)> typeCallback,
                                                      std::function<ConstRetType(std::string_view)> identifierCallback,
-                                                     std::function<TypeInfoCallback> typeInfoCallback,
+                                                     SemanticAnalysis* analyser,
                                                      std::function<void(const Message&)> loggerCallback, Mode mode)
     : m_sourceInterface(sourceInterface),
-      m_typeCallback(std::move(typeCallback)),
       m_identifierCallback(std::move(identifierCallback)),
-      m_typeInfoCallback(std::move(typeInfoCallback)),
+      m_analyser(analyser),
       m_loggerCallback(std::move(loggerCallback)),
       m_mode(mode)
 {
@@ -1314,21 +1315,21 @@ cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::moduloAssign(const c
     return *this = modulo(rhs, options);
 }
 
-cld::Semantics::ConstRetType
-    cld::Semantics::ConstRetType::plus(const cld::Semantics::ConstRetType& rhs, const LanguageOptions& options,
-                                       llvm::function_ref<std::size_t(const Type&)> sizeCallback, Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::plus(const cld::Semantics::ConstRetType& rhs,
+                                                                const LanguageOptions& options,
+                                                                const SemanticAnalysis* analysis, Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
-        [&op2 = op2, &op1 = op1, &sizeCallback](VoidStar address) -> ConstRetType {
+        [&op2 = op2, &op1 = op1, analysis](VoidStar address) -> ConstRetType {
             if (!std::holds_alternative<llvm::APSInt>(op2.getValue()))
             {
                 CLD_UNREACHABLE;
             }
             auto& integer = cld::get<llvm::APSInt>(op2.getValue());
-            CLD_ASSERT(sizeCallback);
-            auto size = sizeCallback(cld::get<PointerType>(op1.getType().get()).getElementType());
+            CLD_ASSERT(analysis);
+            auto size = cld::get<PointerType>(op1.getType().get()).getElementType().getSizeOf(*analysis);
             if (integer.isUnsigned())
             {
                 address.address += size * integer.getZExtValue();
@@ -1342,12 +1343,12 @@ cld::Semantics::ConstRetType
         [&op2 = op2](const llvm::APFloat& floating) -> ConstRetType {
             return {floating + cld::get<llvm::APFloat>(op2.getValue()), op2.getType()};
         },
-        [&op2 = op2, issues, &sizeCallback](const llvm::APSInt& integer) -> ConstRetType {
+        [&op2 = op2, issues, analysis](const llvm::APSInt& integer) -> ConstRetType {
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
                 auto address = cld::get<VoidStar>(op2.getValue());
-                CLD_ASSERT(sizeCallback);
-                auto size = sizeCallback(cld::get<PointerType>(op2.getType().get()).getElementType());
+                CLD_ASSERT(analysis);
+                auto size = cld::get<PointerType>(op2.getType().get()).getElementType().getSizeOf(*analysis);
                 if (integer.isUnsigned())
                 {
                     address.address += size * integer.getZExtValue();
@@ -1369,22 +1370,23 @@ cld::Semantics::ConstRetType
         });
 }
 
-cld::Semantics::ConstRetType&
-    cld::Semantics::ConstRetType::plusAssign(const cld::Semantics::ConstRetType& rhs, const LanguageOptions& options,
-                                             llvm::function_ref<std::size_t(const Type&)> sizeCallback, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::plusAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                       const LanguageOptions& options,
+                                                                       const SemanticAnalysis* analysis, Issues* issues)
 {
-    return *this = plus(rhs, options, sizeCallback, issues);
+    return *this = plus(rhs, options, analysis, issues);
 }
 
-cld::Semantics::ConstRetType
-    cld::Semantics::ConstRetType::minus(const cld::Semantics::ConstRetType& rhs, const LanguageOptions& options,
-                                        llvm::function_ref<std::size_t(const Type&)> sizeCallback, Issues* issues) const
+cld::Semantics::ConstRetType cld::Semantics::ConstRetType::minus(const cld::Semantics::ConstRetType& rhs,
+                                                                 const LanguageOptions& options,
+                                                                 const SemanticAnalysis* analysis, Issues* issues) const
 {
     auto [op1, op2] = arithmeticConversions(*this, rhs, options);
     return match(
         op1.getValue(), [](std::monostate) -> ConstRetType { CLD_UNREACHABLE; },
-        [&op2 = op2, &op1 = op1, &sizeCallback, &options](VoidStar address) -> ConstRetType {
-            auto size = sizeCallback(cld::get<PointerType>(op1.getType().get()).getElementType());
+        [&op2 = op2, &op1 = op1, analysis, &options](VoidStar address) -> ConstRetType {
+            CLD_ASSERT(analysis);
+            auto size = cld::get<PointerType>(op1.getType().get()).getElementType().getSizeOf(*analysis);
             if (std::holds_alternative<VoidStar>(op2.getValue()))
             {
                 return {llvm::APSInt(llvm::APInt(options.sizeOfVoidStar * 8,
@@ -1423,11 +1425,12 @@ cld::Semantics::ConstRetType
         });
 }
 
-cld::Semantics::ConstRetType&
-    cld::Semantics::ConstRetType::minusAssign(const cld::Semantics::ConstRetType& rhs, const LanguageOptions& options,
-                                              llvm::function_ref<std::size_t(const Type&)> sizeCallback, Issues* issues)
+cld::Semantics::ConstRetType& cld::Semantics::ConstRetType::minusAssign(const cld::Semantics::ConstRetType& rhs,
+                                                                        const LanguageOptions& options,
+                                                                        const SemanticAnalysis* analysis,
+                                                                        Issues* issues)
 {
-    return *this = minus(rhs, options, sizeCallback, issues);
+    return *this = minus(rhs, options, analysis, issues);
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstRetType::shiftLeft(const cld::Semantics::ConstRetType& rhs,

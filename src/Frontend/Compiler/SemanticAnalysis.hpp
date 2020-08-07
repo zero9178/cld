@@ -62,9 +62,6 @@ class SemanticAnalysis final
         std::vector<Message> messages;
         ConstantEvaluator evaluator(
             m_sourceInterface,
-            [this](const Syntax::TypeName& typeName) {
-                return declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
-            },
             [this](std::string_view name) -> ConstRetType {
                 const auto* result = lookupDecl(name);
                 if (!result || !std::holds_alternative<ConstRetType>(*result))
@@ -73,15 +70,7 @@ class SemanticAnalysis final
                 }
                 return cld::get<ConstRetType>(*result);
             },
-            [&](ConstantEvaluator::TypeInfo info, const Type& type,
-                llvm::ArrayRef<Lexer::CToken> loc) -> Expected<std::size_t, Message> {
-                switch (info)
-                {
-                    case ConstantEvaluator::TypeInfo::Size: return sizeOf(type, loc);
-                    case ConstantEvaluator::TypeInfo::Alignment: return alignOf(type, loc);
-                }
-                CLD_UNREACHABLE;
-            },
+            this,
             [&](const Message& message) {
                 if (message.getSeverity() == Severity::Error)
                 {
@@ -122,13 +111,6 @@ class SemanticAnalysis final
 
     [[nodiscard]] const DeclarationInScope::Variant* lookupDecl(std::string_view name, std::int64_t scope) const;
 
-    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name) const
-    {
-        return lookupType(name, m_currentScope);
-    }
-
-    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name, std::int64_t scope) const;
-
     void log(const Message& message);
 
     static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers);
@@ -157,10 +139,6 @@ class SemanticAnalysis final
     {
         return m_scopes[m_currentScope];
     }
-
-    bool isCompleteType(const Type& type) const;
-
-    bool isVariablyModified(const Type& type) const;
 
     bool hasFlexibleArrayMember(const Type& type) const;
 
@@ -209,9 +187,21 @@ public:
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations);
     }
 
-    Expected<std::size_t, Message> sizeOf(const Type& type, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
+    bool isCompleteType(const Type& type) const;
 
-    Expected<std::size_t, Message> alignOf(const Type& type, llvm::ArrayRef<Lexer::CToken> loc = {}) const;
+    bool isVariablyModified(const Type& type) const;
+
+    const LanguageOptions& getLanguageOptions() const
+    {
+        return m_sourceInterface.getLanguageOptions();
+    }
+
+    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name) const
+    {
+        return lookupType(name, m_currentScope);
+    }
+
+    [[nodiscard]] const TagTypeInScope::Variant* lookupType(std::string_view name, std::int64_t scope) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 

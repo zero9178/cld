@@ -235,8 +235,8 @@ CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF, "Function type not allow
 
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Underline<0>);
 
-CREATE_ERROR(SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
-             "Size of variable length array cannot be determined in constant expression", Underline<0>);
+CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
+             "Size of variably modified type cannot be determined in constant expression", Underline<0>);
 
 CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "%tokenType0 not allowed in constant expression", PointAt<0>);
 

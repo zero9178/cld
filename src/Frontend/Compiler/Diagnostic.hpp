@@ -30,8 +30,6 @@ namespace detail
 {
 constexpr static auto DIAG_ARG_PATTERN = ctll::fixed_string{"%([^\\s\\\\]*)(\\d)"};
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "llvm-qualified-auto"
 template <class... Args>
 constexpr std::int64_t getBiggestPercentArg(std::u32string_view text)
 {
@@ -140,7 +138,6 @@ constexpr bool checkForNoDuplicates()
                 && ...);
     }
 }
-#pragma clang diagnostic pop
 
 class DiagnosticBase
 {

@@ -81,16 +81,16 @@ public:
     // These are different due to the need of calling sizeof
 
     ConstRetType plus(const ConstRetType& rhs, const LanguageOptions& options,
-                      llvm::function_ref<std::size_t(const Type&)> sizeCallback = {}, Issues* issues = nullptr) const;
+                      const SemanticAnalysis* analysis = nullptr, Issues* issues = nullptr) const;
 
     ConstRetType& plusAssign(const ConstRetType& rhs, const LanguageOptions& options,
-                             llvm::function_ref<std::size_t(const Type&)> sizeCallback = {}, Issues* issues = nullptr);
+                             const SemanticAnalysis* analysis = nullptr, Issues* issues = nullptr);
 
     ConstRetType minus(const ConstRetType& rhs, const LanguageOptions& options,
-                       llvm::function_ref<std::size_t(const Type&)> sizeCallback = {}, Issues* issues = nullptr) const;
+                       const SemanticAnalysis* analysis = nullptr, Issues* issues = nullptr) const;
 
     ConstRetType& minusAssign(const ConstRetType& rhs, const LanguageOptions& options,
-                              llvm::function_ref<std::size_t(const Type&)> sizeCallback = {}, Issues* issues = nullptr);
+                              const SemanticAnalysis* analysis = nullptr, Issues* issues = nullptr);
 
     ConstRetType shiftLeft(const ConstRetType& rhs, const LanguageOptions& options, Issues* issues = nullptr) const;
 
@@ -146,10 +146,8 @@ public:
 
 private:
     const SourceInterface& m_sourceInterface;
-    std::function<Type(const Syntax::TypeName&)> m_typeCallback;
     std::function<ConstRetType(std::string_view)> m_identifierCallback;
-    using TypeInfoCallback = Expected<std::size_t, Message>(TypeInfo, const Type&, llvm::ArrayRef<Lexer::CToken>);
-    std::function<TypeInfoCallback> m_typeInfoCallback;
+    SemanticAnalysis* m_analyser = nullptr;
     std::function<void(const Message&)> m_loggerCallback;
 
 public:
@@ -167,9 +165,8 @@ private:
 
 public:
     explicit ConstantEvaluator(const SourceInterface& sourceInterface,
-                               std::function<Type(const Syntax::TypeName&)> typeCallback = {},
                                std::function<ConstRetType(std::string_view)> identifierCallback = {},
-                               std::function<TypeInfoCallback> typeInfoCallback = {},
+                               SemanticAnalysis* analyser = nullptr,
                                std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
 
     ConstRetType visit(const Syntax::Expression& node);

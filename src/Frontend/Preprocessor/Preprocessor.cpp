@@ -968,7 +968,7 @@ class Preprocessor final : private cld::PPSourceInterface
             return {};
         }
         cld::Semantics::ConstantEvaluator evaluator(
-            *this, {},
+            *this,
             [&](std::string_view macro) -> cld::Semantics::ConstRetType {
                 if (macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0)
                 {
@@ -977,7 +977,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 return {llvm::APSInt(64, false), cld::Semantics::PrimitiveType::createLongLong(false, false)};
             },
-            {},
+            nullptr,
             [&](const cld::Message& message) {
                 if (message.getSeverity() == cld::Severity::Error)
                 {

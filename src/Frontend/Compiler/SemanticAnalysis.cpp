@@ -1199,12 +1199,11 @@ cld::Semantics::Type
                     {
                         continue;
                     }
-                    auto objectSize = sizeOf(type);
-                    CLD_ASSERT(objectSize);
-                    if (result->toUInt() > *objectSize * 8)
+                    auto objectWidth = cld::get<PrimitiveType>(type.get()).getBitCount();
+                    if (result->toUInt() > objectWidth)
                     {
                         log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
-                            *size, m_sourceInterface, specifiers, *objectSize * 8, *size, result->toUInt()));
+                            *size, m_sourceInterface, specifiers, objectWidth, *size, result->toUInt()));
                     }
                     if (result->toUInt() == 0 && declarator)
                     {
@@ -1217,6 +1216,90 @@ cld::Semantics::Type
                 fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), value});
             }
         }
+        std::size_t currentSize = 0, currentAlignment = 0;
+        if (!structOrUnion->isUnion())
+        {
+            for (auto iter = fields.begin(); iter != fields.end();)
+            {
+                if (iter->type->isUndefined())
+                {
+                    iter++;
+                    continue;
+                }
+                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(iter->type->get()))
+                {
+                    break;
+                }
+                if (!iter->bitFieldSize)
+                {
+                    auto alignment = iter->type->getAlignOf(*this);
+                    currentAlignment = std::max(currentAlignment, alignment);
+                    auto rest = currentSize % alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += alignment - rest;
+                    }
+                    auto subSize = iter->type->getSizeOf(*this);
+                    currentSize += subSize;
+                    iter++;
+                    continue;
+                }
+                bool lastWasZero = false;
+                std::uint64_t storageLeft = 0;
+                std::uint64_t prevSize = 0;
+                for (; iter != fields.end() && iter->bitFieldSize; iter++)
+                {
+                    if (*iter->bitFieldSize == 0)
+                    {
+                        lastWasZero = true;
+                        continue;
+                    }
+                    std::size_t size = iter->type->getSizeOf(*this);
+                    if (!lastWasZero && storageLeft > *iter->bitFieldSize
+                        && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
+                    {
+                        storageLeft -= *iter->bitFieldSize;
+                        continue;
+                    }
+                    lastWasZero = false;
+                    currentSize += prevSize;
+                    auto alignment = iter->type->getAlignOf(*this);
+                    currentAlignment = std::max(currentAlignment, alignment);
+                    auto rest = currentSize % alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += alignment - rest;
+                    }
+                    prevSize = size;
+                    storageLeft = cld::get<PrimitiveType>(iter->type->get()).getBitCount() - *iter->bitFieldSize;
+                }
+                currentSize += prevSize;
+            }
+        }
+        else
+        {
+            for (auto& iter : fields)
+            {
+                if (iter.type->isUndefined())
+                {
+                    continue;
+                }
+                auto size = iter.type->getSizeOf(*this);
+                if (size > currentSize)
+                {
+                    currentSize = size;
+                    currentAlignment = iter.type->getAlignOf(*this);
+                }
+            }
+        }
+        if (currentAlignment != 0)
+        {
+            auto rest = currentSize % currentAlignment;
+            if (rest != 0)
+            {
+                currentSize += currentAlignment - rest;
+            }
+        }
         if (structOrUnion->getIdentifierLoc())
         {
             auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
@@ -1224,7 +1307,8 @@ cld::Semantics::Type
             {
                 if (recordDefInScope)
                 {
-                    (*recordDefInScope)->second.tagType = UnionDefinition(name, std::move(fields));
+                    (*recordDefInScope)->second.tagType =
+                        UnionDefinition(name, std::move(fields), currentSize, currentAlignment);
                 }
                 return UnionType::create(isConst, isVolatile,
                                          cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
@@ -1232,7 +1316,8 @@ cld::Semantics::Type
             }
             if (recordDefInScope)
             {
-                (*recordDefInScope)->second.tagType = StructDefinition(name, std::move(fields));
+                (*recordDefInScope)->second.tagType =
+                    StructDefinition(name, std::move(fields), currentSize, currentAlignment);
             }
             return StructType::create(isConst, isVolatile,
                                       cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
@@ -1241,11 +1326,11 @@ cld::Semantics::Type
 
         if (structOrUnion->isUnion())
         {
-            return AnonymousUnionType::create(isConst, isVolatile, std::move(fields));
+            return AnonymousUnionType::create(isConst, isVolatile, std::move(fields), currentSize, currentAlignment);
         }
         else
         {
-            return AnonymousStructType::create(isConst, isVolatile, std::move(fields));
+            return AnonymousStructType::create(isConst, isVolatile, std::move(fields), currentSize, currentAlignment);
         }
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
@@ -1718,266 +1803,6 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         return true;
     }
     return lhs == rhs;
-}
-
-cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::sizeOf(const Type& type,
-                                                                             llvm::ArrayRef<Lexer::CToken> loc) const
-{
-    using RetType = Expected<std::size_t, Message>;
-    return match(
-        type.get(), [](const PrimitiveType& primitiveType) -> RetType { return primitiveType.getByteCount(); },
-        [&](const ArrayType& arrayType) -> RetType {
-            auto result = sizeOf(arrayType.getType(), loc);
-            if (!result)
-            {
-                return result;
-            }
-            return *result * arrayType.getSize();
-        },
-        [&](const AbstractArrayType&) -> RetType {
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
-        },
-        [&](const ValArrayType&) -> RetType {
-            return Errors::Semantics::SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
-                loc, m_sourceInterface, loc);
-        },
-        [&](const FunctionType&) -> RetType {
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(loc, m_sourceInterface, loc);
-        },
-        [&](const StructType& structType) -> RetType {
-            const auto* result = lookupType(structType.getName(), structType.getScope());
-            if (!result || !std::holds_alternative<StructDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& recDef = cld::get<StructDefinition>(*result);
-            std::size_t currentSize = 0;
-            std::size_t currentAlignment = 0;
-            for (auto iter = recDef.getFields().begin(); iter != recDef.getFields().end();)
-            {
-                if (!iter->bitFieldSize)
-                {
-                    auto alignment = alignOf(*iter->type, loc);
-                    CLD_ASSERT(alignment);
-                    currentAlignment = std::max(currentAlignment, *alignment);
-                    auto rest = currentSize % *alignment;
-                    if (rest != 0)
-                    {
-                        currentSize += *alignment - rest;
-                    }
-                    auto subSize = sizeOf(*iter->type, loc);
-                    CLD_ASSERT(subSize);
-                    currentSize += *subSize;
-                    iter++;
-                    continue;
-                }
-                bool lastWasZero = false;
-                std::uint64_t storageLeft = 0;
-                std::uint64_t prevSize = 0;
-                for (; iter != recDef.getFields().end() && iter->bitFieldSize; iter++)
-                {
-                    if (*iter->bitFieldSize == 0)
-                    {
-                        lastWasZero = true;
-                        continue;
-                    }
-                    Expected<std::size_t, Message> size;
-                    if (m_sourceInterface.getLanguageOptions().discreteBitfields)
-                    {
-                        size = sizeOf(*iter->type, loc);
-                        CLD_ASSERT(size);
-                    }
-                    if (!lastWasZero && storageLeft > *iter->bitFieldSize
-                        && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == *size))
-                    {
-                        storageLeft -= *iter->bitFieldSize;
-                        continue;
-                    }
-                    lastWasZero = false;
-                    currentSize += prevSize;
-                    auto alignment = alignOf(*iter->type, loc);
-                    CLD_ASSERT(alignment);
-                    currentAlignment = std::max(currentAlignment, *alignment);
-                    auto rest = currentSize % *alignment;
-                    if (rest != 0)
-                    {
-                        currentSize += *alignment - rest;
-                    }
-                    if (!m_sourceInterface.getLanguageOptions().discreteBitfields)
-                    {
-                        size = sizeOf(*iter->type, loc);
-                        CLD_ASSERT(size);
-                    }
-                    prevSize = *size;
-                    storageLeft = (*size * 8) - *iter->bitFieldSize;
-                }
-                currentSize += prevSize;
-            }
-            auto rest = currentSize % currentAlignment;
-            if (rest != 0)
-            {
-                currentSize += currentAlignment - rest;
-            }
-            return currentSize;
-        },
-        [&](const UnionType& unionType) -> RetType {
-            const auto* result = lookupType(unionType.getName(), unionType.getScope());
-            if (!result || !std::holds_alternative<UnionDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& recDef = cld::get<UnionDefinition>(*result);
-            std::size_t maxSize = 0;
-            for (auto& [type, name, bits] : recDef.getFields())
-            {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto subSize = sizeOf(*type, loc);
-                CLD_ASSERT(subSize); // A struct must always have a valid size otherwise we shouldn't even have a
-                // StructType
-                maxSize = std::max(maxSize, *subSize);
-            }
-            return maxSize;
-        },
-        [&](const AnonymousStructType& structType) -> RetType {
-            std::size_t currentSize = 0;
-            for (auto& [type, name, bits] : structType.getFields())
-            {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto alignment = alignOf(*type, loc);
-                CLD_ASSERT(alignment);
-                auto rest = currentSize % *alignment;
-                if (rest != 0)
-                {
-                    currentSize += *alignment - rest;
-                }
-                auto subSize = sizeOf(*type, loc);
-                CLD_ASSERT(subSize);
-                currentSize += *subSize;
-            }
-            return currentSize;
-        },
-        [&](const AnonymousUnionType& unionType) -> RetType {
-            std::size_t maxSize = 0;
-            for (auto& [type, name, bits] : unionType.getFields())
-            {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto subSize = sizeOf(*type, loc);
-                CLD_ASSERT(subSize); // A struct must always have a valid size otherwise we shouldn't even have a
-                // StructType
-                maxSize = std::max(maxSize, *subSize);
-            }
-            return maxSize;
-        },
-        [&](const AnonymousEnumType& enumType) -> RetType { return sizeOf(enumType.getType(), loc); },
-        [&](const EnumType& enumType) -> RetType {
-            const auto* result = lookupType(enumType.getName(), enumType.getScope());
-            if (!result || std::holds_alternative<EnumDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& enumDef = cld::get<EnumDefinition>(*result);
-            return sizeOf(enumDef.getType(), loc);
-        },
-        [&](const PointerType&) -> RetType {
-            return std::size_t{m_sourceInterface.getLanguageOptions().sizeOfVoidStar};
-        },
-        [](std::monostate) -> RetType { CLD_UNREACHABLE; });
-}
-
-cld::Expected<size_t, cld::Message> cld::Semantics::SemanticAnalysis::alignOf(const cld::Semantics::Type& type,
-                                                                              llvm::ArrayRef<Lexer::CToken> loc) const
-{
-    using RetType = Expected<std::size_t, Message>;
-    return match(
-        type.get(), [](const PrimitiveType& primitiveType) -> RetType { return primitiveType.getByteCount(); },
-        [&](const ArrayType& arrayType) -> RetType { return alignOf(arrayType.getType(), loc); },
-        [&](const AbstractArrayType&) -> RetType {
-            return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
-        },
-        [&](const ValArrayType& arrayType) -> RetType { return alignOf(arrayType.getType(), loc); },
-        [&](const FunctionType&) -> RetType {
-            return Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, loc);
-        },
-        [&](const StructType& recordType) -> RetType {
-            const auto* result = lookupType(recordType.getName(), recordType.getScope());
-            if (!result || !std::holds_alternative<StructDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& recDef = cld::get<StructDefinition>(*result);
-            std::size_t currentAlignment = 0;
-            for (auto& [type, name, bits] : recDef.getFields())
-            {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto alignment = alignOf(*type, loc);
-                CLD_ASSERT(alignment);
-                currentAlignment = std::max(currentAlignment, *alignment);
-            }
-            return currentAlignment;
-        },
-        [&](const UnionType& unionType) -> RetType {
-            const auto* result = lookupType(unionType.getName(), unionType.getScope());
-            if (!result || !std::holds_alternative<UnionDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& recDef = cld::get<UnionDefinition>(*result);
-            auto maxElement = std::max_element(recDef.getFields().begin(), recDef.getFields().end(),
-                                               [&](const Field& lhs, const Field& rhs) {
-                                                   auto lhsSize = sizeOf(*lhs.type, loc);
-                                                   CLD_ASSERT(lhsSize);
-                                                   auto rhsSize = sizeOf(*rhs.type, loc);
-                                                   CLD_ASSERT(rhsSize);
-                                                   return *lhsSize < *rhsSize;
-                                               });
-            return alignOf(*maxElement->type, loc);
-        },
-        [&](const AnonymousStructType& structType) -> RetType {
-            std::size_t currentAlignment = 0;
-            for (auto& [type, name, bits] : structType.getFields())
-            {
-                (void)name;
-                (void)bits;
-                // TODO: Bitfield
-                auto alignment = alignOf(*type, loc);
-                CLD_ASSERT(alignment);
-                currentAlignment = std::max(currentAlignment, *alignment);
-            }
-            return currentAlignment;
-        },
-        [&](const AnonymousUnionType& unionType) {
-            auto maxElement = std::max_element(unionType.getFields().begin(), unionType.getFields().end(),
-                                               [&](const Field& lhs, const Field& rhs) {
-                                                   auto lhsSize = sizeOf(*lhs.type, loc);
-                                                   CLD_ASSERT(lhsSize);
-                                                   auto rhsSize = sizeOf(*rhs.type, loc);
-                                                   CLD_ASSERT(rhsSize);
-                                                   return *lhsSize < *rhsSize;
-                                               });
-            return alignOf(*maxElement->type, loc);
-        },
-        [&](const AnonymousEnumType& enumType) -> RetType { return sizeOf(enumType.getType(), loc); },
-        [&](const EnumType& enumType) -> RetType {
-            const auto* result = lookupType(enumType.getName(), enumType.getScope());
-            if (!result || std::holds_alternative<EnumDefinition>(*result))
-            {
-                return Errors::Semantics::INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF.args(loc, m_sourceInterface, type, loc);
-            }
-            auto& enumDef = cld::get<EnumDefinition>(*result);
-            return alignOf(enumDef.getType(), loc);
-        },
-        [&](const PointerType&) -> RetType {
-            return std::size_t{m_sourceInterface.getLanguageOptions().sizeOfVoidStar};
-        },
-        [](std::monostate) -> RetType { CLD_UNREACHABLE; });
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(const cld::Semantics::Type& type) const

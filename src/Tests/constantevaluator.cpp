@@ -30,41 +30,13 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     REQUIRE((ss.str().empty()));
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     cld::Semantics::ConstantEvaluator evaluator(
-        ctokens,
-        [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
-            return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
-        },
-        {},
-        [&analysis](cld::Semantics::ConstantEvaluator::TypeInfo info, const cld::Semantics::Type& type,
-                    llvm::ArrayRef<cld::Lexer::CToken> loc) -> cld::Expected<std::size_t, cld::Message> {
-            switch (info)
-            {
-                case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
-                case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
-            }
-            CLD_UNREACHABLE;
-        },
-        [&ss](const cld::Message& message) { ss << message; }, mode);
+        ctokens, {}, &analysis, [&ss](const cld::Message& message) { ss << message; }, mode);
     auto ret = evaluator.visit(parsing);
     auto string = ss.str();
     if (!string.empty())
     {
         cld::Semantics::ConstantEvaluator(
-            ctokens,
-            [&analysis](const cld::Syntax::TypeName& typeName) -> cld::Semantics::Type {
-                return analysis.declaratorsToType(typeName.getSpecifierQualifiers(), typeName.getAbstractDeclarator());
-            },
-            {},
-            [&analysis](cld::Semantics::ConstantEvaluator::TypeInfo info, const cld::Semantics::Type& type,
-                        llvm::ArrayRef<cld::Lexer::CToken> loc) -> cld::Expected<std::size_t, cld::Message> {
-                switch (info)
-                {
-                    case cld::Semantics::ConstantEvaluator::Alignment: return analysis.alignOf(type, loc);
-                    case cld::Semantics::ConstantEvaluator::Size: return analysis.sizeOf(type, loc);
-                }
-                CLD_UNREACHABLE;
-            },
-            [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
+            ctokens, {}, &analysis, [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
             .visit(parsing);
     }
     return {ret, string};
@@ -581,7 +553,8 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(int[*])");
                     CHECK(value.isUndefined());
-                    CHECK_THAT(error, ProducesError(SIZEOF_VAL_ARRAY_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION));
+                    CHECK_THAT(error,
+                               ProducesError(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION));
                 }
                 {
                     auto [value, error] = evaluateConstantExpression("sizeof(struct i)");

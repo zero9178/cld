@@ -15,6 +15,8 @@ class Message;
 
 namespace cld::Semantics
 {
+class SemanticAnalysis;
+
 class Type;
 
 class CompoundStatement;
@@ -117,15 +119,37 @@ public:
 
     static Type createVoid(bool isConst, bool isVolatile);
 
-    [[nodiscard]] bool isFloatingPoint() const;
+    [[nodiscard]] bool isFloatingPoint() const
+    {
+        return m_isFloatingPoint;
+    }
 
-    [[nodiscard]] bool isSigned() const;
+    [[nodiscard]] bool isSigned() const
+    {
+        return m_isSigned;
+    }
 
     [[nodiscard]] std::uint8_t getByteCount() const;
 
-    [[nodiscard]] std::uint8_t getBitCount() const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
+    {
+        return getByteCount();
+    }
 
-    Kind getKind() const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis&) const
+    {
+        return getByteCount();
+    }
+
+    [[nodiscard]] std::uint8_t getBitCount() const
+    {
+        return m_bitCount;
+    }
+
+    Kind getKind() const
+    {
+        return m_kind;
+    }
 
     bool operator==(const PrimitiveType& rhs) const;
 
@@ -139,18 +163,34 @@ class ArrayType final
     std::shared_ptr<const Type> m_type;
     std::size_t m_size;
 
-    ArrayType(bool isRestricted,bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
+    ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
 
 public:
     static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type, std::size_t size);
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return *m_type;
+    }
 
-    [[nodiscard]] std::size_t getSize() const;
+    [[nodiscard]] std::size_t getSize() const
+    {
+        return m_size;
+    }
 
-    [[nodiscard]] bool isRestricted() const;
+    [[nodiscard]] bool isRestricted() const
+    {
+        return m_restricted;
+    }
 
-    [[nodiscard]] bool isStatic() const;
+    [[nodiscard]] bool isStatic() const
+    {
+        return m_static;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const ArrayType& rhs) const;
 
@@ -167,9 +207,22 @@ class AbstractArrayType final
 public:
     static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return *m_type;
+    }
 
-    [[nodiscard]] bool isRestricted() const;
+    [[nodiscard]] bool isRestricted() const
+    {
+        return m_restricted;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const AbstractArrayType& rhs) const;
 
@@ -182,16 +235,32 @@ class ValArrayType final
     bool m_static;
     std::shared_ptr<const Type> m_type;
 
-    ValArrayType(bool isRestricted,bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
+    ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted,bool isStatic, Type&& type);
+    static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type);
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return *m_type;
+    }
 
-    [[nodiscard]] bool isRestricted() const;
+    [[nodiscard]] bool isRestricted() const
+    {
+        return m_restricted;
+    }
 
-    [[nodiscard]] bool isStatic() const;
+    [[nodiscard]] bool isStatic() const
+    {
+        return m_static;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const ValArrayType& rhs) const;
 
@@ -212,13 +281,35 @@ public:
     static Type create(cld::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
                        bool lastIsVararg, bool isKandR);
 
-    [[nodiscard]] const Type& getReturnType() const;
+    [[nodiscard]] const Type& getReturnType() const
+    {
+        return *m_returnType;
+    }
 
-    [[nodiscard]] const std::vector<std::pair<Type, std::string>>& getArguments() const;
+    [[nodiscard]] const std::vector<std::pair<Type, std::string>>& getArguments() const
+    {
+        return m_arguments;
+    }
 
-    [[nodiscard]] bool isLastVararg() const;
+    [[nodiscard]] bool isLastVararg() const
+    {
+        return m_lastIsVararg;
+    }
 
-    [[nodiscard]] bool isKandR() const;
+    [[nodiscard]] bool isKandR() const
+    {
+        return m_isKandR;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    std::size_t getAlignOf(const SemanticAnalysis&) const
+    {
+        CLD_UNREACHABLE;
+    }
 
     bool operator==(const FunctionType& rhs) const;
 
@@ -235,9 +326,19 @@ class StructType final
 public:
     static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
 
-    [[nodiscard]] std::string_view getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 
-    std::uint64_t getScope() const;
+    std::uint64_t getScope() const
+    {
+        return m_scope;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const StructType& rhs) const;
 
@@ -254,9 +355,19 @@ class UnionType final
 public:
     static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scope);
 
-    [[nodiscard]] std::string_view getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 
-    std::uint64_t getScope() const;
+    std::uint64_t getScope() const
+    {
+        return m_scope;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const UnionType& rhs) const;
 
@@ -277,16 +388,23 @@ struct Field
 class AnonymousStructType final
 {
     std::vector<Field> m_fields;
+    std::uint64_t m_sizeOf;
+    std::uint64_t m_alignOf;
 
-    AnonymousStructType(std::vector<Field>&& fields);
+    AnonymousStructType(std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields);
+    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
+                       std::uint64_t alignOf);
 
     const std::vector<Field>& getFields() const
     {
         return m_fields;
     }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const AnonymousStructType& rhs) const;
 
@@ -296,16 +414,23 @@ public:
 class AnonymousUnionType final
 {
     std::vector<Field> m_fields;
+    std::uint64_t m_sizeOf;
+    std::uint64_t m_alignOf;
 
-    AnonymousUnionType(std::vector<Field>&& fields);
+    AnonymousUnionType(std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields);
+    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
+                       std::uint64_t alignOf);
 
     const std::vector<Field>& getFields() const
     {
         return m_fields;
     }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const AnonymousUnionType& rhs) const;
 
@@ -322,9 +447,19 @@ class EnumType final
 public:
     static Type create(bool isConst, bool isVolatile, const std::string& name, std::uint64_t scope);
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 
-    std::uint64_t getScope() const;
+    std::uint64_t getScope() const
+    {
+        return m_scope;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const EnumType& rhs) const;
 
@@ -348,6 +483,10 @@ public:
     {
         return *m_type;
     }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
 
 class PointerType final
@@ -360,9 +499,19 @@ class PointerType final
 public:
     static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& elementType);
 
-    [[nodiscard]] const Type& getElementType() const;
+    [[nodiscard]] const Type& getElementType() const
+    {
+        return *m_elementType;
+    }
 
-    [[nodiscard]] bool isRestricted() const;
+    [[nodiscard]] bool isRestricted() const
+    {
+        return m_restricted;
+    }
+
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
     bool operator==(const PointerType& rhs) const;
 
@@ -384,25 +533,54 @@ private:
     Variant m_type;
 
 public:
-    explicit Type(bool isConst = false, bool isVolatile = false, Variant type = std::monostate{});
+    explicit Type(bool isConst = false, bool isVolatile = false, Variant type = std::monostate{})
+        : m_isConst(isConst), m_isVolatile(isVolatile), m_type(std::move(type))
+    {
+    }
 
-    [[nodiscard]] const Variant& get() const;
+    [[nodiscard]] const Variant& get() const
+    {
+        return m_type;
+    }
 
-    [[nodiscard]] bool isConst() const;
+    [[nodiscard]] bool isConst() const
+    {
+        return m_isConst;
+    }
 
-    [[nodiscard]] bool isVolatile() const;
+    [[nodiscard]] bool isVolatile() const
+    {
+        return m_isVolatile;
+    }
 
-    [[nodiscard]] std::string_view getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 
-    void setName(std::string_view name);
+    void setName(std::string_view name)
+    {
+        m_name = name;
+    }
 
-    [[nodiscard]] bool isTypedef() const;
+    [[nodiscard]] bool isTypedef() const
+    {
+        return !m_name.empty();
+    }
 
     bool operator==(const Type& rhs) const;
 
     bool operator!=(const Type& rhs) const;
 
-    [[nodiscard]] bool isUndefined() const;
+    [[nodiscard]] bool isUndefined() const
+    {
+        return std::holds_alternative<std::monostate>(m_type);
+    }
+
+    // Likely replaced with an interface soon?
+    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+
+    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
 
 enum class Linkage
@@ -429,13 +607,25 @@ class Declaration final
 public:
     Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name);
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
 
-    [[nodiscard]] Linkage getLinkage() const;
+    [[nodiscard]] Linkage getLinkage() const
+    {
+        return m_linkage;
+    }
 
-    [[nodiscard]] Lifetime getLifetime() const;
+    [[nodiscard]] Lifetime getLifetime() const
+    {
+        return m_lifetime;
+    }
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 };
 
 class ReturnStatement final
@@ -457,7 +647,10 @@ class CompoundStatement final
 public:
     explicit CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems);
 
-    [[nodiscard]] const std::vector<std::variant<Statement, Declaration>>& getCompoundItems() const;
+    [[nodiscard]] const std::vector<std::variant<Statement, Declaration>>& getCompoundItems() const
+    {
+        return m_compoundItems;
+    }
 };
 
 class ForStatement final
@@ -504,9 +697,11 @@ class StructDefinition
 {
     std::string m_name;
     std::vector<Field> m_fields;
+    std::uint64_t m_sizeOf;
+    std::uint64_t m_alignOf;
 
 public:
-    StructDefinition(std::string_view name, std::vector<Field>&& fields);
+    StructDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
 
     std::string_view getName() const
     {
@@ -516,6 +711,16 @@ public:
     const std::vector<Field>& getFields() const
     {
         return m_fields;
+    }
+
+    std::uint64_t getSizeOf() const
+    {
+        return m_sizeOf;
+    }
+
+    std::uint64_t getAlignOf() const
+    {
+        return m_alignOf;
     }
 
     bool operator==(const StructDefinition& rhs) const;
@@ -527,9 +732,11 @@ class UnionDefinition
 {
     std::string m_name;
     std::vector<Field> m_fields;
+    std::uint64_t m_sizeOf;
+    std::uint64_t m_alignOf;
 
 public:
-    UnionDefinition(std::string_view name, std::vector<Field>&& fields);
+    UnionDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
 
     std::string_view getName() const
     {
@@ -541,7 +748,18 @@ public:
         return m_fields;
     }
 
+    std::uint64_t getSizeOf() const
+    {
+        return m_sizeOf;
+    }
+
+    std::uint64_t getAlignOf() const
+    {
+        return m_alignOf;
+    }
+
     bool operator==(const UnionDefinition& rhs) const;
+
     bool operator!=(const UnionDefinition& rhs) const;
 };
 
@@ -573,18 +791,33 @@ class FunctionDefinition final
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(Type type, std::string name, std::vector<Declaration> parameterDeclarations,
-                       Linkage linkage, CompoundStatement&& compoundStatement);
+    FunctionDefinition(Type type, std::string name, std::vector<Declaration> parameterDeclarations, Linkage linkage,
+                       CompoundStatement&& compoundStatement);
 
-    [[nodiscard]] const std::string& getName() const;
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
 
-    [[nodiscard]] const Type& getType() const;
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
 
-    [[nodiscard]] const std::vector<Declaration>& getParameterDeclarations() const;
+    [[nodiscard]] const std::vector<Declaration>& getParameterDeclarations() const
+    {
+        return m_parameterDeclarations;
+    }
 
-    [[nodiscard]] bool isKandR() const;
+    [[nodiscard]] bool isKandR() const
+    {
+        return cld::get<FunctionType>(m_type.get()).isKandR();
+    }
 
-    [[nodiscard]] Linkage getLinkage() const;
+    [[nodiscard]] Linkage getLinkage() const
+    {
+        return m_linkage;
+    }
 };
 
 class TranslationUnit final
@@ -598,7 +831,10 @@ private:
 public:
     explicit TranslationUnit(std::vector<Variant> globals);
 
-    [[nodiscard]] const std::vector<Variant>& getGlobals() const;
+    [[nodiscard]] const std::vector<Variant>& getGlobals() const
+    {
+        return m_globals;
+    }
 };
 
 std::string_view declaratorToName(const cld::Syntax::Declarator& declarator);
