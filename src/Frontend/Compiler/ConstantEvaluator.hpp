@@ -146,7 +146,7 @@ public:
 
 private:
     const SourceInterface& m_sourceInterface;
-    std::function<ConstRetType(std::string_view)> m_identifierCallback;
+    std::function<std::optional<ConstRetType>(std::string_view)> m_identifierCallback;
     SemanticAnalysis* m_analyser = nullptr;
     std::function<void(const Message&)> m_loggerCallback;
 
@@ -165,7 +165,7 @@ private:
 
 public:
     explicit ConstantEvaluator(const SourceInterface& sourceInterface,
-                               std::function<ConstRetType(std::string_view)> identifierCallback = {},
+                               std::function<std::optional<ConstRetType>(std::string_view)> identifierCallback = {},
                                SemanticAnalysis* analyser = nullptr,
                                std::function<void(const Message&)> loggerCallback = {}, Mode mode = Integer);
 

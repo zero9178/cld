@@ -70,7 +70,7 @@ class SemanticAnalysis final
         std::vector<Message> messages;
         ConstantEvaluator evaluator(
             m_sourceInterface,
-            [this](std::string_view name) -> ConstRetType {
+            [this](std::string_view name) -> std::optional<ConstRetType> {
                 const auto* result = lookupDecl(name);
                 if (!result || !std::holds_alternative<ConstRetType>(*result))
                 {

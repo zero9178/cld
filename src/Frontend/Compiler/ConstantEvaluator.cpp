@@ -836,10 +836,11 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
         [this](const Syntax::PrimaryExpressionIdentifier& identifier) -> ConstRetType {
-            auto decl = m_identifierCallback ? m_identifierCallback(identifier.getIdentifier()) : ConstRetType{};
-            if (!decl.isUndefined())
+            auto decl =
+                m_identifierCallback ? m_identifierCallback(identifier.getIdentifier()) : std::optional<ConstRetType>{};
+            if (decl)
             {
-                return decl;
+                return *decl;
             }
             log(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                 identifier, m_sourceInterface, identifier));
@@ -904,10 +905,10 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return visit(node.getConditionalExpression());
 }
 
-cld::Semantics::ConstantEvaluator::ConstantEvaluator(const SourceInterface& sourceInterface,
-                                                     std::function<ConstRetType(std::string_view)> identifierCallback,
-                                                     SemanticAnalysis* analyser,
-                                                     std::function<void(const Message&)> loggerCallback, Mode mode)
+cld::Semantics::ConstantEvaluator::ConstantEvaluator(
+    const SourceInterface& sourceInterface,
+    std::function<std::optional<ConstRetType>(std::string_view)> identifierCallback, SemanticAnalysis* analyser,
+    std::function<void(const Message&)> loggerCallback, Mode mode)
     : m_sourceInterface(sourceInterface),
       m_identifierCallback(std::move(identifierCallback)),
       m_analyser(analyser),
@@ -927,7 +928,10 @@ void cld::Semantics::ConstantEvaluator::log(const Message& message)
 cld::Semantics::ConstRetType
     cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::UnaryExpressionDefined& defined)
 {
-    return m_identifierCallback(defined.getIdentifier());
+    CLD_ASSERT(m_identifierCallback);
+    auto result = m_identifierCallback(defined.getIdentifier());
+    CLD_ASSERT(result);
+    return *result;
 }
 
 cld::Semantics::ConstRetType::ConstRetType(const cld::Semantics::ConstRetType::ValueType& value,

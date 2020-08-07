@@ -681,7 +681,144 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SEMA_PRODUCES("union A{ int f[*]; };", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION));
 }
 
-TEST_CASE("Semantics enums", "[semantics]") {}
+TEST_CASE("Semantics enums", "[semantics]")
+{
+    SECTION("Values")
+    {
+        SECTION("Default values")
+        {
+            auto [tu, errors] = generateSemantics("enum A {\n"
+                                                  "_,a,b,c\n"
+                                                  "};\n"
+                                                  "\n"
+                                                  "int a_[a];\n"
+                                                  "int b_[b];\n"
+                                                  "int c_[c];");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(tu.getGlobals().size() == 3);
+            std::uint64_t i = 1;
+            for (auto& iter : tu.getGlobals())
+            {
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == i++);
+            }
+        }
+        SECTION("Explicit values")
+        {
+            auto [tu, errors] = generateSemantics("enum A {\n"
+                                                  "a = 5,b = 4,c = 3\n"
+                                                  "};\n"
+                                                  "\n"
+                                                  "int a_[a];\n"
+                                                  "int b_[b];\n"
+                                                  "int c_[c];");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(tu.getGlobals().size() == 3);
+            std::uint64_t i = 5;
+            for (auto& iter : tu.getGlobals())
+            {
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == i--);
+            }
+        }
+        SEMA_PRODUCES("enum A {\n"
+                      "a = 1ull << 40,\n"
+                      "};",
+                      ProducesError(VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT));
+    }
+    SECTION("Anonymous enum")
+    {
+        SECTION("Default values")
+        {
+            auto [tu, errors] = generateSemantics("enum {\n"
+                                                  "_,a,b,c\n"
+                                                  "};\n"
+                                                  "\n"
+                                                  "int a_[a];\n"
+                                                  "int b_[b];\n"
+                                                  "int c_[c];");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(tu.getGlobals().size() == 3);
+            std::uint64_t i = 1;
+            for (auto& iter : tu.getGlobals())
+            {
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == i++);
+            }
+        }
+        SECTION("Explicit values")
+        {
+            auto [tu, errors] = generateSemantics("enum {\n"
+                                                  "a = 5,b = 4,c = 3\n"
+                                                  "};\n"
+                                                  "\n"
+                                                  "int a_[a];\n"
+                                                  "int b_[b];\n"
+                                                  "int c_[c];");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(tu.getGlobals().size() == 3);
+            std::uint64_t i = 5;
+            for (auto& iter : tu.getGlobals())
+            {
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                CHECK(array.getSize() == i--);
+            }
+        }
+        SEMA_PRODUCES("enum {\n"
+                      "a = 1ull << 40,\n"
+                      "};",
+                      ProducesError(VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT));
+    }
+    SEMA_PRODUCES("enum A;", ProducesError(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED));
+    SEMA_PRODUCES("enum A {\n"
+                  "l,\n"
+                  "};\n"
+                  "enum A;",
+                  !ProducesError(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED));
+    SEMA_PRODUCES("enum A {\n"
+                  "l\n"
+                  "};\n"
+                  "\n"
+                  "enum A {\n"
+                  "f\n"
+                  "};",
+                  ProducesError(REDEFINITION_OF_SYMBOL_N, "'A'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+    SEMA_PRODUCES("enum A {\n"
+                  "l\n"
+                  "};\n"
+                  "\n"
+                  "enum B {\n"
+                  "l\n"
+                  "};",
+                  ProducesError(REDEFINITION_OF_SYMBOL_N, "'l'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+    SEMA_PRODUCES("enum A {\n"
+                  "l\n"
+                  "};\n"
+                  "\n"
+                  "enum {\n"
+                  "l\n"
+                  "};",
+                  ProducesError(REDEFINITION_OF_SYMBOL_N, "'l'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+    SEMA_PRODUCES("enum {\n"
+                  "a = (float)5,\n"
+                  "};\n"
+                  "\n"
+                  "int a_[a];\n",
+                  ProducesError(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION)
+                      && !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
+}
 
 TEST_CASE("Semantics type compatibility", "[semantics]")
 {

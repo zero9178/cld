@@ -1349,33 +1349,42 @@ cld::Semantics::Type
     for (auto& [loc, maybeExpression] : enumDef.getValues())
     {
         ConstRetType value;
+        bool validValue = true;
         if (maybeExpression)
         {
             auto result = evaluateConstantExpression(*maybeExpression, ConstantEvaluator::Integer);
             if (!result)
             {
+                validValue = false;
+                value = ConstRetType{};
                 for (auto& iter : result.error())
                 {
                     log(iter);
                 }
-                continue;
             }
-            CLD_ASSERT(std::holds_alternative<llvm::APSInt>(result->getValue()));
-            if (cld::get<llvm::APSInt>(result->getValue())
-                    .ugt(llvm::APSInt::getMaxValue(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, true)))
+            else
             {
-                auto number = cld::get<llvm::APSInt>(result->getValue()).toString(10);
-                log(Errors::Semantics::VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT.args(
-                    *loc, m_sourceInterface, *loc, *maybeExpression, number));
+                CLD_ASSERT(std::holds_alternative<llvm::APSInt>(result->getValue()));
+                auto& apInt = cld::get<llvm::APSInt>(result->getValue());
+                if (apInt.ugt(llvm::APSInt::getMaxValue(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, true)
+                                  .extOrTrunc(apInt.getBitWidth())))
+                {
+                    auto number = apInt.toString(10);
+                    log(Errors::Semantics::VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT.args(
+                        *loc, m_sourceInterface, *loc, *maybeExpression, number));
+                }
+                value = result->castTo(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                                       m_sourceInterface.getLanguageOptions());
             }
-            value = result->castTo(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
-                                   m_sourceInterface.getLanguageOptions());
         }
         else
         {
             value = nextValue;
         }
-        nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
+        if (validValue)
+        {
+            nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
+        }
         auto [prevValue, notRedefined] = getCurrentScope().declarations.insert(
             {cld::get<std::string>(loc->getValue()), DeclarationInScope{loc, std::move(value)}});
         if (!notRedefined)
@@ -2027,6 +2036,11 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     if (!result)
     {
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type));
+        return;
+    }
+    if (result->isUndefined())
+    {
+        type = Type{};
         return;
     }
     if (!result->isInteger())
