@@ -9,6 +9,7 @@
 
 #include "ErrorMessages.hpp"
 #include "ParserUtil.hpp"
+#include "SemanticUtil.hpp"
 
 using namespace cld::Syntax;
 
@@ -35,37 +36,6 @@ std::vector<DeclarationSpecifier> parseDeclarationSpecifierList(cld::Lexer::CTok
     } while (begin < end && cld::Parser::firstIsInDeclarationSpecifier(*begin, context)
              && (begin->getTokenType() != cld::Lexer::TokenType::Identifier || !seenTypeSpecifier));
     return declarationSpecifiers;
-}
-
-template <class T>
-std::pair<const T*, std::uint64_t> findDirectDeclWithDepth(const cld::Syntax::DirectDeclarator& variant)
-{
-    const T* result = nullptr;
-    std::uint64_t resultDepth = 0;
-    std::uint64_t currentDepth = 0;
-    const cld::Syntax::DirectDeclarator* curr = &variant;
-    while (curr)
-    {
-        cld::match<void>(*curr, [&](auto&& value) {
-            using ValueType = std::decay_t<decltype(value)>;
-            currentDepth++;
-            if constexpr (std::is_same_v<ValueType, T>)
-            {
-                resultDepth = currentDepth;
-                result = &value;
-            }
-        });
-        curr = cld::match(
-            *curr,
-            [](const cld::Syntax::DirectDeclaratorParentheses& parentheses) -> const cld::Syntax::DirectDeclarator* {
-                return &parentheses.getDeclarator().getDirectDeclarator();
-            },
-            [](const cld::Syntax::DirectDeclaratorIdentifier&) -> const cld::Syntax::DirectDeclarator* {
-                return nullptr;
-            },
-            [](const auto& value) -> const cld::Syntax::DirectDeclarator* { return &value.getDirectDeclarator(); });
-    }
-    return {result, resultDepth};
 }
 
 } // namespace
@@ -173,13 +143,37 @@ std::optional<cld::Syntax::ExternalDeclaration>
             return {};
         }
 
-        auto [parameters, parameterDepth] =
-            findDirectDeclWithDepth<DirectDeclaratorParenthesesParameters>(declarator->getDirectDeclarator());
+        const DirectDeclaratorParenthesesParameters* parameters = nullptr;
+        const DirectDeclaratorParenthesesIdentifiers* identifierList = nullptr;
 
-        auto [identifierList, identiferDepth] =
-            findDirectDeclWithDepth<DirectDeclaratorParenthesesIdentifiers>(declarator->getDirectDeclarator());
+        for (auto& iter :
+             Semantics::RecursiveVisitor(declarator->getDirectDeclarator(), Semantics::DIRECT_DECL_NEXT_FN))
+        {
+            cld::match(
+                iter,
+                [&](const DirectDeclaratorParenthesesParameters& dd) {
+                    parameters = &dd;
+                    identifierList = nullptr;
+                },
+                [&](const DirectDeclaratorParenthesesIdentifiers& dd) {
+                    parameters = nullptr;
+                    identifierList = &dd;
+                },
+                [](const DirectDeclaratorIdentifier&) {},
+                [&](const DirectDeclaratorParentheses& parentheses) {
+                    if (!parentheses.getDeclarator().getPointers().empty())
+                    {
+                        parameters = nullptr;
+                        identifierList = nullptr;
+                    }
+                },
+                [&](const auto&) {
+                    parameters = nullptr;
+                    identifierList = nullptr;
+                });
+        }
 
-        if (identifierList && (!parameters || identiferDepth > parameterDepth))
+        if (identifierList)
         {
             for (auto& iter : identifierList->getIdentifiers())
             {

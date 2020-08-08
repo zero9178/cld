@@ -150,7 +150,7 @@ class SemanticAnalysis final
 
     bool hasFlexibleArrayMember(const Type& type) const;
 
-    bool typesAreCompatible(const Type& lhs, const Type& rhs) const;
+    bool typesAreCompatible(const Type& lhs, const Type& rhs, bool leftIsFuncDefinition = false) const;
 
     Type defaultArgumentPromotion(const Type& type) const;
 
@@ -250,5 +250,9 @@ public:
     std::vector<TranslationUnit::Variant> visit(const Syntax::FunctionDefinition& node);
 
     std::vector<TranslationUnit::Variant> visit(const Syntax::Declaration& node);
+
+    CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
+
+    std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
 };
 } // namespace cld::Semantics

@@ -820,6 +820,56 @@ TEST_CASE("Semantics enums", "[semantics]")
                       && !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
 }
 
+TEST_CASE("Semantics function definitions")
+{
+    SECTION("Identifier list")
+    {
+        SEMA_PRODUCES("int foo(a) int a = 5;{}",
+                      ProducesError(DECLARATION_OF_IDENTIFIER_LIST_NOT_ALLOWED_TO_HAVE_AN_INITIALIZER));
+        SEMA_PRODUCES("int foo(a) int a;float;{}",
+                      ProducesError(DECLARATION_OF_IDENTIFIER_LIST_MUST_DECLARE_AT_LEAST_ONE_IDENTIFIER));
+        SEMA_PRODUCES("int foo(a) int a;float b;{}",
+                      ProducesError(DECLARATION_OF_IDENTIFIER_LIST_NOT_BELONGING_TO_ANY_PARAMETER));
+        SEMA_PRODUCES("int foo(a,b,c) int a;{}",
+                      ProducesError(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION, "'b'")
+                          && ProducesError(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION, "'c'"));
+        SEMA_PRODUCES("int foo(a,b,c) int a,a;{}",
+                      ProducesError(REDEFINITION_OF_SYMBOL_N, "'a'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+        SEMA_PRODUCES("int foo(a,b,a) int a,b;{}",
+                      ProducesError(REDEFINITION_OF_SYMBOL_N, "'a'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+        SEMA_PRODUCES("int (*foo(a,b,c))(z) int a,b,c;{}",
+                      ProducesError(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION));
+    }
+    SEMA_PRODUCES("struct A {\n"
+                  " float f;\n"
+                  "};\n"
+                  "\n"
+                  "int foo(struct A {\n"
+                  " int r;\n"
+                  "} a){}",
+                  ProducesNothing());
+    SEMA_PRODUCES("struct A {\n"
+                  " float f;\n"
+                  "};\n"
+                  "\n"
+                  "int foo(a) struct A { int r; } a; {}",
+                  ProducesNothing());
+    SEMA_PRODUCES("int foo(int a,int a) {}",
+                  ProducesError(REDEFINITION_OF_SYMBOL_N, "'a'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+    SEMA_PRODUCES("int foo(int a,int b) int a; int f; {}",
+                  ProducesError(FUNCTION_DEFINITION_WITH_A_PARAMETER_LIST_MUST_NOT_HAVE_DECLARATIONS_FOLLOWING_IT));
+    SEMA_PRODUCES("typedef int F(float f);\n"
+                  "\n"
+                  "F foo\n"
+                  "{}",
+                  ProducesError(FUNCTION_DEFINITION_MUST_HAVE_A_PARAMETER_LIST));
+    SEMA_PRODUCES("auto int foo(){}", ProducesError(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION));
+    SEMA_PRODUCES("register int foo(){}", ProducesError(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION));
+    SEMA_PRODUCES("typedef int foo(){}", ProducesError(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION));
+    SEMA_PRODUCES("int foo{}", ProducesError(FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE));
+    SEMA_PRODUCES("struct R foo(void){}", ProducesError(RETURN_TYPE_OF_FUNCTION_DEFINITION_MUST_BE_A_COMPLETE_TYPE));
+}
+
 TEST_CASE("Semantics type compatibility", "[semantics]")
 {
     SECTION("Qualifiers")
@@ -917,6 +967,21 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
         SEMA_PRODUCES("int foo();\n"
                       "int foo(const float a);",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
+        SEMA_PRODUCES("int foo(const float a);\n"
+                      "int foo(a) const float a; {}",
+                      ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
+        SEMA_PRODUCES("int foo(const double a);\n"
+                      "int foo(a) const float a; {}",
+                      ProducesNothing());
+        SEMA_PRODUCES("int foo(int a);\n"
+                      "int foo() {}",
+                      ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
+        SEMA_PRODUCES("int foo(void);\n"
+                      "int foo() {}",
+                      ProducesNothing());
+        SEMA_PRODUCES("int foo();\n"
+                      "int foo(a) int a; {}",
+                      ProducesNothing());
         SEMA_PRODUCES("int foo(float a);\n"
                       "int foo(const float a);",
                       ProducesNothing());

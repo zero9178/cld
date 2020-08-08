@@ -499,17 +499,6 @@ bool cld::Semantics::isArray(const cld::Semantics::Type& type)
            || std::holds_alternative<AbstractArrayType>(type.get());
 }
 
-cld::Semantics::FunctionDefinition::FunctionDefinition(Type type, std::string name,
-                                                       std::vector<Declaration> parameterDeclarations, Linkage linkage,
-                                                       CompoundStatement&& compoundStatement)
-    : m_type(std::move(type)),
-      m_name(std::move(name)),
-      m_parameterDeclarations(std::move(parameterDeclarations)),
-      m_linkage(linkage),
-      m_compoundStatement(std::move(compoundStatement))
-{
-}
-
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
@@ -518,11 +507,6 @@ cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Va
 cld::Semantics::Declaration::Declaration(cld::Semantics::Type type, cld::Semantics::Linkage linkage,
                                          cld::Semantics::Lifetime lifetime, std::string name)
     : m_type(std::move(type)), m_linkage(linkage), m_lifetime(lifetime), m_name(std::move(name))
-{
-}
-
-cld::Semantics::CompoundStatement::CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems)
-    : m_compoundItems(std::move(compoundItems))
 {
 }
 

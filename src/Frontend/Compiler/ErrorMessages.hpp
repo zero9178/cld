@@ -98,9 +98,6 @@ namespace Semantics
 {
 CREATE_ERROR(ONLY_ONE_STORAGE_SPECIFIER, "Only one storage specifier allowed in declaration", Underline<0>);
 
-CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
-             "Only 'static' or 'extern' are allowed in function definition", Underline<0>);
-
 CREATE_ERROR(AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED, "At least one type specifier required", Underline<0>);
 
 CREATE_ERROR(VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT, "Value of enumeration constant must fit in type 'int'",
@@ -215,13 +212,23 @@ CREATE_ERROR(BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME, "Bit-field with size 0
 CREATE_ERROR(IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION,
              "Identifier list only allowed as part of a function definition", Underline<0>);
 
+CREATE_ERROR(DECLARATION_OF_IDENTIFIER_LIST_NOT_ALLOWED_TO_HAVE_AN_INITIALIZER,
+             "Declaration of identifier list not allowed to have an initializer", Underline<0>);
+
+CREATE_ERROR(DECLARATION_OF_IDENTIFIER_LIST_MUST_DECLARE_AT_LEAST_ONE_IDENTIFIER,
+             "Declaration of identifier list must declare at least one identifier", Underline<0>);
+
+CREATE_ERROR(DECLARATION_OF_IDENTIFIER_LIST_NOT_BELONGING_TO_ANY_PARAMETER,
+             "Declaration of identifier list not belonging to any parameter", Underline<0>, Underline<1>);
+
+CREATE_ERROR(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION,
+             "Identifier %0 in identifier list does not have a matching declaration", Underline<0>);
+
 CREATE_ERROR(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER,
              "No storage class specifier allowed in parameter besides 'register'", Underline<0>);
 
 CREATE_ERROR(ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE,
              "Element type of pointer with restrict qualifier must not be a function type", Underline<0>, PointAt<1>);
-
-CREATE_ERROR(INCOMPLETE_TYPE_N_IN_ALIGNMENT_OF, "Incomplete type %full0 in 'alignof'", Underline<1>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
@@ -231,14 +238,27 @@ CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %ful
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC_2, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>, Annotate<3, 4>);
 
-CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_ALIGNMENT_OF, "Function type not allowed in 'alignof'", Underline<0>);
-
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Underline<0>);
 
 CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
              "Size of variably modified type cannot be determined in constant expression", Underline<0>);
 
 CREATE_ERROR(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED, "Forward declaring an enum is not allowed", Underline<0>);
+
+CREATE_ERROR(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION,
+             "Only 'static' or 'extern' are allowed in function definition", Underline<0>);
+
+CREATE_ERROR(FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE, "Function definition must have function type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(RETURN_TYPE_OF_FUNCTION_DEFINITION_MUST_BE_A_COMPLETE_TYPE,
+             "Return type of function definition must be a complete type", Underline<0>);
+
+CREATE_ERROR(FUNCTION_DEFINITION_MUST_HAVE_A_PARAMETER_LIST, "Function definition must have a parameter list",
+             Underline<0>);
+
+CREATE_ERROR(FUNCTION_DEFINITION_WITH_A_PARAMETER_LIST_MUST_NOT_HAVE_DECLARATIONS_FOLLOWING_IT,
+             "Function definition with a parameter list must not have declarations following it", Underline<0>);
 
 CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "%tokenType0 not allowed in constant expression", PointAt<0>);
 

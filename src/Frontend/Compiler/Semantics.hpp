@@ -47,9 +47,14 @@ class ReturnStatement;
 
 class ExpressionStatement;
 
-using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+// using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
+//                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+//                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+
+// Temporary dummy
+class Statement
+{
+};
 
 class PrimitiveType final
 {
@@ -593,7 +598,8 @@ enum class Linkage
 enum class Lifetime
 {
     Automatic,
-    Static
+    Static,
+    Register
 };
 
 class Declaration final
@@ -642,12 +648,22 @@ class IfStatement final
 
 class CompoundStatement final
 {
-    std::vector<std::variant<Statement, Declaration>> m_compoundItems;
+public:
+    using Variant = std::variant<Statement, std::unique_ptr<Declaration>>;
+
+private:
+    std::vector<Variant> m_compoundItems;
 
 public:
-    explicit CompoundStatement(std::vector<std::variant<Statement, Declaration>> compoundItems);
+    explicit CompoundStatement(std::vector<Variant>&& compoundItems) : m_compoundItems(std::move(compoundItems)) {}
 
-    [[nodiscard]] const std::vector<std::variant<Statement, Declaration>>& getCompoundItems() const
+    CompoundStatement(const CompoundStatement&) = delete;
+    CompoundStatement& operator=(const CompoundStatement&) = delete;
+
+    CompoundStatement(CompoundStatement&&) noexcept = default;
+    CompoundStatement& operator=(CompoundStatement&&) noexcept = default;
+
+    [[nodiscard]] const std::vector<Variant>& getCompoundItems() const
     {
         return m_compoundItems;
     }
@@ -786,13 +802,21 @@ class FunctionDefinition final
 {
     Type m_type;
     std::string m_name;
-    std::vector<Declaration> m_parameterDeclarations;
+    std::vector<std::unique_ptr<Declaration>> m_parameterDeclarations;
     Linkage m_linkage;
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(Type type, std::string name, std::vector<Declaration> parameterDeclarations, Linkage linkage,
-                       CompoundStatement&& compoundStatement);
+    FunctionDefinition(Type type, std::string_view name,
+                       std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
+                       CompoundStatement compoundStatement)
+        : m_type(std::move(type)),
+          m_name(cld::to_string(name)),
+          m_parameterDeclarations(std::move(parameterDeclarations)),
+          m_linkage(linkage),
+          m_compoundStatement(std::move(compoundStatement))
+    {
+    }
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -804,7 +828,7 @@ public:
         return m_type;
     }
 
-    [[nodiscard]] const std::vector<Declaration>& getParameterDeclarations() const
+    [[nodiscard]] const std::vector<std::unique_ptr<Declaration>>& getParameterDeclarations() const
     {
         return m_parameterDeclarations;
     }
@@ -817,6 +841,16 @@ public:
     [[nodiscard]] Linkage getLinkage() const
     {
         return m_linkage;
+    }
+
+    [[nodiscard]] const CompoundStatement& getCompoundStatement() const
+    {
+        return m_compoundStatement;
+    }
+
+    void setCompoundStatement(CompoundStatement&& compoundStatement)
+    {
+        m_compoundStatement = std::move(compoundStatement);
     }
 };
 
