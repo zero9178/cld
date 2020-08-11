@@ -343,7 +343,6 @@ private:
                 using T2 = std::decay_t<std::tuple_element_t<1, U>>;
                 return (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
-                       || (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
                        || (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>)
                        || (std::is_base_of_v<Lexer::TokenBase,
                                              std::remove_pointer_t<
@@ -448,22 +447,31 @@ private:
         {
             using T1 = std::decay_t<std::tuple_element_t<0, U>>;
             using T2 = std::decay_t<std::tuple_element_t<1, U>>;
-            if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_base_of_v<Lexer::TokenBase, T2>)
+            if constexpr (std::is_base_of_v<Lexer::TokenBase,
+                                            std::remove_pointer_t<
+                                                T1>> && std::is_base_of_v<Lexer::TokenBase, std::remove_pointer_t<T2>>)
             {
                 auto& [arg1, arg2] = arg;
-                return {{arg1.getOffset(), arg1.getFileId(), arg1.getMacroId()},
-                        {arg2.getOffset() + arg2.getLength(), arg2.getFileId(), arg2.getMacroId()}};
-            }
-            else if constexpr (std::is_base_of_v<
-                                   Lexer::TokenBase,
-                                   std::remove_pointer_t<
-                                       T1>> && std::is_base_of_v<Lexer::TokenBase, std::remove_pointer_t<T2>>)
-            {
-                auto& [arg1, arg2] = arg;
-                CLD_ASSERT(arg1);
-                CLD_ASSERT(arg2);
-                return {{arg1->getOffset(), arg1->getFileId(), arg1->getMacroId()},
-                        {arg2->getOffset() + arg2->getLength(), arg2->getFileId(), arg2->getMacroId()}};
+                PointLocation first, second;
+                if constexpr (std::is_pointer_v<T1>)
+                {
+                    CLD_ASSERT(arg1);
+                    first = {arg1->getOffset(), arg1->getFileId(), arg1->getMacroId()};
+                }
+                else
+                {
+                    first = {arg1.getOffset(), arg1.getFileId(), arg1.getMacroId()};
+                }
+                if constexpr (std::is_pointer_v<T2>)
+                {
+                    CLD_ASSERT(arg2);
+                    second = {arg2->getOffset() + arg2->getLength(), arg2->getFileId(), arg2->getMacroId()};
+                }
+                else
+                {
+                    second = {arg2.getOffset() + arg2.getLength(), arg2.getFileId(), arg2.getMacroId()};
+                }
+                return {first, second};
             }
             else if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
             {

@@ -160,8 +160,12 @@ class SemanticAnalysis final
 
     Type compositeType(const Type& lhs, const Type& rhs) const;
 
+    static Expression lvalueConversion(Expression expression);
+
+    Expression integerPromotion(Expression expression) const;
+
 public:
-    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = nullptr)
+    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs())
         : m_sourceInterface(sourceInterface), m_reporter(reporter)
     {
     }
@@ -254,5 +258,71 @@ public:
     CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
 
     std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
+
+    Statement visit(const Syntax::Statement& node);
+
+    Expression visit(const Syntax::Expression& node);
+
+    Expression visit(const Syntax::AssignmentExpression& node);
+
+    Expression visit(const Syntax::PrimaryExpression& node);
+
+    Expression visit(const Syntax::PrimaryExpressionIdentifier& node);
+
+    Expression visit(const Syntax::PrimaryExpressionConstant& node);
+
+    Expression visit(const Syntax::PrimaryExpressionParentheses& node);
+
+    Expression visit(const Syntax::PostFixExpression& node);
+
+    Expression visit(const Syntax::PostFixExpressionPrimaryExpression& node);
+
+    Expression visit(const Syntax::PostFixExpressionSubscript& node);
+
+    Expression visit(const Syntax::PostFixExpressionDot& node);
+
+    Expression visit(const Syntax::PostFixExpressionArrow& node);
+
+    Expression visit(const Syntax::PostFixExpressionFunctionCall& node);
+
+    Expression visit(const Syntax::PostFixExpressionIncrement& node);
+
+    Expression visit(const Syntax::PostFixExpressionDecrement& node);
+
+    Expression visit(const Syntax::PostFixExpressionTypeInitializer& node);
+
+    Expression visit(const Syntax::UnaryExpression& node);
+
+    Expression visit(const Syntax::UnaryExpressionPostFixExpression& node);
+
+    Expression visit(const Syntax::UnaryExpressionUnaryOperator& node);
+
+    Expression visit(const Syntax::UnaryExpressionSizeOf& node);
+
+    Expression visit(const Syntax::UnaryExpressionDefined& node);
+
+    Expression visit(const Syntax::CastExpression& node);
+
+    Expression visit(const Syntax::Term& node);
+
+    Expression visit(const Syntax::AdditiveExpression& node);
+
+    Expression visit(const Syntax::ShiftExpression& node);
+
+    Expression visit(const Syntax::RelationalExpression& node);
+
+    Expression visit(const Syntax::EqualityExpression& node);
+
+    Expression visit(const Syntax::BitAndExpression& node);
+
+    Expression visit(const Syntax::BitXorExpression& node);
+
+    Expression visit(const Syntax::BitOrExpression& node);
+
+    Expression visit(const Syntax::LogicalAndExpression& node);
+
+    Expression visit(const Syntax::LogicalOrExpression& node);
+
+    Expression visit(const Syntax::ConditionalExpression& node);
 };
 } // namespace cld::Semantics

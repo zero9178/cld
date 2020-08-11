@@ -7,14 +7,14 @@
 
 cld::LanguageOptions cld::LanguageOptions::native(Language language)
 {
-    return cld::LanguageOptions{language,
-                                sizeof(bool),
-                                std::is_signed_v<char>,
-                                sizeof(wchar_t),
-                                std::is_signed_v<wchar_t>,
-                                sizeof(short),
-                                sizeof(int),
-                                sizeof(long),
+    return cld::LanguageOptions{
+        language,
+        sizeof(bool),
+        std::is_signed_v<char>,
+        sizeof(wchar_t) == 2 ? WideCharType::UnsignedShort : WideCharType ::Int,
+        sizeof(short),
+        sizeof(int),
+        sizeof(long),
         []() -> std::uint8_t {
             switch (std::numeric_limits<long double>::digits)
             {

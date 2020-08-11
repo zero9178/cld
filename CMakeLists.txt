@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
-if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.15.0")
-    cmake_policy(SET CMP0091 NEW)
-    cmake_policy(SET CMP0092 NEW)
-endif ()
 project(cld CXX)
 set(CMAKE_CXX_STANDARD 17)
 
-find_package(LLVM REQUIRED)
+if (POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif ()
+if (POLICY CMP0092)
+    cmake_policy(SET CMP0092 NEW)
+endif ()
 
 option(CLD_BUILD_TESTS "Build tests" ON)
 option(CLD_ENABLE_ASSERTS "Enable asserts in Release mode" ${CLD_FUZZER})
@@ -41,6 +42,9 @@ if (WIN32)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8000000")
     endif ()
 endif ()
+
+
+find_package(LLVM REQUIRED)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)

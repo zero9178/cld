@@ -554,7 +554,7 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parsePostFixExpression, "((((]",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-        treeProduces("void foo(){i;\"string\"\"can also be concatenated\";34234;}", ProducesNothing());
+        // treeProduces("void foo(){i;\"string\"\"can also be concatenated\";34234;}", ProducesNothing());
         treeProduces("void foo(){int i =;}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
         treeProduces("int i =", ProducesError(EXPECTED_N, "literal, identifier or '('")

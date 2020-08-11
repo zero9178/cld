@@ -106,7 +106,7 @@ cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld:
 }
 
 cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                         cld::Semantics::Type&& elementType)
+                                                         cld::Semantics::Type elementType)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
@@ -501,12 +501,6 @@ bool cld::Semantics::isArray(const cld::Semantics::Type& type)
 
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
-{
-}
-
-cld::Semantics::Declaration::Declaration(cld::Semantics::Type type, cld::Semantics::Linkage linkage,
-                                         cld::Semantics::Lifetime lifetime, std::string name)
-    : m_type(std::move(type)), m_linkage(linkage), m_lifetime(lifetime), m_name(std::move(name))
 {
 }
 

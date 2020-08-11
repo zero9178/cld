@@ -47,14 +47,13 @@ class ReturnStatement;
 
 class ExpressionStatement;
 
-// using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-//                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-//                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
+                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
 
-// Temporary dummy
-class Statement
-{
-};
+class Declaration;
+
+class FunctionDefinition;
 
 class PrimitiveType final
 {
@@ -502,7 +501,7 @@ class PointerType final
     PointerType(bool isRestricted, std::shared_ptr<Type>&& elementType);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& elementType);
+    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type elementType);
 
     [[nodiscard]] const Type& getElementType() const
     {
@@ -588,6 +587,171 @@ public:
     std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
 
+class Expression;
+
+class Constant
+{
+public:
+    using Variant = Syntax::PrimaryExpressionConstant::Variant;
+
+private:
+    Variant m_value;
+
+public:
+    Constant(Variant value) : m_value(std::move(value)) {}
+
+    const Variant& getValue() const
+    {
+        return m_value;
+    }
+};
+
+class DeclarationRead
+{
+public:
+    using Variant = std::variant<const Declaration*, const FunctionDefinition*>;
+
+private:
+    Variant m_declRead;
+
+public:
+    explicit DeclarationRead(Variant declRead) : m_declRead(declRead) {}
+
+    Variant getDeclRead() const
+    {
+        return m_declRead;
+    }
+};
+
+class Conversion
+{
+public:
+    enum Kind
+    {
+        LValue,
+        Explicit,
+        IntegerPromotion,
+        ArithmeticConversion
+    };
+
+private:
+    Type m_newType;
+    Kind m_kind;
+    std::shared_ptr<const Expression> m_expression;
+
+public:
+    Conversion(Type newType, Kind kind, std::shared_ptr<const Expression> expression)
+        : m_newType(newType), m_kind(kind), m_expression(std::move(expression))
+    {
+    }
+};
+
+class MemberAccess
+{
+    std::shared_ptr<const Expression> m_recordExpr;
+    std::uint64_t m_memberIndex;
+
+public:
+    MemberAccess(std::shared_ptr<const Expression> recordExpr, std::uint64_t memberIndex)
+        : m_recordExpr(recordExpr), m_memberIndex(memberIndex)
+    {
+    }
+};
+
+class BinaryOperator
+{
+    std::shared_ptr<const Expression> m_leftOperand;
+
+public:
+    enum Kind
+    {
+        Addition
+    };
+
+private:
+    Kind m_kind;
+    std::shared_ptr<const Expression> m_rightOperand;
+
+public:
+    BinaryOperator(std::shared_ptr<const Expression> leftOperand, Kind kind,
+                   std::shared_ptr<const Expression> rightOperand)
+        : m_leftOperand(std::move(leftOperand)), m_kind(kind), m_rightOperand(std::move(rightOperand))
+    {
+    }
+};
+
+class UnaryOperator
+{
+public:
+    enum Kind
+    {
+        PostIncrement,
+        PostDecrement
+    };
+
+private:
+    Kind m_kind;
+    std::shared_ptr<const Expression> m_operand;
+
+public:
+    UnaryOperator(Kind kind, std::shared_ptr<const Expression> operand) : m_kind(kind), m_operand(std::move(operand)) {}
+};
+
+class Dereference
+{
+    std::shared_ptr<const Expression> m_pointerExpr;
+
+public:
+    explicit Dereference(std::shared_ptr<const Expression> pointerExpr) : m_pointerExpr(std::move(pointerExpr)) {}
+};
+
+enum class ValueCategory
+{
+    Lvalue,
+    Rvalue
+};
+
+class Expression
+{
+    Type m_type;
+    ValueCategory m_valueCategory;
+
+public:
+    using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, Dereference,
+                                 BinaryOperator, UnaryOperator>;
+
+private:
+    Variant m_expression;
+
+public:
+    Expression() = default;
+
+    Expression(Type type, ValueCategory valueCategory, Variant expression)
+        : m_type(std::move(type)), m_valueCategory(valueCategory), m_expression(std::move(expression))
+    {
+    }
+
+    [[nodiscard]] const Variant& get() const
+    {
+        return m_expression;
+    }
+
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
+
+    [[nodiscard]] ValueCategory getValueCategory() const
+    {
+        return m_valueCategory;
+    }
+
+    [[nodiscard]] bool isUndefined() const
+    {
+        return std::holds_alternative<std::monostate>(m_expression);
+    }
+};
+
 enum class Linkage
 {
     Internal,
@@ -608,10 +772,18 @@ class Declaration final
     Linkage m_linkage;
     Lifetime m_lifetime;
     std::string m_name;
-    // initializer
+    // std::optional<Expression> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name);
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name/*,
+                std::optional<Expression> initializer = {}*/)
+        : m_type(std::move(type)),
+          m_linkage(linkage),
+          m_lifetime(lifetime),
+          m_name(std::move(name))/*,
+          m_initializer(std::move(initializer))*/
+    {
+    }
 
     [[nodiscard]] const Type& getType() const
     {
@@ -640,6 +812,15 @@ class ReturnStatement final
 
 class ExpressionStatement final
 {
+    std::optional<Expression> m_expression;
+
+public:
+    explicit ExpressionStatement(std::optional<Expression> expression) : m_expression(std::move(expression)) {}
+
+    const std::optional<Expression>& getExpression() const
+    {
+        return m_expression;
+    }
 };
 
 class IfStatement final

@@ -230,6 +230,44 @@ CREATE_ERROR(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER,
 CREATE_ERROR(ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE,
              "Element type of pointer with restrict qualifier must not be a function type", Underline<0>, PointAt<1>);
 
+CREATE_ERROR(UNDECLARED_IDENTIFIER_N, "Undeclared identifier %0", Underline<0>);
+
+CREATE_ERROR(EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE, "Expected one operand to be of pointer type", Annotate<0, 1>,
+             Annotate<2, 3>);
+
+CREATE_ERROR(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE, "Expected other operand to be of integer type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR,
+             "Expected 'struct' or 'union' on the left side of '.' operator", Annotate<0, 1>);
+
+CREATE_ERROR(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "Struct %0 is an incomplete type", Underline<1>);
+
+CREATE_ERROR(UNION_N_IS_AN_INCOMPLETE_TYPE, "Union %0 is an incomplete type", Underline<1>);
+
+CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N, "No member called %0 found in struct %1", Underline<0>);
+
+CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_UNION_N, "No member called %0 found in union %1", Underline<0>);
+
+CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT, "No member called %0 found in anonymous struct",
+             Underline<0>);
+
+CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 found in anonymous struct",
+             Underline<0>);
+
+CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR,
+             "Expected pointer to 'struct' or 'union' on the left side of '->' operator", Annotate<0, 1>);
+
+CREATE_ERROR(OPERAND_OF_INCREMENT_MUST_BE_AN_LVALUE, "Operand of increment must be an lvalue", Underline<0>);
+
+CREATE_ERROR(OPERAND_OF_INCREMENT_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Operand of increment must be an arithmetic or pointer types", Annotate<0, 1>);
+
+CREATE_ERROR(OPERAND_OF_DECREMENT_MUST_BE_AN_LVALUE, "Operand of increment must be an lvalue", Underline<0>);
+
+CREATE_ERROR(OPERAND_OF_DECREMENT_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Operand of increment must be an arithmetic or pointer types", Annotate<0, 1>);
+
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",

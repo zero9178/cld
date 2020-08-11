@@ -177,7 +177,7 @@ public:
 
     ConstRetType visit(const Syntax::PrimaryExpressionConstant& node);
 
-    ConstRetType visit(const Syntax::PrimaryExpressionParenthese& node);
+    ConstRetType visit(const Syntax::PrimaryExpressionParentheses& node);
 
     ConstRetType visit(const Syntax::PostFixExpression& node);
 

@@ -203,30 +203,30 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             {
                 auto result = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
 
-                std::vector<std::pair<Term::BinaryDotOperator, CastExpression>> list;
+                std::vector<Term::Operand> list;
                 while (begin != end
                        && (begin->getTokenType() == cld::Lexer::TokenType::Asterisk
                            || begin->getTokenType() == cld::Lexer::TokenType::Division
                            || begin->getTokenType() == cld::Lexer::TokenType::Percent))
                 {
-                    auto token = begin->getTokenType();
+                    cld::Lexer::TokenBase token = *begin;
                     begin++;
                     auto newCast = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newCast)
                     {
-                        list.emplace_back(
-                            [token] {
-                                switch (token)
-                                {
-                                    case cld::Lexer::TokenType::Asterisk:
-                                        return Term::BinaryDotOperator::BinaryMultiply;
-                                    case cld::Lexer::TokenType::Division: return Term::BinaryDotOperator::BinaryDivide;
-                                    case cld::Lexer::TokenType::Percent:
-                                        return Term::BinaryDotOperator::BinaryRemainder;
-                                    default: CLD_UNREACHABLE;
-                                }
-                            }(),
-                            std::move(*newCast));
+                        list.push_back({[&token] {
+                                            switch (token.getTokenType())
+                                            {
+                                                case cld::Lexer::TokenType::Asterisk:
+                                                    return Term::BinaryDotOperator::BinaryMultiply;
+                                                case cld::Lexer::TokenType::Division:
+                                                    return Term::BinaryDotOperator::BinaryDivide;
+                                                case cld::Lexer::TokenType::Percent:
+                                                    return Term::BinaryDotOperator::BinaryRemainder;
+                                                default: CLD_UNREACHABLE;
+                                            }
+                                        }(),
+                                        token, std::move(*newCast)});
                     }
                 }
 
@@ -244,20 +244,20 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             {
                 auto& result = cld::get<std::optional<Term>>(state);
 
-                std::vector<std::pair<AdditiveExpression::BinaryDashOperator, Term>> list;
+                std::vector<AdditiveExpression::Operand> list;
                 while (begin != end
                        && (begin->getTokenType() == cld::Lexer::TokenType::Plus
                            || begin->getTokenType() == cld::Lexer::TokenType::Minus))
                 {
-                    auto token = begin->getTokenType();
+                    cld::Lexer::TokenBase token = *begin;
                     begin++;
                     auto newTerm = parseTerm(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newTerm)
                     {
-                        list.emplace_back(token == cld::Lexer::TokenType::Plus ?
-                                              AdditiveExpression::BinaryDashOperator::BinaryPlus :
-                                              AdditiveExpression::BinaryDashOperator::BinaryMinus,
-                                          std::move(*newTerm));
+                        list.push_back({token.getTokenType() == cld::Lexer::TokenType::Plus ?
+                                            AdditiveExpression::BinaryDashOperator::BinaryPlus :
+                                            AdditiveExpression::BinaryDashOperator::BinaryMinus,
+                                        token, std::move(*newTerm)});
                     }
                 }
 
@@ -669,8 +669,8 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             begin++;
             if (current)
             {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionIncrement(start, begin, std::move(current)));
+                current = std::make_unique<PostFixExpression>(
+                    PostFixExpressionIncrement(start, begin, std::move(current), *(begin - 1)));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Decrement)
@@ -678,8 +678,8 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             begin++;
             if (current)
             {
-                current =
-                    std::make_unique<PostFixExpression>(PostFixExpressionDecrement(start, begin, std::move(current)));
+                current = std::make_unique<PostFixExpression>(
+                    PostFixExpressionDecrement(start, begin, std::move(current), *(begin - 1)));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Dot)
@@ -870,10 +870,10 @@ std::optional<cld::Syntax::UnaryExpression>
                  || begin->getTokenType() == Lexer::TokenType::LogicalNegation
                  || begin->getTokenType() == Lexer::TokenType::BitWiseNegation))
     {
-        auto token = begin->getTokenType();
+        Lexer::TokenBase token = *begin;
         begin++;
-        auto op = [token] {
-            switch (token)
+        auto op = [&token] {
+            switch (token.getTokenType())
             {
                 case Lexer::TokenType::Increment: return UnaryExpressionUnaryOperator::UnaryOperator::Increment;
                 case Lexer::TokenType::Decrement: return UnaryExpressionUnaryOperator::UnaryOperator::Decrement;
@@ -892,7 +892,7 @@ std::optional<cld::Syntax::UnaryExpression>
             return {};
         }
         return UnaryExpression(
-            UnaryExpressionUnaryOperator(start, begin, op, std::make_unique<CastExpression>(std::move(*cast))));
+            UnaryExpressionUnaryOperator(start, begin, op, token, std::make_unique<CastExpression>(std::move(*cast))));
     }
 
     auto postFix = parsePostFixExpression(begin, end, context);
@@ -916,15 +916,14 @@ std::optional<cld::Syntax::PostFixExpression>
         std::optional<cld::Syntax::PrimaryExpression> newPrimary;
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
         {
-            const auto& value = cld::get<std::string>(begin->getValue());
             begin++;
-            newPrimary = PrimaryExpression(PrimaryExpressionIdentifier(start, begin, value));
+            newPrimary = PrimaryExpression(PrimaryExpressionIdentifier(start, begin, begin - 1));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::Literal)
         {
-            auto value = cld::match(begin->getValue(), [](auto&& value) -> typename PrimaryExpressionConstant::variant {
+            auto value = cld::match(begin->getValue(), [](auto&& value) -> typename PrimaryExpressionConstant::Variant {
                 using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::variant, T>)
+                if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::Variant, T>)
                 {
                     return {std::forward<decltype(value)>(value)};
                 }
@@ -943,118 +942,131 @@ std::optional<cld::Syntax::PostFixExpression>
             stringVariant literal = match(
                 begin->getValue(), [](const std::string& str) -> stringVariant { return str; },
                 [](const Lexer::NonCharString& str) -> stringVariant { return str; },
-                [](auto &&) -> stringVariant { CLD_UNREACHABLE; });
+                [](auto&&) -> stringVariant { CLD_UNREACHABLE; });
             begin++;
 
-            while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
-            {
-                literal = match(
-                    begin->getValue(),
-                    [&literal, &context](const std::string& str) -> stringVariant {
-                        return match(
-                            literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
-                            [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
-                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
-                                {
-                                    case 2:
-                                    {
-                                        auto* sourceStart = str.data();
-                                        std::vector<llvm::UTF16> utf16(str.size());
-                                        auto* targetStart = utf16.data();
-                                        auto result = llvm::ConvertUTF8toUTF16(
-                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()), &targetStart,
-                                            targetStart + utf16.size(), llvm::strictConversion);
-                                        if (result != llvm::conversionOK)
-                                        {
-                                            CLD_UNREACHABLE;
-                                        }
-                                        std::transform(utf16.data(), targetStart, std::back_inserter(lhs.characters),
-                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
-                                        return lhs;
-                                    }
-                                    case 4:
-                                    {
-                                        auto* sourceStart = str.data();
-                                        std::vector<llvm::UTF32> utf32(str.size());
-                                        auto* targetStart = utf32.data();
-                                        auto result = llvm::ConvertUTF8toUTF32(
-                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()), &targetStart,
-                                            targetStart + utf32.size(), llvm::strictConversion);
-                                        if (result != llvm::conversionOK)
-                                        {
-                                            CLD_UNREACHABLE;
-                                        }
-                                        std::transform(utf32.data(), targetStart, std::back_inserter(lhs.characters),
-                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch; });
-                                        return lhs;
-                                    }
-                                    default: CLD_UNREACHABLE;
-                                }
-                            },
-                            [](const auto&) -> stringVariant { CLD_UNREACHABLE; });
-                    },
-                    [&literal, &context](Lexer::NonCharString str) -> stringVariant {
-                        return match(
-                            literal,
-                            [&str, &context](const std::string& lhs) -> stringVariant {
-                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
-                                {
-                                    case 2:
-                                    {
-                                        auto* sourceStart = lhs.data();
-                                        std::vector<llvm::UTF16> utf16(lhs.size());
-                                        auto* targetStart = utf16.data();
-                                        auto result = llvm::ConvertUTF8toUTF16(
-                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()), &targetStart,
-                                            targetStart + utf16.size(), llvm::strictConversion);
-                                        if (result != llvm::conversionOK)
-                                        {
-                                            CLD_UNREACHABLE;
-                                        }
-                                        std::transform(utf16.data(), targetStart,
-                                                       std::inserter(str.characters, str.characters.begin()),
-                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch; });
-                                        return lhs;
-                                    }
-                                    case 4:
-                                    {
-                                        auto* sourceStart = lhs.data();
-                                        std::vector<llvm::UTF32> utf32(lhs.size());
-                                        auto* targetStart = utf32.data();
-                                        auto result = llvm::ConvertUTF8toUTF32(
-                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()), &targetStart,
-                                            targetStart + utf32.size(), llvm::strictConversion);
-                                        if (result != llvm::conversionOK)
-                                        {
-                                            CLD_UNREACHABLE;
-                                        }
-                                        std::transform(utf32.data(), targetStart, std::back_inserter(str.characters),
-                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch; });
-                                        return lhs;
-                                    }
-                                    default: CLD_UNREACHABLE;
-                                }
-                            },
-                            [&str](Lexer::NonCharString lhs) -> stringVariant {
-                                lhs.characters.insert(lhs.characters.end(), str.characters.begin(),
-                                                      str.characters.end());
-                                return lhs;
-                            },
-                            [](const auto&) -> stringVariant { CLD_UNREACHABLE; });
-                    },
-                    [](auto &&) -> stringVariant { CLD_UNREACHABLE; });
-                begin++;
-            }
+            //            while (begin < end && begin->getTokenType() == Lexer::TokenType::StringLiteral)
+            //            {
+            //                literal = match(
+            //                    begin->getValue(),
+            //                    [&literal, &context](const std::string& str) -> stringVariant {
+            //                        return match(
+            //                            literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str;
+            //                            },
+            //                            [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
+            //                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
+            //                                {
+            //                                    case 2:
+            //                                    {
+            //                                        auto* sourceStart = str.data();
+            //                                        std::vector<llvm::UTF16> utf16(str.size());
+            //                                        auto* targetStart = utf16.data();
+            //                                        auto result = llvm::ConvertUTF8toUTF16(
+            //                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+            //                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()),
+            //                                            &targetStart, targetStart + utf16.size(),
+            //                                            llvm::strictConversion);
+            //                                        if (result != llvm::conversionOK)
+            //                                        {
+            //                                            CLD_UNREACHABLE;
+            //                                        }
+            //                                        std::transform(utf16.data(), targetStart,
+            //                                        std::back_inserter(lhs.characters),
+            //                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch;
+            //                                                       });
+            //                                        return lhs;
+            //                                    }
+            //                                    case 4:
+            //                                    {
+            //                                        auto* sourceStart = str.data();
+            //                                        std::vector<llvm::UTF32> utf32(str.size());
+            //                                        auto* targetStart = utf32.data();
+            //                                        auto result = llvm::ConvertUTF8toUTF32(
+            //                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+            //                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + str.size()),
+            //                                            &targetStart, targetStart + utf32.size(),
+            //                                            llvm::strictConversion);
+            //                                        if (result != llvm::conversionOK)
+            //                                        {
+            //                                            CLD_UNREACHABLE;
+            //                                        }
+            //                                        std::transform(utf32.data(), targetStart,
+            //                                        std::back_inserter(lhs.characters),
+            //                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch;
+            //                                                       });
+            //                                        return lhs;
+            //                                    }
+            //                                    default: CLD_UNREACHABLE;
+            //                                }
+            //                            },
+            //                            [](const auto&) -> stringVariant { CLD_UNREACHABLE; });
+            //                    },
+            //                    [&literal, &context](Lexer::NonCharString str) -> stringVariant {
+            //                        return match(
+            //                            literal,
+            //                            [&str, &context](const std::string& lhs) -> stringVariant {
+            //                                switch (context.getSourceInterface().getLanguageOptions().sizeOfWChar)
+            //                                {
+            //                                    case 2:
+            //                                    {
+            //                                        auto* sourceStart = lhs.data();
+            //                                        std::vector<llvm::UTF16> utf16(lhs.size());
+            //                                        auto* targetStart = utf16.data();
+            //                                        auto result = llvm::ConvertUTF8toUTF16(
+            //                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+            //                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()),
+            //                                            &targetStart, targetStart + utf16.size(),
+            //                                            llvm::strictConversion);
+            //                                        if (result != llvm::conversionOK)
+            //                                        {
+            //                                            CLD_UNREACHABLE;
+            //                                        }
+            //                                        std::transform(utf16.data(), targetStart,
+            //                                                       std::inserter(str.characters,
+            //                                                       str.characters.begin()),
+            //                                                       [](llvm::UTF16 ch) -> std::uint32_t { return ch;
+            //                                                       });
+            //                                        return lhs;
+            //                                    }
+            //                                    case 4:
+            //                                    {
+            //                                        auto* sourceStart = lhs.data();
+            //                                        std::vector<llvm::UTF32> utf32(lhs.size());
+            //                                        auto* targetStart = utf32.data();
+            //                                        auto result = llvm::ConvertUTF8toUTF32(
+            //                                            reinterpret_cast<const llvm::UTF8**>(&sourceStart),
+            //                                            reinterpret_cast<const llvm::UTF8*>(sourceStart + lhs.size()),
+            //                                            &targetStart, targetStart + utf32.size(),
+            //                                            llvm::strictConversion);
+            //                                        if (result != llvm::conversionOK)
+            //                                        {
+            //                                            CLD_UNREACHABLE;
+            //                                        }
+            //                                        std::transform(utf32.data(), targetStart,
+            //                                        std::back_inserter(str.characters),
+            //                                                       [](llvm::UTF32 ch) -> std::uint32_t { return ch;
+            //                                                       });
+            //                                        return lhs;
+            //                                    }
+            //                                    default: CLD_UNREACHABLE;
+            //                                }
+            //                            },
+            //                            [&str](Lexer::NonCharString lhs) -> stringVariant {
+            //                                lhs.characters.insert(lhs.characters.end(), str.characters.begin(),
+            //                                                      str.characters.end());
+            //                                return lhs;
+            //                            },
+            //                            [](const auto&) -> stringVariant { CLD_UNREACHABLE; });
+            //                    },
+            //                    [](auto &&) -> stringVariant { CLD_UNREACHABLE; });
+            //                begin++;
+            //            }
             newPrimary = PrimaryExpression(PrimaryExpressionConstant(
                 start, begin,
                 match(
-                    literal, [](const std::string& str) -> PrimaryExpressionConstant::variant { return str; },
-                    [](const Lexer::NonCharString& str) -> PrimaryExpressionConstant::variant { return str; },
-                    [](const auto&) -> PrimaryExpressionConstant::variant { CLD_UNREACHABLE; }),
+                    literal, [](const std::string& str) -> PrimaryExpressionConstant::Variant { return str; },
+                    [](const Lexer::NonCharString& str) -> PrimaryExpressionConstant::Variant { return str; },
+                    [](const auto&) -> PrimaryExpressionConstant::Variant { CLD_UNREACHABLE; }),
                 Lexer::CToken::Type::None));
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::OpenParentheses)
@@ -1068,7 +1080,7 @@ std::optional<cld::Syntax::PostFixExpression>
             {
                 context.skipUntil(begin, end);
             }
-            newPrimary = PrimaryExpression(PrimaryExpressionParenthese(start, begin, std::move(expression)));
+            newPrimary = PrimaryExpression(PrimaryExpressionParentheses(start, begin, std::move(expression)));
         }
         else
         {

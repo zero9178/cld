@@ -110,9 +110,9 @@ unsigned cld::unsafeColumnWidth(std::string_view text)
     for (size_t i = 0, e = text.size(); i < e; i += length)
     {
         length = llvm::getNumBytesForUTF8(text[i]);
-        llvm::UTF32 buf[1];
+        std::array<llvm::UTF32, 1> buf;
         const llvm::UTF8* start = reinterpret_cast<const llvm::UTF8*>(text.data() + i);
-        llvm::UTF32* target = &buf[0];
+        llvm::UTF32* target = buf.data();
         if (llvm::conversionOK
             != ConvertUTF8toUTF32(&start, start + length, &target, target + 1, llvm::strictConversion))
             CLD_UNREACHABLE;

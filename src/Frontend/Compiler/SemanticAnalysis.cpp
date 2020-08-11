@@ -67,7 +67,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     }
 
     auto& ft = cld::get<FunctionType>(type.get());
-    if (!isCompleteType(ft.getReturnType()))
+    if (!isVoid(ft.getReturnType()) && !isCompleteType(ft.getReturnType()))
     {
         log(Errors::Semantics::RETURN_TYPE_OF_FUNCTION_DEFINITION_MUST_BE_A_COMPLETE_TYPE.args(
             node.getDeclarationSpecifiers(), m_sourceInterface, node.getDeclarationSpecifiers()));
@@ -163,7 +163,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         for (auto& iter : node.getDeclarations())
         {
             Lifetime lifetime = Lifetime::Automatic;
-            for (auto& iter2 : node.getDeclarationSpecifiers())
+            for (auto& iter2 : iter.getDeclarationSpecifiers())
             {
                 if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter2))
                 {
@@ -559,11 +559,21 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
                                return cld::get<std::unique_ptr<Declaration>>(std::move(variant));
                            });
         },
-        [&](const Syntax::Statement& statement) {
-            // TODO:
-            (void)statement;
-        });
+        [&](const Syntax::Statement& statement) { visit(statement); });
     return result;
+}
+
+cld::Semantics::Statement cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
+{
+    return cld::match(
+        node, [](const auto&) -> Statement { CLD_UNREACHABLE; },
+        [&](const Syntax::ExpressionStatement& node) -> Statement {
+            if (!node.getOptionalExpression())
+            {
+                return ExpressionStatement({});
+            }
+            return ExpressionStatement(visit(*node.getOptionalExpression()));
+        });
 }
 
 bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const

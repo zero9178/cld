@@ -87,6 +87,45 @@ TEST_CASE("Semantics declarations", "[semantics]")
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
         }
+        SECTION("Objects at function or block scope are None by default")
+        {
+            SECTION("None")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLinkage() == cld::Semantics::Linkage::None);
+            }
+            SECTION("extern")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    extern int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLinkage() == cld::Semantics::Linkage::External);
+            }
+        }
         SECTION("Objects at file scope are external by default")
         {
             auto [translationUnit, errors] = generateSemantics("int i;");
@@ -125,6 +164,112 @@ TEST_CASE("Semantics declarations", "[semantics]")
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             SEMA_PRODUCES("auto int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO));
             SEMA_PRODUCES("register int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER));
+        }
+        SECTION("Block and function scope")
+        {
+            SECTION("Default")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
+            }
+            SECTION("auto")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    auto int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
+            }
+            SECTION("static")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    static int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
+            }
+            SECTION("extern")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void)\n"
+                                                                   "{\n"
+                                                                   "    extern int i;\n"
+                                                                   "}\n");
+                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                    translationUnit.getGlobals()[0]));
+                auto& func =
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
+                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
+            }
+            SECTION("register")
+            {
+                SECTION("Param list")
+                {
+                    auto [translationUnit, errors] = generateSemantics("void foo(register int i)\n"
+                                                                       "{}\n");
+                    REQUIRE_THAT(errors, ProducesNothing());
+                    REQUIRE(translationUnit.getGlobals().size() == 1);
+                    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                        translationUnit.getGlobals()[0]));
+                    auto& func =
+                        *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    REQUIRE(func.getParameterDeclarations().size() == 1);
+                    auto& decl = *func.getParameterDeclarations()[0];
+                    CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
+                }
+                SECTION("Identifier list")
+                {
+                    auto [translationUnit, errors] = generateSemantics("void foo(i) register int i;\n"
+                                                                       "{}\n");
+                    REQUIRE_THAT(errors, ProducesNothing());
+                    REQUIRE(translationUnit.getGlobals().size() == 1);
+                    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                        translationUnit.getGlobals()[0]));
+                    auto& func =
+                        *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    REQUIRE(func.getParameterDeclarations().size() == 1);
+                    auto& decl = *func.getParameterDeclarations()[0];
+                    CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
+                }
+            }
         }
     }
     SECTION("Typedef")
@@ -669,6 +814,24 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                       "};",
                       ProducesError(BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME));
     }
+    SEMA_PRODUCES("struct A {\n"
+                  " struct B {\n"
+                  "     int r;\n"
+                  " } b;\n"
+                  "};\n"
+                  "\n"
+                  "struct B {\n"
+                  " int r;\n"
+                  "};",
+                  ProducesError(REDEFINITION_OF_SYMBOL_N, "'B'"));
+    SEMA_PRODUCES("struct A {\n"
+                  " struct B {\n"
+                  "     int r;\n"
+                  " } b;\n"
+                  "};\n"
+                  "\n"
+                  "struct B a;",
+                  ProducesNothing());
     SEMA_PRODUCES("struct A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_STRUCT));
     SEMA_PRODUCES("union A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_UNION));
     SEMA_PRODUCES("struct A{ struct r f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'struct r'"));
@@ -1201,4 +1364,19 @@ TEST_CASE("Semantics type printing", "[semantics]")
                       8)))
               == "char*(*(**[][8])())[]");
     }
+}
+
+TEST_CASE("Semantics primary expressions", "[semantics]")
+{
+    const auto* comp = R"(---
+TranslationUnit:
+  - Object: FunctionDefinition
+    Type: int(void)
+    CompoundStatement:
+      - Object: UnaryExpression
+        Operator: '-'
+        Expression:
+          Object: Constant
+          Value: 5
+)";
 }

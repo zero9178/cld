@@ -4,8 +4,10 @@
 
 #include <Frontend/Compiler/Lexer.hpp>
 #include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/SemanticAnalysis.hpp>
 #include <Frontend/Compiler/SourceObject.hpp>
 #include <Frontend/Preprocessor/Parser.hpp>
+#include <Frontend/Preprocessor/Preprocessor.hpp>
 
 int main(int argc, char** argv)
 {
@@ -21,11 +23,6 @@ int main(int argc, char** argv)
         return -1;
     }
     std::string filename = argv[2];
-    for (int i = 3; i < argc; i++)
-    {
-        filename += ' ';
-        filename += argv[i];
-    }
     std::uint64_t size;
     auto error = llvm::sys::fs::file_size(filename, size);
     if (error != std::error_code())
@@ -55,7 +52,7 @@ int main(int argc, char** argv)
     if (mode == "lexer")
     {
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors)
         {
             return 0;
@@ -65,7 +62,7 @@ int main(int argc, char** argv)
     else if (mode == "parser")
     {
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
@@ -83,17 +80,49 @@ int main(int argc, char** argv)
     }
     else if (mode == "pplexer")
     {
-        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls());
+        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), nullptr, filename);
     }
     else if (mode == "ppparser")
     {
         bool errors;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors);
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
         }
         cld::PP::buildTree(tokens, &llvm::nulls());
+    }
+    else if (mode == "sema")
+    {
+        auto options = cld::LanguageOptions::native();
+        for (int i = 3; i < argc; i++)
+        {
+            options.includeDirectories.push_back(argv[i]);
+        }
+        bool errors = false;
+        auto pptokens = cld::Lexer::tokenize(input, options, &llvm::errs(), &errors, filename);
+        if (errors)
+        {
+            return 0;
+        }
+        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+        if (errors)
+        {
+            return 0;
+        }
+        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);
+        if (errors)
+        {
+            return 0;
+        }
+        auto pair = cld::Parser::buildTree(ctokens);
+        if (!pair.second)
+        {
+            return 0;
+        }
+        cld::Semantics::SemanticAnalysis analysis(ctokens);
+        analysis.visit(pair.first);
+        return 0;
     }
     else
     {

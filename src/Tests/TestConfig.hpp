@@ -15,12 +15,18 @@
 
 namespace cld::Tests
 {
-const inline auto x64windowsGnu = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 8, true};
-const inline auto x86windowsGnu = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 80, 4, true};
-const inline auto x64windowsMsvc = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 8, true};
-const inline auto x86windowsMsvc = LanguageOptions{cld::LanguageOptions::C99, 1, true, 2, false, 2, 4, 4, 64, 4, true};
-const inline auto x64linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 8, 80, 8, false};
-const inline auto x86linux = LanguageOptions{cld::LanguageOptions::C99, 1, true, 4, true, 2, 4, 4, 80, 4, false};
+const inline auto x64windowsGnu =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::UnsignedShort, 2, 4, 4, 80, 8, true};
+const inline auto x86windowsGnu =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::UnsignedShort, 2, 4, 4, 80, 4, true};
+const inline auto x64windowsMsvc =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::UnsignedShort, 2, 4, 4, 64, 8, true};
+const inline auto x86windowsMsvc =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::UnsignedShort, 2, 4, 4, 64, 4, true};
+const inline auto x64linux =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::Int, 2, 4, 8, 80, 8, false};
+const inline auto x86linux =
+    LanguageOptions{LanguageOptions::C99, 1, true, LanguageOptions::WideCharType::Int, 2, 4, 4, 80, 4, false};
 
 namespace detail
 {

@@ -19,7 +19,7 @@ class PrimaryExpressionIdentifier;
 
 class PrimaryExpressionConstant;
 
-class PrimaryExpressionParenthese;
+class PrimaryExpressionParentheses;
 
 class PostFixExpressionPrimaryExpression;
 
@@ -195,12 +195,13 @@ public:
  */
 class PrimaryExpressionIdentifier final : public Node
 {
-    std::string m_identifier;
+    Lexer::CTokenIterator m_identifier;
 
 public:
-    PrimaryExpressionIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier);
+    PrimaryExpressionIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                Lexer::CTokenIterator identifier);
 
-    [[nodiscard]] const std::string& getIdentifier() const;
+    [[nodiscard]] Lexer::CTokenIterator getIdentifier() const;
 };
 
 /**
@@ -210,30 +211,30 @@ public:
 class PrimaryExpressionConstant final : public Node
 {
 public:
-    using variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
+    using Variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
 
 private:
-    variant m_value;
+    Variant m_value;
     Lexer::CToken::Type m_type;
 
 public:
-    PrimaryExpressionConstant(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant value,
+    PrimaryExpressionConstant(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Variant value,
                               Lexer::CToken::Type type);
 
-    [[nodiscard]] const variant& getValue() const;
+    [[nodiscard]] const Variant& getValue() const;
 
     [[nodiscard]] Lexer::CToken::Type getType() const;
 };
 
 /**
- * <PrimaryExpressionParenthese> ::= <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+ * <PrimaryExpressionParentheses> ::= <TokenType::OpenParentheses> <Expression> <TokenType::CloseParentheses>
  */
-class PrimaryExpressionParenthese final : public Node
+class PrimaryExpressionParentheses final : public Node
 {
     Expression m_expression;
 
 public:
-    PrimaryExpressionParenthese(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression);
+    PrimaryExpressionParentheses(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Expression&& expression);
 
     [[nodiscard]] const Expression& getExpression() const;
 };
@@ -241,10 +242,10 @@ public:
 /**
  * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
  *                       | <PrimaryExpressionConstant>
- *                       | <PrimaryExpressionParenthese>
+ *                       | <PrimaryExpressionParentheses>
  */
 using PrimaryExpression =
-    std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParenthese>;
+    std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParentheses>;
 
 /**
  * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
@@ -299,12 +300,16 @@ public:
 class PostFixExpressionIncrement final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
+    Lexer::TokenBase m_incrementToken;
 
 public:
     PostFixExpressionIncrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                               std::unique_ptr<PostFixExpression>&& postFixExpression);
+                               std::unique_ptr<PostFixExpression>&& postFixExpression,
+                               const Lexer::TokenBase& incrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
+
+    [[nodiscard]] const Lexer::TokenBase& getIncrementToken() const;
 };
 
 /**
@@ -313,12 +318,16 @@ public:
 class PostFixExpressionDecrement final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
+    Lexer::TokenBase m_decrementToken;
 
 public:
     PostFixExpressionDecrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                               std::unique_ptr<PostFixExpression>&& postFixExpression);
+                               std::unique_ptr<PostFixExpression>&& postFixExpression,
+                               const Lexer::TokenBase& decrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
+
+    [[nodiscard]] const Lexer::TokenBase& getDecrementToken() const;
 };
 
 /**
@@ -356,19 +365,19 @@ public:
 };
 
 /**
- * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParenthese> <NonCommaExpression>
+ * <PostFixExpressionFunctionCall> ::= <PostFixExpression> <TokenType::OpenParentheses> <NonCommaExpression>
  *                                     { <TokenType::Comma> <NonCommaExpression> }
- *                                     <TokenType::CloseParenthese>
+ *                                     <TokenType::CloseParentheses>
  */
 class PostFixExpressionFunctionCall final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
-    std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmanetExpressions;
+    std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmentExpressions;
 
 public:
     PostFixExpressionFunctionCall(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                  std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmanetExpressions);
+                                  std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmentExpressions);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
@@ -376,7 +385,7 @@ public:
 };
 
 /**
- * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParenthese>
+ * <PostFixExpressionTypeInitializer> ::= <TokenType::OpenParentheses> <TypeName> <TokenType::CloseParentheses>
  *                                        <TokenType::OpenBrace> <InitializerList> [<TokenType::Comma>]
  * <TokenType::CloseBrace>
  */
@@ -445,20 +454,23 @@ public:
 private:
     std::unique_ptr<CastExpression> m_castExpression;
     UnaryOperator m_operator;
+    Lexer::TokenBase m_unaryToken;
 
 public:
     UnaryExpressionUnaryOperator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryOperator anOperator,
-                                 std::unique_ptr<CastExpression>&& unaryExpression);
+                                 const Lexer::TokenBase& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression);
 
-    [[nodiscard]] UnaryOperator getAnOperator() const;
+    [[nodiscard]] UnaryOperator getOperator() const;
+
+    [[nodiscard]] const Lexer::TokenBase& getUnaryToken() const;
 
     [[nodiscard]] const CastExpression& getCastExpression() const;
 };
 
 /**
  * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
- *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParenthese> <TypeName>
- * <TokenType::CloseParenthese>
+ *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParentheses> <TypeName>
+ * <TokenType::CloseParentheses>
  */
 class UnaryExpressionSizeOf final : public Node
 {
@@ -474,8 +486,8 @@ public:
 
 /**
  * <UnaryExpressionDefined> ::= <TokenType::DefinedKeyword> <TokenType::Identifier>
- *                            | <TokenType::DefinedKeyword> <TokenType::OpenParenthese> <TokenType::Identifier>
- * <TokenType::CloseParenthese>
+ *                            | <TokenType::DefinedKeyword> <TokenType::OpenParentheses> <TokenType::Identifier>
+ * <TokenType::CloseParentheses>
  */
 class UnaryExpressionDefined final : public Node
 {
@@ -534,7 +546,7 @@ public:
 
 /**
  * <CastExpression> ::= <UnaryExpression>
- *                    | <TokenType::OpenParenthese> <TypeName> <TokenType::CloseParentheses> <CastExpression>
+ *                    | <TokenType::OpenParentheses> <TypeName> <TokenType::CloseParentheses> <CastExpression>
  */
 class CastExpression final : public Node
 {
@@ -566,16 +578,23 @@ public:
         BinaryRemainder ///<<TokenType::Modulo>
     };
 
+    struct Operand
+    {
+        BinaryDotOperator dotOperator;
+        Lexer::TokenBase operatorToken;
+        CastExpression expression;
+    };
+
 private:
-    std::vector<std::pair<BinaryDotOperator, CastExpression>> m_optionalCastExpressions;
+    std::vector<Operand> m_optionalCastExpressions;
 
 public:
     Term(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, CastExpression&& castExpressions,
-         std::vector<std::pair<BinaryDotOperator, CastExpression>>&& optionalCastExpressions);
+         std::vector<Operand>&& optionalCastExpressions);
 
     [[nodiscard]] const CastExpression& getCastExpression() const;
 
-    [[nodiscard]] const std::vector<std::pair<BinaryDotOperator, CastExpression>>& getOptionalCastExpressions() const;
+    [[nodiscard]] const std::vector<Operand>& getOptionalCastExpressions() const;
 };
 
 /**
@@ -595,16 +614,23 @@ public:
         BinaryMinus ///<<TokenType::Negation>
     };
 
+    struct Operand
+    {
+        BinaryDashOperator dashOperator;
+        Lexer::TokenBase operatorToken;
+        Term expression;
+    };
+
 private:
-    std::vector<std::pair<BinaryDashOperator, Term>> m_optionalTerms;
+    std::vector<Operand> m_optionalTerms;
 
 public:
     AdditiveExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Term&& term,
-                       std::vector<std::pair<BinaryDashOperator, Term>>&& optionalTerms);
+                       std::vector<Operand>&& optionalTerms);
 
     [[nodiscard]] const Term& getTerm() const;
 
-    [[nodiscard]] const std::vector<std::pair<BinaryDashOperator, Term>>& getOptionalTerms() const;
+    [[nodiscard]] const std::vector<Operand>& getOptionalTerms() const;
 };
 
 /**
@@ -817,7 +843,7 @@ public:
         NoOperator,       ///<<TokenType::Assignment>
         PlusAssign,       ///<<TokenType::PlusAssign>
         MinusAssign,      ///<<TokenType::MinusAssign>
-        DivideAssign,     ///< TokenType::DivideAssign>
+        DivideAssign,     ///<<TokenType::DivideAssign>
         MultiplyAssign,   ///<<TokenType::MultiplyAssign>
         ModuloAssign,     ///<<TokenType::ModuloAssign>
         LeftShiftAssign,  ///<<TokenType::LeftShiftAssign>
@@ -891,7 +917,7 @@ using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement
                                SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
 
 /**
- * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParenthese> <Expression> <TokenType::CloseParenthese>
+ * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParentheses> <Expression> <TokenType::CloseParentheses>
  *               <Statement> [ <TokenType::ElseKeyword> <Statement> ]
  */
 class IfStatement final : public Node
@@ -912,8 +938,8 @@ public:
 };
 
 /**
- * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParenthese> <Expression>
- * <TokenType::CloseParenthese> <Statement>
+ * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParentheses> <Expression>
+ * <TokenType::CloseParentheses> <Statement>
  */
 class SwitchStatement final : public Node
 {
@@ -1069,8 +1095,8 @@ public:
 /**
  * <ExpressionOrDeclaration> ::= <Declaration> | [<Expression>] <TokenType::SemiColon>
  *
- * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParenthese> <ExpressionOrDeclaration>
- *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParenthese> <Statement>
+ * <ForStatement> ::= <TokenType::ForKeyword> <TokenType::OpenParentheses> <ExpressionOrDeclaration>
+ *                    [<Expression>] <TokenType::SemiColon> [<Expression>] <TokenType::CloseParentheses> <Statement>
  */
 class ForStatement final : public Node
 {
@@ -1094,8 +1120,8 @@ public:
 };
 
 /**
- * <HeadWhileStatement> ::= <TokenType::WhileKeyword> <TokenType::OpenParenthese> <Expression>
- *                          <TokenType::CloseParenthese> <Statement>
+ * <HeadWhileStatement> ::= <TokenType::WhileKeyword> <TokenType::OpenParentheses> <Expression>
+ *                          <TokenType::CloseParentheses> <Statement>
  */
 class HeadWhileStatement final : public Node
 {
@@ -1161,7 +1187,7 @@ public:
 };
 
 /**
- * <DirectAbstractDeclarator> ::= <DirectAbstractDeclaratorParenthese>
+ * <DirectAbstractDeclarator> ::= <DirectAbstractDeclaratorParentheses>
  *                              | <DirectAbstractDeclaratorAssignmentExpression>
  *                              | <DirectAbstractDeclaratorAsterisk>
  *                              | <DirectAbstractDeclaratorParameterTypeList>
@@ -1171,8 +1197,8 @@ using DirectAbstractDeclarator =
                  DirectAbstractDeclaratorAsterisk, DirectAbstractDeclaratorParameterTypeList>;
 
 /**
- * <DirectAbstractDeclaratorParenthese> ::= <TokenType::OpenParenthese> <AbstractDeclarator>
- * <TokenType::CloseParenthese>
+ * <DirectAbstractDeclaratorParentheses> ::= <TokenType::OpenParentheses> <AbstractDeclarator>
+ * <TokenType::CloseParentheses>
  */
 class DirectAbstractDeclaratorParentheses final : public Node
 {
@@ -1220,8 +1246,8 @@ public:
 };
 
 /**
- * <DirectAbstractDeclaratorParameterTypeList> ::= [<DirectAbstractDeclarator>] <TokenType::OpenParenthese>
- *                                                 [<ParameterTypeList>] <TokenType::CloseParenthese>
+ * <DirectAbstractDeclaratorParameterTypeList> ::= [<DirectAbstractDeclarator>] <TokenType::OpenParentheses>
+ *                                                 [<ParameterTypeList>] <TokenType::CloseParentheses>
  */
 class DirectAbstractDeclaratorParameterTypeList final : public Node
 {

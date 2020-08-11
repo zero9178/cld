@@ -18,8 +18,11 @@ struct LanguageOptions
     Language language;
     std::uint8_t sizeOfUnderlineBool;
     bool charIsSigned;
-    std::uint8_t sizeOfWChar;
-    bool wcharIsSigned;
+    enum class WideCharType
+    {
+        UnsignedShort,
+        Int
+    } wcharUnderlyingType;
     std::uint8_t sizeOfShort;
     std::uint8_t sizeOfInt;
     std::uint8_t sizeOfLong;
