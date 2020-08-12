@@ -1,6 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
-project(cld CXX)
-set(CMAKE_CXX_STANDARD 17)
+cmake_minimum_required(VERSION 3.11)
 
 if (POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
@@ -9,6 +7,10 @@ if (POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW)
 endif ()
 
+cmake_policy(SET CMP0069 NEW)
+
+project(cld CXX)
+set(CMAKE_CXX_STANDARD 17)
 option(CLD_BUILD_TESTS "Build tests" ON)
 option(CLD_ENABLE_ASSERTS "Enable asserts in Release mode" ${CLD_FUZZER})
 

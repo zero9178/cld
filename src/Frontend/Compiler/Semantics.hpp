@@ -323,7 +323,7 @@ public:
 class StructType final
 {
     std::string m_name;
-    std::int64_t m_scopeOrId;
+    std::uint64_t m_scopeOrId;
 
     StructType(std::string_view name, std::int64_t scope);
 
@@ -335,7 +335,7 @@ public:
         return m_name;
     }
 
-    std::int64_t getScopeOrId() const
+    std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
@@ -352,7 +352,7 @@ public:
 class UnionType final
 {
     std::string m_name;
-    std::int64_t m_scopeOrId;
+    std::uint64_t m_scopeOrId;
 
     UnionType(std::string_view name, std::int64_t scopeOrId);
 
@@ -364,7 +364,7 @@ public:
         return m_name;
     }
 
-    std::int64_t getScopeOrId() const
+    std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
@@ -444,7 +444,7 @@ public:
 class EnumType final
 {
     std::string m_name;
-    std::int64_t m_scopeOrId;
+    std::uint64_t m_scopeOrId;
 
     EnumType(std::string name, std::int64_t scopeOrId);
 
@@ -456,7 +456,7 @@ public:
         return m_name;
     }
 
-    std::int64_t getScopeOrId() const
+    std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
@@ -644,6 +644,21 @@ public:
         : m_newType(newType), m_kind(kind), m_expression(std::move(expression))
     {
     }
+
+    const Type& getNewType() const
+    {
+        return m_newType;
+    }
+
+    Kind getKind() const
+    {
+        return m_kind;
+    }
+
+    const Expression& getExpression() const
+    {
+        return *m_expression;
+    }
 };
 
 class MemberAccess
@@ -655,6 +670,16 @@ public:
     MemberAccess(std::shared_ptr<const Expression> recordExpr, std::uint64_t memberIndex)
         : m_recordExpr(recordExpr), m_memberIndex(memberIndex)
     {
+    }
+
+    const Expression& getRecordExpression() const
+    {
+        return *m_recordExpr;
+    }
+
+    std::uint64_t getMemberIndex() const
+    {
+        return m_memberIndex;
     }
 };
 
@@ -678,6 +703,21 @@ public:
         : m_leftOperand(std::move(leftOperand)), m_kind(kind), m_rightOperand(std::move(rightOperand))
     {
     }
+
+    const Expression& getLeftExpression() const
+    {
+        return *m_leftOperand;
+    }
+
+    Kind getKind() const
+    {
+        return m_kind;
+    }
+
+    const Expression& getRightExpression() const
+    {
+        return *m_rightOperand;
+    }
 };
 
 class UnaryOperator
@@ -695,6 +735,16 @@ private:
 
 public:
     UnaryOperator(Kind kind, std::shared_ptr<const Expression> operand) : m_kind(kind), m_operand(std::move(operand)) {}
+
+    Kind getKind() const
+    {
+        return m_kind;
+    }
+
+    const Expression& getOperand() const
+    {
+        return *m_operand;
+    }
 };
 
 class Dereference
@@ -703,6 +753,11 @@ class Dereference
 
 public:
     explicit Dereference(std::shared_ptr<const Expression> pointerExpr) : m_pointerExpr(std::move(pointerExpr)) {}
+
+    const Expression& getPointerExpression() const
+    {
+        return *m_pointerExpr;
+    }
 };
 
 enum class ValueCategory

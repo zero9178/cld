@@ -33,6 +33,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         switch (node.getType())
         {
             case Lexer::CToken::Type::None: CLD_UNREACHABLE;
+            case Lexer::CToken::Type::UnsignedShort:
+                return Expression(
+                    PrimitiveType::createUnsignedShort(false, false, m_sourceInterface.getLanguageOptions()),
+                    ValueCategory::Rvalue, Constant(node.getValue()));
             case Lexer::CToken::Type::Int:
                 return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
                                   ValueCategory::Rvalue, Constant(node.getValue()));
@@ -70,7 +74,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return Expression(
             ArrayType::create(false, false, false, false,
                               PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()),
-                              string.size()),
+                              string.size() + 1),
             ValueCategory::Rvalue, node.getValue());
     }
     else if (std::holds_alternative<Lexer::NonCharString>(node.getValue()))
@@ -84,13 +88,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     return Expression(ArrayType::create(false, false, false, false,
                                                         PrimitiveType::createUnsignedShort(
                                                             false, false, m_sourceInterface.getLanguageOptions()),
-                                                        string.characters.size()),
+                                                        string.characters.size() + 1),
                                       ValueCategory::Rvalue, node.getValue());
                 case LanguageOptions::WideCharType::Int:
                     return Expression(ArrayType::create(false, false, false, false,
                                                         PrimitiveType::createInt(
                                                             false, false, m_sourceInterface.getLanguageOptions()),
-                                                        string.characters.size()),
+                                                        string.characters.size() + 1),
                                       ValueCategory::Rvalue, node.getValue());
             }
             CLD_UNREACHABLE;
@@ -160,7 +164,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return {};
     }
     if (!std::holds_alternative<PointerType>(first.getType().get())
-        || !std::holds_alternative<PointerType>(second.getType().get()))
+        && !std::holds_alternative<PointerType>(second.getType().get()))
     {
         log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(
             node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), first.getType(),
@@ -190,19 +194,20 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         if (&pointerExpr == &first)
         {
             log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-                node.getExpression(), m_sourceInterface, elementType, node.getExpression(), pointerExpr.getType()));
+                node.getPostFixExpression(), m_sourceInterface, elementType, node.getPostFixExpression(),
+                pointerExpr.getType()));
         }
         else
         {
             log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-                node.getPostFixExpression(), m_sourceInterface, elementType, node.getPostFixExpression(),
-                pointerExpr.getType()));
+                node.getExpression(), m_sourceInterface, elementType, node.getExpression(), pointerExpr.getType()));
         }
         return {};
     }
+    auto pointerType = pointerExpr.getType();
     return Expression(std::move(elementType), ValueCategory::Lvalue,
                       Dereference(std::make_shared<Expression>(
-                          elementType, ValueCategory::Rvalue,
+                          pointerType, ValueCategory::Rvalue,
                           BinaryOperator(std::make_shared<Expression>(std::move(pointerExpr)), BinaryOperator::Addition,
                                          std::make_shared<Expression>(std::move(intExpr))))));
 }
@@ -228,9 +233,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         fields = &cld::get<AnonymousUnionType>(structOrUnion.getType().get()).getFields();
     }
-    if (std::holds_alternative<AnonymousUnionType>(structOrUnion.getType().get()))
+    if (std::holds_alternative<AnonymousStructType>(structOrUnion.getType().get()))
     {
-        fields = &cld::get<AnonymousUnionType>(structOrUnion.getType().get()).getFields();
+        fields = &cld::get<AnonymousStructType>(structOrUnion.getType().get()).getFields();
     }
     if (std::holds_alternative<StructType>(structOrUnion.getType().get()))
     {
@@ -256,6 +261,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         fields = &unionDef->getFields();
     }
+    CLD_ASSERT(fields);
     auto result = std::find_if(fields->begin(), fields->end(), [&](const Field& field) {
         return field.name == cld::get<std::string>(node.getIdentifier()->getValue());
     });
@@ -296,9 +302,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         type = Type(structOrUnion.getType().isConst(), structOrUnion.getType().isVolatile(), result->type->get());
     }
     auto category = structOrUnion.getValueCategory();
-    return Expression(
-        std::move(type), category,
-        MemberAccess(std::make_shared<const Expression>(std::move(structOrUnion)), result - fields->begin()));
+    auto index = result - fields->begin();
+    return Expression(std::move(type), category,
+                      MemberAccess(std::make_shared<const Expression>(std::move(structOrUnion)), index));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)
@@ -329,9 +335,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         fields = &cld::get<AnonymousUnionType>(structOrUnion.get()).getFields();
     }
-    if (std::holds_alternative<AnonymousUnionType>(structOrUnion.get()))
+    if (std::holds_alternative<AnonymousStructType>(structOrUnion.get()))
     {
-        fields = &cld::get<AnonymousUnionType>(structOrUnion.get()).getFields();
+        fields = &cld::get<AnonymousStructType>(structOrUnion.get()).getFields();
     }
     if (std::holds_alternative<StructType>(structOrUnion.get()))
     {
@@ -357,6 +363,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         fields = &unionDef->getFields();
     }
+    CLD_ASSERT(fields);
     auto result = std::find_if(fields->begin(), fields->end(), [&](const Field& field) {
         return field.name == cld::get<std::string>(node.getIdentifier()->getValue());
     });
@@ -395,11 +402,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         type = Type(structOrUnion.isConst(), structOrUnion.isVolatile(), result->type->get());
     }
+    auto index = result - fields->begin();
     return Expression(std::move(type), ValueCategory::Lvalue,
                       MemberAccess(std::make_shared<const Expression>(
                                        structOrUnion, ValueCategory::Lvalue,
                                        Dereference(std::make_shared<const Expression>(std::move(structOrUnionPtr)))),
-                                   result - fields->begin()));
+                                   index));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node) {}

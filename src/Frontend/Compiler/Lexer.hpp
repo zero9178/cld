@@ -295,9 +295,10 @@ class CToken final : public TokenBase
     variant m_value; ///< Optional value of the token
 
 public:
-    enum class Type : std::uint8_t
+    enum Type : std::uint8_t
     {
         None,
+        UnsignedShort, // wchar_t on Windows
         Int,
         UnsignedInt,
         Long,

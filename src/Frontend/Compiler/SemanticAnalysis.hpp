@@ -56,6 +56,9 @@ class SemanticAnalysis final
     std::vector<UnionDefinition> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
 
+    constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
+    constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
+
     auto pushScope()
     {
         m_scopes.push_back({m_currentScope, {}, {}});
@@ -233,20 +236,20 @@ public:
         return nullptr;
     }
 
-    StructDefinition* getStructDefinition(std::string_view name, std::int64_t scopeOrId,
+    StructDefinition* getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
                                           std::uint64_t* idOut = nullptr);
 
-    const StructDefinition* getStructDefinition(std::string_view name, std::int64_t scopeOrId,
+    const StructDefinition* getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                 std::uint64_t* idOut = nullptr) const;
 
-    EnumDefinition* getEnumDefinition(std::string_view name, std::int64_t scopeOrId, std::uint64_t* idOut = nullptr);
+    EnumDefinition* getEnumDefinition(std::string_view name, std::uint64_t scopeOrId, std::uint64_t* idOut = nullptr);
 
-    const EnumDefinition* getEnumDefinition(std::string_view name, std::int64_t scopeOrId,
+    const EnumDefinition* getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
                                             std::uint64_t* idOut = nullptr) const;
 
-    UnionDefinition* getUnionDefinition(std::string_view name, std::int64_t scopeOrId, std::uint64_t* idOut = nullptr);
+    UnionDefinition* getUnionDefinition(std::string_view name, std::uint64_t scopeOrId, std::uint64_t* idOut = nullptr);
 
-    const UnionDefinition* getUnionDefinition(std::string_view name, std::int64_t scopeOrId,
+    const UnionDefinition* getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
                                               std::uint64_t* idOut = nullptr) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);

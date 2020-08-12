@@ -559,7 +559,7 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
                                return cld::get<std::unique_ptr<Declaration>>(std::move(variant));
                            });
         },
-        [&](const Syntax::Statement& statement) { visit(statement); });
+        [&](const Syntax::Statement& statement) { result.emplace_back(visit(statement)); });
     return result;
 }
 
@@ -1108,11 +1108,16 @@ cld::Semantics::Type
         if (structOrUnion->getStructDeclarations().empty())
         {
             CLD_ASSERT(structOrUnion->getIdentifierLoc());
+            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
             if (structOrUnion->isUnion())
             {
+                std::uint64_t id;
+                if (getUnionDefinition(name, m_currentScope | IS_SCOPE, &id))
+                {
+                    return UnionType::create(isConst, isVolatile, name, id);
+                }
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
-                     TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::UnionDecl{}}});
+                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::UnionDecl{}}});
                 if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType)
                     && !std::holds_alternative<UnionDefTag>(prev->second.tagType))
                 {
@@ -1121,15 +1126,17 @@ cld::Semantics::Type
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                return UnionType::create(isConst, isVolatile,
-                                         cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
-                                         -m_currentScope);
+                return UnionType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
             }
             else
             {
+                std::uint64_t id;
+                if (getStructDefinition(name, m_currentScope | IS_SCOPE, &id))
+                {
+                    return StructType::create(isConst, isVolatile, name, id);
+                }
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
-                     TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
+                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
                 if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
                     && !std::holds_alternative<StructDefTag>(prev->second.tagType))
                 {
@@ -1138,9 +1145,7 @@ cld::Semantics::Type
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                return StructType::create(isConst, isVolatile,
-                                          cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
-                                          -m_currentScope);
+                return StructType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
             }
         }
         // Originally an iterator pointing at the std::unorderd_map was used here. But in the loops over the fields
@@ -1467,7 +1472,8 @@ cld::Semantics::Type
             // without an enumerator list shall only appear after the type it specifies is complete
             log(Errors::Semantics::FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED.args(*typeSpec[0], m_sourceInterface,
                                                                                  *typeSpec[0]));
-            return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()), -m_currentScope);
+            return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()),
+                                    m_currentScope | IS_SCOPE);
         }
         return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()),
                                 static_cast<std::uint64_t>(*lookup));
@@ -2206,14 +2212,14 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
 }
 
 cld::Semantics::StructDefinition* cld::Semantics::SemanticAnalysis::getStructDefinition(std::string_view name,
-                                                                                        std::int64_t scopeOrId,
+                                                                                        std::uint64_t scopeOrId,
                                                                                         std::uint64_t* idOut)
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
-        return &m_structDefinitions[scopeOrId];
+        return &m_structDefinitions[scopeOrId & SCOPE_OR_ID_MASK];
     }
-    auto* type = lookupType<StructDefTag>(name, -scopeOrId);
+    auto* type = lookupType<StructDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;
@@ -2226,14 +2232,14 @@ cld::Semantics::StructDefinition* cld::Semantics::SemanticAnalysis::getStructDef
 }
 
 const cld::Semantics::StructDefinition*
-    cld::Semantics::SemanticAnalysis::getStructDefinition(std::string_view name, std::int64_t scopeOrId,
+    cld::Semantics::SemanticAnalysis::getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                           std::uint64_t* idOut) const
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
         return &m_structDefinitions[scopeOrId];
     }
-    auto* type = lookupType<StructDefTag>(name, -scopeOrId);
+    auto* type = lookupType<StructDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;
@@ -2246,14 +2252,14 @@ const cld::Semantics::StructDefinition*
 }
 
 cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumDefinition(std::string_view name,
-                                                                                    std::int64_t scopeOrId,
+                                                                                    std::uint64_t scopeOrId,
                                                                                     std::uint64_t* idOut)
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
         return &m_enumDefinitions[scopeOrId];
     }
-    auto* type = lookupType<EnumDefTag>(name, -scopeOrId);
+    auto* type = lookupType<EnumDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;
@@ -2266,14 +2272,14 @@ cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumDefinit
 }
 
 const cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumDefinition(std::string_view name,
-                                                                                          std::int64_t scopeOrId,
+                                                                                          std::uint64_t scopeOrId,
                                                                                           std::uint64_t* idOut) const
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
         return &m_enumDefinitions[scopeOrId];
     }
-    auto* type = lookupType<EnumDefTag>(name, -scopeOrId);
+    auto* type = lookupType<EnumDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;
@@ -2286,14 +2292,14 @@ const cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumD
 }
 
 cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnionDefinition(std::string_view name,
-                                                                                      std::int64_t scopeOrId,
+                                                                                      std::uint64_t scopeOrId,
                                                                                       std::uint64_t* idOut)
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
         return &m_unionDefinitions[scopeOrId];
     }
-    auto* type = lookupType<UnionDefTag>(name, -scopeOrId);
+    auto* type = lookupType<UnionDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;
@@ -2306,14 +2312,14 @@ cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnionDefin
 }
 
 const cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnionDefinition(std::string_view name,
-                                                                                            std::int64_t scopeOrId,
+                                                                                            std::uint64_t scopeOrId,
                                                                                             std::uint64_t* idOut) const
 {
-    if (scopeOrId >= 0)
+    if (!(scopeOrId & IS_SCOPE))
     {
         return &m_unionDefinitions[scopeOrId];
     }
-    auto* type = lookupType<UnionDefTag>(name, -scopeOrId);
+    auto* type = lookupType<UnionDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
     if (!type)
     {
         return nullptr;

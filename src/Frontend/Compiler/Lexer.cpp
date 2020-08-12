@@ -2612,7 +2612,10 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                                                      * 8,
                                                  chars[0]),
                                      sourceInterface.getLanguageOptions().wcharUnderlyingType
-                                         == LanguageOptions::WideCharType::UnsignedShort));
+                                         == LanguageOptions::WideCharType::UnsignedShort),
+                        sourceInterface.getLanguageOptions().wcharUnderlyingType == LanguageOptions::WideCharType::Int ?
+                            CToken::Int :
+                            CToken::UnsignedShort);
                 }
                 else
                 {
@@ -2620,7 +2623,8 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                                         iter->getMacroId(),
                                         llvm::APSInt(llvm::APInt(sourceInterface.getLanguageOptions().sizeOfInt * 8,
                                                                  static_cast<std::uint8_t>(chars[0]), true),
-                                                     false));
+                                                     false),
+                                        CToken::Int);
                 }
                 break;
             }

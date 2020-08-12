@@ -78,6 +78,9 @@ cld::Semantics::ConstRetType
         [this, &node](const llvm::APSInt& integer) -> Semantics::ConstRetType {
             switch (node.getType())
             {
+                case Lexer::CToken::Type::UnsignedShort:
+                    return {integer,
+                            PrimitiveType::createUnsignedShort(false, false, m_sourceInterface.getLanguageOptions())};
                 case Lexer::CToken::Type::Int:
                     return {integer, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
                 case Lexer::CToken::Type::UnsignedInt:

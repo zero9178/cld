@@ -1366,17 +1366,514 @@ TEST_CASE("Semantics type printing", "[semantics]")
     }
 }
 
+using namespace cld::Semantics;
+
 TEST_CASE("Semantics primary expressions", "[semantics]")
 {
-    const auto* comp = R"(---
-TranslationUnit:
-  - Object: FunctionDefinition
-    Type: int(void)
-    CompoundStatement:
-      - Object: UnaryExpression
-        Operator: '-'
-        Expression:
-          Object: Constant
-          Value: 5
-)";
+    SECTION("Constant")
+    {
+        SECTION("Normal")
+        {
+            auto options = cld::LanguageOptions::native();
+            auto constant = GENERATE_COPY(values<std::pair<std::string, Type>>({
+                {"5", PrimitiveType::createInt(false, false, options)},
+                {"5u", PrimitiveType::createUnsignedInt(false, false, options)},
+                {"5l", PrimitiveType::createLong(false, false, options)},
+                {"5ul", PrimitiveType::createUnsignedLong(false, false, options)},
+                {"5LL", PrimitiveType::createLongLong(false, false)},
+                {"5uLL", PrimitiveType::createUnsignedLongLong(false, false)},
+                {"5.0f", PrimitiveType::createFloat(false, false)},
+                {"5.0", PrimitiveType::createDouble(false, false)},
+                {"5.0L", PrimitiveType::createLongDouble(false, false, options)},
+                {"\"txt\"",
+                 ArrayType::create(false, false, false, false, PrimitiveType::createChar(false, false, options), 4)},
+            }));
+            auto [translationUnit, errors] = generateSemantics("void foo(void) { " + constant.first + ";}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == constant.second);
+            CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
+            CHECK(std::holds_alternative<Constant>(expr->get()));
+        }
+        SECTION("Wide")
+        {
+            SECTION("Windows")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void) { L\"txt\";}", x64windowsMsvc);
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+                auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+                REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+                auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+                REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+                auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+                REQUIRE(expr);
+                CHECK(expr->getType()
+                      == ArrayType::create(false, false, false, false,
+                                           PrimitiveType::createUnsignedShort(false, false, x64windowsMsvc), 4));
+                CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
+                CHECK(std::holds_alternative<Constant>(expr->get()));
+            }
+            SECTION("Unix")
+            {
+                auto [translationUnit, errors] = generateSemantics("void foo(void) { L\"txt\";}", x64linux);
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+                auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+                REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+                auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+                REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+                auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+                REQUIRE(expr);
+                CHECK(expr->getType()
+                      == ArrayType::create(false, false, false, false, PrimitiveType::createInt(false, false, x64linux),
+                                           4));
+                CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
+                CHECK(std::holds_alternative<Constant>(expr->get()));
+            }
+        }
+    }
+    SECTION("Parentheses")
+    {
+        auto [translationUnit, errors] = generateSemantics("void foo(void) { (5);}");
+        REQUIRE_THAT(errors, ProducesNoErrors());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+        auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+        REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+        REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+        auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+        REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+        auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+        REQUIRE(expr);
+        CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
+        CHECK(std::holds_alternative<Constant>(expr->get()));
+    }
+    SECTION("Identifiers")
+    {
+        SECTION("Declarations")
+        {
+            auto [translationUnit, errors] = generateSemantics("void foo(void) { foo;}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == FunctionType::create(PrimitiveType::createVoid(false, false), {}, false, false));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<DeclarationRead>(expr->get()));
+            CHECK(cld::get<DeclarationRead>(expr->get()).getDeclRead() == DeclarationRead::Variant(&funcDef));
+        }
+        SECTION("Enum constants")
+        {
+            auto [translationUnit, errors] = generateSemantics("enum A { VALUE = 7};void foo(void) { VALUE;}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<Constant>(expr->get()));
+        }
+        SEMA_PRODUCES("void foo(void) { bar; }", ProducesError(UNDECLARED_IDENTIFIER_N, "'bar'"));
+    }
+}
+
+TEST_CASE("Semantics postfix expressions", "[semantics]")
+{
+    SECTION("Subscript")
+    {
+        auto [translationUnit, errors] = generateSemantics("void foo(void) {\n"
+                                                           "    int *i;\n"
+                                                           "    i[5];\n"
+                                                           "}");
+        REQUIRE_THAT(errors, ProducesNoErrors());
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+        auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+        REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+        CHECK(
+            std::holds_alternative<std::unique_ptr<Declaration>>(funcDef.getCompoundStatement().getCompoundItems()[0]));
+        REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+        auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+        REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+        auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+        REQUIRE(expr);
+        CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+        REQUIRE(std::holds_alternative<Dereference>(expr->get()));
+        CHECK(cld::get<Dereference>(expr->get()).getPointerExpression().getType()
+              == PointerType::create(false, false, false,
+                                     PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
+        CHECK(cld::get<Dereference>(expr->get()).getPointerExpression().getValueCategory() == ValueCategory::Rvalue);
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " 5[5];\n"
+                      "}",
+                      ProducesError(EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int *i;\n"
+                      " i[5.0];\n"
+                      "}",
+                      ProducesError(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int *i;\n"
+                      " 5.0[i];\n"
+                      "}",
+                      ProducesError(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r *i;\n"
+                      " i[5];\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r *i;\n"
+                      " 5[i];\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+    }
+    SECTION("Dot member access")
+    {
+        SECTION("struct")
+        {
+            auto [translationUnit, errors] = generateSemantics("struct A {\n"
+                                                               " int i;\n"
+                                                               "};\n"
+                                                               "\n"
+                                                               "int foo(void) {\n"
+                                                               " struct A i;\n"
+                                                               " i.i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<StructType>(
+                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+        }
+        SECTION("union")
+        {
+            auto [translationUnit, errors] = generateSemantics("union A {\n"
+                                                               " int i;\n"
+                                                               "};\n"
+                                                               "\n"
+                                                               "int foo(void) {\n"
+                                                               " union A i;\n"
+                                                               " i.i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<UnionType>(
+                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+        }
+        SECTION("anonymous struct")
+        {
+            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
+                                                               " struct { int i; } i;\n"
+                                                               " i.i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<AnonymousStructType>(
+                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+        }
+        SECTION("anonymous union")
+        {
+            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
+                                                               " union { int i; } i;\n"
+                                                               " i.i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<AnonymousUnionType>(
+                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+        }
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " '5'.m;\n"
+                      "}",
+                      ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR));
+        // TODO: When operator* is implemented
+        //        SEMA_PRODUCES("int foo(void) {\n"
+        //                      " struct r* i;\n"
+        //                      " (*i).m;\n"
+        //                      "}",ProducesError(STRUCT_N_IS_AN_INCOMPLETE_TYPE,"'r'"));
+        //        SEMA_PRODUCES("int foo(void) {\n"
+        //                      " union r i;\n"
+        //                      " (*i).m;\n"
+        //                      "}",ProducesError(UNION_N_IS_AN_INCOMPLETE_TYPE,"'r'"));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i;\n"
+                      "};\n"
+                      "\n"
+                      "int foo(void) {\n"
+                      " struct A i;\n"
+                      " i.m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N, "'m'", "A"));
+        SEMA_PRODUCES("union A {\n"
+                      " int i;\n"
+                      "};\n"
+                      "\n"
+                      "int foo(void) {\n"
+                      " union A i;\n"
+                      " i.m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_UNION_N, "'m'", "A"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } i;\n"
+                      " i.m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT, "'m'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " union { int i; } i;\n"
+                      " i.m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "'m'"));
+    }
+    SECTION("Arrow member access")
+    {
+        SECTION("struct")
+        {
+            auto [translationUnit, errors] = generateSemantics("struct A {\n"
+                                                               " int i;\n"
+                                                               "};\n"
+                                                               "\n"
+                                                               "int foo(void) {\n"
+                                                               " struct A* i;\n"
+                                                               " i->i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            auto& mem = cld::get<MemberAccess>(expr->get());
+            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            CHECK(std::holds_alternative<StructType>(mem.getRecordExpression().getType().get()));
+            CHECK(mem.getMemberIndex() == 0);
+        }
+        SECTION("union")
+        {
+            auto [translationUnit, errors] = generateSemantics("union A {\n"
+                                                               " int i;\n"
+                                                               "};\n"
+                                                               "\n"
+                                                               "int foo(void) {\n"
+                                                               " union A* i;\n"
+                                                               " i->i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            auto& mem = cld::get<MemberAccess>(expr->get());
+            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            CHECK(std::holds_alternative<UnionType>(mem.getRecordExpression().getType().get()));
+            CHECK(mem.getMemberIndex() == 0);
+        }
+        SECTION("anonymous struct")
+        {
+            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
+                                                               " struct { int i; }* i;\n"
+                                                               " i->i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            auto& mem = cld::get<MemberAccess>(expr->get());
+            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            CHECK(std::holds_alternative<AnonymousStructType>(mem.getRecordExpression().getType().get()));
+            CHECK(mem.getMemberIndex() == 0);
+        }
+        SECTION("anonymous union")
+        {
+            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
+                                                               " union { int i; } *i;\n"
+                                                               " i->i;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
+            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
+            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
+            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
+                funcDef.getCompoundStatement().getCompoundItems()[0]));
+            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
+            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
+            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+            REQUIRE(expr);
+            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
+            auto& mem = cld::get<MemberAccess>(expr->get());
+            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            CHECK(std::holds_alternative<AnonymousUnionType>(mem.getRecordExpression().getType().get()));
+            CHECK(mem.getMemberIndex() == 0);
+        }
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " 5->m;\n"
+                      "}",
+                      ProducesError(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "r"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " union r* i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(UNION_N_IS_AN_INCOMPLETE_TYPE, "r"));
+        SEMA_PRODUCES("struct A {\n"
+                      " int i;\n"
+                      "};\n"
+                      "\n"
+                      "int foo(void) {\n"
+                      " struct A* i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N, "'m'", "A"));
+        SEMA_PRODUCES("union A {\n"
+                      " int i;\n"
+                      "};\n"
+                      "\n"
+                      "int foo(void) {\n"
+                      " union A* i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_UNION_N, "'m'", "A"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } *i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT, "'m'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " union { int i; } *i;\n"
+                      " i->m;\n"
+                      "}",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "'m'"));
+    }
 }

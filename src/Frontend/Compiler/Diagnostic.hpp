@@ -40,7 +40,8 @@ constexpr std::int64_t getBiggestPercentArg(std::u32string_view text)
         const auto end = result.get_end_position();
         text.remove_prefix(end - text.begin());
     }
-    std::int64_t sizes[] = {max, *std::max_element(Args::indices.begin(), Args::indices.end())...};
+    std::int64_t sizes[] = {
+        max, static_cast<std::int64_t>(*std::max_element(Args::indices.begin(), Args::indices.end()))...};
     return *std::max_element(std::begin(sizes), std::end(sizes)) + 1;
 }
 
