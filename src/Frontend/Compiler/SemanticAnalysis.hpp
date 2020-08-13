@@ -165,7 +165,21 @@ class SemanticAnalysis final
 
     static Expression lvalueConversion(Expression expression);
 
+    static Type lvalueConversion(Type type);
+
     Expression integerPromotion(Expression expression) const;
+
+    llvm::ArrayRef<Field> getFields(const Type& recordType) const;
+
+    bool isBitfieldAccess(const Expression& expression) const;
+
+    std::optional<std::pair<Type, std::uint64_t>> checkMemberAccess(const Type& recordType,
+                                                                    const Syntax::PostFixExpression& postFixExpr,
+                                                                    const Lexer::CToken& identifier);
+
+    template <class Expr>
+    Expression checkIncrementAndDecrement(UnaryOperator::Kind kind, Expression&& value, const Lexer::TokenBase& opToken,
+                                          const Expr& syntaxExpr);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs())

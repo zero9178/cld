@@ -238,6 +238,12 @@ CREATE_ERROR(EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE, "Expected one operand t
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE, "Expected other operand to be of integer type",
              Annotate<0, 1>);
 
+CREATE_ERROR(POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR,
+             "Pointer to incomplete type %full0 not allowed in subscript operator", Annotate<1, 2>);
+
+CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR,
+             "Pointer to function type not allowed subscript operator", Annotate<0, 1>);
+
 CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR,
              "Expected 'struct' or 'union' on the left side of '.' operator", Annotate<0, 1>);
 
@@ -258,25 +264,52 @@ CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 f
 CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR,
              "Expected pointer to 'struct' or 'union' on the left side of '->' operator", Annotate<0, 1>);
 
-CREATE_ERROR(OPERAND_OF_INCREMENT_MUST_BE_AN_LVALUE, "Operand of increment must be an lvalue", Underline<0>);
+CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_LVALUE, "Operand of %0 must be an lvalue", PointAt<0>, Underline<1>);
 
-CREATE_ERROR(OPERAND_OF_INCREMENT_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
-             "Operand of increment must be an arithmetic or pointer types", Annotate<0, 1>);
+CREATE_ERROR(OPERAND_OF_N_MUST_NOT_BE_CONST, "Operand of %0 must not be const", PointAt<0>, Annotate<1, 2>);
 
-CREATE_ERROR(OPERAND_OF_DECREMENT_MUST_BE_AN_LVALUE, "Operand of increment must be an lvalue", Underline<0>);
+CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Operand of %0 must be an arithmetic or pointer types",
+             PointAt<0>, Annotate<1, 2>);
 
-CREATE_ERROR(OPERAND_OF_DECREMENT_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
-             "Operand of increment must be an arithmetic or pointer types", Annotate<0, 1>);
+CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC,
+             "Pointer to function type not allowed in pointer arithmetic", Annotate<0, 1>);
+
+CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_TEMPORARY, "Cannot take address of temporary", PointAt<0>, Underline<1>);
+
+CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER,
+             "Cannot take address of declaration annotated with register", PointAt<0>, Underline<1>);
+
+CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_BITFIELD, "Cannot take address of bitfield", PointAt<0>, Underline<1>);
+
+CREATE_ERROR(CANNOT_DEREFERENCE_NON_POINTER_TYPE_N, "Cannot dereference non pointer type %full0", Annotate<1, 0>,
+             PointAt<2>);
+
+CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "Operand of operator %0 must be an arithmetic type",
+             PointAt<0>, Annotate<1, 2>);
+
+CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "Operand of operator %0 must be an integer type",
+             PointAt<0>, Annotate<1, 2>);
+
+CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, Annotate<1, 2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
+
+CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Annotate<0, 1>);
+
+CREATE_ERROR(BITFIELD_NOT_ALLOWED_IN_SIZE_OF, "Bitfield not allowed in 'sizeof'", Underline<0>);
+
+CREATE_ERROR(TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Type in cast must be an arithmetic or pointer type",
+             Annotate<0, 1>);
+
+CREATE_ERROR(EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Expression in cast must be an arithmetic or pointer type", Annotate<0, 1>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC_2, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>, Annotate<3, 4>);
-
-CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Underline<0>);
 
 CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
              "Size of variably modified type cannot be determined in constant expression", Underline<0>);

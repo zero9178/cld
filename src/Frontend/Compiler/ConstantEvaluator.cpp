@@ -208,7 +208,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             if (std::holds_alternative<FunctionType>(type.get()))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
-                                                                                 *typeName));
+                                                                                 *typeName, type));
                 return {};
             }
             auto size = type.getSizeOf(*m_analyser);

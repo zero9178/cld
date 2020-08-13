@@ -285,7 +285,8 @@ bool cld::Parser::firstIsInUnaryExpression(const Lexer::CToken& token, const cld
 {
     return firstIsInPostFixExpression(token, context) || token.getTokenType() == Lexer::TokenType::Increment
            || token.getTokenType() == Lexer::TokenType::Decrement || token.getTokenType() == Lexer::TokenType::Ampersand
-           || token.getTokenType() == Lexer::TokenType::Plus || token.getTokenType() == Lexer::TokenType::Minus
+           || token.getTokenType() == Lexer::TokenType::Asterisk || token.getTokenType() == Lexer::TokenType::Plus
+           || token.getTokenType() == Lexer::TokenType::Minus
            || token.getTokenType() == Lexer::TokenType::BitWiseNegation
            || token.getTokenType() == Lexer::TokenType::LogicalNegation
            || token.getTokenType() == Lexer::TokenType::SizeofKeyword;

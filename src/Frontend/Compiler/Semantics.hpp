@@ -88,40 +88,40 @@ private:
     PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind);
 
 public:
-    static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                       std::uint8_t bitCount, Kind kind);
+    [[nodiscard]] static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                                     std::uint8_t bitCount, Kind kind);
 
-    static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createSignedChar(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createSignedChar(bool isConst, bool isVolatile);
 
-    static Type createUnderlineBool(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createUnderlineBool(bool isConst, bool isVolatile);
 
-    static Type createUnsignedChar(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createUnsignedChar(bool isConst, bool isVolatile);
 
-    static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedShort(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createUnsignedShort(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createLongLong(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createLongLong(bool isConst, bool isVolatile);
 
-    static Type createUnsignedLongLong(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createUnsignedLongLong(bool isConst, bool isVolatile);
 
-    static Type createFloat(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createFloat(bool isConst, bool isVolatile);
 
-    static Type createDouble(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createDouble(bool isConst, bool isVolatile);
 
-    static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    static Type createVoid(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createVoid(bool isConst, bool isVolatile);
 
     [[nodiscard]] bool isFloatingPoint() const
     {
@@ -150,14 +150,14 @@ public:
         return m_bitCount;
     }
 
-    Kind getKind() const
+    [[nodiscard]] Kind getKind() const
     {
         return m_kind;
     }
 
-    bool operator==(const PrimitiveType& rhs) const;
+    [[nodiscard]] bool operator==(const PrimitiveType& rhs) const;
 
-    bool operator!=(const PrimitiveType& rhs) const;
+    [[nodiscard]] bool operator!=(const PrimitiveType& rhs) const;
 };
 
 class ArrayType final
@@ -170,7 +170,8 @@ class ArrayType final
     ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type, std::size_t size);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type,
+                                     std::size_t size);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -192,13 +193,13 @@ public:
         return m_static;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const ArrayType& rhs) const;
+    [[nodiscard]] bool operator==(const ArrayType& rhs) const;
 
-    bool operator!=(const ArrayType& rhs) const;
+    [[nodiscard]] bool operator!=(const ArrayType& rhs) const;
 };
 
 class AbstractArrayType final
@@ -209,7 +210,7 @@ class AbstractArrayType final
     AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -221,16 +222,16 @@ public:
         return m_restricted;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
     {
         CLD_UNREACHABLE;
     }
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const AbstractArrayType& rhs) const;
+    [[nodiscard]] bool operator==(const AbstractArrayType& rhs) const;
 
-    bool operator!=(const AbstractArrayType& rhs) const;
+    [[nodiscard]] bool operator!=(const AbstractArrayType& rhs) const;
 };
 
 class ValArrayType final
@@ -242,7 +243,7 @@ class ValArrayType final
     ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -259,16 +260,16 @@ public:
         return m_static;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
     {
         CLD_UNREACHABLE;
     }
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const ValArrayType& rhs) const;
+    [[nodiscard]] bool operator==(const ValArrayType& rhs) const;
 
-    bool operator!=(const ValArrayType& rhs) const;
+    [[nodiscard]] bool operator!=(const ValArrayType& rhs) const;
 };
 
 class FunctionType final
@@ -282,8 +283,9 @@ class FunctionType final
                  bool lastIsVararg, bool isKandR);
 
 public:
-    static Type create(cld::Semantics::Type&& returnType, std::vector<std::pair<Type, std::string>>&& arguments,
-                       bool lastIsVararg, bool isKandR);
+    [[nodiscard]] static Type create(cld::Semantics::Type&& returnType,
+                                     std::vector<std::pair<Type, std::string>>&& arguments, bool lastIsVararg,
+                                     bool isKandR);
 
     [[nodiscard]] const Type& getReturnType() const
     {
@@ -305,19 +307,19 @@ public:
         return m_isKandR;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
     {
         CLD_UNREACHABLE;
     }
 
-    std::size_t getAlignOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis&) const
     {
         CLD_UNREACHABLE;
     }
 
-    bool operator==(const FunctionType& rhs) const;
+    [[nodiscard]] bool operator==(const FunctionType& rhs) const;
 
-    bool operator!=(const FunctionType& rhs) const;
+    [[nodiscard]] bool operator!=(const FunctionType& rhs) const;
 };
 
 class StructType final
@@ -328,25 +330,25 @@ class StructType final
     StructType(std::string_view name, std::int64_t scope);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scope);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scope);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const StructType& rhs) const;
+    [[nodiscard]] bool operator==(const StructType& rhs) const;
 
-    bool operator!=(const StructType& rhs) const;
+    [[nodiscard]] bool operator!=(const StructType& rhs) const;
 };
 
 class UnionType final
@@ -364,18 +366,18 @@ public:
         return m_name;
     }
 
-    std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const UnionType& rhs) const;
+    [[nodiscard]] bool operator==(const UnionType& rhs) const;
 
-    bool operator!=(const UnionType& rhs) const;
+    [[nodiscard]] bool operator!=(const UnionType& rhs) const;
 };
 
 struct Field
@@ -384,9 +386,9 @@ struct Field
     std::string name;
     std::optional<std::uint8_t> bitFieldSize;
 
-    bool operator==(const Field& rhs) const;
+    [[nodiscard]] bool operator==(const Field& rhs) const;
 
-    bool operator!=(const Field& rhs) const;
+    [[nodiscard]] bool operator!=(const Field& rhs) const;
 };
 
 class AnonymousStructType final
@@ -401,18 +403,18 @@ public:
     static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
                        std::uint64_t alignOf);
 
-    const std::vector<Field>& getFields() const
+    [[nodiscard]] const std::vector<Field>& getFields() const
     {
         return m_fields;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const AnonymousStructType& rhs) const;
+    [[nodiscard]] bool operator==(const AnonymousStructType& rhs) const;
 
-    bool operator!=(const AnonymousStructType& rhs) const;
+    [[nodiscard]] bool operator!=(const AnonymousStructType& rhs) const;
 };
 
 class AnonymousUnionType final
@@ -427,18 +429,18 @@ public:
     static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
                        std::uint64_t alignOf);
 
-    const std::vector<Field>& getFields() const
+    [[nodiscard]] const std::vector<Field>& getFields() const
     {
         return m_fields;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const AnonymousUnionType& rhs) const;
+    [[nodiscard]] bool operator==(const AnonymousUnionType& rhs) const;
 
-    bool operator!=(const AnonymousUnionType& rhs) const;
+    [[nodiscard]] bool operator!=(const AnonymousUnionType& rhs) const;
 };
 
 class EnumType final
@@ -456,18 +458,18 @@ public:
         return m_name;
     }
 
-    std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getScopeOrId() const
     {
         return m_scopeOrId;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const EnumType& rhs) const;
+    [[nodiscard]] bool operator==(const EnumType& rhs) const;
 
-    bool operator!=(const EnumType& rhs) const;
+    [[nodiscard]] bool operator!=(const EnumType& rhs) const;
 };
 
 class AnonymousEnumType
@@ -479,18 +481,18 @@ class AnonymousEnumType
 public:
     static Type create(bool isConst, bool isVolatile, Type&& type);
 
-    bool operator==(const AnonymousEnumType& rhs) const;
+    [[nodiscard]] bool operator==(const AnonymousEnumType& rhs) const;
 
-    bool operator!=(const AnonymousEnumType& rhs) const;
+    [[nodiscard]] bool operator!=(const AnonymousEnumType& rhs) const;
 
-    const Type& getType() const
+    [[nodiscard]] const Type& getType() const
     {
         return *m_type;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
 
 class PointerType final
@@ -503,7 +505,7 @@ class PointerType final
 public:
     static Type create(bool isConst, bool isVolatile, bool isRestricted, Type elementType);
 
-    [[nodiscard]] const Type& getElementType() const
+    [[nodiscard]] const Type& getElementType() const&
     {
         return *m_elementType;
     }
@@ -513,13 +515,13 @@ public:
         return m_restricted;
     }
 
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    bool operator==(const PointerType& rhs) const;
+    [[nodiscard]] bool operator==(const PointerType& rhs) const;
 
-    bool operator!=(const PointerType& rhs) const;
+    [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
 class Type final
@@ -542,9 +544,14 @@ public:
     {
     }
 
-    [[nodiscard]] const Variant& get() const
+    [[nodiscard]] const Variant& get() const&
     {
         return m_type;
+    }
+
+    [[nodiscard]] Variant&& get() &&
+    {
+        return std::move(m_type);
     }
 
     [[nodiscard]] bool isConst() const
@@ -572,9 +579,9 @@ public:
         return !m_name.empty();
     }
 
-    bool operator==(const Type& rhs) const;
+    [[nodiscard]] bool operator==(const Type& rhs) const;
 
-    bool operator!=(const Type& rhs) const;
+    [[nodiscard]] bool operator!=(const Type& rhs) const;
 
     [[nodiscard]] bool isUndefined() const
     {
@@ -582,9 +589,9 @@ public:
     }
 
     // Likely replaced with an interface soon?
-    std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
 
-    std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
 
 class Expression;
@@ -600,7 +607,7 @@ private:
 public:
     Constant(Variant value) : m_value(std::move(value)) {}
 
-    const Variant& getValue() const
+    [[nodiscard]] const Variant& getValue() const
     {
         return m_value;
     }
@@ -617,7 +624,7 @@ private:
 public:
     explicit DeclarationRead(Variant declRead) : m_declRead(declRead) {}
 
-    Variant getDeclRead() const
+    [[nodiscard]] Variant getDeclRead() const
     {
         return m_declRead;
     }
@@ -645,17 +652,17 @@ public:
     {
     }
 
-    const Type& getNewType() const
+    [[nodiscard]] const Type& getNewType() const
     {
         return m_newType;
     }
 
-    Kind getKind() const
+    [[nodiscard]] Kind getKind() const
     {
         return m_kind;
     }
 
-    const Expression& getExpression() const
+    [[nodiscard]] const Expression& getExpression() const
     {
         return *m_expression;
     }
@@ -672,12 +679,12 @@ public:
     {
     }
 
-    const Expression& getRecordExpression() const
+    [[nodiscard]] const Expression& getRecordExpression() const
     {
         return *m_recordExpr;
     }
 
-    std::uint64_t getMemberIndex() const
+    [[nodiscard]] std::uint64_t getMemberIndex() const
     {
         return m_memberIndex;
     }
@@ -704,17 +711,17 @@ public:
     {
     }
 
-    const Expression& getLeftExpression() const
+    [[nodiscard]] const Expression& getLeftExpression() const
     {
         return *m_leftOperand;
     }
 
-    Kind getKind() const
+    [[nodiscard]] Kind getKind() const
     {
         return m_kind;
     }
 
-    const Expression& getRightExpression() const
+    [[nodiscard]] const Expression& getRightExpression() const
     {
         return *m_rightOperand;
     }
@@ -725,8 +732,16 @@ class UnaryOperator
 public:
     enum Kind
     {
+        AddressOf,
+        Dereference,
         PostIncrement,
-        PostDecrement
+        PostDecrement,
+        PreIncrement,
+        PreDecrement,
+        Plus,
+        Minus,
+        BooleanNegate,
+        BitwiseNegate,
     };
 
 private:
@@ -736,27 +751,40 @@ private:
 public:
     UnaryOperator(Kind kind, std::shared_ptr<const Expression> operand) : m_kind(kind), m_operand(std::move(operand)) {}
 
-    Kind getKind() const
+    [[nodiscard]] Kind getKind() const
     {
         return m_kind;
     }
 
-    const Expression& getOperand() const
+    [[nodiscard]] const Expression& getOperand() const
     {
         return *m_operand;
     }
 };
 
-class Dereference
+class SizeofOperator
 {
-    std::shared_ptr<const Expression> m_pointerExpr;
+public:
+    using Variant = std::variant<std::shared_ptr<const Expression>, Type>;
+
+private:
+    std::optional<std::uint64_t> m_size;
+    Variant m_variant;
 
 public:
-    explicit Dereference(std::shared_ptr<const Expression> pointerExpr) : m_pointerExpr(std::move(pointerExpr)) {}
-
-    const Expression& getPointerExpression() const
+    explicit SizeofOperator(std::optional<std::uint64_t> size, Variant variant)
+        : m_size(size), m_variant(std::move(variant))
     {
-        return *m_pointerExpr;
+    }
+
+    [[nodiscard]] const std::optional<std::uint64_t>& getSize() const
+    {
+        return m_size;
+    }
+
+    [[nodiscard]] const Variant& getVariant() const
+    {
+        return m_variant;
     }
 };
 
@@ -772,8 +800,8 @@ class Expression
     ValueCategory m_valueCategory;
 
 public:
-    using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, Dereference,
-                                 BinaryOperator, UnaryOperator>;
+    using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, BinaryOperator,
+                                 UnaryOperator, SizeofOperator>;
 
 private:
     Variant m_expression;
@@ -1114,6 +1142,12 @@ Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator)
 bool isVoid(const Type& type);
 
 bool isArray(const Type& type);
+
+bool isInteger(const Type& type);
+
+bool isArithmetic(const Type& type);
+
+bool isScalar(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag

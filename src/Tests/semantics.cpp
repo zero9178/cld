@@ -10,7 +10,7 @@
 #include "TestConfig.hpp"
 
 static std::pair<cld::Semantics::TranslationUnit, std::string>
-    generateSemantics(const std::string& source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
+    generateSemantics(std::string_view source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
@@ -1368,6 +1368,31 @@ TEST_CASE("Semantics type printing", "[semantics]")
 
 using namespace cld::Semantics;
 
+namespace
+{
+/***
+ * Assume last thing in the translation unit is a function definition and assumes that the last expression
+ * inside the function definitions compound statement is a non empty expression statement.
+ * Returns the expression of that expression statement
+ * @param source Source code to process
+ * @param options Language options
+ * @return Last expression in the function definition
+ */
+Expression generateExpression(std::string_view source, cld::LanguageOptions options = cld::LanguageOptions::native())
+{
+    auto [translationUnit, errors] = generateSemantics(source, options);
+    REQUIRE_THAT(errors, ProducesNoErrors());
+    REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back()));
+    auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back());
+    REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
+    auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+    REQUIRE(expr);
+    return *expr;
+}
+} // namespace
+
 TEST_CASE("Semantics primary expressions", "[semantics]")
 {
     SECTION("Constant")
@@ -1388,116 +1413,57 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
                 {"\"txt\"",
                  ArrayType::create(false, false, false, false, PrimitiveType::createChar(false, false, options), 4)},
             }));
-            auto [translationUnit, errors] = generateSemantics("void foo(void) { " + constant.first + ";}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == constant.second);
-            CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
-            CHECK(std::holds_alternative<Constant>(expr->get()));
+            auto expr = generateExpression("void foo(void) { " + constant.first + ";}");
+            CHECK(expr.getType() == constant.second);
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(std::holds_alternative<Constant>(expr.get()));
         }
         SECTION("Wide")
         {
             SECTION("Windows")
             {
-                auto [translationUnit, errors] = generateSemantics("void foo(void) { L\"txt\";}", x64windowsMsvc);
-                REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-                auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-                REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-                REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-                auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-                REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-                auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-                REQUIRE(expr);
-                CHECK(expr->getType()
+                auto expr = generateExpression("void foo(void) { L\"txt\";}", x64windowsMsvc);
+                CHECK(expr.getType()
                       == ArrayType::create(false, false, false, false,
                                            PrimitiveType::createUnsignedShort(false, false, x64windowsMsvc), 4));
-                CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
-                CHECK(std::holds_alternative<Constant>(expr->get()));
+                CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+                CHECK(std::holds_alternative<Constant>(expr.get()));
             }
             SECTION("Unix")
             {
-                auto [translationUnit, errors] = generateSemantics("void foo(void) { L\"txt\";}", x64linux);
-                REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-                auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-                REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-                REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-                auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-                REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-                auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-                REQUIRE(expr);
-                CHECK(expr->getType()
+                auto expr = generateExpression("void foo(void) { L\"txt\";}", x64linux);
+                CHECK(expr.getType()
                       == ArrayType::create(false, false, false, false, PrimitiveType::createInt(false, false, x64linux),
                                            4));
-                CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
-                CHECK(std::holds_alternative<Constant>(expr->get()));
+                CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+                CHECK(std::holds_alternative<Constant>(expr.get()));
             }
         }
     }
     SECTION("Parentheses")
     {
-        auto [translationUnit, errors] = generateSemantics("void foo(void) { (5);}");
-        REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-        auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-        REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-        REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-        auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-        REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-        auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-        REQUIRE(expr);
-        CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
-        CHECK(std::holds_alternative<Constant>(expr->get()));
+        auto expr = generateExpression("void foo(void) { (5);}");
+        CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(std::holds_alternative<Constant>(expr.get()));
     }
     SECTION("Identifiers")
     {
         SECTION("Declarations")
         {
-            auto [translationUnit, errors] = generateSemantics("void foo(void) { foo;}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == FunctionType::create(PrimitiveType::createVoid(false, false), {}, false, false));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<DeclarationRead>(expr->get()));
-            CHECK(cld::get<DeclarationRead>(expr->get()).getDeclRead() == DeclarationRead::Variant(&funcDef));
+            auto expr = generateExpression("void foo(void) { foo;}");
+            CHECK(expr.getType() == FunctionType::create(PrimitiveType::createVoid(false, false), {}, false, false));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<DeclarationRead>(expr.get()));
+            CHECK(
+                std::holds_alternative<const FunctionDefinition*>(cld::get<DeclarationRead>(expr.get()).getDeclRead()));
         }
         SECTION("Enum constants")
         {
-            auto [translationUnit, errors] = generateSemantics("enum A { VALUE = 7};void foo(void) { VALUE;}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 1);
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[0]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<Constant>(expr->get()));
+            auto expr = generateExpression("enum A { VALUE = 7};void foo(void) { VALUE;}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<Constant>(expr.get()));
         }
         SEMA_PRODUCES("void foo(void) { bar; }", ProducesError(UNDECLARED_IDENTIFIER_N, "'bar'"));
     }
@@ -1507,29 +1473,18 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 {
     SECTION("Subscript")
     {
-        auto [translationUnit, errors] = generateSemantics("void foo(void) {\n"
-                                                           "    int *i;\n"
-                                                           "    i[5];\n"
-                                                           "}");
-        REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-        auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-        REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-        CHECK(
-            std::holds_alternative<std::unique_ptr<Declaration>>(funcDef.getCompoundStatement().getCompoundItems()[0]));
-        REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-        auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-        REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-        auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-        REQUIRE(expr);
-        CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-        REQUIRE(std::holds_alternative<Dereference>(expr->get()));
-        CHECK(cld::get<Dereference>(expr->get()).getPointerExpression().getType()
+        auto expr = generateExpression("void foo(int *i) {\n"
+                                       "    i[5];\n"
+                                       "}");
+
+        CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+        REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
+        CHECK(cld::get<UnaryOperator>(expr.get()).getKind() == UnaryOperator::Dereference);
+        CHECK(cld::get<UnaryOperator>(expr.get()).getOperand().getType()
               == PointerType::create(false, false, false,
                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-        CHECK(cld::get<Dereference>(expr->get()).getPointerExpression().getValueCategory() == ValueCategory::Rvalue);
+        CHECK(cld::get<UnaryOperator>(expr.get()).getOperand().getValueCategory() == ValueCategory::Rvalue);
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5[5];\n"
                       "}",
@@ -1548,144 +1503,101 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                       " struct r *i;\n"
                       " i[5];\n"
                       "}",
-                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+                      ProducesError(POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR, "'struct r'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " struct r *i;\n"
                       " 5[i];\n"
                       "}",
-                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+                      ProducesError(POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " i[5];\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " 5[i];\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR));
     }
     SECTION("Dot member access")
     {
         SECTION("struct")
         {
-            auto [translationUnit, errors] = generateSemantics("struct A {\n"
-                                                               " int i;\n"
-                                                               "};\n"
-                                                               "\n"
-                                                               "int foo(void) {\n"
-                                                               " struct A i;\n"
-                                                               " i.i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
-                  == ValueCategory::Lvalue);
+            auto expr = generateExpression("struct A {\n"
+                                           " int i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(struct A i) {\n"
+                                           " i.i;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<StructType>(
-                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
         }
         SECTION("union")
         {
-            auto [translationUnit, errors] = generateSemantics("union A {\n"
-                                                               " int i;\n"
-                                                               "};\n"
-                                                               "\n"
-                                                               "int foo(void) {\n"
-                                                               " union A i;\n"
-                                                               " i.i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
-                  == ValueCategory::Lvalue);
+            auto expr = generateExpression("union A {\n"
+                                           " int i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(union A i) {\n"
+                                           " i.i;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<UnionType>(
-                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
         }
         SECTION("anonymous struct")
         {
-            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
-                                                               " struct { int i; } i;\n"
-                                                               " i.i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
-                  == ValueCategory::Lvalue);
+            auto expr = generateExpression("int foo(struct { int i; } i) {\n"
+                                           " i.i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousStructType>(
-                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
         }
         SECTION("anonymous union")
         {
-            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
-                                                               " union { int i; } i;\n"
-                                                               " i.i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getRecordExpression().getValueCategory()
-                  == ValueCategory::Lvalue);
+            auto expr = generateExpression("int foo(union { int i; } i) {\n"
+                                           " i.i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousUnionType>(
-                cld::get<MemberAccess>(expr->get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr->get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
+            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
         }
         SEMA_PRODUCES("int foo(void) {\n"
                       " '5'.m;\n"
                       "}",
                       ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR));
-        // TODO: When operator* is implemented
-        //        SEMA_PRODUCES("int foo(void) {\n"
-        //                      " struct r* i;\n"
-        //                      " (*i).m;\n"
-        //                      "}",ProducesError(STRUCT_N_IS_AN_INCOMPLETE_TYPE,"'r'"));
-        //        SEMA_PRODUCES("int foo(void) {\n"
-        //                      " union r i;\n"
-        //                      " (*i).m;\n"
-        //                      "}",ProducesError(UNION_N_IS_AN_INCOMPLETE_TYPE,"'r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " (*i).m;\n"
+                      "}",
+                      ProducesError(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "r"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " union r* i;\n"
+                      " (*i).m;\n"
+                      "}",
+                      ProducesError(UNION_N_IS_AN_INCOMPLETE_TYPE, "r"));
         SEMA_PRODUCES("struct A {\n"
                       " int i;\n"
                       "};\n"
@@ -1719,117 +1631,73 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
     {
         SECTION("struct")
         {
-            auto [translationUnit, errors] = generateSemantics("struct A {\n"
-                                                               " int i;\n"
-                                                               "};\n"
-                                                               "\n"
-                                                               "int foo(void) {\n"
-                                                               " struct A* i;\n"
-                                                               " i->i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            auto& mem = cld::get<MemberAccess>(expr->get());
+            auto expr = generateExpression("struct A {\n"
+                                           " int i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(struct A* i) {\n"
+                                           " i->i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            auto& mem = cld::get<MemberAccess>(expr.get());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(mem.getRecordExpression().get()));
+            CHECK(cld::get<UnaryOperator>(mem.getRecordExpression().get()).getKind() == UnaryOperator::Dereference);
             CHECK(std::holds_alternative<StructType>(mem.getRecordExpression().getType().get()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("union")
         {
-            auto [translationUnit, errors] = generateSemantics("union A {\n"
-                                                               " int i;\n"
-                                                               "};\n"
-                                                               "\n"
-                                                               "int foo(void) {\n"
-                                                               " union A* i;\n"
-                                                               " i->i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            auto& mem = cld::get<MemberAccess>(expr->get());
+            auto expr = generateExpression("union A {\n"
+                                           " int i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(union A* i) {\n"
+                                           " i->i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            auto& mem = cld::get<MemberAccess>(expr.get());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(mem.getRecordExpression().get()));
+            CHECK(cld::get<UnaryOperator>(mem.getRecordExpression().get()).getKind() == UnaryOperator::Dereference);
             CHECK(std::holds_alternative<UnionType>(mem.getRecordExpression().getType().get()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("anonymous struct")
         {
-            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
-                                                               " struct { int i; }* i;\n"
-                                                               " i->i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            auto& mem = cld::get<MemberAccess>(expr->get());
+            auto expr = generateExpression("int foo( struct { int i; }* i) {\n"
+                                           " i->i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            auto& mem = cld::get<MemberAccess>(expr.get());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(mem.getRecordExpression().get()));
+            CHECK(cld::get<UnaryOperator>(mem.getRecordExpression().get()).getKind() == UnaryOperator::Dereference);
             CHECK(std::holds_alternative<AnonymousStructType>(mem.getRecordExpression().getType().get()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("anonymous union")
         {
-            auto [translationUnit, errors] = generateSemantics("int foo(void) {\n"
-                                                               " union { int i; } *i;\n"
-                                                               " i->i;\n"
-                                                               "}");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]));
-            auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals()[0]);
-            REQUIRE(funcDef.getCompoundStatement().getCompoundItems().size() == 2);
-            CHECK(std::holds_alternative<std::unique_ptr<Declaration>>(
-                funcDef.getCompoundStatement().getCompoundItems()[0]));
-            REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]));
-            auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems()[1]);
-            REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-            auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
-            REQUIRE(expr);
-            CHECK(expr->getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            CHECK(expr->getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr->get()));
-            auto& mem = cld::get<MemberAccess>(expr->get());
+            auto expr = generateExpression("int foo(union { int i; } *i) {\n"
+                                           " i->i;\n"
+                                           "}");
+
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
+            auto& mem = cld::get<MemberAccess>(expr.get());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<Dereference>(mem.getRecordExpression().get()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(mem.getRecordExpression().get()));
+            CHECK(cld::get<UnaryOperator>(mem.getRecordExpression().get()).getKind() == UnaryOperator::Dereference);
             CHECK(std::holds_alternative<AnonymousUnionType>(mem.getRecordExpression().getType().get()));
             CHECK(mem.getMemberIndex() == 0);
         }
@@ -1876,4 +1744,337 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                       "}",
                       ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "'m'"));
     }
+    SECTION("Increment and decrement")
+    {
+        SECTION("Increment")
+        {
+            auto expr = generateExpression("int foo(volatile int i) {\n"
+                                           " i++;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
+            auto& unary = cld::get<UnaryOperator>(expr.get());
+            CHECK(unary.getKind() == UnaryOperator::PostIncrement);
+        }
+        SECTION("Decrement")
+        {
+            auto expr = generateExpression("int foo(volatile int i) {\n"
+                                           " i--;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
+            auto& unary = cld::get<UnaryOperator>(expr.get());
+            CHECK(unary.getKind() == UnaryOperator::PostDecrement);
+        }
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } i;\n"
+                      " i++;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } i;\n"
+                      " i--;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int i;\n"
+                      " (i++)++;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int i;\n"
+                      " (i--)--;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " const int i;\n"
+                      " i++;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " const int i;\n"
+                      " i--;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " i++;\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " i--;\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " i++;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " i--;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+    }
+}
+
+TEST_CASE("Semantics unary expressions", "[semantics]")
+{
+    SECTION("Increment and decrement")
+    {
+        SECTION("Increment")
+        {
+            auto expr = generateExpression("int foo(volatile int i) {\n"
+                                           " ++i;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
+            auto& unary = cld::get<UnaryOperator>(expr.get());
+            CHECK(unary.getKind() == UnaryOperator::PreIncrement);
+        }
+        SECTION("Decrement")
+        {
+            auto expr = generateExpression("int foo(volatile int i) {\n"
+                                           " --i;\n"
+                                           "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
+            auto& unary = cld::get<UnaryOperator>(expr.get());
+            CHECK(unary.getKind() == UnaryOperator::PreDecrement);
+        }
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } i;\n"
+                      " ++i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct { int i; } i;\n"
+                      " --i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int i;\n"
+                      " ++(++i);\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " int i;\n"
+                      " --(--i);\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " const int i;\n"
+                      " ++i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'++'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " const int i;\n"
+                      " --i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'--'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " ++i;\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " struct r* i;\n"
+                      " --i;\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct r'"));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " ++i;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      " void (*i)(int);\n"
+                      " --i;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+    }
+    SECTION("Address of")
+    {
+        SECTION("Following dereference")
+        {
+            auto exp = generateExpression("void foo(int *i) {\n"
+                                          " &*i;\n"
+                                          "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType()
+                  == PointerType::create(false, false, false,
+                                         PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
+            CHECK(!std::holds_alternative<UnaryOperator>(exp.get()));
+        }
+        SECTION("Following subscript")
+        {
+            auto exp = generateExpression("void foo(int *i) {\n"
+                                          " &i[0];\n"
+                                          "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType()
+                  == PointerType::create(false, false, false,
+                                         PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
+            REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+            auto& binOp = cld::get<BinaryOperator>(exp.get());
+            CHECK(binOp.getKind() == BinaryOperator::Addition);
+        }
+        SEMA_PRODUCES("void foo(register int i) {\n"
+                      " &i;\n"
+                      "}",
+                      ProducesError(CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER));
+        SEMA_PRODUCES("void foo(struct { int i : 5; } i) {\n"
+                      " &i.i;\n"
+                      "}",
+                      ProducesError(CANNOT_TAKE_ADDRESS_OF_BITFIELD));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " &5;\n"
+                      "}",
+                      ProducesError(CANNOT_TAKE_ADDRESS_OF_TEMPORARY));
+    }
+    SECTION("Dereference")
+    {
+        auto exp = generateExpression("void foo(int* i) {\n"
+                                      "*i;\n"
+                                      "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Dereference);
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      " *i;\n"
+                      "}",
+                      ProducesError(CANNOT_DEREFERENCE_NON_POINTER_TYPE_N, "'int'"));
+    }
+    SECTION("Unary + and -")
+    {
+        SECTION("-")
+        {
+            auto exp = generateExpression("void foo(short i) {\n"
+                                          "-i;\n"
+                                          "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Minus);
+        }
+        SECTION("+")
+        {
+            auto exp = generateExpression("void foo(short i) {\n"
+                                          "+i;\n"
+                                          "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Plus);
+        }
+        SEMA_PRODUCES("void foo(float i) {\n"
+                      "+i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "+i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'+'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "-i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'-'"));
+    }
+    SECTION("Bitwise negate")
+    {
+        auto exp = generateExpression("void foo(short i) {\n"
+                                      "~i;\n"
+                                      "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BitwiseNegate);
+        SEMA_PRODUCES("void foo(float i) {\n"
+                      "~i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'~'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "~i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'~'"));
+    }
+    SECTION("Logical negate")
+    {
+        auto exp = generateExpression("void foo(short i) {\n"
+                                      "!i;\n"
+                                      "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+        SEMA_PRODUCES("void foo(float i) {\n"
+                      "!i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "!i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(struct { int r; } i) {\n"
+                      "!i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'!'"));
+    }
+    SECTION("sizeof")
+    {
+        auto exp = generateExpression("void foo(void) {\n"
+                                      "sizeof(int);\n"
+                                      "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        REQUIRE(std::holds_alternative<SizeofOperator>(exp.get()));
+        SEMA_PRODUCES("void foo(struct r* i) {\n"
+                      " sizeof *i;\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_IN_SIZE_OF, "'struct r'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " sizeof(struct r);\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_IN_SIZE_OF, "'struct r'"));
+        SEMA_PRODUCES("void foo(int (*i)(void)) {\n"
+                      " sizeof *i;\n"
+                      "}",
+                      ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " sizeof(void(void));\n"
+                      "}",
+                      ProducesError(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF));
+        SEMA_PRODUCES("void foo(struct { int i : 5; } i) {\n"
+                      " sizeof i.i;\n"
+                      "}",
+                      ProducesError(BITFIELD_NOT_ALLOWED_IN_SIZE_OF));
+    }
+}
+
+TEST_CASE("Semantics cast expression", "[semantics]")
+{
+    auto exp = generateExpression("void foo(int* const i) {\n"
+                                  "(const int* const)i;\n"
+                                  "}");
+    CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+    CHECK(exp.getType()
+          == PointerType::create(false, false, false,
+                                 PrimitiveType::createInt(true, false, cld::LanguageOptions::native())));
+    REQUIRE(std::holds_alternative<Conversion>(exp.get()));
+    auto& conversion = cld::get<Conversion>(exp.get());
+    CHECK(conversion.getKind() == Conversion::Explicit);
+    SEMA_PRODUCES("void foo(int* i) {\n"
+                  " (struct r)i;\n"
+                  "}",
+                  ProducesError(TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+    SEMA_PRODUCES("void foo(struct r* i) {\n"
+                  " (int)*i;\n"
+                  "}",
+                  ProducesError(EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
 }

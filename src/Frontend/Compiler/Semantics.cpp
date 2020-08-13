@@ -499,6 +499,22 @@ bool cld::Semantics::isArray(const cld::Semantics::Type& type)
            || std::holds_alternative<AbstractArrayType>(type.get());
 }
 
+bool cld::Semantics::isInteger(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<PrimitiveType>(type.get()) && !cld::get<PrimitiveType>(type.get()).isFloatingPoint()
+           && cld::get<PrimitiveType>(type.get()).getBitCount() != 0;
+}
+
+bool cld::Semantics::isArithmetic(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<PrimitiveType>(type.get()) && cld::get<PrimitiveType>(type.get()).getBitCount() != 0;
+}
+
+bool cld::Semantics::isScalar(const cld::Semantics::Type& type)
+{
+    return isArithmetic(type) || std::holds_alternative<PointerType>(type.get());
+}
+
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
