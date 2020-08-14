@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/Format.h>
 
 #include <Frontend/Compiler/ErrorMessages.hpp>
@@ -44,6 +45,10 @@ using namespace Catch::Matchers;
 
 namespace
 {
+
+//MSVC has a bug where it attempts to use the deleted copy constructor here. As a workaround we return straight
+//away and instead use a constructor to check for the errors
+
 [[nodiscard]] cld::CSourceObject lexes(std::string_view code,
                                        const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
@@ -53,10 +58,11 @@ namespace
     auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
-    auto ctokens = cld::Lexer::toCTokens(result, &ss, &errors);
-    UNSCOPED_INFO(buffer);
-    REQUIRE_FALSE(errors);
-    return ctokens;
+    auto exit = llvm::make_scope_exit([&]{
+      UNSCOPED_INFO(buffer);
+      REQUIRE_FALSE(errors);
+    });
+    return cld::Lexer::toCTokens(result, &ss, &errors);
 }
 
 [[nodiscard]] cld::PPSourceObject pplexes(std::string_view code,
@@ -65,10 +71,11 @@ namespace
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
-    UNSCOPED_INFO(buffer);
-    REQUIRE_FALSE(errors);
-    return result;
+    auto exit = llvm::make_scope_exit([&]{
+      UNSCOPED_INFO(buffer);
+      REQUIRE_FALSE(errors);
+    });
+    return cld::Lexer::tokenize(code, options, &ss, &errors);
 }
 } // namespace
 

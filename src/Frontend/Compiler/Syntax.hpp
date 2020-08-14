@@ -300,16 +300,16 @@ public:
 class PostFixExpressionIncrement final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
-    Lexer::TokenBase m_incrementToken;
+    Lexer::CTokenIterator m_incrementToken;
 
 public:
     PostFixExpressionIncrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               const Lexer::TokenBase& incrementToken);
+                               const Lexer::CToken& incrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const Lexer::TokenBase& getIncrementToken() const;
+    [[nodiscard]] const Lexer::CToken& getIncrementToken() const;
 };
 
 /**
@@ -318,16 +318,16 @@ public:
 class PostFixExpressionDecrement final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
-    Lexer::TokenBase m_decrementToken;
+    Lexer::CTokenIterator m_decrementToken;
 
 public:
     PostFixExpressionDecrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               const Lexer::TokenBase& decrementToken);
+                               const Lexer::CToken& decrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const Lexer::TokenBase& getDecrementToken() const;
+    [[nodiscard]] const Lexer::CToken& getDecrementToken() const;
 };
 
 /**
@@ -454,15 +454,15 @@ public:
 private:
     std::unique_ptr<CastExpression> m_castExpression;
     UnaryOperator m_operator;
-    Lexer::TokenBase m_unaryToken;
+    Lexer::CTokenIterator m_unaryToken;
 
 public:
     UnaryExpressionUnaryOperator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryOperator anOperator,
-                                 const Lexer::TokenBase& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression);
+                                 const Lexer::CToken& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression);
 
     [[nodiscard]] UnaryOperator getOperator() const;
 
-    [[nodiscard]] const Lexer::TokenBase& getUnaryToken() const;
+    [[nodiscard]] const Lexer::CToken& getUnaryToken() const;
 
     [[nodiscard]] const CastExpression& getCastExpression() const;
 };
@@ -581,7 +581,7 @@ public:
     struct Operand
     {
         BinaryDotOperator dotOperator;
-        Lexer::TokenBase operatorToken;
+        Lexer::CTokenIterator operatorToken;
         CastExpression expression;
     };
 
@@ -617,7 +617,7 @@ public:
     struct Operand
     {
         BinaryDashOperator dashOperator;
-        Lexer::TokenBase operatorToken;
+        Lexer::CTokenIterator operatorToken;
         Term expression;
     };
 
@@ -990,11 +990,11 @@ public:
  */
 class LabelStatement final : public Node
 {
-    std::string m_identifier;
+    std::string_view m_identifier;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string identifier,
+    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string_view identifier,
                    Statement&& statement);
 
     [[nodiscard]] const Statement& getStatement() const;
@@ -1599,7 +1599,7 @@ public:
 
 private:
     using variant = std::variant<PrimitiveTypeSpecifier, std::unique_ptr<StructOrUnionSpecifier>,
-                                 std::unique_ptr<EnumSpecifier>, std::string>;
+                                 std::unique_ptr<EnumSpecifier>, std::string_view>;
 
     variant m_variant;
 

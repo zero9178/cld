@@ -275,16 +275,22 @@ public:
 class FunctionType final
 {
     std::shared_ptr<const Type> m_returnType;
-    std::vector<std::pair<Type, std::string>> m_arguments;
+    std::vector<std::pair<Type, std::string_view>> m_arguments;
     bool m_lastIsVararg;
     bool m_isKandR;
 
-    FunctionType(std::shared_ptr<Type>&& returnType, std::vector<std::pair<Type, std::string>> arguments,
-                 bool lastIsVararg, bool isKandR);
+    FunctionType(std::shared_ptr<Type>&& returnType, std::vector<std::pair<Type, std::string_view>> arguments,
+                 bool lastIsVararg, bool isKandR)
+        : m_returnType(std::move(returnType)),
+          m_arguments(std::move(arguments)),
+          m_lastIsVararg(lastIsVararg),
+          m_isKandR(isKandR)
+    {
+    }
 
 public:
     [[nodiscard]] static Type create(cld::Semantics::Type&& returnType,
-                                     std::vector<std::pair<Type, std::string>>&& arguments, bool lastIsVararg,
+                                     std::vector<std::pair<Type, std::string_view>>&& arguments, bool lastIsVararg,
                                      bool isKandR);
 
     [[nodiscard]] const Type& getReturnType() const
@@ -292,7 +298,7 @@ public:
         return *m_returnType;
     }
 
-    [[nodiscard]] const std::vector<std::pair<Type, std::string>>& getArguments() const
+    [[nodiscard]] const std::vector<std::pair<Type, std::string_view>>& getArguments() const
     {
         return m_arguments;
     }
@@ -324,7 +330,7 @@ public:
 
 class StructType final
 {
-    std::string m_name;
+    std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
     StructType(std::string_view name, std::int64_t scope);
@@ -353,7 +359,7 @@ public:
 
 class UnionType final
 {
-    std::string m_name;
+    std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
     UnionType(std::string_view name, std::int64_t scopeOrId);
@@ -383,7 +389,7 @@ public:
 struct Field
 {
     std::shared_ptr<const Type> type;
-    std::string name;
+    std::string_view name;
     std::optional<std::uint8_t> bitFieldSize;
 
     [[nodiscard]] bool operator==(const Field& rhs) const;
@@ -445,13 +451,13 @@ public:
 
 class EnumType final
 {
-    std::string m_name;
+    std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
-    EnumType(std::string name, std::int64_t scopeOrId);
+    EnumType(std::string_view name, std::int64_t scopeOrId);
 
 public:
-    static Type create(bool isConst, bool isVolatile, const std::string& name, std::int64_t scopeOrId);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrId);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -854,16 +860,16 @@ class Declaration final
     Type m_type;
     Linkage m_linkage;
     Lifetime m_lifetime;
-    std::string m_name;
+    std::string_view m_name;
     // std::optional<Expression> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string name/*,
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string_view name/*,
                 std::optional<Expression> initializer = {}*/)
         : m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
-          m_name(std::move(name))/*,
+          m_name(name)/*,
           m_initializer(std::move(initializer))*/
     {
     }
@@ -975,13 +981,16 @@ class LabelStatement final
 
 class StructDefinition
 {
-    std::string m_name;
+    std::string_view m_name;
     std::vector<Field> m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    StructDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
+    StructDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_name(name), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    {
+    }
 
     std::string_view getName() const
     {
@@ -1010,13 +1019,16 @@ public:
 
 class UnionDefinition
 {
-    std::string m_name;
+    std::string_view m_name;
     std::vector<Field> m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    UnionDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
+    UnionDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_name(name), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    {
+    }
 
     std::string_view getName() const
     {
@@ -1045,11 +1057,11 @@ public:
 
 class EnumDefinition
 {
-    std::string m_name;
+    std::string_view m_name;
     Type m_type;
 
 public:
-    EnumDefinition(std::string_view name, Type type) : m_name(cld::to_string(name)), m_type(std::move(type)) {}
+    EnumDefinition(std::string_view name, Type type) : m_name(name), m_type(std::move(type)) {}
 
     std::string_view getName() const
     {
@@ -1065,7 +1077,7 @@ public:
 class FunctionDefinition final
 {
     Type m_type;
-    std::string m_name;
+    std::string_view m_name;
     std::vector<std::unique_ptr<Declaration>> m_parameterDeclarations;
     Linkage m_linkage;
     CompoundStatement m_compoundStatement;
@@ -1075,7 +1087,7 @@ public:
                        std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
                        CompoundStatement compoundStatement)
         : m_type(std::move(type)),
-          m_name(cld::to_string(name)),
+          m_name(name),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
           m_compoundStatement(std::move(compoundStatement))

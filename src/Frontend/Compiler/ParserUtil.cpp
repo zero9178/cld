@@ -23,7 +23,7 @@ bool cld::Parser::expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIt
         }
         return false;
     }
-    value = cld::get<std::string>(begin->getValue());
+    value = begin->getText();
     begin++;
     return true;
 }
@@ -104,7 +104,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
         case Lexer::TokenType::RestrictKeyword:
         case Lexer::TokenType::VolatileKeyword:
         case Lexer::TokenType::InlineKeyword: return true;
-        case Lexer::TokenType::Identifier: return context.isTypedefInScope(cld::get<std::string>(token.getValue()));
+        case Lexer::TokenType::Identifier: return context.isTypedefInScope(token.getText());
         default: return false;
     }
 }
@@ -129,7 +129,7 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
         case Lexer::TokenType::ConstKeyword:
         case Lexer::TokenType::RestrictKeyword:
         case Lexer::TokenType::VolatileKeyword: return true;
-        case Lexer::TokenType::Identifier: return context.isTypedefInScope(cld::get<std::string>(token.getValue()));
+        case Lexer::TokenType::Identifier: return context.isTypedefInScope(token.getText());
         default: return false;
     }
 }

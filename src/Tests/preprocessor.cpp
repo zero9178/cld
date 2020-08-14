@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 
@@ -18,10 +19,11 @@
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
         UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
-        auto ret = cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                       \
-        UNSCOPED_INFO(ss.str());                                                                       \
-        REQUIRE_FALSE(errorsOccurred);                                                                 \
-        return ret;                                                                                    \
+        auto exit = llvm::make_scope_exit([&] {                                                        \
+            UNSCOPED_INFO(ss.str());                                                                   \
+            REQUIRE_FALSE(errorsOccurred);                                                             \
+        });                                                                                            \
+        return cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                           \
     }(source)
 
 #define preprocessResultWith(source, option)                           \
@@ -30,11 +32,12 @@
         llvm::raw_string_ostream ss(storage);                          \
         auto tokens = cld::Lexer::tokenize(str, languageOptions, &ss); \
         UNSCOPED_INFO(ss.str());                                       \
-        REQUIRE(ss.str().empty());                                     \
-        auto ret = cld::PP::preprocess(std::move(tokens), &ss);        \
-        UNSCOPED_INFO(ss.str());                                       \
-        REQUIRE(ss.str().empty());                                     \
-        return ret;                                                    \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                    \
+        auto exit = llvm::make_scope_exit([&] {                        \
+            UNSCOPED_INFO(ss.str());                                   \
+            REQUIRE_THAT(ss.str(), ProducesNoErrors());                \
+        });                                                            \
+        return cld::PP::preprocess(std::move(tokens), &ss);            \
     }(source, option)
 
 #define preprocessReconstructsTo(source, resultSource)                                                  \

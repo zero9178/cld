@@ -317,7 +317,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
                     log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                        opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                        *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                         std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
                     return {};
                 }
@@ -329,7 +329,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if (!value.isArithmetic() || !other.isArithmetic())
                 {
                     log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                        opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                        *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                         std::forward_as_tuple(*node.begin(), lhsInclusiveEnd), exp));
                     return {};
                 }
@@ -341,7 +341,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if (!value.isInteger() || !other.isInteger())
                 {
                     log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                        opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                        *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                         std::forward_as_tuple(*node.begin(), lhsInclusiveEnd), exp));
                     return {};
                 }
@@ -385,7 +385,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                     || (value.isArithmetic() != other.isArithmetic() && (!value.isInteger() && !other.isInteger())))
                 {
                     log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                        opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                        *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                         std::forward_as_tuple(*node.begin(), lhsInclusiveEnd), exp));
                     return {};
                 }
@@ -410,7 +410,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 if ((value.isArithmetic() || !other.isInteger()) && (value.isArithmetic() != other.isArithmetic()))
                 {
                     log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                        opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                        *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                         std::forward_as_tuple(*node.begin(), lhsInclusiveEnd), exp));
                     return {};
                 }
@@ -420,7 +420,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                         != cld::get<PointerType>(other.getType().get()).getElementType().get())
                     {
                         log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                            opToken, m_sourceInterface, opToken, value.getType(), other.getType(),
+                            *opToken, m_sourceInterface, *opToken, value.getType(), other.getType(),
                             std::forward_as_tuple(*node.begin(), lhsInclusiveEnd), exp));
                         return {};
                     }
@@ -770,7 +770,6 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                                                                                               exp, other.getType()));
             return {};
         }
-        std::string opName = op == Syntax::EqualityExpression::EqualityOperator::Equal ? "==" : "!=";
         if (!value.isArithmetic() && !other.isArithmetic())
         {
             if (cld::get<PointerType>(value.getType().get()).getElementType().get()
@@ -843,9 +842,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
     return match(
         node, [this](auto&& value) -> ConstRetType { return visit(value); },
         [this](const Syntax::PrimaryExpressionIdentifier& identifier) -> ConstRetType {
-            auto decl = m_identifierCallback ?
-                            m_identifierCallback(cld::get<std::string>(identifier.getIdentifier()->getValue())) :
-                            std::optional<ConstRetType>{};
+            auto decl = m_identifierCallback ? m_identifierCallback(identifier.getIdentifier()->getText()) :
+                                               std::optional<ConstRetType>{};
             if (decl)
             {
                 return *decl;

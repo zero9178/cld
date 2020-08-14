@@ -167,7 +167,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
-    auto* result = lookupDecl(cld::get<std::string>(node.getIdentifier()->getValue()));
+    auto* result = lookupDecl(node.getIdentifier()->getText());
     if (!result || std::holds_alternative<Type>(*result))
     {
         log(Errors::Semantics::UNDECLARED_IDENTIFIER_N.args(*node.getIdentifier(), m_sourceInterface,
@@ -326,9 +326,8 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
         fields = &unionDef->getFields();
     }
     CLD_ASSERT(fields);
-    auto result = std::find_if(fields->begin(), fields->end(), [&](const Field& field) {
-        return field.name == cld::get<std::string>(identifier.getValue());
-    });
+    auto result = std::find_if(fields->begin(), fields->end(),
+                               [&](const Field& field) { return field.name == identifier.getText(); });
     if (result == fields->end())
     {
         if (std::holds_alternative<AnonymousUnionType>(recordType.get()))

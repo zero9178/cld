@@ -209,13 +209,13 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                            || begin->getTokenType() == cld::Lexer::TokenType::Division
                            || begin->getTokenType() == cld::Lexer::TokenType::Percent))
                 {
-                    cld::Lexer::TokenBase token = *begin;
+                    const auto* token = begin;
                     begin++;
                     auto newCast = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newCast)
                     {
                         list.push_back({[&token] {
-                                            switch (token.getTokenType())
+                                            switch (token->getTokenType())
                                             {
                                                 case cld::Lexer::TokenType::Asterisk:
                                                     return Term::BinaryDotOperator::BinaryMultiply;
@@ -249,12 +249,12 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                        && (begin->getTokenType() == cld::Lexer::TokenType::Plus
                            || begin->getTokenType() == cld::Lexer::TokenType::Minus))
                 {
-                    cld::Lexer::TokenBase token = *begin;
+                    const auto* token = begin;
                     begin++;
                     auto newTerm = parseTerm(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newTerm)
                     {
-                        list.push_back({token.getTokenType() == cld::Lexer::TokenType::Plus ?
+                        list.push_back({token->getTokenType() == cld::Lexer::TokenType::Plus ?
                                             AdditiveExpression::BinaryDashOperator::BinaryPlus :
                                             AdditiveExpression::BinaryDashOperator::BinaryMinus,
                                         token, std::move(*newTerm)});
@@ -830,7 +830,7 @@ std::optional<cld::Syntax::UnaryExpression>
         }
     }
     else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
-             && cld::get<std::string>(begin->getValue()) == "defined")
+             && begin->getText() == "defined")
     {
         if (begin->isMacroInserted())
         {
@@ -870,10 +870,10 @@ std::optional<cld::Syntax::UnaryExpression>
                  || begin->getTokenType() == Lexer::TokenType::LogicalNegation
                  || begin->getTokenType() == Lexer::TokenType::BitWiseNegation))
     {
-        Lexer::TokenBase token = *begin;
+        const auto* token = begin;
         begin++;
         auto op = [&token] {
-            switch (token.getTokenType())
+            switch (token->getTokenType())
             {
                 case Lexer::TokenType::Increment: return UnaryExpressionUnaryOperator::UnaryOperator::Increment;
                 case Lexer::TokenType::Decrement: return UnaryExpressionUnaryOperator::UnaryOperator::Decrement;
@@ -892,7 +892,7 @@ std::optional<cld::Syntax::UnaryExpression>
             return {};
         }
         return UnaryExpression(
-            UnaryExpressionUnaryOperator(start, begin, op, token, std::make_unique<CastExpression>(std::move(*cast))));
+            UnaryExpressionUnaryOperator(start, begin, op, *token, std::make_unique<CastExpression>(std::move(*cast))));
     }
 
     auto postFix = parsePostFixExpression(begin, end, context);

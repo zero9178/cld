@@ -177,7 +177,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
         {
             for (auto& iter : identifierList->getIdentifiers())
             {
-                context.addToScope(cld::get<std::string>(iter->getValue()), {start, begin, iter});
+                context.addToScope(iter->getText(), {start, begin, iter});
             }
         }
         else if (parameters)
@@ -207,7 +207,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
                     {
                         continue;
                     }
-                    auto* identifier = std::get_if<std::string>(&typeSpecifier->getVariant());
+                    auto* identifier = std::get_if<std::string_view>(&typeSpecifier->getVariant());
                     if (!identifier)
                     {
                         continue;
@@ -236,11 +236,11 @@ std::optional<cld::Syntax::ExternalDeclaration>
 
                     if (iter.declarationSpecifiers.size() == 1
                         && std::holds_alternative<TypeSpecifier>(iter.declarationSpecifiers[0])
-                        && std::holds_alternative<std::string>(
+                        && std::holds_alternative<std::string_view>(
                             cld::get<TypeSpecifier>(iter.declarationSpecifiers[0]).getVariant()))
                     {
                         auto& typeSpecifier = cld::get<TypeSpecifier>(iter.declarationSpecifiers[0]);
-                        const auto& name = cld::get<std::string>(typeSpecifier.getVariant());
+                        auto name = cld::get<std::string_view>(typeSpecifier.getVariant());
                         auto* loc = context.getLocationOf(name);
                         if (loc)
                         {
@@ -372,8 +372,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
         && std::none_of(
             declarationSpecifiers.begin(), declarationSpecifiers.end(),
             [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
-        && begin->getTokenType() == Lexer::TokenType::Identifier
-        && context.isTypedef(cld::get<std::string>(begin->getValue())))
+        && begin->getTokenType() == Lexer::TokenType::Identifier && context.isTypedef(begin->getText()))
     {
         declaratorMightActuallyBeTypedef = true;
     }
@@ -577,7 +576,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             }
             case Lexer::TokenType::Identifier:
             {
-                auto name = cld::get<std::string>(begin->getValue());
+                auto name = begin->getText();
                 if (context.isTypedefInScope(name))
                 {
                     return Syntax::DeclarationSpecifier{TypeSpecifier(start, ++begin, name)};
@@ -821,14 +820,14 @@ std::optional<cld::Syntax::SpecifierQualifier>
             }
             case Lexer::TokenType::Identifier:
             {
-                auto name = cld::get<std::string>(begin->getValue());
+                auto name = begin->getText();
                 if (context.isTypedefInScope(name))
                 {
                     return Syntax::SpecifierQualifier{TypeSpecifier(start, ++begin, name)};
                 }
                 else if (context.isTypedef(name))
                 {
-                    auto* loc = context.getLocationOf(cld::get<std::string>(begin->getValue()));
+                    auto* loc = context.getLocationOf(begin->getText());
                     CLD_ASSERT(loc);
                     context.log(Errors::Parser::EXPECTED_TYPENAME_INSTEAD_OF_N.args(
                         *begin, context.getSourceInterface(), *begin));
@@ -1562,8 +1561,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
 
         if (thisValueStart->getTokenType() == Lexer::TokenType::Identifier)
         {
-            context.addToScope(cld::get<std::string>(thisValueStart->getValue()),
-                               {thisValueStart, begin, thisValueStart});
+            context.addToScope(thisValueStart->getText(), {thisValueStart, begin, thisValueStart});
         }
 
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
@@ -1925,7 +1923,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             {
                 if (begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::Colon)
                 {
-                    const auto& name = cld::get<std::string>(begin->getValue());
+                    auto name = begin->getText();
                     begin += 2;
                     auto statement = parseStatement(begin, end, context);
                     if (!statement)
@@ -1948,10 +1946,9 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon)));
         std::optional<Message> note;
         if (start + 1 == begin && start->getTokenType() == Lexer::TokenType::Identifier
-            && context.isTypedef(cld::get<std::string>(start->getValue()))
-            && begin->getTokenType() == Lexer::TokenType::Identifier)
+            && context.isTypedef(start->getText()) && begin->getTokenType() == Lexer::TokenType::Identifier)
         {
-            auto* loc = context.getLocationOf(cld::get<std::string>(start->getValue()));
+            auto* loc = context.getLocationOf(start->getText());
             if (loc)
             {
                 note = Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(*loc->identifier, context.getSourceInterface(),

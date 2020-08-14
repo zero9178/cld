@@ -141,7 +141,7 @@ public:
 
     std::uint64_t getBracketMax() const;
 
-    void setBracketMax(uint64_t bracketMax);
+    void setBracketMax(std::uint64_t bracketMax);
 };
 
 std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const CSourceObject& sourceObject,

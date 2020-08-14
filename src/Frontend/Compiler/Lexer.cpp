@@ -1953,7 +1953,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
     std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
         if (wide)
         {
-            std::uint8_t size;
+            std::uint8_t size = 0;
             switch (context.sourceInterface.getLanguageOptions().wcharUnderlyingType)
             {
                 case cld::LanguageOptions::WideCharType ::Int:
@@ -2669,7 +2669,7 @@ std::optional<cld::Lexer::CToken> cld::Lexer::parseStringLiteral(const PPToken& 
                       ppToken.getMacroId(), std::string(utf8.data(), dest));
     }
 
-    std::uint8_t size;
+    std::uint8_t size = 0;
     switch (sourceInterface.getLanguageOptions().wcharUnderlyingType)
     {
         case LanguageOptions::WideCharType ::UnsignedShort:

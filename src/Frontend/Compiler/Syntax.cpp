@@ -87,8 +87,8 @@ const cld::Syntax::Expression& cld::Syntax::PostFixExpressionSubscript::getExpre
 
 cld::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
-    const Lexer::TokenBase& incrementToken)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_incrementToken(incrementToken)
+    const Lexer::CToken& incrementToken)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_incrementToken(&incrementToken)
 {
 }
 
@@ -97,15 +97,15 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionIncrement::g
     return *m_postFixExpression;
 }
 
-const cld::Lexer::TokenBase& cld::Syntax::PostFixExpressionIncrement::getIncrementToken() const
+const cld::Lexer::CToken& cld::Syntax::PostFixExpressionIncrement::getIncrementToken() const
 {
-    return m_incrementToken;
+    return *m_incrementToken;
 }
 
 cld::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
-    const Lexer::TokenBase& decrementToken)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_decrementToken(decrementToken)
+    const Lexer::CToken& decrementToken)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_decrementToken(&decrementToken)
 {
 }
 
@@ -114,9 +114,9 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionDecrement::g
     return *m_postFixExpression;
 }
 
-const cld::Lexer::TokenBase& cld::Syntax::PostFixExpressionDecrement::getDecrementToken() const
+const cld::Lexer::CToken& cld::Syntax::PostFixExpressionDecrement::getDecrementToken() const
 {
-    return m_decrementToken;
+    return *m_decrementToken;
 }
 
 cld::Syntax::PostFixExpressionDot::PostFixExpressionDot(
@@ -195,8 +195,8 @@ const cld::Syntax::PostFixExpression& cld::Syntax::UnaryExpressionPostFixExpress
 
 cld::Syntax::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryExpressionUnaryOperator::UnaryOperator anOperator,
-    const Lexer::TokenBase& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression)
-    : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator), m_unaryToken(unaryToken)
+    const Lexer::CToken& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression)
+    : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator), m_unaryToken(&unaryToken)
 {
 }
 
@@ -210,9 +210,9 @@ const cld::Syntax::CastExpression& cld::Syntax::UnaryExpressionUnaryOperator::ge
     return *m_castExpression;
 }
 
-const cld::Lexer::TokenBase& cld::Syntax::UnaryExpressionUnaryOperator::getUnaryToken() const
+const cld::Lexer::CToken& cld::Syntax::UnaryExpressionUnaryOperator::getUnaryToken() const
 {
-    return m_unaryToken;
+    return *m_unaryToken;
 }
 
 cld::Syntax::UnaryExpressionSizeOf::UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
@@ -998,10 +998,8 @@ cld::Lexer::CTokenIterator cld::Syntax::GotoStatement::getIdentifier() const
 }
 
 cld::Syntax::LabelStatement::LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                            std::string identifier, Statement&& statement)
-    : Node(begin, end),
-      m_identifier(std::move(identifier)),
-      m_statement(std::make_unique<Statement>(std::move(statement)))
+                                            std::string_view identifier, Statement&& statement)
+    : Node(begin, end), m_identifier(identifier), m_statement(std::make_unique<Statement>(std::move(statement)))
 {
 }
 

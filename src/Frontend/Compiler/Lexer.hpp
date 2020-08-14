@@ -327,17 +327,22 @@ public:
         return m_value;
     }
 
-    [[nodiscard]] Type getType() const
+    [[nodiscard]] std::string_view getText() const noexcept
+    {
+        return cld::get<std::string>(m_value);
+    }
+
+    [[nodiscard]] Type getType() const noexcept
     {
         return m_type;
     }
 
-    void setType(Type type)
+    void setType(Type type) noexcept
     {
         m_type = type;
     }
 
-    void setValue(const variant& value)
+    void setValue(const variant& value) noexcept
     {
         m_value = value;
     }

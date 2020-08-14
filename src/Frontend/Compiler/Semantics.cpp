@@ -132,12 +132,10 @@ std::size_t cld::Semantics::PointerType::getAlignOf(const SemanticAnalysis& anal
     return analysis.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string name, int64_t scopeOrId)
-    : m_name(std::move(name)), m_scopeOrId(scopeOrId)
-{
+cld::Semantics::EnumType::EnumType(std::string_view name, int64_t scopeOrId) : m_name(name), m_scopeOrId(scopeOrId) {
 }
 
-cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, const std::string& name,
+cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, std::string_view name,
                                                       int64_t scopeOrId)
 {
     return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scopeOrId));
@@ -319,18 +317,8 @@ bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType
     return !(rhs == *this);
 }
 
-cld::Semantics::FunctionType::FunctionType(std::shared_ptr<Type>&& returnType,
-                                           std::vector<std::pair<Type, std::string>> arguments, bool lastIsVararg,
-                                           bool isKandR)
-    : m_returnType(std::move(returnType)),
-      m_arguments(std::move(arguments)),
-      m_lastIsVararg(lastIsVararg),
-      m_isKandR(isKandR)
-{
-}
-
 cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&& returnType,
-                                                          std::vector<std::pair<Type, std::string>>&& arguments,
+                                                          std::vector<std::pair<Type, std::string_view>>&& arguments,
                                                           bool lastIsVararg, bool isKandR)
 {
     return cld::Semantics::Type(
@@ -384,7 +372,7 @@ std::string_view cld::Semantics::declaratorToName(const cld::Syntax::Declarator&
     return matchWithSelf(
         declarator.getDirectDeclarator(),
         [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string_view {
-            return cld::get<std::string>(name.getIdentifierLoc()->getValue());
+            return name.getIdentifierLoc()->getText();
         },
         [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> std::string_view {
             return cld::match(declarator.getDeclarator().getDirectDeclarator(),
@@ -413,9 +401,7 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, int64_t scope)
-    : m_name(cld::to_string(name)), m_scopeOrId(scope)
-{
+cld::Semantics::StructType::StructType(std::string_view name, int64_t scope) : m_name(name), m_scopeOrId(scope) {
 }
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
@@ -448,9 +434,7 @@ std::size_t cld::Semantics::StructType::getAlignOf(const SemanticAnalysis& analy
     return def->getAlignOf();
 }
 
-cld::Semantics::UnionType::UnionType(std::string_view name, int64_t scopeOrId)
-    : m_name(cld::to_string(name)), m_scopeOrId(scopeOrId)
-{
+cld::Semantics::UnionType::UnionType(std::string_view name, int64_t scopeOrId) : m_name(name), m_scopeOrId(scopeOrId) {
 }
 
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
@@ -520,12 +504,6 @@ cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Va
 {
 }
 
-cld::Semantics::StructDefinition::StructDefinition(std::string_view name, std::vector<Field>&& fields,
-                                                   std::uint64_t sizeOf, std::uint64_t alignOf)
-    : m_name(cld::to_string(name)), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
-{
-}
-
 bool cld::Semantics::StructDefinition::operator==(const cld::Semantics::StructDefinition& rhs) const
 {
     return std::tie(m_name, m_fields) == std::tie(rhs.m_name, rhs.m_fields);
@@ -534,12 +512,6 @@ bool cld::Semantics::StructDefinition::operator==(const cld::Semantics::StructDe
 bool cld::Semantics::StructDefinition::operator!=(const cld::Semantics::StructDefinition& rhs) const
 {
     return !(rhs == *this);
-}
-
-cld::Semantics::UnionDefinition::UnionDefinition(std::string_view name, std::vector<Field>&& fields,
-                                                 std::uint64_t sizeOf, std::uint64_t alignOf)
-    : m_name(cld::to_string(name)), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
-{
 }
 
 bool cld::Semantics::UnionDefinition::operator==(const cld::Semantics::UnionDefinition& rhs) const

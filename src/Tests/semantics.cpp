@@ -22,7 +22,8 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
     tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    auto ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
+    static cld::CSourceObject ctokens;
+    ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     auto parsing = cld::Parser::buildTree(ctokens, &ss);

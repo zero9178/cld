@@ -141,10 +141,10 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 }
             }
             auto paramType = ft.getArguments()[i].first;
-            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
-                std::move(paramType), Linkage::None, lifetime, cld::get<std::string>(loc->getValue())));
-            auto [prev, notRedefined] = getCurrentScope().declarations.insert(
-                {cld::get<std::string>(loc->getValue()), DeclarationInScope{loc, ptr.get()}});
+            auto& ptr = parameterDeclarations.emplace_back(
+                std::make_unique<Declaration>(std::move(paramType), Linkage::None, lifetime, loc->getText()));
+            auto [prev, notRedefined] =
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
@@ -189,7 +189,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     continue;
                 }
                 auto& ptr = parameterDeclarations.emplace_back(
-                    std::make_unique<Declaration>(result->second, Linkage::None, lifetime, cld::to_string(name)));
+                    std::make_unique<Declaration>(result->second, Linkage::None, lifetime, name));
                 const auto* loc = declaratorToLoc(*decl);
                 getCurrentScope().declarations.insert({name, DeclarationInScope{loc, ptr.get()}});
                 // Don't check for duplicates again. We already did that when processing the identifier list
@@ -316,8 +316,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 linkage = Linkage::Internal;
             }
             Lifetime lifetime = Lifetime::Static;
-            auto declaration =
-                std::make_unique<Declaration>(std::move(result), linkage, lifetime, cld::to_string(name));
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, name);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({name, DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -339,8 +338,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    declaration =
-                        std::make_unique<Declaration>(std::move(composite), linkage, lifetime, cld::to_string(name));
+                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, name);
                     prev->second.declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -501,8 +499,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 }
                 continue;
             }
-            auto declaration =
-                std::make_unique<Declaration>(std::move(result), linkage, lifetime, cld::to_string(name));
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, name);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({name, DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -689,7 +686,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         type = FunctionType::create(std::move(type), {}, false, true);
         return;
     }
-    std::vector<std::pair<Type, std::string>> parameters;
+    std::vector<std::pair<Type, std::string_view>> parameters;
     for (auto& iter : parameterTypeList->getParameters())
     {
         for (auto& specs : iter.declarationSpecifiers)
@@ -745,7 +742,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
             log(Errors::Semantics::STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY.args(iter.declarator, m_sourceInterface,
                                                                                iter.declarator));
         }
-        std::string name;
+        std::string_view name;
         if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
         {
             name = declaratorToName(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
@@ -892,13 +889,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     return;
                 }
                 std::unordered_map<std::string_view, std::uint64_t> paramNames;
-                std::vector<std::pair<Type, std::string>> parameters;
+                std::vector<std::pair<Type, std::string_view>> parameters;
                 std::unordered_map<std::string_view, Lexer::CTokenIterator> seenParameters;
                 for (auto& iter : identifiers.getIdentifiers())
                 {
-                    auto& name = cld::get<std::string>(iter->getValue());
+                    auto name = iter->getText();
                     paramNames[name] = paramNames.size();
-                    parameters.emplace_back(Type{}, cld::get<std::string>(iter->getValue()));
+                    parameters.emplace_back(Type{}, iter->getText());
                     auto& loc = seenParameters[name];
                     if (loc != nullptr)
                     {
@@ -1078,7 +1075,7 @@ cld::Semantics::Type
     {
         return primitiveTypeSpecifiersToType(isConst, isVolatile, std::move(typeSpec));
     }
-    if (auto* name = std::get_if<std::string>(&typeSpec[0]->getVariant()))
+    if (auto* name = std::get_if<std::string_view>(&typeSpec[0]->getVariant()))
     {
         if (typeSpec.size() != 1)
         {
@@ -1108,7 +1105,7 @@ cld::Semantics::Type
         if (structOrUnion->getStructDeclarations().empty())
         {
             CLD_ASSERT(structOrUnion->getIdentifierLoc());
-            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
+            auto name = structOrUnion->getIdentifierLoc()->getText();
             if (structOrUnion->isUnion())
             {
                 std::uint64_t id;
@@ -1157,7 +1154,7 @@ cld::Semantics::Type
         bool definitionIsValid = true;
         if (structOrUnion->getIdentifierLoc())
         {
-            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
+            auto name = structOrUnion->getIdentifierLoc()->getText();
             if (structOrUnion->isUnion())
             {
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
@@ -1330,7 +1327,7 @@ cld::Semantics::Type
                     value = result->toUInt();
                 }
                 std::string_view fieldName = declarator ? declaratorToName(*declarator) : "";
-                fields.push_back({std::make_shared<Type>(std::move(type)), cld::to_string(fieldName), value});
+                fields.push_back({std::make_shared<Type>(std::move(type)), fieldName, value});
             }
         }
         std::size_t currentSize = 0, currentAlignment = 0;
@@ -1419,7 +1416,7 @@ cld::Semantics::Type
         }
         if (structOrUnion->getIdentifierLoc())
         {
-            auto& name = cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue());
+            auto name = structOrUnion->getIdentifierLoc()->getText();
             if (structOrUnion->isUnion())
             {
                 m_unionDefinitions.emplace_back(name, std::move(fields), currentSize, currentAlignment);
@@ -1429,8 +1426,7 @@ cld::Semantics::Type
                         name,
                         TagTypeInScope{structOrUnion->getIdentifierLoc(), UnionDefTag(m_unionDefinitions.size() - 1)});
                 }
-                return UnionType::create(isConst, isVolatile,
-                                         cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+                return UnionType::create(isConst, isVolatile, structOrUnion->getIdentifierLoc()->getText(),
                                          m_unionDefinitions.size() - 1);
             }
             m_structDefinitions.emplace_back(name, std::move(fields), currentSize, currentAlignment);
@@ -1440,8 +1436,7 @@ cld::Semantics::Type
                     name,
                     TagTypeInScope{structOrUnion->getIdentifierLoc(), StructDefTag(m_structDefinitions.size() - 1)});
             }
-            return StructType::create(isConst, isVolatile,
-                                      cld::get<std::string>(structOrUnion->getIdentifierLoc()->getValue()),
+            return StructType::create(isConst, isVolatile, structOrUnion->getIdentifierLoc()->getText(),
                                       m_structDefinitions.size() - 1);
         }
 
@@ -1463,7 +1458,7 @@ cld::Semantics::Type
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
     if (auto* loc = std::get_if<Lexer::CTokenIterator>(&enumDecl->getVariant()))
     {
-        const auto* lookup = lookupType<EnumDefTag>(cld::get<std::string>((*loc)->getValue()));
+        const auto* lookup = lookupType<EnumDefTag>((*loc)->getText());
         if (!lookup)
         {
             // C99 6.7.2.3:
@@ -1472,11 +1467,9 @@ cld::Semantics::Type
             // without an enumerator list shall only appear after the type it specifies is complete
             log(Errors::Semantics::FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED.args(*typeSpec[0], m_sourceInterface,
                                                                                  *typeSpec[0]));
-            return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()),
-                                    m_currentScope | IS_SCOPE);
+            return EnumType::create(isConst, isVolatile, (*loc)->getText(), m_currentScope | IS_SCOPE);
         }
-        return EnumType::create(isConst, isVolatile, cld::get<std::string>((*loc)->getValue()),
-                                static_cast<std::uint64_t>(*lookup));
+        return EnumType::create(isConst, isVolatile, (*loc)->getText(), static_cast<std::uint64_t>(*lookup));
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
     // TODO: Type depending on values as an extension
@@ -1523,8 +1516,8 @@ cld::Semantics::Type
         {
             nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
         }
-        auto [prevValue, notRedefined] = getCurrentScope().declarations.insert(
-            {cld::get<std::string>(loc->getValue()), DeclarationInScope{loc, std::move(value)}});
+        auto [prevValue, notRedefined] =
+            getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, std::move(value)}});
         if (!notRedefined)
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
@@ -1534,7 +1527,7 @@ cld::Semantics::Type
     }
     if (enumDef.getName())
     {
-        auto& name = cld::get<std::string>(enumDef.getName()->getValue());
+        auto name = enumDef.getName()->getText();
         m_enumDefinitions.emplace_back(name,
                                        PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
         auto [prev, notRedefined] = getCurrentScope().types.insert(
@@ -1557,7 +1550,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
     using PrimitiveTypeSpecifier = Syntax::TypeSpecifier::PrimitiveTypeSpecifier;
     CLD_ASSERT(std::holds_alternative<PrimitiveTypeSpecifier>(typeSpecs[0]->getVariant()));
     auto excessSpecifiersError = [this](std::string_view type, const Syntax::TypeSpecifier* typeSpec) {
-        if (std::holds_alternative<std::string>(typeSpec->getVariant()))
+        if (std::holds_alternative<std::string_view>(typeSpec->getVariant()))
         {
             log(Errors::Semantics::CANNOT_COMBINE_N_WITH_TYPENAME.args(*typeSpec, m_sourceInterface, type, *typeSpec));
         }
@@ -2053,7 +2046,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
         {
             return rhs;
         }
-        std::vector<std::pair<Type, std::string>> parameters;
+        std::vector<std::pair<Type, std::string_view>> parameters;
         for (std::size_t i = 0; i < rhsFtype.getArguments().size(); i++)
         {
             parameters.emplace_back(compositeType(lhsFtype.getArguments()[i].first, rhsFtype.getArguments()[i].first),

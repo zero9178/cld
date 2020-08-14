@@ -109,6 +109,12 @@ public:
     {
     }
 
+    ~SourceObject() = default;
+    SourceObject(const SourceObject&) = delete;
+    SourceObject& operator=(const SourceObject&) = delete;
+    SourceObject(SourceObject&&) noexcept = default;
+    SourceObject& operator=(SourceObject&&) noexcept = default;
+
     [[nodiscard]] std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {
         CLD_ASSERT(fileID < m_files.size());
