@@ -436,16 +436,24 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
         auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
-        std::optional<Message> note;
         if (loc)
         {
-            note = Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(*loc->identifier, context.getSourceInterface(),
-                                                                   *loc->identifier);
+            if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
+                    return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                        *loc->identifier, context.getSourceInterface(), *loc->identifier);
+                }))
+            {
+                context.skipUntil(begin, end);
+                return {};
+            }
         }
-        if (!expect(Lexer::TokenType::SemiColon, begin, end, context, std::move(note)))
+        else
         {
-            context.skipUntil(begin, end);
-            return {};
+            if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+            {
+                context.skipUntil(begin, end);
+                return {};
+            }
         }
     }
     else
@@ -897,7 +905,7 @@ std::optional<cld::Syntax::DirectDeclarator>
                 DirectDeclaratorParentheses(start, begin, std::make_unique<Declarator>(std::move(*declarator))));
         }
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    [&] { return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos); }))
         {
             context.skipUntil(
                 begin, end,
@@ -934,8 +942,9 @@ std::optional<cld::Syntax::DirectDeclarator>
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
                 auto checkForClose = std::optional{llvm::make_scope_exit([&] {
-                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
                     {
                         context.skipUntil(begin, end,
                                           Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1013,8 +1022,9 @@ std::optional<cld::Syntax::DirectDeclarator>
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
                 auto checkForClose = std::optional{llvm::make_scope_exit([&] {
-                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
+                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
                     {
                         context.skipUntil(begin, end,
                                           Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1376,8 +1386,9 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
                 auto closeParenth = std::optional{llvm::make_scope_exit([&] {
-                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
                     {
                         context.skipUntil(begin, end,
                                           Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1419,8 +1430,9 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
                 auto closeParenth = std::optional{llvm::make_scope_exit([&] {
-                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                                Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
+                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
                     {
                         context.skipUntil(begin, end,
                                           Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
@@ -1635,14 +1647,20 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
     {
         context.popScope();
     }
-    std::optional<Message> additional;
     if (braceSeen)
     {
-        additional = Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start);
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start); }))
+        {
+            context.skipUntil(begin, end);
+        }
     }
-    if (!expect(Lexer::TokenType::CloseBrace, begin, end, context, std::move(additional)))
+    else
     {
-        context.skipUntil(begin, end);
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
+        {
+            context.skipUntil(begin, end);
+        }
     }
     return CompoundStatement(start, begin, std::move(items));
 }
@@ -1737,8 +1755,9 @@ std::optional<cld::Syntax::InitializerList>
                     begin, end,
                     context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
                 designation.emplace_back(std::move(constant));
-                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
-                            Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
+                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                    }))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::Assignment,
@@ -1951,13 +1970,28 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             auto* loc = context.getLocationOf(start->getText());
             if (loc)
             {
-                note = Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(*loc->identifier, context.getSourceInterface(),
-                                                                       *loc->identifier);
+                if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
+                        return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                            *loc->identifier, context.getSourceInterface(), *loc->identifier);
+                    }))
+                {
+                    context.skipUntil(begin, end);
+                }
+            }
+            else
+            {
+                if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+                {
+                    context.skipUntil(begin, end);
+                }
             }
         }
-        if (!expect(Lexer::TokenType::SemiColon, begin, end, context, std::move(note)))
+        else
         {
-            context.skipUntil(begin, end);
+            if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+            {
+                context.skipUntil(begin, end);
+            }
         }
         return Statement(ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(expression))));
     }
@@ -1993,11 +2027,18 @@ std::optional<cld::Syntax::HeadWhileStatement>
     std::optional<Message> note;
     if (openPpos)
     {
-        note = Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos); }))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
-    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
+    else
     {
-        context.skipUntil(begin, end, firstStatementSet);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
     auto statement = parseStatement(begin, end, context);
     if (!statement)
@@ -2022,16 +2063,21 @@ std::optional<cld::Syntax::FootWhileStatement>
     }
     auto statement =
         parseStatement(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::WhileKeyword)));
-    std::optional<Message> note;
     if (doPos)
     {
-        note = Notes::TO_MATCH_N_HERE.args(**doPos, context.getSourceInterface(), **doPos);
+        if (!expect(Lexer::TokenType::WhileKeyword, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(**doPos, context.getSourceInterface(), **doPos); }))
+        {
+            context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
+        }
     }
-    if (!expect(Lexer::TokenType::WhileKeyword, begin, end, context, std::move(note)))
+    else
     {
-        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
+        if (!expect(Lexer::TokenType::WhileKeyword, begin, end, context))
+        {
+            context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::OpenParentheses));
+        }
     }
-    note.reset();
     std::optional<Lexer::CTokenIterator> openPpos;
     if (!expect(Lexer::TokenType::OpenParentheses, begin, end, context))
     {
@@ -2045,11 +2091,18 @@ std::optional<cld::Syntax::FootWhileStatement>
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
     if (openPpos)
     {
-        note = Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos); }))
+        {
+            context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::SemiColon));
+        }
     }
-    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
+    else
     {
-        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::SemiColon));
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context))
+        {
+            context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::SemiColon));
+        }
     }
     if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
     {
@@ -2110,14 +2163,20 @@ std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(Lexer::CTo
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::optional<Message> note;
     if (openPpos)
     {
-        note = Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos); }))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
-    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
+    else
     {
-        context.skipUntil(begin, end, firstStatementSet);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
     auto statement =
         parseStatement(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::ElseKeyword)));
@@ -2162,14 +2221,20 @@ std::optional<cld::Syntax::SwitchStatement>
     }
     auto expression = parseExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    std::optional<Message> note;
     if (openPpos)
     {
-        note = Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(**openPpos, context.getSourceInterface(), **openPpos); }))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
-    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, std::move(note)))
+    else
     {
-        context.skipUntil(begin, end, firstStatementSet);
+        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context))
+        {
+            context.skipUntil(begin, end, firstStatementSet);
+        }
     }
     auto statement = parseStatement(begin, end, context);
     if (!statement)
@@ -2264,7 +2329,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
         auto exp = parseExpression(begin, end, context);
         post = std::make_unique<Expression>(std::move(exp));
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
-                    Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos)))
+                    [&] { return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos); }))
         {
             context.skipUntil(begin, end, firstStatementSet);
         }

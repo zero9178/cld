@@ -3,14 +3,22 @@
 #include <Frontend/Common/Expected.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "Syntax.hpp"
+#include "LanguageOptions.hpp"
+#include "Lexer.hpp"
 
 namespace cld
 {
 class Message;
+
+namespace Syntax
+{
+class Declarator;
+} // namespace Syntax
+
 } // namespace cld
 
 namespace cld::Semantics
@@ -605,7 +613,7 @@ class Expression;
 class Constant
 {
 public:
-    using Variant = Syntax::PrimaryExpressionConstant::Variant;
+    using Variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
 
 private:
     Variant m_value;

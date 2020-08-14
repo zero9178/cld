@@ -268,6 +268,41 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
     // and then emits it correctly in it's operator<<
     llvm::raw_string_ostream ss(result);
 
+    {
+        auto file = sourceInterface.getFiles()[location.first.fileId].includedBy;
+        std::vector<std::pair<std::uint32_t, std::uint64_t>> includeTrace;
+        while (file)
+        {
+            includeTrace.push_back(*file);
+            file = sourceInterface.getFiles()[file->first].includedBy;
+        }
+        std::reverse(includeTrace.begin(), includeTrace.end());
+        for (auto& iter : includeTrace)
+        {
+            auto line = sourceInterface.getLineNumber(iter.first, iter.second);
+            const auto& range = sourceInterface.getFiles()[iter.first].lineAndFileMapping;
+            auto map = std::upper_bound(range.begin(), range.end(), line,
+                                        [](auto line, const auto& tuple) { return line < std::get<0>(tuple); });
+            if (!range.empty() && map == range.end())
+            {
+                map--;
+            }
+            if (map == range.end())
+            {
+                // The element was not found. That means that any #lines appeared after this line or that none exist
+                llvm::WithColor(ss, ss.WHITE, true)
+                    << "In file included from " << sourceInterface.getFiles()[iter.first].path << ':' << line << ':';
+            }
+            else
+            {
+                const auto path = std::get<1>(*map).value_or(sourceInterface.getFiles()[iter.first].path);
+                const auto printedLine = std::get<2>(*map) + line - std::get<0>(*map);
+                llvm::WithColor(ss, ss.WHITE, true) << "In file included from " << path << ':' << printedLine << ':';
+            }
+            ss << '\n';
+        }
+    }
+
     location = toMacroId0Range(location, sourceInterface);
     const auto [line, column] = getLineCol(location.first, sourceInterface);
     {

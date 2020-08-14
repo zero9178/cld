@@ -38,8 +38,8 @@ class Preprocessor final : private cld::PPSourceInterface
 {
     llvm::raw_ostream* m_reporter;
     const cld::LanguageOptions& m_options;
-    std::uint64_t m_macroID = 0;
-    std::uint64_t m_currentFile = 0;
+    std::uint32_t m_macroID = 0;
+    std::uint32_t m_currentFile = 0;
     std::vector<cld::Lexer::PPToken> m_result;
     std::vector<cld::Source::PPRecord> m_substitutions{1};
     struct Macro
@@ -123,12 +123,12 @@ class Preprocessor final : private cld::PPSourceInterface
 
     using TokenSet = std::unordered_set<const cld::Lexer::PPToken*, OffsetHash, OffsetEqual>;
 
-    std::vector<cld::Lexer::PPToken>
-        argumentSubstitution(std::uint64_t parentID, const std::vector<cld::Lexer::PPToken>& identifierList,
-                             std::vector<cld::Lexer::PPToken>&& replacementList,
-                             std::vector<llvm::ArrayRef<cld::Lexer::PPToken>>&& arguments,
-                             TokenSet&& argumentsInReplacement,
-                             std::unordered_map<std::string_view, std::uint64_t> nameToIndex)
+    std::vector<cld::Lexer::PPToken> argumentSubstitution(std::uint32_t parentID,
+                                                          const std::vector<cld::Lexer::PPToken>& identifierList,
+                                                          std::vector<cld::Lexer::PPToken>&& replacementList,
+                                                          std::vector<llvm::ArrayRef<cld::Lexer::PPToken>>&& arguments,
+                                                          TokenSet&& argumentsInReplacement,
+                                                          std::unordered_map<std::string_view, std::size_t> nameToIndex)
     {
         std::vector<cld::Lexer::PPToken> result;
         auto start = replacementList.begin();
@@ -413,7 +413,7 @@ class Preprocessor final : private cld::PPSourceInterface
         return arguments;
     }
 
-    void evaluateConcats(std::uint64_t parentID, std::vector<cld::Lexer::PPToken>& tokens,
+    void evaluateConcats(std::uint32_t parentID, std::vector<cld::Lexer::PPToken>& tokens,
                          std::optional<TokenSet> concatOperators = {})
     {
         for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
@@ -1109,7 +1109,8 @@ public:
         return m_intervalMaps;
     }
 
-    void include(cld::PPSourceObject&& sourceObject)
+    void include(cld::PPSourceObject&& sourceObject,
+                 std::optional<std::pair<std::uint32_t, std::uint64_t>> includePos = {})
     {
         auto scope = llvm::make_scope_exit([prev = m_currentFile, this] { m_currentFile = prev; });
         CLD_ASSERT(sourceObject.getFiles().size() == 1);
@@ -1119,8 +1120,8 @@ public:
             {
                 iter2.setFileId(m_files.size());
             }
-            m_files.push_back(
-                {std::move(iter.path), std::move(iter.source), std::move(iter.starts), std::move(iter.ppTokens)});
+            m_files.push_back({std::move(iter.path), std::move(iter.source), std::move(iter.starts),
+                               std::move(iter.ppTokens), includePos});
             m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
         }
         m_currentFile = m_files.size() - 1;
@@ -1380,7 +1381,7 @@ public:
                     }
                     llvm::sys::fs::closeFile(*handle);
                     scopeExit.release();
-                    include(std::move(newFile));
+                    include(std::move(newFile), std::pair{m_currentFile, includeTag.includeToken->getOffset()});
                     return;
                 }
             }
@@ -1590,12 +1591,14 @@ public:
             if (getLanguageOptions().disabledWarnings.count(cld::to_string(cld::Warnings::PP::N_REDEFINED.getName()))
                 == 0)
             {
-                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro->identifierPos, *this, *macro->identifierPos));
+                log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifierPos, *this,
+                                                              *result->second.identifierPos));
             }
             return;
         }
         log(cld::Errors::PP::REDEFINITION_OF_MACRO_N.args(*macro->identifierPos, *this, *macro->identifierPos));
-        log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro->identifierPos, *this, *macro->identifierPos));
+        log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifierPos, *this,
+                                                      *result->second.identifierPos));
     }
 
     bool errorsOccurred() const
