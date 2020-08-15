@@ -2,11 +2,7 @@
 
 #include <llvm/ADT/STLExtras.h>
 
-#include <Frontend/Common/Text.hpp>
-#include <Frontend/Common/Util.hpp>
-
-#include <optional>
-#include <utility>
+#include <string_view>
 
 #include "Parser.hpp"
 

@@ -329,6 +329,7 @@ cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLo
 
     switch (m_severity)
     {
+        case Severity::None: CLD_UNREACHABLE;
         case Severity::Error: llvm::WithColor(ss, ss.RED, true) << "error: "; break;
         case Severity::Warning: llvm::WithColor(ss, ss.MAGENTA, true) << "warning: "; break;
         case Severity::Note: llvm::WithColor(ss, ss.CYAN, true) << "note: "; break;

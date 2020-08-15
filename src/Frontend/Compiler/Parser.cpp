@@ -32,7 +32,7 @@ bool cld::Parser::Context::isTypedef(std::string_view name) const
     return false;
 }
 
-void cld::Parser::Context::log(const Message& message)
+bool cld::Parser::Context::log(const Message& message)
 {
     if (message.getSeverity() == Severity::Error)
     {
@@ -42,6 +42,7 @@ void cld::Parser::Context::log(const Message& message)
     {
         *m_reporter << message;
     }
+    return message.getSeverity() != Severity::None;
 }
 
 void cld::Parser::Context::addToScope(std::string_view name, DeclarationLocation declarator)

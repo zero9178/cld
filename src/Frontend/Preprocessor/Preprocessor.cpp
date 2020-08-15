@@ -65,7 +65,7 @@ class Preprocessor final : private cld::PPSourceInterface
         m_result.insert(m_result.end(), tokens.begin(), tokens.end());
     }
 
-    void log(const cld::Message& message)
+    bool log(const cld::Message& message)
     {
         if (message.getSeverity() == cld::Severity::Error)
         {
@@ -75,6 +75,7 @@ class Preprocessor final : private cld::PPSourceInterface
         {
             *m_reporter << message;
         }
+        return message.getSeverity() != cld::Severity::None;
     }
 
     static bool equal(const Macro& lhs, const Macro& rhs)
@@ -442,9 +443,11 @@ class Preprocessor final : private cld::PPSourceInterface
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
-                log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(*iter, *this, lhs,
-                                                                                                    *iter, rhs));
-                log(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(*iter, *this, lhs, *iter, rhs));
+                if(log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(*iter, *this, lhs,
+                                                                                                    *iter, rhs)))
+                {
+                    log(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(*iter, *this, lhs, *iter, rhs));
+                }
                 iter = tokens.erase(iter - 1, iter + 2);
                 if (iter == tokens.end())
                 {
@@ -1587,9 +1590,7 @@ public:
         }
         if (equal(*macro, result->second))
         {
-            log(cld::Warnings::PP::N_REDEFINED.args(*macro->identifierPos, *this, *macro->identifierPos));
-            if (getLanguageOptions().disabledWarnings.count(cld::to_string(cld::Warnings::PP::N_REDEFINED.getName()))
-                == 0)
+            if (log(cld::Warnings::PP::N_REDEFINED.args(*macro->identifierPos, *this, *macro->identifierPos)))
             {
                 log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifierPos, *this,
                                                               *result->second.identifierPos));

@@ -222,7 +222,7 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                                                 case cld::Lexer::TokenType::Division:
                                                     return Term::BinaryDotOperator::BinaryDivide;
                                                 case cld::Lexer::TokenType::Percent:
-                                                    return Term::BinaryDotOperator::BinaryRemainder;
+                                                    return Term::BinaryDotOperator::BinaryModulo;
                                                 default: CLD_UNREACHABLE;
                                             }
                                         }(),
@@ -654,7 +654,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             auto expression = parseExpression(begin, end,
                                               context.withRecoveryTokens(cld::Parser::Context::fromTokenTypes(
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
-
+            const auto* closePpos = begin;
             if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
                     return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                 }))
@@ -663,8 +663,8 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             }
             if (current)
             {
-                current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionSubscript(start, begin, std::move(current), std::move(expression)));
+                current = std::make_unique<PostFixExpression>(PostFixExpressionSubscript(
+                    start, begin, std::move(current), openPpos, std::move(expression), closePpos));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Increment)
@@ -673,7 +673,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             if (current)
             {
                 current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionIncrement(start, begin, std::move(current), *(begin - 1)));
+                    PostFixExpressionIncrement(start, begin, std::move(current), (begin - 1)));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Decrement)
@@ -682,7 +682,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             if (current)
             {
                 current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionDecrement(start, begin, std::move(current), *(begin - 1)));
+                    PostFixExpressionDecrement(start, begin, std::move(current), (begin - 1)));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::Dot)
@@ -734,6 +734,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     begin++;
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+    const auto* openParenth = begin;
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                 [&] { return Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start); }))
     {
@@ -747,7 +748,8 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
             return {};
         }
         return CastExpression(start, begin,
-                              std::pair{std::move(*typeName), std::make_unique<CastExpression>(std::move(*cast))});
+                              CastExpression::CastVariant{start, std::move(*typeName), openParenth,
+                                                          std::make_unique<CastExpression>(std::move(*cast))});
     }
 
     std::optional<Lexer::CTokenIterator> openBrace;
@@ -821,7 +823,8 @@ std::optional<cld::Syntax::UnaryExpression>
             {
                 return {};
             }
-            return UnaryExpression(UnaryExpressionSizeOf(start, begin, std::make_unique<TypeName>(std::move(*type))));
+            return UnaryExpression(
+                UnaryExpressionSizeOf(start, begin, start, std::make_unique<TypeName>(std::move(*type))));
         }
         else
         {
@@ -831,7 +834,7 @@ std::optional<cld::Syntax::UnaryExpression>
                 return {};
             }
             return UnaryExpression(
-                UnaryExpressionSizeOf(start, begin, std::make_unique<UnaryExpression>(std::move(*unary))));
+                UnaryExpressionSizeOf(start, begin, start, std::make_unique<UnaryExpression>(std::move(*unary))));
         }
     }
     else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
@@ -897,7 +900,7 @@ std::optional<cld::Syntax::UnaryExpression>
             return {};
         }
         return UnaryExpression(
-            UnaryExpressionUnaryOperator(start, begin, op, *token, std::make_unique<CastExpression>(std::move(*cast))));
+            UnaryExpressionUnaryOperator(start, begin, op, token, std::make_unique<CastExpression>(std::move(*cast))));
     }
 
     auto postFix = parsePostFixExpression(begin, end, context);

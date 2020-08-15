@@ -16,12 +16,13 @@
 #include "ErrorMessages.hpp"
 #include "SemanticUtil.hpp"
 
-void cld::Semantics::SemanticAnalysis::log(const Message& message)
+bool cld::Semantics::SemanticAnalysis::log(const Message& message)
 {
     if (m_reporter)
     {
         *m_reporter << message;
     }
+    return message.getSeverity() != Severity::None;
 }
 
 cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Syntax::TranslationUnit& node)
@@ -55,8 +56,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         storageClassSpecifier = &storage;
     }
-    std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
-    auto type = declaratorsToType(node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations());
+    auto scope = pushScope();
+    auto type = declaratorsToType(node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(), true);
     if (!std::holds_alternative<FunctionType>(type.get()))
     {
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE.args(
@@ -109,7 +110,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         return {};
     }
 
-    auto scope = pushScope();
+    std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
     if (parameters)
     {
         if (!node.getDeclarations().empty())
@@ -119,7 +120,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         const auto& parameterSyntaxDecls = parameters->getParameterTypeList().getParameters();
         // Parameters that have some kind of error in their declaration should still be inserted in the function
-        // type exception is when paramterSyntaxDecls is 0
+        // type except when parameterSyntaxDecls is 0
         CLD_ASSERT(parameterSyntaxDecls.size() == ft.getArguments().size() || ft.getArguments().size() == 0);
         for (std::size_t i = 0; i < ft.getArguments().size(); i++)
         {
@@ -225,7 +226,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
     }
 
-    auto comp = visit(node.getCompoundStatement());
+    auto comp = visit(node.getCompoundStatement(), false);
     ptr->setCompoundStatement(std::move(comp));
     return result;
 }
@@ -527,10 +528,10 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
 cld::Semantics::CompoundStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundStatement& node,
                                                                           bool pushScope)
 {
-    std::optional scope{this->pushScope()};
-    if (!pushScope)
+    std::optional<decltype(this->pushScope())> scope;
+    if (pushScope)
     {
-        scope.reset();
+        scope.emplace(this->pushScope());
     }
     std::vector<CompoundStatement::Variant> result;
     for (auto& iter : node.getBlockItems())
@@ -650,7 +651,6 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
                                                            const Syntax::ParameterTypeList* parameterTypeList,
                                                            T&& returnTypeLoc)
 {
-    auto scope = pushScope();
     if (std::holds_alternative<FunctionType>(type.get()))
     {
         log(cld::Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
@@ -760,7 +760,8 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
     const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
-    const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations)
+    const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
+    bool inFunctionDefinition)
 {
     bool isConst = false;
     bool isVolatile = false;
@@ -796,8 +797,9 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
         return type;
     }
     // whatever is in declarator it is not null
-    if (std::holds_alternative<const Syntax::Declarator*>(declarator))
+    if (std::holds_alternative<const Syntax::Declarator * CLD_NON_NULL>(declarator))
     {
+        bool isFunctionPrototype = false;
         const Syntax::DirectDeclaratorParenthesesIdentifiers* declarationsOwner = nullptr;
         auto& realDecl = *cld::get<const Syntax::Declarator*>(declarator);
         for (auto& iter : realDecl.getPointers())
@@ -807,11 +809,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
         }
         for (auto& iter : RecursiveVisitor(realDecl.getDirectDeclarator(), DIRECT_DECL_NEXT_FN))
         {
-            if (auto* dd = std::get_if<Syntax::DirectDeclaratorParenthesesIdentifiers>(&iter))
-            {
-                declarationsOwner = dd;
-            }
+            cld::match(
+                iter,
+                [&](const Syntax::DirectDeclaratorParenthesesIdentifiers& dd) {
+                    declarationsOwner = &dd;
+                    isFunctionPrototype = true;
+                },
+                [&](const Syntax::DirectDeclaratorParenthesesParameters&) { isFunctionPrototype = true; },
+                [](const Syntax::DirectDeclaratorIdentifier&) {}, [&](const auto&) { isFunctionPrototype = false; });
         }
+        isFunctionPrototype = isFunctionPrototype && !inFunctionDefinition;
         cld::matchWithSelf<void>(
             realDecl.getDirectDeclarator(), [](auto&&, const Syntax::DirectDeclaratorIdentifier&) {},
             [&](auto&& self, const Syntax::DirectDeclaratorParentheses& parentheses) {
@@ -853,7 +860,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
-                auto scope2 = pushScope();
+                std::optional<decltype(pushScope())> scope2;
+                if (isFunctionPrototype)
+                {
+                    scope2.emplace(pushScope());
+                }
                 if (std::holds_alternative<FunctionType>(type.get()))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
@@ -975,6 +986,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesParameters& parameterList) {
                 auto scope = llvm::make_scope_exit([&] { cld::match(parameterList.getDirectDeclarator(), self); });
+                std::optional<decltype(pushScope())> scope2;
+                if (isFunctionPrototype)
+                {
+                    scope2.emplace(pushScope());
+                }
                 handleParameterList(
                     type, &parameterList.getParameterTypeList(),
                     std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()));
@@ -1442,11 +1458,15 @@ cld::Semantics::Type
 
         if (structOrUnion->isUnion())
         {
-            return AnonymousUnionType::create(isConst, isVolatile, std::move(fields), currentSize, currentAlignment);
+            return AnonymousUnionType::create(isConst, isVolatile,
+                                              reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
+                                              std::move(fields), currentSize, currentAlignment);
         }
         else
         {
-            return AnonymousStructType::create(isConst, isVolatile, std::move(fields), currentSize, currentAlignment);
+            return AnonymousStructType::create(isConst, isVolatile,
+                                               reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
+                                               std::move(fields), currentSize, currentAlignment);
         }
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
@@ -1540,7 +1560,7 @@ cld::Semantics::Type
         }
         return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
     }
-    return AnonymousEnumType::create(isConst, isVolatile,
+    return AnonymousEnumType::create(isConst, isVolatile, reinterpret_cast<std::uintptr_t>(enumDecl->begin()),
                                      PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
 }
 
@@ -1743,17 +1763,17 @@ bool cld::Semantics::SemanticAnalysis::isCompleteType(const Type& type) const
     if (std::holds_alternative<EnumType>(type.get()))
     {
         auto& enumType = cld::get<EnumType>(type.get());
-        return lookupType<EnumDefTag>(enumType.getName(), enumType.getScopeOrId());
+        return getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
     }
     if (std::holds_alternative<StructType>(type.get()))
     {
         auto& structType = cld::get<StructType>(type.get());
-        return lookupType<StructDefTag>(structType.getName(), structType.getScopeOrId());
+        return getStructDefinition(structType.getName(), structType.getScopeOrId());
     }
     if (std::holds_alternative<UnionType>(type.get()))
     {
         auto& unionType = cld::get<UnionType>(type.get());
-        return lookupType<UnionDefTag>(unionType.getName(), unionType.getScopeOrId());
+        return getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
     }
     return true;
 }
@@ -1912,6 +1932,30 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             }
         }
         return true;
+    }
+    if (std::holds_alternative<StructType>(lhs.get()) && std::holds_alternative<StructType>(rhs.get()))
+    {
+        auto* lhsDef = getStructDefinition(cld::get<StructType>(lhs.get()).getName(),
+                                           cld::get<StructType>(lhs.get()).getScopeOrId());
+        auto* rhsDef = getStructDefinition(cld::get<StructType>(rhs.get()).getName(),
+                                           cld::get<StructType>(rhs.get()).getScopeOrId());
+        return lhsDef == rhsDef;
+    }
+    if (std::holds_alternative<UnionType>(lhs.get()) && std::holds_alternative<UnionType>(rhs.get()))
+    {
+        auto* lhsDef =
+            getUnionDefinition(cld::get<UnionType>(lhs.get()).getName(), cld::get<UnionType>(lhs.get()).getScopeOrId());
+        auto* rhsDef =
+            getUnionDefinition(cld::get<UnionType>(rhs.get()).getName(), cld::get<UnionType>(rhs.get()).getScopeOrId());
+        return lhsDef == rhsDef;
+    }
+    if (std::holds_alternative<EnumType>(lhs.get()) && std::holds_alternative<EnumType>(rhs.get()))
+    {
+        auto* lhsDef =
+            getEnumDefinition(cld::get<EnumType>(lhs.get()).getName(), cld::get<EnumType>(lhs.get()).getScopeOrId());
+        auto* rhsDef =
+            getEnumDefinition(cld::get<EnumType>(rhs.get()).getName(), cld::get<EnumType>(rhs.get()).getScopeOrId());
+        return lhsDef == rhsDef;
     }
     return lhs == rhs;
 }
@@ -2210,6 +2254,10 @@ cld::Semantics::StructDefinition* cld::Semantics::SemanticAnalysis::getStructDef
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_structDefinitions[scopeOrId & SCOPE_OR_ID_MASK];
     }
     auto* type = lookupType<StructDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
@@ -2230,6 +2278,10 @@ const cld::Semantics::StructDefinition*
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_structDefinitions[scopeOrId];
     }
     auto* type = lookupType<StructDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
@@ -2250,6 +2302,10 @@ cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumDefinit
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_enumDefinitions[scopeOrId];
     }
     auto* type = lookupType<EnumDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
@@ -2270,6 +2326,10 @@ const cld::Semantics::EnumDefinition* cld::Semantics::SemanticAnalysis::getEnumD
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_enumDefinitions[scopeOrId];
     }
     auto* type = lookupType<EnumDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
@@ -2290,6 +2350,10 @@ cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnionDefin
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_unionDefinitions[scopeOrId];
     }
     auto* type = lookupType<UnionDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);
@@ -2310,6 +2374,10 @@ const cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnio
 {
     if (!(scopeOrId & IS_SCOPE))
     {
+        if (idOut)
+        {
+            *idOut = scopeOrId;
+        }
         return &m_unionDefinitions[scopeOrId];
     }
     auto* type = lookupType<UnionDefTag>(name, scopeOrId & SCOPE_OR_ID_MASK);

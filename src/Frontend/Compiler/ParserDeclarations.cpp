@@ -1510,7 +1510,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         context.skipUntil(begin, end,
                           Context::fromTokenTypes(Lexer::TokenType::OpenBrace, Lexer::TokenType::Identifier));
     }
-    Lexer::CTokenIterator name = nullptr;
+    const Lexer::CToken* name = nullptr;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
     {
         name = begin;

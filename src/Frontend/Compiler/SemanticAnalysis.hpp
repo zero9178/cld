@@ -26,7 +26,8 @@ class SemanticAnalysis final
     struct DeclarationInScope
     {
         Lexer::CTokenIterator identifier;
-        using Variant = std::variant<const Declaration*, const FunctionDefinition*, Type, ConstRetType>;
+        using Variant =
+            std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL, Type, ConstRetType>;
         Variant declared;
     };
 
@@ -59,7 +60,7 @@ class SemanticAnalysis final
     constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
     constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
 
-    auto pushScope()
+    [[nodiscard]] auto pushScope()
     {
         m_scopes.push_back({m_currentScope, {}, {}});
         m_currentScope = m_scopes.size() - 1;
@@ -102,44 +103,49 @@ class SemanticAnalysis final
     }
 
     template <class T>
-    void handleParameterList(Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc);
+    void handleParameterList(Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
+                             T&& returnTypeLoc);
 
     template <class T>
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
-                     const Syntax::AssignmentExpression* assignmentExpression, bool isStatic, bool valarray,
-                     T&& returnTypeLoc);
+                     const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression, bool isStatic,
+                     bool valarray, T&& returnTypeLoc);
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
-    [[nodiscard]] const Semantics::Type* getTypedef(std::string_view name) const;
+    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name) const;
 
-    [[nodiscard]] const DeclarationInScope::Variant* lookupDecl(std::string_view name) const
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name) const
     {
         return lookupDecl(name, m_currentScope);
     }
 
-    [[nodiscard]] const DeclarationInScope::Variant* lookupDecl(std::string_view name, std::int64_t scope) const;
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name,
+                                                                             std::int64_t scope) const;
 
-    void log(const Message& message);
+    bool log(const Message& message);
 
     static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers);
 
-    using PossiblyAbstractQualifierRef = std::variant<const Syntax::AbstractDeclarator*, const Syntax::Declarator*>;
+    using PossiblyAbstractQualifierRef =
+        std::variant<const Syntax::AbstractDeclarator * CLD_NULLABLE, const Syntax::Declarator * CLD_NON_NULL>;
 
     using DeclarationOrSpecifierQualifier =
-        std::variant<const Syntax::TypeSpecifier*, const Syntax::TypeQualifier*, const Syntax::StorageClassSpecifier*,
-                     const Syntax::FunctionSpecifier*>;
+        std::variant<const Syntax::TypeSpecifier * CLD_NON_NULL, const Syntax::TypeQualifier * CLD_NON_NULL,
+                     const Syntax::StorageClassSpecifier * CLD_NON_NULL,
+                     const Syntax::FunctionSpecifier * CLD_NON_NULL>;
 
-    Type typeSpecifiersToType(bool isConst, bool isVolatile, const std::vector<const Syntax::TypeSpecifier*>& typeSpec);
+    Type typeSpecifiersToType(bool isConst, bool isVolatile,
+                              const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
 
     Type declaratorsToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                               const PossiblyAbstractQualifierRef& parameterList = {},
-                               const std::vector<Syntax::Declaration>& declarations = {});
+                               const PossiblyAbstractQualifierRef& parameterList,
+                               const std::vector<Syntax::Declaration>& declarations, bool inFunctionDefinition);
 
     Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
-                                       const std::vector<const Syntax::TypeSpecifier*>& typeSpecs);
+                                       const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
 
     Scope& getCurrentScope()
     {
@@ -169,6 +175,8 @@ class SemanticAnalysis final
 
     Expression integerPromotion(Expression expression) const;
 
+    void arithmeticConversion(Expression& lhs, Expression& rhs) const;
+
     llvm::ArrayRef<Field> getFields(const Type& recordType) const;
 
     bool isBitfieldAccess(const Expression& expression) const;
@@ -177,9 +185,7 @@ class SemanticAnalysis final
                                                                     const Syntax::PostFixExpression& postFixExpr,
                                                                     const Lexer::CToken& identifier);
 
-    template <class Expr>
-    Expression checkIncrementAndDecrement(UnaryOperator::Kind kind, Expression&& value, const Lexer::TokenBase& opToken,
-                                          const Expr& syntaxExpr);
+    Expression checkIncrementAndDecrement(UnaryOperator::Kind kind, Expression&& value, Lexer::CTokenIterator opToken);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs())
@@ -190,7 +196,7 @@ public:
     template <class T>
     Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
                            const Syntax::AbstractDeclarator* declarator = nullptr,
-                           const std::vector<Syntax::Declaration>& declarations = {})
+                           const std::vector<Syntax::Declaration>& declarations = {}, bool inFunctionDefinition = false)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
@@ -199,12 +205,12 @@ public:
                                return &valueInVariant;
                            });
                        });
-        return declaratorsToTypeImpl(std::move(temp), declarator, declarations);
+        return declaratorsToTypeImpl(std::move(temp), declarator, declarations, inFunctionDefinition);
     }
 
     template <class T>
     Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers, const Syntax::Declarator& declarator,
-                           const std::vector<Syntax::Declaration>& declarations = {})
+                           const std::vector<Syntax::Declaration>& declarations = {}, bool inFunctionDefinition = false)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
@@ -213,26 +219,26 @@ public:
                                return &valueInVariant;
                            });
                        });
-        return declaratorsToTypeImpl(std::move(temp), &declarator, declarations);
+        return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, inFunctionDefinition);
     }
 
-    bool isCompleteType(const Type& type) const;
+    [[nodiscard]] bool isCompleteType(const Type& type) const;
 
-    bool isVariablyModified(const Type& type) const;
+    [[nodiscard]] bool isVariablyModified(const Type& type) const;
 
-    const LanguageOptions& getLanguageOptions() const
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const
     {
         return m_sourceInterface.getLanguageOptions();
     }
 
     template <class T>
-    [[nodiscard]] const T* lookupType(std::string_view name) const
+    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
     {
         return lookupType<T>(name, m_currentScope);
     }
 
     template <class T>
-    [[nodiscard]] const T* lookupType(std::string_view name, std::int64_t scope) const
+    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::int64_t scope) const
     {
         auto curr = scope;
         while (curr >= 0)
@@ -250,21 +256,23 @@ public:
         return nullptr;
     }
 
-    StructDefinition* getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                          std::uint64_t* idOut = nullptr);
+    StructDefinition* CLD_NULLABLE getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                       std::uint64_t* idOut = nullptr);
 
-    const StructDefinition* getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                std::uint64_t* idOut = nullptr) const;
+    const StructDefinition* CLD_NULLABLE getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                             std::uint64_t* idOut = nullptr) const;
 
-    EnumDefinition* getEnumDefinition(std::string_view name, std::uint64_t scopeOrId, std::uint64_t* idOut = nullptr);
+    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                   std::uint64_t* idOut = nullptr);
 
-    const EnumDefinition* getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                            std::uint64_t* idOut = nullptr) const;
+    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                         std::uint64_t* idOut = nullptr) const;
 
-    UnionDefinition* getUnionDefinition(std::string_view name, std::uint64_t scopeOrId, std::uint64_t* idOut = nullptr);
+    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                     std::uint64_t* idOut = nullptr);
 
-    const UnionDefinition* getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                              std::uint64_t* idOut = nullptr) const;
+    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
+                                                           std::uint64_t* idOut = nullptr) const;
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 

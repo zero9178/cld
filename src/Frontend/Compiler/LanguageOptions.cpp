@@ -30,5 +30,39 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 #else
         0,
 #endif
+        [] {
+            static_assert(
+                std::is_same_v<long long,
+                               ptrdiff_t> || std::is_same_v<int, ptrdiff_t> || std::is_same_v<long, ptrdiff_t>);
+            if constexpr (std::is_same_v<int, ptrdiff_t>)
+            {
+                return PtrdiffType::Int;
+            }
+            else if constexpr (std::is_same_v<long, ptrdiff_t>)
+            {
+                return PtrdiffType::Long;
+            }
+            else
+            {
+                return PtrdiffType::LongLong;
+            }
+        }(),
+        [] {
+            static_assert(std::is_same_v<
+                              unsigned long long,
+                              size_t> || std::is_same_v<unsigned int, size_t> || std::is_same_v<unsigned long, size_t>);
+            if constexpr (std::is_same_v<unsigned int, size_t>)
+            {
+                return SizeTType::UnsignedInt;
+            }
+            else if constexpr (std::is_same_v<unsigned long, size_t>)
+            {
+                return SizeTType::UnsignedLong;
+            }
+            else
+            {
+                return SizeTType::UnsignedLongLong;
+            }
+        }(),
     };
 }

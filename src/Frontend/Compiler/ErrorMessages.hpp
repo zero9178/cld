@@ -232,20 +232,20 @@ CREATE_ERROR(ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCT
 
 CREATE_ERROR(UNDECLARED_IDENTIFIER_N, "Undeclared identifier %0", Underline<0>);
 
-CREATE_ERROR(EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE, "Expected one operand to be of pointer type", Annotate<0, 1>,
-             Annotate<2, 3>);
+CREATE_ERROR(EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE, "Expected one operand to be of pointer type", AnnotateExpr<0>,
+             AnnotateExpr<1>);
 
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE, "Expected other operand to be of integer type",
-             Annotate<0, 1>);
+             AnnotateExpr<0>);
 
 CREATE_ERROR(POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR,
-             "Pointer to incomplete type %full0 not allowed in subscript operator", Annotate<1, 2>);
+             "Pointer to incomplete type %full0 not allowed in subscript operator", AnnotateExpr<1>);
 
 CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR,
-             "Pointer to function type not allowed subscript operator", Annotate<0, 1>);
+             "Pointer to function type not allowed subscript operator", AnnotateExpr<0>);
 
 CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR,
-             "Expected 'struct' or 'union' on the left side of '.' operator", Annotate<0, 1>);
+             "Expected struct or union type on the left side of '.' operator", AnnotateExpr<0>);
 
 CREATE_ERROR(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "Struct %0 is an incomplete type", Underline<1>);
 
@@ -262,17 +262,17 @@ CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 f
              Underline<0>);
 
 CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR,
-             "Expected pointer to 'struct' or 'union' on the left side of '->' operator", Annotate<0, 1>);
+             "Expected pointer to struct or union type on the left side of '->' operator", AnnotateExpr<0>);
 
 CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_LVALUE, "Operand of %0 must be an lvalue", PointAt<0>, Underline<1>);
 
-CREATE_ERROR(OPERAND_OF_N_MUST_NOT_BE_CONST, "Operand of %0 must not be const", PointAt<0>, Annotate<1, 2>);
+CREATE_ERROR(OPERAND_OF_N_MUST_NOT_BE_CONST, "Operand of %0 must not be const", PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Operand of %0 must be an arithmetic or pointer types",
-             PointAt<0>, Annotate<1, 2>);
+             PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC,
-             "Pointer to function type not allowed in pointer arithmetic", Annotate<0, 1>);
+             "Pointer to function type not allowed in pointer arithmetic", AnnotateExpr<0>);
 
 CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_TEMPORARY, "Cannot take address of temporary", PointAt<0>, Underline<1>);
 
@@ -281,17 +281,44 @@ CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER,
 
 CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_BITFIELD, "Cannot take address of bitfield", PointAt<0>, Underline<1>);
 
-CREATE_ERROR(CANNOT_DEREFERENCE_NON_POINTER_TYPE_N, "Cannot dereference non pointer type %full0", Annotate<1, 0>,
-             PointAt<2>);
+CREATE_ERROR(CANNOT_DEREFERENCE_NON_POINTER_TYPE_N, "Cannot dereference non pointer type %fullType1", PointAt<0>,
+             AnnotateExpr<1>);
 
 CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "Operand of operator %0 must be an arithmetic type",
-             PointAt<0>, Annotate<1, 2>);
+             PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "Operand of operator %0 must be an integer type",
-             PointAt<0>, Annotate<1, 2>);
+             PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
-             "Operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, Annotate<1, 2>);
+             "Operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE,
+             "Left operand of operator %0 must be an arithmetic type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "Left operand of operator %0 must be an integer type",
+             PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Left operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE,
+             "Right operand of operator %0 must be an arithmetic type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE,
+             "Right operand of operator %0 must be an integer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Right operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
+             "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE, "Cannot subtract pointer from arithmetic type",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot subtract pointers of incompatible types",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
@@ -303,16 +330,13 @@ CREATE_ERROR(TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Type in cast m
              Annotate<0, 1>);
 
 CREATE_ERROR(EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
-             "Expression in cast must be an arithmetic or pointer type", Annotate<0, 1>);
+             "Expression in cast must be an arithmetic or pointer type", AnnotateExpr<0>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC_2, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>, Annotate<3, 4>);
-
-CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
-             "Size of variably modified type cannot be determined in constant expression", Underline<0>);
 
 CREATE_ERROR(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED, "Forward declaring an enum is not allowed", Underline<0>);
 
@@ -330,6 +354,11 @@ CREATE_ERROR(FUNCTION_DEFINITION_MUST_HAVE_A_PARAMETER_LIST, "Function definitio
 
 CREATE_ERROR(FUNCTION_DEFINITION_WITH_A_PARAMETER_LIST_MUST_NOT_HAVE_DECLARATIONS_FOLLOWING_IT,
              "Function definition with a parameter list must not have declarations following it", Underline<0>);
+
+// Constant evaluator
+
+CREATE_ERROR(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION,
+             "Size of variably modified type cannot be determined in constant expression", Underline<0>);
 
 CREATE_ERROR(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "%tokenType0 not allowed in constant expression", PointAt<0>);
 

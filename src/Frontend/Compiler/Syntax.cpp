@@ -70,8 +70,13 @@ const cld::Syntax::PrimaryExpression& cld::Syntax::PostFixExpressionPrimaryExpre
 
 cld::Syntax::PostFixExpressionSubscript::PostFixExpressionSubscript(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, cld::Syntax::Expression&& expression)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_expression(std::move(expression))
+    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression, Lexer::CTokenIterator openBracket,
+    cld::Syntax::Expression&& expression, Lexer::CTokenIterator closeBracket)
+    : Node(begin, end),
+      m_postFixExpression(std::move(postFixExpression)),
+      m_openBracket(openBracket),
+      m_expression(std::move(expression)),
+      m_closeBracket(closeBracket)
 {
 }
 
@@ -87,8 +92,8 @@ const cld::Syntax::Expression& cld::Syntax::PostFixExpressionSubscript::getExpre
 
 cld::Syntax::PostFixExpressionIncrement::PostFixExpressionIncrement(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
-    const Lexer::CToken& incrementToken)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_incrementToken(&incrementToken)
+    Lexer::CTokenIterator incrementToken)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_incrementToken(incrementToken)
 {
 }
 
@@ -97,15 +102,15 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionIncrement::g
     return *m_postFixExpression;
 }
 
-const cld::Lexer::CToken& cld::Syntax::PostFixExpressionIncrement::getIncrementToken() const
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionIncrement::getIncrementToken() const
 {
-    return *m_incrementToken;
+    return m_incrementToken;
 }
 
 cld::Syntax::PostFixExpressionDecrement::PostFixExpressionDecrement(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
-    const Lexer::CToken& decrementToken)
-    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_decrementToken(&decrementToken)
+    Lexer::CTokenIterator decrementToken)
+    : Node(begin, end), m_postFixExpression(std::move(postFixExpression)), m_decrementToken(decrementToken)
 {
 }
 
@@ -114,9 +119,9 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionDecrement::g
     return *m_postFixExpression;
 }
 
-const cld::Lexer::CToken& cld::Syntax::PostFixExpressionDecrement::getDecrementToken() const
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionDecrement::getDecrementToken() const
 {
-    return *m_decrementToken;
+    return m_decrementToken;
 }
 
 cld::Syntax::PostFixExpressionDot::PostFixExpressionDot(
@@ -195,8 +200,8 @@ const cld::Syntax::PostFixExpression& cld::Syntax::UnaryExpressionPostFixExpress
 
 cld::Syntax::UnaryExpressionUnaryOperator::UnaryExpressionUnaryOperator(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryExpressionUnaryOperator::UnaryOperator anOperator,
-    const Lexer::CToken& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression)
-    : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator), m_unaryToken(&unaryToken)
+    Lexer::CTokenIterator unaryToken, std::unique_ptr<CastExpression>&& unaryExpression)
+    : Node(begin, end), m_castExpression(std::move(unaryExpression)), m_operator(anOperator), m_unaryToken(unaryToken)
 {
 }
 
@@ -210,14 +215,15 @@ const cld::Syntax::CastExpression& cld::Syntax::UnaryExpressionUnaryOperator::ge
     return *m_castExpression;
 }
 
-const cld::Lexer::CToken& cld::Syntax::UnaryExpressionUnaryOperator::getUnaryToken() const
+cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionUnaryOperator::getUnaryToken() const
 {
-    return *m_unaryToken;
+    return m_unaryToken;
 }
 
 cld::Syntax::UnaryExpressionSizeOf::UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                          Lexer::CTokenIterator sizeOfToken,
                                                           cld::Syntax::UnaryExpressionSizeOf::variant&& variant)
-    : Node(begin, end), m_variant(std::move(variant))
+    : Node(begin, end), m_sizeOfToken(sizeOfToken), m_variant(std::move(variant))
 {
 }
 
@@ -227,12 +233,12 @@ const cld::Syntax::UnaryExpressionSizeOf::variant& cld::Syntax::UnaryExpressionS
 }
 
 cld::Syntax::CastExpression::CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                            cld::Syntax::CastExpression::variant&& variant)
+                                            cld::Syntax::CastExpression::Variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
 }
 
-const cld::Syntax::CastExpression::variant& cld::Syntax::CastExpression::getVariant() const
+const cld::Syntax::CastExpression::Variant& cld::Syntax::CastExpression::getVariant() const
 {
     return m_variant;
 }
@@ -621,7 +627,7 @@ const typename cld::Syntax::InitializerList::vector&
 }
 
 cld::Syntax::EnumDeclaration::EnumDeclaration(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator name,
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, const Lexer::CToken* name,
     std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values)
     : Node(begin, end), m_name(std::move(name)), m_values(std::move(values))
 {
@@ -654,12 +660,12 @@ cld::Syntax::BreakStatement::BreakStatement(Lexer::CTokenIterator begin, Lexer::
 }
 
 cld::Syntax::EnumSpecifier::EnumSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                          cld::Syntax::EnumSpecifier::variant&& variant)
+                                          cld::Syntax::EnumSpecifier::Variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))
 {
 }
 
-const cld::Syntax::EnumSpecifier::variant& cld::Syntax::EnumSpecifier::getVariant() const
+const cld::Syntax::EnumSpecifier::Variant& cld::Syntax::EnumSpecifier::getVariant() const
 {
     return m_variant;
 }
@@ -714,7 +720,7 @@ bool cld::Syntax::StructOrUnionSpecifier::isUnion() const
     return m_isUnion;
 }
 
-cld::Lexer::CTokenIterator cld::Syntax::StructOrUnionSpecifier::getIdentifierLoc() const
+const cld::Lexer::CToken* cld::Syntax::StructOrUnionSpecifier::getIdentifierLoc() const
 {
     return m_identifierLoc;
 }

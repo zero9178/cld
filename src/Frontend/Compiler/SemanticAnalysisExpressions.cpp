@@ -59,7 +59,9 @@ bool cld::Semantics::SemanticAnalysis::isBitfieldAccess(const Expression& expres
     }
     auto& mem = cld::get<MemberAccess>(expression.get());
     auto& expr = mem.getRecordExpression();
-    auto& recordType = expr.getType();
+    auto& recordType = std::holds_alternative<PointerType>(expr.getType().get()) ?
+                           cld::get<PointerType>(expr.getType().get()).getElementType() :
+                           expr.getType();
     auto fields = getFields(recordType);
     return static_cast<bool>(fields[mem.getMemberIndex()].bitFieldSize);
 }
@@ -98,36 +100,36 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             case Lexer::CToken::Type::UnsignedShort:
                 return Expression(
                     PrimitiveType::createUnsignedShort(false, false, m_sourceInterface.getLanguageOptions()),
-                    ValueCategory::Rvalue, Constant(node.getValue()));
+                    ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::Int:
                 return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
-                                  ValueCategory::Rvalue, Constant(node.getValue()));
+                                  ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::UnsignedInt:
                 return Expression(
                     PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()),
-                    ValueCategory::Rvalue, Constant(node.getValue()));
+                    ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::Long:
                 return Expression(PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions()),
-                                  ValueCategory::Rvalue, Constant(node.getValue()));
+                                  ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::UnsignedLong:
                 return Expression(
                     PrimitiveType::createUnsignedLong(false, false, m_sourceInterface.getLanguageOptions()),
-                    ValueCategory::Rvalue, Constant(node.getValue()));
+                    ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::LongLong:
                 return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
-                                  Constant(node.getValue()));
+                                  Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::UnsignedLongLong:
                 return Expression(PrimitiveType::createUnsignedLongLong(false, false), ValueCategory::Rvalue,
-                                  Constant(node.getValue()));
+                                  Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::Float:
                 return Expression(PrimitiveType::createFloat(false, false), ValueCategory::Rvalue,
-                                  Constant(node.getValue()));
+                                  Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::Double:
                 return Expression(PrimitiveType::createDouble(false, false), ValueCategory::Rvalue,
-                                  Constant(node.getValue()));
+                                  Constant(node.getValue(), node.begin(), node.end()));
             case Lexer::CToken::Type::LongDouble:
                 return Expression(PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()),
-                                  ValueCategory::Rvalue, Constant(node.getValue()));
+                                  ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
         }
     }
     else if (std::holds_alternative<std::string>(node.getValue()))
@@ -137,7 +139,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             ArrayType::create(false, false, false, false,
                               PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()),
                               string.size() + 1),
-            ValueCategory::Rvalue, node.getValue());
+            ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
     }
     else if (std::holds_alternative<Lexer::NonCharString>(node.getValue()))
     {
@@ -151,13 +153,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                         PrimitiveType::createUnsignedShort(
                                                             false, false, m_sourceInterface.getLanguageOptions()),
                                                         string.characters.size() + 1),
-                                      ValueCategory::Rvalue, node.getValue());
+                                      ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
                 case LanguageOptions::WideCharType::Int:
                     return Expression(ArrayType::create(false, false, false, false,
                                                         PrimitiveType::createInt(
                                                             false, false, m_sourceInterface.getLanguageOptions()),
                                                         string.characters.size() + 1),
-                                      ValueCategory::Rvalue, node.getValue());
+                                      ValueCategory::Rvalue, Constant(node.getValue(), node.begin(), node.end()));
             }
             CLD_UNREACHABLE;
         }
@@ -178,27 +180,31 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         auto& value = cld::get<ConstRetType>(*result);
         return Expression(value.getType(), ValueCategory::Rvalue,
-                          Constant(cld::match(value.getValue(), [](auto&& value) -> Constant::Variant {
-                              using T = std::decay_t<decltype(value)>;
-                              if constexpr (std::is_constructible_v<Constant::Variant, T>)
-                              {
-                                  return value;
-                              }
-                              CLD_UNREACHABLE;
-                          })));
+                          Constant(cld::match(value.getValue(),
+                                              [](auto&& value) -> Constant::Variant {
+                                                  using T = std::decay_t<decltype(value)>;
+                                                  if constexpr (std::is_constructible_v<Constant::Variant, T>)
+                                                  {
+                                                      return value;
+                                                  }
+                                                  CLD_UNREACHABLE;
+                                              }),
+                                   node.getIdentifier(), node.getIdentifier() + 1));
     }
     auto& type = std::holds_alternative<const Declaration*>(*result) ?
                      cld::get<const Declaration*>(*result)->getType() :
                      cld::get<const FunctionDefinition*>(*result)->getType();
     return Expression(type, ValueCategory::Lvalue,
-                      DeclarationRead(cld::match(*result, [](auto&& value) -> DeclarationRead::Variant {
-                          using T = std::decay_t<decltype(value)>;
-                          if constexpr (std::is_constructible_v<DeclarationRead::Variant, T>)
-                          {
-                              return value;
-                          }
-                          CLD_UNREACHABLE;
-                      })));
+                      DeclarationRead(cld::match(*result,
+                                                 [](auto&& value) -> DeclarationRead::Variant {
+                                                     using T = std::decay_t<decltype(value)>;
+                                                     if constexpr (std::is_constructible_v<DeclarationRead::Variant, T>)
+                                                     {
+                                                         return value;
+                                                     }
+                                                     CLD_UNREACHABLE;
+                                                 }),
+                                      node.getIdentifier()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionParentheses& node)
@@ -228,71 +234,40 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     if (!std::holds_alternative<PointerType>(first.getType().get())
         && !std::holds_alternative<PointerType>(second.getType().get()))
     {
-        log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(
-            node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), first.getType(),
-            node.getExpression(), second.getType()));
+        log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(node.getPostFixExpression(),
+                                                                               m_sourceInterface, first, second));
         return {};
     }
     auto& pointerExpr = std::holds_alternative<PointerType>(first.getType().get()) ? first : second;
     auto& intExpr = &pointerExpr == &first ? second : first;
     if (!isInteger(intExpr.getType()))
     {
-        if (&pointerExpr == &first)
-        {
-            log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(
-                node.getExpression(), m_sourceInterface, node.getExpression(), intExpr.getType()));
-        }
-        else
-        {
-            log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(
-                node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), intExpr.getType()));
-        }
+        log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(intExpr, m_sourceInterface, intExpr));
         return {};
     }
     auto elementType = cld::get<PointerType>(pointerExpr.getType().get()).getElementType();
     if (!isCompleteType(elementType))
     {
-        if (&pointerExpr == &first)
-        {
-            log(Errors::Semantics::POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
-                node.getPostFixExpression(), m_sourceInterface, elementType, node.getPostFixExpression(),
-                pointerExpr.getType()));
-        }
-        else
-        {
-            log(Errors::Semantics::POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
-                node.getExpression(), m_sourceInterface, elementType, node.getExpression(), pointerExpr.getType()));
-        }
+        log(Errors::Semantics::POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
+            pointerExpr, m_sourceInterface, elementType, pointerExpr));
         return {};
     }
     else if (std::holds_alternative<FunctionType>(elementType.get()))
     {
-        if (&pointerExpr == &first)
-        {
-            log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
-                node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), pointerExpr.getType()));
-        }
-        else
-        {
-            log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
-                node.getExpression(), m_sourceInterface, node.getExpression(), pointerExpr.getType()));
-        }
+        log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
+            pointerExpr, m_sourceInterface, pointerExpr));
         return {};
     }
     auto pointerType = pointerExpr.getType();
-    return Expression(
-        std::move(elementType), ValueCategory::Lvalue,
-        UnaryOperator(UnaryOperator::Dereference,
-                      std::make_shared<Expression>(pointerType, ValueCategory::Rvalue,
-                                                   BinaryOperator(std::make_shared<Expression>(std::move(pointerExpr)),
-                                                                  BinaryOperator::Addition,
-                                                                  std::make_shared<Expression>(std::move(intExpr))))));
+    return Expression(std::move(elementType), ValueCategory::Lvalue,
+                      SubscriptOperator(std::make_unique<Expression>(std::move(first)), node.getOpenBracket(),
+                                        std::make_unique<Expression>(std::move(second)), node.getCloseBracket()));
 }
 
 std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::SemanticAnalysis::checkMemberAccess(
     const Type& recordType, const Syntax::PostFixExpression& postFixExpr, const Lexer::CToken& identifier)
 {
-    const std::vector<Field>* fields;
+    const std::vector<Field>* fields = nullptr;
     if (std::holds_alternative<AnonymousUnionType>(recordType.get()))
     {
         fields = &cld::get<AnonymousUnionType>(recordType.get()).getFields();
@@ -377,7 +352,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         && !std::holds_alternative<AnonymousUnionType>(structOrUnion.getType().get()))
     {
         log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR.args(
-            node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), structOrUnion.getType()));
+            structOrUnion, m_sourceInterface, structOrUnion));
         return {};
     }
     auto result = checkMemberAccess(structOrUnion.getType(), node.getPostFixExpression(), *node.getIdentifier());
@@ -391,8 +366,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return {};
     }
     auto category = structOrUnion.getValueCategory();
-    return Expression(std::move(type), category,
-                      MemberAccess(std::make_shared<Expression>(std::move(structOrUnion)), index));
+    return Expression(
+        std::move(type), category,
+        MemberAccess(std::make_unique<Expression>(std::move(structOrUnion)), index, node.getIdentifier()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)
@@ -405,7 +381,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     if (!std::holds_alternative<PointerType>(structOrUnionPtr.getType().get()))
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
-            node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), structOrUnionPtr.getType()));
+            structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
         return {};
     }
     auto& structOrUnion = cld::get<PointerType>(structOrUnionPtr.getType().get()).getElementType();
@@ -415,7 +391,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         && !std::holds_alternative<AnonymousUnionType>(structOrUnion.get()))
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
-            node.getPostFixExpression(), m_sourceInterface, node.getPostFixExpression(), structOrUnionPtr.getType()));
+            structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
         return {};
     }
     auto result = checkMemberAccess(structOrUnion, node.getPostFixExpression(), *node.getIdentifier());
@@ -424,21 +400,16 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return {};
     }
     auto& [type, index] = *result;
-    return Expression(std::move(type), ValueCategory::Lvalue,
-                      MemberAccess(std::make_shared<Expression>(
-                                       structOrUnion, ValueCategory::Lvalue,
-                                       UnaryOperator(UnaryOperator::Dereference,
-                                                     std::make_shared<Expression>(std::move(structOrUnionPtr)))),
-                                   index));
+    return Expression(
+        std::move(type), ValueCategory::Lvalue,
+        MemberAccess(std::make_unique<Expression>(std::move(structOrUnionPtr)), index, node.getIdentifier()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node) {}
 
-template <class Expr>
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::checkIncrementAndDecrement(UnaryOperator::Kind kind,
                                                                                         Expression&& value,
-                                                                                        const Lexer::TokenBase& opToken,
-                                                                                        const Expr& syntaxExpr)
+                                                                                        Lexer::CTokenIterator opToken)
 {
     if (value.isUndefined())
     {
@@ -446,52 +417,51 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::checkIncrementAndDe
     }
     if (!isScalar(value.getType()))
     {
-        log(Errors::Semantics::OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-            syntaxExpr, m_sourceInterface, opToken, syntaxExpr, value.getType()));
+        log(Errors::Semantics::OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(value, m_sourceInterface,
+                                                                                       *opToken, value));
         return {};
     }
     if (value.getValueCategory() != ValueCategory::Lvalue)
     {
-        log(Errors::Semantics::OPERAND_OF_N_MUST_BE_AN_LVALUE.args(syntaxExpr, m_sourceInterface, opToken, syntaxExpr));
+        log(Errors::Semantics::OPERAND_OF_N_MUST_BE_AN_LVALUE.args(value, m_sourceInterface, *opToken, value));
     }
     else if (value.getType().isConst())
     {
-        log(Errors::Semantics::OPERAND_OF_N_MUST_NOT_BE_CONST.args(syntaxExpr, m_sourceInterface, opToken, syntaxExpr,
-                                                                   value.getType()));
+        log(Errors::Semantics::OPERAND_OF_N_MUST_NOT_BE_CONST.args(value, m_sourceInterface, *opToken, value));
     }
     if (isArithmetic(value.getType()))
     {
         auto type = removeQualifiers(value.getType());
         return Expression(std::move(type), ValueCategory::Rvalue,
-                          UnaryOperator(kind, std::make_shared<Expression>(std::move(value))));
+                          UnaryOperator(kind, opToken, std::make_unique<Expression>(std::move(value))));
     }
     auto& elementType = cld::get<PointerType>(value.getType().get()).getElementType();
     if (!isCompleteType(elementType))
     {
-        log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
-            syntaxExpr, m_sourceInterface, elementType, syntaxExpr, value.getType()));
+        log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(value, m_sourceInterface, elementType,
+                                                                                 value, value.getType()));
     }
     else if (std::holds_alternative<FunctionType>(elementType.get()))
     {
-        log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
-            syntaxExpr, m_sourceInterface, syntaxExpr, value.getType()));
+        log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(value, m_sourceInterface,
+                                                                                               value));
         return {};
     }
     auto type = removeQualifiers(value.getType());
     return Expression(std::move(type), ValueCategory::Rvalue,
-                      UnaryOperator(kind, std::make_shared<Expression>(std::move(value))));
+                      UnaryOperator(kind, opToken, std::make_unique<Expression>(std::move(value))));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionIncrement& node)
 {
     return checkIncrementAndDecrement(UnaryOperator::PostIncrement, visit(node.getPostFixExpression()),
-                                      node.getIncrementToken(), node.getPostFixExpression());
+                                      node.getIncrementToken());
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionDecrement& node)
 {
     return checkIncrementAndDecrement(UnaryOperator::PostDecrement, visit(node.getPostFixExpression()),
-                                      node.getDecrementToken(), node.getPostFixExpression());
+                                      node.getDecrementToken());
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionTypeInitializer& node)
@@ -519,19 +489,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Increment:
             return checkIncrementAndDecrement(UnaryOperator::PreIncrement, visit(node.getCastExpression()),
-                                              node.getUnaryToken(), node.getCastExpression());
+                                              node.getUnaryToken());
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Decrement:
             return checkIncrementAndDecrement(UnaryOperator::PreDecrement, visit(node.getCastExpression()),
-                                              node.getUnaryToken(), node.getCastExpression());
+                                              node.getUnaryToken());
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
         {
-            if (std::holds_alternative<UnaryOperator>(value.get())
-                && cld::get<UnaryOperator>(value.get()).getKind() == UnaryOperator::Dereference)
-            {
-                auto& dereference = cld::get<UnaryOperator>(value.get());
-                auto& exp = dereference.getOperand();
-                return Expression(exp.getType(), ValueCategory::Rvalue, exp.get());
-            }
             // TODO: Call Expression
             if (std::holds_alternative<DeclarationRead>(value.get()))
             {
@@ -540,22 +503,23 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     && cld::get<const Declaration*>(declRead.getDeclRead())->getLifetime() == Lifetime::Register)
                 {
                     log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER.args(
-                        node.getCastExpression(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression()));
+                        value, m_sourceInterface, *node.getUnaryToken(), value));
                 }
             }
             if (isBitfieldAccess(value))
             {
-                log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_BITFIELD.args(
-                    node.getCastExpression(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression()));
+                log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_BITFIELD.args(value, m_sourceInterface,
+                                                                            *node.getUnaryToken(), value));
             }
             if (value.getValueCategory() != ValueCategory::Lvalue)
             {
-                log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_TEMPORARY.args(
-                    node.getCastExpression(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression()));
+                log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_TEMPORARY.args(value, m_sourceInterface,
+                                                                             *node.getUnaryToken(), value));
             }
             auto type = value.getType();
             return Expression(PointerType::create(false, false, false, std::move(type)), ValueCategory::Rvalue,
-                              UnaryOperator(UnaryOperator::AddressOf, std::make_shared<Expression>(std::move(value))));
+                              UnaryOperator(UnaryOperator::AddressOf, node.getUnaryToken(),
+                                            std::make_unique<Expression>(std::move(value))));
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         {
@@ -563,14 +527,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             if (!std::holds_alternative<PointerType>(value.getType().get()))
             {
                 log(Errors::Semantics::CANNOT_DEREFERENCE_NON_POINTER_TYPE_N.args(
-                    node.getCastExpression(), m_sourceInterface, value.getType(), node.getCastExpression(),
-                    node.getUnaryToken()));
+                    *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
                 return {};
             }
             auto elementType = cld::get<PointerType>(value.getType().get()).getElementType();
-            return Expression(
-                std::move(elementType), ValueCategory::Lvalue,
-                UnaryOperator(UnaryOperator::Dereference, std::make_shared<Expression>(std::move(value))));
+            return Expression(std::move(elementType), ValueCategory::Lvalue,
+                              UnaryOperator(UnaryOperator::Dereference, node.getUnaryToken(),
+                                            std::make_unique<Expression>(std::move(value))));
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
@@ -579,8 +542,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             if (!isArithmetic(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
-                    node.getUnaryToken(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression(),
-                    value.getType()));
+                    *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
                 return {};
             }
             auto type = value.getType();
@@ -589,7 +551,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 UnaryOperator(node.getOperator() == Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus ?
                                   UnaryOperator::Minus :
                                   UnaryOperator::Plus,
-                              std::make_shared<Expression>(std::move(value))));
+                              node.getUnaryToken(), std::make_unique<Expression>(std::move(value))));
         }
         break;
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
@@ -598,14 +560,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             if (!isInteger(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
-                    node.getUnaryToken(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression(),
-                    value.getType()));
+                    *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
                 return {};
             }
             auto type = value.getType();
-            return Expression(
-                std::move(type), ValueCategory::Rvalue,
-                UnaryOperator(UnaryOperator::BitwiseNegate, std::make_shared<Expression>(std::move(value))));
+            return Expression(std::move(type), ValueCategory::Rvalue,
+                              UnaryOperator(UnaryOperator::BitwiseNegate, node.getUnaryToken(),
+                                            std::make_unique<Expression>(std::move(value))));
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
         {
@@ -613,14 +574,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             if (!isScalar(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                    node.getUnaryToken(), m_sourceInterface, node.getUnaryToken(), node.getCastExpression(),
-                    value.getType()));
+                    *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
                 return {};
             }
             auto type = value.getType();
-            return Expression(
-                std::move(type), ValueCategory::Rvalue,
-                UnaryOperator(UnaryOperator::BooleanNegate, std::make_shared<Expression>(std::move(value))));
+            return Expression(std::move(type), ValueCategory::Rvalue,
+                              UnaryOperator(UnaryOperator::BooleanNegate, node.getUnaryToken(),
+                                            std::make_unique<Expression>(std::move(value))));
         }
     }
     CLD_UNREACHABLE;
@@ -639,24 +599,22 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             auto& type = exp.getType();
             if (!isCompleteType(type))
             {
-                log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*unaryExpression, m_sourceInterface, type,
-                                                                         *unaryExpression));
+                log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(exp, m_sourceInterface, type, exp));
                 return {};
             }
             else if (std::holds_alternative<FunctionType>(type.get()))
             {
-                log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*unaryExpression, m_sourceInterface,
-                                                                                 *unaryExpression, type));
+                log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp, type));
                 return {};
             }
             if (isBitfieldAccess(exp))
             {
-                log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_SIZE_OF.args(*unaryExpression, m_sourceInterface,
-                                                                            *unaryExpression));
+                log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp));
             }
             auto size = exp.getType().getSizeOf(*this);
-            return Expression(PrimitiveType::createUnsignedLongLong(false, false), ValueCategory::Rvalue,
-                              SizeofOperator(size, std::make_shared<Expression>(std::move(exp))));
+            return Expression(
+                getSizeT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+                SizeofOperator(node.getSizeOfToken(), size, std::make_unique<Expression>(std::move(exp))));
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> Expression {
             auto type = declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator());
@@ -677,8 +635,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 return {};
             }
             auto size = type.getSizeOf(*this);
-            return Expression(PrimitiveType::createUnsignedLongLong(false, false), ValueCategory::Rvalue,
-                              SizeofOperator(size, std::move(type)));
+            return Expression(getSizeT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+                              SizeofOperator(node.getSizeOfToken(), size,
+                                             SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
+                                                                         node.end() - 1}));
         });
 }
 
@@ -692,14 +652,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     return cld::match(
         node.getVariant(),
         [&](const Syntax::UnaryExpression& unaryExpression) -> Expression { return visit(unaryExpression); },
-        [&](const std::pair<Syntax::TypeName, std::unique_ptr<Syntax::CastExpression>>& cast) -> Expression {
-            auto type = declaratorsToType(cast.first.getSpecifierQualifiers(), cast.first.getAbstractDeclarator());
+        [&](const Syntax::CastExpression::CastVariant& cast) -> Expression {
+            auto type =
+                declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator());
             if (type.isUndefined())
             {
-                visit(*cast.second);
+                visit(*cast.cast);
                 return {};
             }
-            auto value = visit(*cast.second);
+            auto value = visit(*cast.cast);
             if (value.isUndefined())
             {
                 return {};
@@ -708,18 +669,19 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             if (!isScalar(type))
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                    cast.first, m_sourceInterface, cast.first, type));
+                    cast.typeName, m_sourceInterface, cast.typeName, type));
                 return {};
             }
             type = lvalueConversion(std::move(type));
             if (!isScalar(value.getType()))
             {
                 log(Errors::Semantics::EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                    *cast.second, m_sourceInterface, *cast.second, value.getType()));
+                    value, m_sourceInterface, value));
                 return {};
             }
             return Expression(type, ValueCategory::Rvalue,
-                              Conversion(type, Conversion::Explicit, std::make_shared<Expression>(std::move(value))));
+                              Cast(cast.openParentheses, type, cast.closeParentheses,
+                                   std::make_unique<Expression>(std::move(value))));
         });
 }
 
@@ -730,8 +692,71 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return value;
     }
-    for (auto& iter : node.getOptionalCastExpressions())
+    for (auto& [kind, token, rhs] : node.getOptionalCastExpressions())
     {
+        auto rhsValue = visit(rhs);
+        switch (kind)
+        {
+            case Syntax::Term::BinaryDotOperator::BinaryDivide:
+            case Syntax::Term::BinaryDotOperator::BinaryMultiply:
+            {
+                arithmeticConversion(value, rhsValue);
+                bool errors = false;
+                if (!value.isUndefined() && !isArithmetic(value.getType()))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
+                        value, m_sourceInterface, *token, value));
+                    errors = true;
+                }
+                if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                    errors = true;
+                }
+                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                {
+                    value = {};
+                    continue;
+                }
+                auto type = value.getType();
+                value = Expression(std::move(type), ValueCategory::Rvalue,
+                                   BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                  kind == Syntax::Term::BinaryDotOperator::BinaryDivide ?
+                                                      BinaryOperator::Divide :
+                                                      BinaryOperator::Multiply,
+                                                  token, std::make_unique<Expression>(std::move(rhsValue))));
+                continue;
+            }
+            case Syntax::Term::BinaryDotOperator::BinaryModulo:
+            {
+                arithmeticConversion(value, rhsValue);
+                bool errors = false;
+                if (!value.isUndefined() && !isInteger(value.getType()))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        value, m_sourceInterface, *token, value));
+                    errors = true;
+                }
+                if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                    errors = true;
+                }
+                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                {
+                    value = {};
+                    continue;
+                }
+                auto type = value.getType();
+                value =
+                    Expression(std::move(type), ValueCategory::Rvalue,
+                               BinaryOperator(std::make_unique<Expression>(std::move(value)), BinaryOperator::Modulo,
+                                              token, std::make_unique<Expression>(std::move(rhsValue))));
+                continue;
+            }
+        }
     }
     return value;
 }
@@ -743,8 +768,154 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return value;
     }
-    for (auto& iter : node.getOptionalTerms())
+    for (auto& [kind, token, rhs] : node.getOptionalTerms())
     {
+        auto rhsValue = visit(rhs);
+        if (std::holds_alternative<PrimitiveType>(value.getType().get())
+            && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+        {
+            arithmeticConversion(value, rhsValue);
+        }
+        bool errors = false;
+        if (!value.isUndefined() && !isScalar(value.getType()))
+        {
+            log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                value, m_sourceInterface, *token, value));
+            errors = true;
+        }
+        if (!rhsValue.isUndefined() && !isScalar(rhsValue.getType()))
+        {
+            log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                rhsValue, m_sourceInterface, *token, rhsValue));
+            errors = true;
+        }
+        switch (kind)
+        {
+            case Syntax::AdditiveExpression::BinaryDashOperator::BinaryMinus:
+            {
+                if (std::holds_alternative<PrimitiveType>(value.getType().get())
+                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+                {
+                    auto type = value.getType();
+                    value = Expression(std::move(type), ValueCategory::Rvalue,
+                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                      BinaryOperator::Subtraction, token,
+                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                    continue;
+                }
+                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                {
+                    value = {};
+                    continue;
+                }
+                if (std::holds_alternative<PrimitiveType>(value.getType().get())
+                    && std::holds_alternative<PointerType>(rhsValue.getType().get()))
+                {
+                    log(Errors::Semantics::CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE.args(value, m_sourceInterface,
+                                                                                             value, *token, rhsValue));
+                    auto type = rhsValue.getType();
+                    value = Expression(std::move(type), ValueCategory::Rvalue,
+                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                      BinaryOperator::Subtraction, token,
+                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                    continue;
+                }
+                // value is guaranteed to be a pointer type now, rhsValue is a scalar
+                auto valueElementType = cld::get<PointerType>(value.getType().get()).getElementType();
+                if (!isCompleteType(valueElementType))
+                {
+                    log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                        value, m_sourceInterface, valueElementType, value, value.getType()));
+                }
+                else if (std::holds_alternative<FunctionType>(valueElementType.get()))
+                {
+                    log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
+                        value, m_sourceInterface, value));
+                }
+                if (std::holds_alternative<PointerType>(rhsValue.getType().get()))
+                {
+                    auto rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+                    if (!isCompleteType(rhsElementType))
+                    {
+                        log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                            rhsValue, m_sourceInterface, rhsElementType, rhsValue, rhsValue.getType()));
+                    }
+                    else if (std::holds_alternative<FunctionType>(rhsElementType.get()))
+                    {
+                        log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
+                            rhsValue, m_sourceInterface, rhsValue));
+                    }
+
+                    valueElementType = removeQualifiers(std::move(valueElementType));
+                    rhsElementType = removeQualifiers(std::move(rhsElementType));
+                    if (!typesAreCompatible(valueElementType, rhsElementType))
+                    {
+                        log(Errors::Semantics::CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES.args(
+                            value, m_sourceInterface, value, *token, rhsValue));
+                    }
+                    value = Expression(getPtrdiffT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                      BinaryOperator::Subtraction, token,
+                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                }
+                else
+                {
+                    if (!isInteger(rhsValue.getType()))
+                    {
+                        log(Errors::Semantics::EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue));
+                    }
+                    auto type = value.getType();
+                    value = Expression(std::move(type), ValueCategory::Rvalue,
+                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                      BinaryOperator::Subtraction, token,
+                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                }
+                continue;
+            }
+            case Syntax::AdditiveExpression::BinaryDashOperator::BinaryPlus:
+            {
+                if (std::holds_alternative<PrimitiveType>(value.getType().get())
+                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+                {
+                    auto type = value.getType();
+                    value = Expression(std::move(type), ValueCategory::Rvalue,
+                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
+                                                      BinaryOperator::Addition, token,
+                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                    continue;
+                }
+                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                {
+                    value = {};
+                    continue;
+                }
+                auto& pointerExpr = std::holds_alternative<PointerType>(value.getType().get()) ? value : rhsValue;
+                auto& intExpr = &pointerExpr == &value ? rhsValue : value;
+                if (!isInteger(intExpr.getType()))
+                {
+                    log(Errors::Semantics::EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE.args(
+                        intExpr, m_sourceInterface, *token, intExpr));
+                }
+                auto& elementType = cld::get<PointerType>(pointerExpr.getType().get()).getElementType();
+                if (!isCompleteType(elementType))
+                {
+                    log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                        pointerExpr, m_sourceInterface, elementType, pointerExpr, pointerExpr.getType()));
+                }
+                else if (std::holds_alternative<FunctionType>(elementType.get()))
+                {
+                    log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
+                        pointerExpr, m_sourceInterface, pointerExpr));
+                }
+                auto type = pointerExpr.getType();
+                value =
+                    Expression(std::move(type), ValueCategory::Rvalue,
+                               BinaryOperator(std::make_unique<Expression>(std::move(value)), BinaryOperator::Addition,
+                                              token, std::make_unique<Expression>(std::move(rhsValue))));
+                continue;
+            }
+        }
     }
     return value;
 }
@@ -872,13 +1043,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
                                cld::get<ValArrayType>(expression.getType().get()).getType();
         return Expression(
             PointerType::create(false, false, false, elementType), ValueCategory::Rvalue,
-            Conversion(elementType, Conversion::LValue, std::make_shared<Expression>(std::move(expression))));
+            Conversion(elementType, Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
     if (std::holds_alternative<FunctionType>(expression.getType().get()))
     {
         return Expression(
             PointerType::create(false, false, false, expression.getType()), ValueCategory::Rvalue,
-            Conversion(expression.getType(), Conversion::LValue, std::make_shared<Expression>(std::move(expression))));
+            Conversion(expression.getType(), Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (expression.getValueCategory() != ValueCategory::Lvalue && !expression.getType().isVolatile()
@@ -890,7 +1061,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
     }
     auto newType = Type(false, false, expression.getType().get());
     return Expression(newType, ValueCategory::Rvalue,
-                      Conversion(newType, Conversion::LValue, std::make_shared<Expression>(std::move(expression))));
+                      Conversion(newType, Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type type)
@@ -930,5 +1101,52 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
     auto newType = PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
     return Expression(
         newType, ValueCategory::Rvalue,
-        Conversion(newType, Conversion::IntegerPromotion, std::make_shared<Expression>(std::move(expression))));
+        Conversion(newType, Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
+}
+
+void cld::Semantics::SemanticAnalysis::arithmeticConversion(cld::Semantics::Expression& lhs,
+                                                            cld::Semantics::Expression& rhs) const
+{
+    lhs = integerPromotion(std::move(lhs));
+    rhs = integerPromotion(std::move(rhs));
+    if (!isArithmetic(lhs.getType()) || !isArithmetic(rhs.getType()))
+    {
+        return;
+    }
+    if (lhs.getType() == rhs.getType())
+    {
+        return;
+    }
+    auto& lhsPrim = cld::get<PrimitiveType>(lhs.getType().get());
+    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().get());
+    Type type;
+    if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
+    {
+        auto [floating, biggest] = std::max(std::pair(lhsPrim.isFloatingPoint(), lhsPrim.getKind()),
+                                            std::pair(rhsPrim.isFloatingPoint(), rhsPrim.getKind()));
+        (void)floating;
+        switch (biggest)
+        {
+            case PrimitiveType::Kind::Float: type = PrimitiveType::createFloat(false, false); break;
+            case PrimitiveType::Kind::Double: type = PrimitiveType::createDouble(false, false); break;
+            case PrimitiveType::Kind::LongDouble:
+                type = PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
+                break;
+            default: CLD_UNREACHABLE;
+        }
+    }
+    else if (rhsPrim.isSigned() == lhsPrim.isSigned() || rhsPrim.getBitCount() != lhsPrim.getBitCount())
+    {
+        auto [bits, sign, lhsType] = std::max(std::tuple(lhsPrim.getBitCount(), lhsPrim.isSigned(), true),
+                                              std::tuple(rhsPrim.getBitCount(), rhsPrim.isSigned(), false));
+        type = lhsType ? lhs.getType() : rhs.getType();
+    }
+    else
+    {
+        type = !lhsPrim.isSigned() ? lhs.getType() : rhs.getType();
+    }
+    lhs = Expression(type, ValueCategory::Rvalue,
+                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(lhs))));
+    rhs = Expression(type, ValueCategory::Rvalue,
+                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }

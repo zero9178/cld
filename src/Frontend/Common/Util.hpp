@@ -70,15 +70,30 @@
 
 #else
 
-    #define CLD_ASSERT(x) assert(x)
+    #define CLD_ASSERT(x)                                            \
+        do                                                           \
+        {                                                            \
+            if (!(x))                                                \
+            {                                                        \
+                fprintf(stderr, __FILE__ ":%d: " #x "\n", __LINE__); \
+                std::abort();                                        \
+            }                                                        \
+        } while (0)
 
     #define CLD_UNREACHABLE                                                              \
         do                                                                               \
         {                                                                                \
-            assert(false);                                                               \
             std::abort(); /* So that the compiler sees code afterwards is unreachable */ \
         } while (0)
 
+#endif
+
+#ifdef __clang__
+    #define CLD_NON_NULL _Nonnull
+    #define CLD_NULLABLE _Nullable
+#else
+    #define CLD_NON_NULL
+    #define CLD_NULLABLE
 #endif
 
 namespace cld

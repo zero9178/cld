@@ -681,9 +681,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
     }
     SECTION("Multibyte")
     {
-        auto result = lexes("L\"5\"", cld::LanguageOptions{cld::LanguageOptions::C99, 1, true,
-                                                           cld::LanguageOptions::WideCharType::UnsignedShort, 2, 4, 4,
-                                                           80, 8, false});
+        auto result = lexes("L\"5\"");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         REQUIRE(std::holds_alternative<cld::Lexer::NonCharString>(result.data()[0].getValue()));
@@ -808,9 +806,9 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             }
             SECTION("128 bit")
             {
-                auto result = lexes("1.18e4900L", cld::LanguageOptions{cld::LanguageOptions::C99, 1, true,
-                                                                       cld::LanguageOptions::WideCharType::Int, 2, 4, 8,
-                                                                       128, 8, false});
+                auto copy = cld::LanguageOptions::native();
+                copy.sizeOfLongDoubleBits = 128;
+                auto result = lexes("1.18e4900L", copy);
                 REQUIRE_FALSE(result.data().empty());
                 CHECK(result.data().size() == 1);
                 CHECK(result.data()[0].getType() == cld::Lexer::CToken::Type::LongDouble);

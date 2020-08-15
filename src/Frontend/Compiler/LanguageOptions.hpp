@@ -29,6 +29,18 @@ struct LanguageOptions
     std::uint8_t sizeOfLongDoubleBits;
     std::uint8_t sizeOfVoidStar;
     bool discreteBitfields;
+    enum class PtrdiffType
+    {
+        Int,
+        Long,
+        LongLong,
+    } ptrdiffType;
+    enum class SizeTType
+    {
+        UnsignedInt,
+        UnsignedLong,
+        UnsignedLongLong,
+    } sizeTType;
     std::vector<std::string> includeDirectories{};
     std::vector<std::string> includeQuoteDirectories{};
     std::unordered_set<std::string> disabledWarnings{};

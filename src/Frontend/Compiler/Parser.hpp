@@ -117,11 +117,11 @@ public:
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
-    void log(const Message& message);
+    bool log(const Message& message);
 
     void addToScope(std::string_view name, DeclarationLocation declarator);
 
-    [[nodiscard]] const Parser::Context::DeclarationLocation* getLocationOf(std::string_view name) const;
+    [[nodiscard]] const Parser::Context::DeclarationLocation* CLD_NULLABLE getLocationOf(std::string_view name) const;
 
     void pushScope();
 

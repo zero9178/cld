@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Frontend/Common/Expected.hpp>
-
 #include <memory>
 #include <optional>
 #include <string>
@@ -167,6 +165,10 @@ public:
 
     [[nodiscard]] bool operator!=(const PrimitiveType& rhs) const;
 };
+
+Type getSizeT(const LanguageOptions& options);
+
+Type getPtrdiffT(const LanguageOptions& options);
 
 class ArrayType final
 {
@@ -360,9 +362,15 @@ public:
 
     [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    [[nodiscard]] bool operator==(const StructType& rhs) const;
+    [[nodiscard]] bool operator==(const StructType&) const
+    {
+        return false;
+    }
 
-    [[nodiscard]] bool operator!=(const StructType& rhs) const;
+    [[nodiscard]] bool operator!=(const StructType& rhs) const
+    {
+        return !(rhs == *this);
+    }
 };
 
 class UnionType final
@@ -370,10 +378,10 @@ class UnionType final
     std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
-    UnionType(std::string_view name, std::int64_t scopeOrId);
+    UnionType(std::string_view name, std::uint64_t scopeOrId);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrId);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scopeOrId);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -389,9 +397,15 @@ public:
 
     [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    [[nodiscard]] bool operator==(const UnionType& rhs) const;
+    [[nodiscard]] bool operator==(const UnionType&) const
+    {
+        return false;
+    }
 
-    [[nodiscard]] bool operator!=(const UnionType& rhs) const;
+    [[nodiscard]] bool operator!=(const UnionType& rhs) const
+    {
+        return !(rhs == *this);
+    }
 };
 
 struct Field
@@ -407,15 +421,24 @@ struct Field
 
 class AnonymousStructType final
 {
+    std::uint64_t m_id;
     std::vector<Field> m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
-    AnonymousStructType(std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
+    AnonymousStructType(std::uint64_t id, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    {
+    }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields, std::uint64_t sizeOf,
                        std::uint64_t alignOf);
+
+    [[nodiscard]] std::uint64_t getId() const
+    {
+        return m_id;
+    }
 
     [[nodiscard]] const std::vector<Field>& getFields() const
     {
@@ -433,15 +456,21 @@ public:
 
 class AnonymousUnionType final
 {
+    std::uint64_t m_id;
     std::vector<Field> m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
-    AnonymousUnionType(std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
+    AnonymousUnionType(std::uint64_t id, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::vector<Field> fields, std::uint64_t sizeOf,
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields, std::uint64_t sizeOf,
                        std::uint64_t alignOf);
+
+    [[nodiscard]] std::uint64_t getId() const
+    {
+        return m_id;
+    }
 
     [[nodiscard]] const std::vector<Field>& getFields() const
     {
@@ -462,10 +491,10 @@ class EnumType final
     std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
-    EnumType(std::string_view name, std::int64_t scopeOrId);
+    EnumType(std::string_view name, std::uint64_t scopeOrId);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrId);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scopeOrId);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -481,19 +510,31 @@ public:
 
     [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 
-    [[nodiscard]] bool operator==(const EnumType& rhs) const;
+    [[nodiscard]] bool operator==(const EnumType&) const
+    {
+        return false;
+    }
 
-    [[nodiscard]] bool operator!=(const EnumType& rhs) const;
+    [[nodiscard]] bool operator!=(const EnumType& rhs) const
+    {
+        return !(rhs == *this);
+    }
 };
 
 class AnonymousEnumType
 {
+    std::uint64_t m_id;
     std::shared_ptr<const Type> m_type;
 
-    AnonymousEnumType(std::shared_ptr<const Type> type);
+    AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, Type&& type);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, Type&& type);
+
+    [[nodiscard]] std::uint64_t getId() const
+    {
+        return m_id;
+    }
 
     [[nodiscard]] bool operator==(const AnonymousEnumType& rhs) const;
 
@@ -610,47 +651,75 @@ public:
 
 class Expression;
 
-class Constant
+class Constant final
 {
 public:
     using Variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
 
 private:
     Variant m_value;
+    Lexer::CTokenIterator m_valueBegin;
+    Lexer::CTokenIterator m_valueEnd;
 
 public:
-    Constant(Variant value) : m_value(std::move(value)) {}
+    Constant(Variant value, Lexer::CTokenIterator valueBegin, Lexer::CTokenIterator valueEnd)
+        : m_value(std::move(value)), m_valueBegin(valueBegin), m_valueEnd(valueEnd)
+    {
+    }
 
     [[nodiscard]] const Variant& getValue() const
     {
         return m_value;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_valueBegin;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_valueEnd;
+    }
 };
 
-class DeclarationRead
+class DeclarationRead final
 {
 public:
-    using Variant = std::variant<const Declaration*, const FunctionDefinition*>;
+    using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL>;
 
 private:
     Variant m_declRead;
+    Lexer::CTokenIterator m_identifierToken;
 
 public:
-    explicit DeclarationRead(Variant declRead) : m_declRead(declRead) {}
+    explicit DeclarationRead(Variant declRead, Lexer::CTokenIterator identifierToken)
+        : m_declRead(declRead), m_identifierToken(identifierToken)
+    {
+    }
 
     [[nodiscard]] Variant getDeclRead() const
     {
         return m_declRead;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_identifierToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_identifierToken + 1;
+    }
 };
 
-class Conversion
+class Conversion final
 {
 public:
     enum Kind
     {
         LValue,
-        Explicit,
         IntegerPromotion,
         ArithmeticConversion
     };
@@ -658,11 +727,11 @@ public:
 private:
     Type m_newType;
     Kind m_kind;
-    std::shared_ptr<const Expression> m_expression;
+    std::unique_ptr<Expression> m_expression;
 
 public:
-    Conversion(Type newType, Kind kind, std::shared_ptr<const Expression> expression)
-        : m_newType(newType), m_kind(kind), m_expression(std::move(expression))
+    Conversion(Type newType, Kind kind, std::unique_ptr<Expression> expression)
+        : m_newType(std::move(newType)), m_kind(kind), m_expression(std::move(expression))
     {
     }
 
@@ -680,16 +749,67 @@ public:
     {
         return *m_expression;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class MemberAccess
+class Cast final
 {
-    std::shared_ptr<const Expression> m_recordExpr;
-    std::uint64_t m_memberIndex;
+    Lexer::CTokenIterator m_openParentheses;
+    Type m_newType;
+    Lexer::CTokenIterator m_closeParentheses;
+    std::unique_ptr<Expression> m_expression;
 
 public:
-    MemberAccess(std::shared_ptr<const Expression> recordExpr, std::uint64_t memberIndex)
-        : m_recordExpr(recordExpr), m_memberIndex(memberIndex)
+    Cast(Lexer::CTokenIterator openParentheses, Type newType, Lexer::CTokenIterator closeParentheses,
+         std::unique_ptr<Expression> expression)
+        : m_openParentheses(openParentheses),
+          m_newType(std::move(newType)),
+          m_closeParentheses(closeParentheses),
+          m_expression(std::move(expression))
+    {
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const
+    {
+        return m_openParentheses;
+    }
+
+    [[nodiscard]] const Type& getNewType() const
+    {
+        return m_newType;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
+    {
+        return m_closeParentheses;
+    }
+
+    [[nodiscard]] const Expression& getExpression() const
+    {
+        return *m_expression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_openParentheses;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
+class MemberAccess final
+{
+    std::unique_ptr<Expression> m_recordExpr;
+    std::uint64_t m_memberIndex;
+    Lexer::CTokenIterator m_memberIdentifier;
+
+public:
+    MemberAccess(std::unique_ptr<Expression> recordExpr, std::uint64_t memberIndex,
+                 Lexer::CTokenIterator memberIdentifier)
+        : m_recordExpr(std::move(recordExpr)), m_memberIndex(memberIndex), m_memberIdentifier(memberIdentifier)
     {
     }
 
@@ -702,26 +822,86 @@ public:
     {
         return m_memberIndex;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_memberIdentifier + 1;
+    }
 };
 
-class BinaryOperator
+class SubscriptOperator final
 {
-    std::shared_ptr<const Expression> m_leftOperand;
+    std::unique_ptr<Expression> m_leftExpr;
+    Lexer::CTokenIterator m_openBracket;
+    std::unique_ptr<Expression> m_rightExpr;
+    Lexer::CTokenIterator m_closeBracket;
+
+public:
+    SubscriptOperator(std::unique_ptr<Expression> leftExpr, Lexer::CTokenIterator openBracket,
+                      std::unique_ptr<Expression> rightExpr, Lexer::CTokenIterator closeBracket)
+        : m_leftExpr(std::move(leftExpr)),
+          m_openBracket(openBracket),
+          m_rightExpr(std::move(rightExpr)),
+          m_closeBracket(closeBracket)
+    {
+    }
+
+    [[nodiscard]] const Expression& getLeftExpression() const
+    {
+        return *m_leftExpr;
+    }
+
+    [[nodiscard]] const Expression& getRightExpression() const
+    {
+        return *m_rightExpr;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenBracket() const
+    {
+        return m_openBracket;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseBracket() const
+    {
+        return m_closeBracket;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_closeBracket + 1;
+    }
+};
+
+class BinaryOperator final
+{
+    std::unique_ptr<Expression> m_leftOperand;
 
 public:
     enum Kind
     {
-        Addition
+        Addition,
+        Subtraction,
+        Multiply,
+        Divide,
+        Modulo
     };
 
 private:
     Kind m_kind;
-    std::shared_ptr<const Expression> m_rightOperand;
+    Lexer::CTokenIterator m_operatorToken;
+    std::unique_ptr<Expression> m_rightOperand;
 
 public:
-    BinaryOperator(std::shared_ptr<const Expression> leftOperand, Kind kind,
-                   std::shared_ptr<const Expression> rightOperand)
-        : m_leftOperand(std::move(leftOperand)), m_kind(kind), m_rightOperand(std::move(rightOperand))
+    BinaryOperator(std::unique_ptr<Expression> leftOperand, Kind kind, Lexer::CTokenIterator operatorToken,
+                   std::unique_ptr<Expression> rightOperand)
+        : m_leftOperand(std::move(leftOperand)),
+          m_kind(kind),
+          m_operatorToken(operatorToken),
+          m_rightOperand(std::move(rightOperand))
     {
     }
 
@@ -735,13 +915,22 @@ public:
         return m_kind;
     }
 
+    [[nodiscard]] Lexer::CTokenIterator getOperatorToken() const
+    {
+        return m_operatorToken;
+    }
+
     [[nodiscard]] const Expression& getRightExpression() const
     {
         return *m_rightOperand;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class UnaryOperator
+class UnaryOperator final
 {
 public:
     enum Kind
@@ -760,10 +949,14 @@ public:
 
 private:
     Kind m_kind;
-    std::shared_ptr<const Expression> m_operand;
+    Lexer::CTokenIterator m_operatorToken;
+    std::unique_ptr<Expression> m_operand;
 
 public:
-    UnaryOperator(Kind kind, std::shared_ptr<const Expression> operand) : m_kind(kind), m_operand(std::move(operand)) {}
+    UnaryOperator(Kind kind, Lexer::CTokenIterator operatorToken, std::unique_ptr<Expression> operand)
+        : m_kind(kind), m_operatorToken(operatorToken), m_operand(std::move(operand))
+    {
+    }
 
     [[nodiscard]] Kind getKind() const
     {
@@ -774,20 +967,32 @@ public:
     {
         return *m_operand;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class SizeofOperator
+class SizeofOperator final
 {
 public:
-    using Variant = std::variant<std::shared_ptr<const Expression>, Type>;
+    struct TypeVariant
+    {
+        Lexer::CTokenIterator openParentheses;
+        Type type;
+        Lexer::CTokenIterator closeParentheses;
+    };
+
+    using Variant = std::variant<std::unique_ptr<Expression>, TypeVariant>;
 
 private:
+    Lexer::CTokenIterator m_sizeOfToken;
     std::optional<std::uint64_t> m_size;
     Variant m_variant;
 
 public:
-    explicit SizeofOperator(std::optional<std::uint64_t> size, Variant variant)
-        : m_size(size), m_variant(std::move(variant))
+    explicit SizeofOperator(Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size, Variant variant)
+        : m_sizeOfToken(sizeOfToken), m_size(size), m_variant(std::move(variant))
     {
     }
 
@@ -800,6 +1005,13 @@ public:
     {
         return m_variant;
     }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_sizeOfToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
 enum class ValueCategory
@@ -808,14 +1020,14 @@ enum class ValueCategory
     Rvalue
 };
 
-class Expression
+class Expression final
 {
     Type m_type;
     ValueCategory m_valueCategory;
 
 public:
     using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, BinaryOperator,
-                                 UnaryOperator, SizeofOperator>;
+                                 Cast, UnaryOperator, SizeofOperator, SubscriptOperator>;
 
 private:
     Variant m_expression;
@@ -827,6 +1039,24 @@ public:
         : m_type(std::move(type)), m_valueCategory(valueCategory), m_expression(std::move(expression))
     {
     }
+
+    Expression(const Expression&) = delete;
+    Expression& operator=(const Expression&) = delete;
+
+    // Currently MSVC deletes the move constructor and assign operator if I mark them noexcept
+    // This is due to llvm::APSInt not being noexcept. Other compilers will believe me that Expression is noexcept
+    // if I mark it as such but Microsoft instead punishes me by deleting it.
+
+    Expression(Expression&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
+    Expression& operator=(Expression&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
 
     [[nodiscard]] const Variant& get() const
     {
@@ -846,6 +1076,20 @@ public:
     [[nodiscard]] bool isUndefined() const
     {
         return std::holds_alternative<std::monostate>(m_expression);
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return cld::match(
+            m_expression, [](std::monostate) -> Lexer::CTokenIterator { CLD_UNREACHABLE; },
+            [](const auto& value) { return value.begin(); });
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return cld::match(
+            m_expression, [](std::monostate) -> Lexer::CTokenIterator { CLD_UNREACHABLE; },
+            [](const auto& value) { return value.end(); });
     }
 };
 
@@ -912,7 +1156,7 @@ class ExpressionStatement final
     std::optional<Expression> m_expression;
 
 public:
-    explicit ExpressionStatement(std::optional<Expression> expression) : m_expression(std::move(expression)) {}
+    explicit ExpressionStatement(std::optional<Expression>&& expression) : m_expression(std::move(expression)) {}
 
     const std::optional<Expression>& getExpression() const
     {
@@ -1187,6 +1431,18 @@ template <>
 struct CustomFormat<U'f', U'u', U'l', U'l'>
 {
     std::string operator()(const Semantics::Type& arg);
+};
+
+template <>
+struct CustomFormat<U't', U'y', U'p', U'e'>
+{
+    std::string operator()(const Semantics::Expression& arg);
+};
+
+template <>
+struct CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>
+{
+    std::string operator()(const Semantics::Expression& arg);
 };
 
 } // namespace cld::diag

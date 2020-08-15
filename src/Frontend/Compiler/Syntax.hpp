@@ -283,15 +283,29 @@ public:
 class PostFixExpressionSubscript final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
+    Lexer::CTokenIterator m_openBracket;
     Expression m_expression;
+    Lexer::CTokenIterator m_closeBracket;
 
 public:
     PostFixExpressionSubscript(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                               std::unique_ptr<PostFixExpression>&& postFixExpression, Expression&& expression);
+                               std::unique_ptr<PostFixExpression>&& postFixExpression,
+                               Lexer::CTokenIterator openBracket, Expression&& expression,
+                               Lexer::CTokenIterator closeBracket);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
     [[nodiscard]] const Expression& getExpression() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenBracket() const
+    {
+        return m_openBracket;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseBracket() const
+    {
+        return m_closeBracket;
+    }
 };
 
 /**
@@ -305,11 +319,11 @@ class PostFixExpressionIncrement final : public Node
 public:
     PostFixExpressionIncrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               const Lexer::CToken& incrementToken);
+                               Lexer::CTokenIterator incrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const Lexer::CToken& getIncrementToken() const;
+    [[nodiscard]] Lexer::CTokenIterator getIncrementToken() const;
 };
 
 /**
@@ -323,11 +337,11 @@ class PostFixExpressionDecrement final : public Node
 public:
     PostFixExpressionDecrement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                std::unique_ptr<PostFixExpression>&& postFixExpression,
-                               const Lexer::CToken& decrementToken);
+                               Lexer::CTokenIterator decrementToken);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
-    [[nodiscard]] const Lexer::CToken& getDecrementToken() const;
+    [[nodiscard]] Lexer::CTokenIterator getDecrementToken() const;
 };
 
 /**
@@ -458,11 +472,11 @@ private:
 
 public:
     UnaryExpressionUnaryOperator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, UnaryOperator anOperator,
-                                 const Lexer::CToken& unaryToken, std::unique_ptr<CastExpression>&& unaryExpression);
+                                 Lexer::CTokenIterator unaryToken, std::unique_ptr<CastExpression>&& unaryExpression);
 
     [[nodiscard]] UnaryOperator getOperator() const;
 
-    [[nodiscard]] const Lexer::CToken& getUnaryToken() const;
+    [[nodiscard]] Lexer::CTokenIterator getUnaryToken() const;
 
     [[nodiscard]] const CastExpression& getCastExpression() const;
 };
@@ -476,12 +490,19 @@ class UnaryExpressionSizeOf final : public Node
 {
     using variant = std::variant<std::unique_ptr<UnaryExpression>, std::unique_ptr<TypeName>>;
 
+    Lexer::CTokenIterator m_sizeOfToken;
     variant m_variant;
 
 public:
-    UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
+    UnaryExpressionSizeOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator sizeOfToken,
+                          variant&& variant);
 
     [[nodiscard]] const variant& getVariant() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getSizeOfToken() const
+    {
+        return m_sizeOfToken;
+    }
 };
 
 /**
@@ -550,14 +571,24 @@ public:
  */
 class CastExpression final : public Node
 {
-    using variant = std::variant<UnaryExpression, std::pair<TypeName, std::unique_ptr<CastExpression>>>;
+public:
+    struct CastVariant
+    {
+        Lexer::CTokenIterator openParentheses;
+        TypeName typeName;
+        Lexer::CTokenIterator closeParentheses;
+        std::unique_ptr<CastExpression> cast;
+    };
 
-    variant m_variant;
+    using Variant = std::variant<UnaryExpression, CastVariant>;
+
+private:
+    Variant m_variant;
 
 public:
-    CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
+    CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Variant&& variant);
 
-    [[nodiscard]] const variant& getVariant() const;
+    [[nodiscard]] const Variant& getVariant() const;
 };
 
 /**
@@ -575,7 +606,7 @@ public:
     {
         BinaryMultiply, ///<<TokenType::Multiplication>
         BinaryDivide,   ///<<TokenType::Division>
-        BinaryRemainder ///<<TokenType::Modulo>
+        BinaryModulo    ///<<TokenType::Modulo>
     };
 
     struct Operand
@@ -1499,7 +1530,7 @@ public:
 class StructOrUnionSpecifier final : public Node
 {
     bool m_isUnion;
-    Lexer::CTokenIterator m_identifierLoc;
+    const Lexer::CToken* m_identifierLoc;
 
 public:
     /**
@@ -1520,11 +1551,11 @@ private:
 
 public:
     StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion,
-                           Lexer::CTokenIterator identifierLoc, std::vector<StructDeclaration>&& structDeclarations);
+                           const Lexer::CToken* identifierLoc, std::vector<StructDeclaration>&& structDeclarations);
 
     [[nodiscard]] bool isUnion() const;
 
-    [[nodiscard]] Lexer::CTokenIterator getIdentifierLoc() const;
+    [[nodiscard]] const Lexer::CToken* getIdentifierLoc() const;
 
     [[nodiscard]] const std::vector<StructDeclaration>& getStructDeclarations() const;
 };
@@ -1537,14 +1568,14 @@ public:
  */
 class EnumDeclaration final : public Node
 {
-    Lexer::CTokenIterator m_name;
+    const Lexer::CToken* m_name;
     std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> m_values;
 
 public:
-    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator name,
+    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, const Lexer::CToken* name,
                     std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values);
 
-    [[nodiscard]] Lexer::CTokenIterator getName() const;
+    [[nodiscard]] const Lexer::CToken* getName() const;
 
     [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&
         getValues() const;
@@ -1555,14 +1586,14 @@ public:
  */
 class EnumSpecifier final : public Node
 {
-    using variant = std::variant<EnumDeclaration, Lexer::CTokenIterator>;
+    using Variant = std::variant<EnumDeclaration, const Lexer::CToken * CLD_NULLABLE>;
 
-    variant m_variant;
+    Variant m_variant;
 
 public:
-    EnumSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, variant&& variant);
+    EnumSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Variant&& variant);
 
-    [[nodiscard]] const variant& getVariant() const;
+    [[nodiscard]] const Variant& getVariant() const;
 };
 
 /**

@@ -8,6 +8,7 @@ namespace cld
 {
 enum class Severity
 {
+    None,
     Error,
     Warning,
     Note
@@ -15,7 +16,7 @@ enum class Severity
 
 class Message final
 {
-    Severity m_severity;
+    Severity m_severity = Severity::None;
     std::string m_text;
 
 public:

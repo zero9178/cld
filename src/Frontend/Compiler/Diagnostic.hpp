@@ -23,6 +23,9 @@ struct InsertAfter;
 template <std::size_t index, std::size_t text>
 struct Annotate;
 
+template <std::size_t index>
+struct AnnotateExpr;
+
 template <std::size_t index, char character = '~', bool continuous = true>
 struct Underline;
 
@@ -109,6 +112,16 @@ struct IsAnnotate : std::false_type
 
 template <std::size_t index, std::size_t text>
 struct IsAnnotate<Annotate<index, text>> : std::true_type
+{
+};
+
+template <class T>
+struct IsAnnotateExpr : std::false_type
+{
+};
+
+template <std::size_t index>
+struct IsAnnotateExpr<AnnotateExpr<index>> : std::true_type
 {
 };
 
@@ -274,6 +287,18 @@ struct Annotate
     }
 };
 
+template <std::size_t index>
+struct AnnotateExpr
+{
+    constexpr static std::array<std::size_t, 1> indices = {index};
+    constexpr static std::size_t affects = index;
+
+    [[nodiscard]] constexpr static std::size_t getIndex() noexcept
+    {
+        return index;
+    }
+};
+
 template <std::size_t N, auto& format, class... Mods>
 class Diagnostic : public detail::DiagnosticBase
 {
@@ -282,6 +307,7 @@ public:
     {
         LocationConstraint = 0b1,
         StringConstraint = 0b10,
+        TypeConstraint = 0b100,
         CustomConstraint = 0b1000,
     };
 
@@ -392,6 +418,16 @@ private:
     {
     };
 
+    template <class T, class = void>
+    struct HasType : std::false_type
+    {
+    };
+
+    template <class T>
+    struct HasType<T, std::void_t<decltype(std::declval<T>().getType())>> : std::true_type
+    {
+    };
+
     template <std::size_t argumentIndex, std::underlying_type_t<Constraint> constraint, class T>
     struct ConstraintCheck
     {
@@ -399,6 +435,7 @@ private:
                       "Argument must be convertible to string");
         static_assert(!(constraint & LocationConstraint) || locationConstraintCheck<T>(),
                       "Argument must denote a location range");
+        static_assert(!(constraint & TypeConstraint) || HasType<T>{}, "Argument must have a type");
     };
 
     template <class T>
@@ -707,6 +744,10 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
                 result[T::indices[0]] |= Constraint::LocationConstraint;
                 result[T::indices[1]] |= Constraint::StringConstraint;
             }
+            else if constexpr (detail::IsAnnotateExpr<T>{})
+            {
+                result[T::affects] |= Constraint::LocationConstraint | Constraint::TypeConstraint;
+            }
             else if constexpr (detail::IsInsertAfter<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint;
@@ -750,6 +791,12 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface& 
                 result[IntegerTy::value].inArgText =
                     ::cld::diag::StringConverter<ArgTy>::inArg(std::get<IntegerTy::value>(args), sourceInterface);
             }
+            if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::TypeConstraint))
+            {
+                using Type = std::decay_t<decltype(std::declval<ArgTy>().getType())>;
+                result[IntegerTy::value].inArgText = ::cld::diag::StringConverter<Type>::inArg(
+                    std::get<IntegerTy::value>(args).getType(), sourceInterface);
+            }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
             {
                 auto apply = [&result, &args](auto... values) {
@@ -781,6 +828,10 @@ constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<
             else if constexpr (detail::IsAnnotate<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::Annotate{T::getIndex(), T::getText()}};
+            }
+            else if constexpr (detail::IsAnnotateExpr<T>{})
+            {
+                result[i] = Modifiers{DiagnosticBase::Annotate{T::getIndex(), T::getIndex()}};
             }
             else if constexpr (detail::IsInsertAfter<T>{})
             {
