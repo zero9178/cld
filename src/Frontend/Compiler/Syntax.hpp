@@ -915,7 +915,7 @@ public:
     /**
      * <AssignmentExpression::AssignOperator>
      */
-    enum class AssignOperator
+    enum AssignOperator
     {
         NoOperator,       ///<<TokenType::Assignment>
         PlusAssign,       ///<<TokenType::PlusAssign>
@@ -930,18 +930,25 @@ public:
         BitXorAssign      ///<<TokenType::BitXorAssign>
     };
 
+    struct Operand
+    {
+        AssignOperator assignOperator;
+        Lexer::CTokenIterator operatorToken;
+        ConditionalExpression conditionalExpression;
+    };
+
 private:
     ConditionalExpression m_conditionalExpression;
-    std::vector<std::pair<AssignOperator, ConditionalExpression>> m_assignments;
+    std::vector<Operand> m_optionalConditionalExpression;
 
 public:
     AssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                          ConditionalExpression&& conditionalExpression,
-                         std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments);
+                         std::vector<Operand>&& optionalConditionalExpressions);
 
     [[nodiscard]] const ConditionalExpression& getConditionalExpression() const;
 
-    [[nodiscard]] const std::vector<std::pair<AssignOperator, ConditionalExpression>>& getAssignments() const;
+    [[nodiscard]] const std::vector<Operand>& getOptionalConditionalExpressions() const;
 };
 
 /**

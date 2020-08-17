@@ -1826,22 +1826,22 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                       " int i;\n"
                       " (i++)++;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'++'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'++'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " int i;\n"
                       " (i--)--;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'--'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'--'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " const int i;\n"
                       " i++;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'++'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'++'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " const int i;\n"
                       " i--;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'--'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'--'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " struct r* i;\n"
                       " i++;\n"
@@ -1905,22 +1905,22 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                       " int i;\n"
                       " ++(++i);\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'++'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'++'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " int i;\n"
                       " --(--i);\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_BE_AN_LVALUE, "'--'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'--'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " const int i;\n"
                       " ++i;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'++'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'++'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " const int i;\n"
                       " --i;\n"
                       "}",
-                      ProducesError(OPERAND_OF_N_MUST_NOT_BE_CONST, "'--'"));
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'--'"));
         SEMA_PRODUCES("int foo(void) {\n"
                       " struct r* i;\n"
                       " ++i;\n"
@@ -2339,7 +2339,7 @@ TEST_CASE("Semantics additive expression", "[semantics]")
         SEMA_PRODUCES("void foo(int* i) {\n"
                       " i - 5.f;\n"
                       "}",
-                      ProducesError(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE, "'-'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE, "'-'"));
         SEMA_PRODUCES("void foo(struct r* i) {\n"
                       " i - 5;\n"
                       "}",
@@ -2423,15 +2423,15 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 < r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'<'"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 0 < r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'<'"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r < 0;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'<'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'<'"));
         SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
                       " r < (int*)5;\n"
                       "}",
@@ -2461,15 +2461,15 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 > r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'>'"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 0 > r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'>'"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r > 0;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'>'"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'>'"));
         SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
                       " r > (int*)5;\n"
                       "}",
@@ -2499,15 +2499,15 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 <= r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'<='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 0 <= r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'<='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r <= 0;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'<='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'<='"));
         SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
                       " r <= (int*)5;\n"
                       "}",
@@ -2537,15 +2537,15 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 >= r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'>='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 0 >= r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'>='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r >= 0;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'>='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'>='"));
         SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
                       " r >= (int*)5;\n"
                       "}",
@@ -2579,15 +2579,15 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 == r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'=='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'=='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 5 == r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'=='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'=='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r == 5;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'=='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'=='"));
         SEMA_PRODUCES("void foo(int *r,float *f) {\n"
                       " f == r;\n"
                       "}",
@@ -2625,15 +2625,15 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " 0 != r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'!='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'!='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " 5 != r;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'!='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'!='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
                       " r != 5;\n"
                       "}",
-                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'!='"));
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'!='"));
         SEMA_PRODUCES("void foo(int *r,float *f) {\n"
                       " f != r;\n"
                       "}",
@@ -2834,4 +2834,117 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
                   " r ? *i : *f;\n"
                   "}",
                   ProducesError(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES));
+}
+
+TEST_CASE("Semantics assignment expression", "[semantics]")
+{
+    SECTION("Simple")
+    {
+        auto& exp = generateExpression("void foo(volatile int i) {\n"
+                                       "i = 5;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(std::holds_alternative<Assignment>(exp.get()));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "5 = 3;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'='"));
+        SEMA_PRODUCES("void foo(const int i) {\n"
+                      "i = 3;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'='"));
+        SEMA_PRODUCES("struct R {\n"
+                      "const int i;\n"
+                      "};\n"
+                      "\n"
+                      "void foo(struct R i,struct R f) {\n"
+                      "i = f;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'='"));
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      "i = (int*)3;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'='"));
+        SEMA_PRODUCES("void foo(_Bool i) {\n"
+                      "i = (int*)3;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("struct R {\n"
+                      "int i;\n"
+                      "};\n"
+                      "void foo(_Bool i) {\n"
+                      "struct R r;\n"
+                      "i = r;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'='"));
+        SEMA_PRODUCES("struct R;\n"
+                      "void foo(struct R* i,struct R* f) {\n"
+                      "*i = *f;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N, "'struct R'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "struct { int i; } r,f;\n"
+                      "r = f;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "struct { int i; } r;\n"
+                      "struct { int i; } f;\n"
+                      "r = f;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = 3;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'='"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = (void*)3;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void* i) {\n"
+                      "i = (int*)3;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = (const void*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = (volatile void*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(volatile int* i) {\n"
+                      "i = (const void*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(const int* i) {\n"
+                      "i = (volatile void*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(void* i) {\n"
+                      "i = foo;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER));
+        SEMA_PRODUCES("void foo(void (*i)(void)) {\n"
+                      "i = (void*)5;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = (const int*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = (volatile int*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(volatile int* i) {\n"
+                      "i = (const int*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(const int* i) {\n"
+                      "i = (volatile int*)3;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+    }
 }

@@ -183,6 +183,10 @@ class SemanticAnalysis final
 
     bool isBitfieldAccess(const Expression& expression) const;
 
+    bool isModifiableLValue(const Expression& expression) const;
+
+    bool isConst(const Type& type) const;
+
     std::optional<std::pair<Type, std::uint64_t>> checkMemberAccess(const Type& recordType,
                                                                     const Syntax::PostFixExpression& postFixExpr,
                                                                     const Lexer::CToken& identifier);

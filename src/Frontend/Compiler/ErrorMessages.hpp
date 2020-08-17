@@ -264,9 +264,8 @@ CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 f
 CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR,
              "Expected pointer to struct or union type on the left side of '->' operator", AnnotateExpr<0>);
 
-CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_LVALUE, "Operand of %0 must be an lvalue", PointAt<0>, Underline<1>);
-
-CREATE_ERROR(OPERAND_OF_N_MUST_NOT_BE_CONST, "Operand of %0 must not be const", PointAt<0>, AnnotateExpr<1>);
+CREATE_ERROR(OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST,
+             "Operand of operator %0 must not be a temporary or const", PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Operand of %0 must be an arithmetic or pointer types",
              PointAt<0>, AnnotateExpr<1>);
@@ -302,6 +301,18 @@ CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "Left operand o
 CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
              "Left operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
 
+CREATE_ERROR(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE,
+             "Expected left operand of operator %0 to be an arithmetic type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE,
+             "Expected left operand of operator %0 to be an integer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Expected left operand of operator %0 to be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST,
+             "Left operand of operator %0 must not be a temporary or const", PointAt<0>, AnnotateExpr<1>);
+
 CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE,
              "Right operand of operator %0 must be an arithmetic type", PointAt<0>, AnnotateExpr<1>);
 
@@ -313,6 +324,18 @@ CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
 
 CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "Right operand of operator %0 must be a pointer type",
              PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE,
+             "Expected right operand of operator %0 to be an arithmetic type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE,
+             "Expected right operand of operator %0 to be an integer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Expected right operand of operator %0 to be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE,
+             "Expected right operand of operator %0 to be a pointer type", PointAt<0>, AnnotateExpr<1>);
 
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
              "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
@@ -348,6 +371,18 @@ CREATE_ERROR(POINTER_TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES
 CREATE_ERROR(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES,
              "Types in conditional expression must be of compatible types", PointAt<0>, AnnotateExpr<1>, PointAt<2>,
              AnnotateExpr<3>);
+
+CREATE_ERROR(CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N, "Cannot assign to incomplete type %fullType0", AnnotateExpr<0>,
+             PointAt<1>);
+
+CREATE_ERROR(CANNOT_ASSIGN_INCOMPATIBLE_TYPES, "Cannot assign incompatible types", AnnotateExpr<0>, PointAt<1>,
+             AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER, "Cannot assign void pointer to function pointer",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER, "Cannot assign function pointer to void pointer",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 

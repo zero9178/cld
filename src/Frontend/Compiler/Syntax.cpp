@@ -1198,20 +1198,22 @@ const std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&
 {
     return m_directAbstractDeclarator;
 }
-cld::Syntax::AssignmentExpression::AssignmentExpression(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::ConditionalExpression&& conditionalExpression,
-    std::vector<std::pair<AssignOperator, ConditionalExpression>>&& assignments)
-    : Node(begin, end), m_conditionalExpression(std::move(conditionalExpression)), m_assignments(std::move(assignments))
+cld::Syntax::AssignmentExpression::AssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                        cld::Syntax::ConditionalExpression&& conditionalExpression,
+                                                        std::vector<Operand>&& optionalConditionalExpressions)
+    : Node(begin, end),
+      m_conditionalExpression(std::move(conditionalExpression)),
+      m_optionalConditionalExpression(std::move(optionalConditionalExpressions))
 {
 }
 const cld::Syntax::ConditionalExpression& cld::Syntax::AssignmentExpression::getConditionalExpression() const
 {
     return m_conditionalExpression;
 }
-const std::vector<std::pair<cld::Syntax::AssignmentExpression::AssignOperator, cld::Syntax::ConditionalExpression>>&
-    cld::Syntax::AssignmentExpression::getAssignments() const
+const std::vector<cld::Syntax::AssignmentExpression::Operand>&
+    cld::Syntax::AssignmentExpression::getOptionalConditionalExpressions() const
 {
-    return m_assignments;
+    return m_optionalConditionalExpression;
 }
 
 cld::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,

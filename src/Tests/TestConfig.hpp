@@ -94,6 +94,7 @@ template <class Diagnostic, class... Args>
 std::string args(const Diagnostic&, Args&&... args)
 {
     std::array<std::string, sizeof...(Args)> strArgs = {{cld::to_string(args)...}};
+    static_assert(cld::detail::getBiggestPercentArg(Diagnostic::getFormat()) == sizeof...(Args));
     std::string result;
     std::u32string_view stringView = Diagnostic::getFormat();
     for (auto& iter : ctre::range<cld::detail::DIAG_ARG_PATTERN>(stringView))
@@ -166,7 +167,7 @@ struct ProducesNoErrors : Catch::Matchers::StdString::ContainsMatcher
 
     std::string describe() const override
     {
-        return "Produces no errors";
+        return "produces no errors";
     }
 };
 
@@ -195,7 +196,7 @@ struct ProducesNoNotes : Catch::Matchers::StdString::ContainsMatcher
 
     std::string describe() const override
     {
-        return "Produces no notes";
+        return "produces no notes";
     }
 };
 
@@ -227,7 +228,7 @@ struct ProducesNoWarnings : Catch::Matchers::StdString::ContainsMatcher
 
     std::string describe() const override
     {
-        return "Produces no warnings";
+        return "produces no warnings";
     }
 };
 

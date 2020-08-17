@@ -290,7 +290,7 @@ class FunctionType final
     bool m_lastIsVararg;
     bool m_isKandR;
 
-    FunctionType(std::shared_ptr<Type>&& returnType, std::vector<std::pair<Type, std::string_view>> arguments,
+    FunctionType(std::shared_ptr<const Type>&& returnType, std::vector<std::pair<Type, std::string_view>> arguments,
                  bool lastIsVararg, bool isKandR)
         : m_returnType(std::move(returnType)),
           m_arguments(std::move(arguments)),
@@ -1078,6 +1078,66 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
+class Assignment final
+{
+    std::unique_ptr<Expression> m_leftOperand;
+
+public:
+    enum Kind
+    {
+        Simple,
+        Plus,
+        Minus,
+        Divide,
+        Multiply,
+        Modulo,
+        LeftShift,
+        RightShift,
+        BitAnd,
+        BitOr,
+        BitXor
+    };
+
+private:
+    Kind m_kind;
+    Lexer::CTokenIterator m_operatorToken;
+    std::unique_ptr<Expression> m_rightOperand;
+
+public:
+    Assignment(std::unique_ptr<Expression> leftOperand, Kind kind, Lexer::CTokenIterator operatorToken,
+               std::unique_ptr<Expression> rightOperand)
+        : m_leftOperand(std::move(leftOperand)),
+          m_kind(kind),
+          m_operatorToken(operatorToken),
+          m_rightOperand(std::move(rightOperand))
+    {
+    }
+
+    [[nodiscard]] const Expression& getLeftExpression() const
+    {
+        return *m_leftOperand;
+    }
+
+    [[nodiscard]] Kind getKind() const
+    {
+        return m_kind;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOperatorToken() const
+    {
+        return m_operatorToken;
+    }
+
+    [[nodiscard]] const Expression& getRightExpression() const
+    {
+        return *m_rightOperand;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
 enum class ValueCategory
 {
     Lvalue,
@@ -1090,9 +1150,9 @@ class Expression final
     ValueCategory m_valueCategory;
 
 public:
-    using Variant =
-        std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
-                     MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional>;
+    using Variant = std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead,
+                                 Conversion, MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator,
+                                 SubscriptOperator, Conditional, Assignment>;
 
 private:
     Variant m_expression;
@@ -1481,6 +1541,8 @@ bool isArithmetic(const Type& type);
 bool isScalar(const Type& type);
 
 bool isRecord(const Type& type);
+
+bool isBool(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag

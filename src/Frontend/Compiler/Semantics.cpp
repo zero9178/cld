@@ -340,7 +340,7 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&&
 {
     return cld::Semantics::Type(
         false, false,
-        FunctionType(std::make_shared<Type>(std::move(returnType)), std::move(arguments), lastIsVararg, isKandR));
+        FunctionType(std::make_shared<const Type>(std::move(returnType)), std::move(arguments), lastIsVararg, isKandR));
 }
 
 bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
@@ -473,7 +473,7 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
     {
         return false;
     }
-    return primitive->getBitCount() == 0;
+    return primitive->getKind() == PrimitiveType::Kind::Void;
 }
 
 bool cld::Semantics::isArray(const cld::Semantics::Type& type)
@@ -503,6 +503,16 @@ bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
     return std::holds_alternative<StructType>(type.get()) || std::holds_alternative<UnionType>(type.get())
            || std::holds_alternative<AnonymousStructType>(type.get())
            || std::holds_alternative<AnonymousUnionType>(type.get());
+}
+
+bool cld::Semantics::isBool(const cld::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.get());
+    if (!primitive)
+    {
+        return false;
+    }
+    return primitive->getKind() == PrimitiveType::Kind::Bool;
 }
 
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
@@ -937,6 +947,16 @@ cld::Lexer::CTokenIterator cld::Semantics::BinaryOperator::end() const
     return m_rightOperand->end();
 }
 
+cld::Lexer::CTokenIterator cld::Semantics::Assignment::begin() const
+{
+    return m_leftOperand->begin();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::Assignment::end() const
+{
+    return m_rightOperand->end();
+}
+
 cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::begin() const
 {
     switch (m_kind)
@@ -976,7 +996,7 @@ cld::Lexer::CTokenIterator cld::Semantics::Conditional::begin() const
 
 cld::Lexer::CTokenIterator cld::Semantics::Conditional::end() const
 {
-    return m_boolExpression->end();
+    return m_falseExpression->end();
 }
 
 cld::Semantics::Expression::Expression(const cld::Syntax::Node& node) : Expression(node.begin(), node.end()) {}

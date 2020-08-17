@@ -43,36 +43,43 @@ std::optional<cld::Syntax::AssignmentExpression>
     const auto* start = begin;
     auto result = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
 
-    std::vector<std::pair<AssignmentExpression::AssignOperator, ConditionalExpression>> list;
+    std::vector<AssignmentExpression::Operand> list;
     while (begin != end && isAssignment(begin->getTokenType()))
     {
-        auto token = begin->getTokenType();
+        const auto* token = begin;
         begin++;
         auto conditional = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
         if (conditional)
         {
-            list.emplace_back(
-                [token]() -> AssignmentExpression::AssignOperator {
-                    switch (token)
-                    {
-                        case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
-                        case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
-                        case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
-                        case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
-                        case Lexer::TokenType::MultiplyAssign:
-                            return AssignmentExpression::AssignOperator::MultiplyAssign;
-                        case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
-                        case Lexer::TokenType::ShiftLeftAssign:
-                            return AssignmentExpression::AssignOperator::LeftShiftAssign;
-                        case Lexer::TokenType::ShiftRightAssign:
-                            return AssignmentExpression::AssignOperator::RightShiftAssign;
-                        case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
-                        case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
-                        case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
-                        default: CLD_UNREACHABLE;
-                    }
-                }(),
-                std::move(*conditional));
+            list.push_back({[token]() -> AssignmentExpression::AssignOperator {
+                                switch (token->getTokenType())
+                                {
+                                    case Lexer::TokenType::Assignment:
+                                        return AssignmentExpression::AssignOperator::NoOperator;
+                                    case Lexer::TokenType::PlusAssign:
+                                        return AssignmentExpression::AssignOperator::PlusAssign;
+                                    case Lexer::TokenType::MinusAssign:
+                                        return AssignmentExpression::AssignOperator::MinusAssign;
+                                    case Lexer::TokenType::DivideAssign:
+                                        return AssignmentExpression::AssignOperator::DivideAssign;
+                                    case Lexer::TokenType::MultiplyAssign:
+                                        return AssignmentExpression::AssignOperator::MultiplyAssign;
+                                    case Lexer::TokenType::ModuloAssign:
+                                        return AssignmentExpression::AssignOperator::ModuloAssign;
+                                    case Lexer::TokenType::ShiftLeftAssign:
+                                        return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                                    case Lexer::TokenType::ShiftRightAssign:
+                                        return AssignmentExpression::AssignOperator::RightShiftAssign;
+                                    case Lexer::TokenType::BitAndAssign:
+                                        return AssignmentExpression::AssignOperator::BitAndAssign;
+                                    case Lexer::TokenType::BitOrAssign:
+                                        return AssignmentExpression::AssignOperator::BitOrAssign;
+                                    case Lexer::TokenType::BitXorAssign:
+                                        return AssignmentExpression::AssignOperator::BitXorAssign;
+                                    default: CLD_UNREACHABLE;
+                                }
+                            }(),
+                            token, std::move(*conditional)});
         }
     }
 

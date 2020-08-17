@@ -872,12 +872,13 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::AssignmentExpression& node)
 {
-    for (auto& [op, cond] : node.getAssignments())
+    for (auto& [op, token, cond] : node.getOptionalConditionalExpressions())
     {
-        log(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(*(cond.begin() - 1), m_sourceInterface,
-                                                                         *(cond.begin() - 1)));
+        (void)op;
+        (void)cond;
+        log(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(*token, m_sourceInterface, *token));
     }
-    if (!node.getAssignments().empty())
+    if (!node.getOptionalConditionalExpressions().empty())
     {
         return {};
     }
