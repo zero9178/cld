@@ -390,7 +390,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                                                                                   result));
                 errors = true;
             }
-            else if (isVoid(result))
+            else if (isVoid(removeQualifiers(result)))
             {
                 log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
                 errors = true;
@@ -710,14 +710,14 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
             [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
                 return declaratorsToType(iter.declarationSpecifiers, ptr.get());
             });
-        if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
-            && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
+        if (isVoid(paramType) && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
+            && !cld::get<std::unique_ptr<cld::Syntax::AbstractDeclarator>>(iter.declarator)
             && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
         {
             type = FunctionType::create(std::move(type), {}, false, false);
             return;
         }
-        if (isVoid(paramType))
+        if (isVoid(removeQualifiers(paramType)))
         {
             log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER.args(
                 iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
@@ -1939,6 +1939,10 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
                                            cld::get<StructType>(lhs.get()).getScopeOrId());
         auto* rhsDef = getStructDefinition(cld::get<StructType>(rhs.get()).getName(),
                                            cld::get<StructType>(rhs.get()).getScopeOrId());
+        if (!lhsDef && !rhsDef)
+        {
+            return cld::get<StructType>(lhs.get()).getName() == cld::get<StructType>(rhs.get()).getName();
+        }
         return lhsDef == rhsDef;
     }
     if (std::holds_alternative<UnionType>(lhs.get()) && std::holds_alternative<UnionType>(rhs.get()))
@@ -1947,6 +1951,10 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             getUnionDefinition(cld::get<UnionType>(lhs.get()).getName(), cld::get<UnionType>(lhs.get()).getScopeOrId());
         auto* rhsDef =
             getUnionDefinition(cld::get<UnionType>(rhs.get()).getName(), cld::get<UnionType>(rhs.get()).getScopeOrId());
+        if (!lhsDef && !rhsDef)
+        {
+            return cld::get<UnionType>(lhs.get()).getName() == cld::get<UnionType>(rhs.get()).getName();
+        }
         return lhsDef == rhsDef;
     }
     if (std::holds_alternative<EnumType>(lhs.get()) && std::holds_alternative<EnumType>(rhs.get()))
@@ -1955,6 +1963,10 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             getEnumDefinition(cld::get<EnumType>(lhs.get()).getName(), cld::get<EnumType>(lhs.get()).getScopeOrId());
         auto* rhsDef =
             getEnumDefinition(cld::get<EnumType>(rhs.get()).getName(), cld::get<EnumType>(rhs.get()).getScopeOrId());
+        if (!lhsDef && !rhsDef)
+        {
+            return cld::get<EnumType>(lhs.get()).getName() == cld::get<EnumType>(rhs.get()).getName();
+        }
         return lhsDef == rhsDef;
     }
     return lhs == rhs;

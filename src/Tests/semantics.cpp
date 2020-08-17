@@ -2762,3 +2762,76 @@ TEST_CASE("Semantics logic operators", "[semantics]")
                       ProducesNoErrors());
     }
 }
+
+TEST_CASE("Semantics conditional expression", "[semantics]")
+{
+    SECTION("Arithmetic")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       "1 ? 5.0 : 3uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+    }
+    SECTION("Void")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       "1 ? *(void const*)5 : *(void*)3uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createVoid(false, false));
+    }
+    SECTION("Pointer")
+    {
+        SECTION("Void")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "1 ? (void const*)5 : (float*)3uLL;\n"
+                                           "}");
+            CHECK(exp.getType() == PointerType::create(false, false, false, PrimitiveType::createVoid(true, false)));
+        }
+        SECTION("Merging void")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "1 ? (void const*)5 : (void volatile*)3uLL;\n"
+                                           "}");
+            CHECK(exp.getType() == PointerType::create(false, false, false, PrimitiveType::createVoid(true, true)));
+        }
+        SECTION("Composite type")
+        {
+            auto& exp = generateExpression("void foo(void (*f)(float[]),void (*r)(float[5])) {\n"
+                                           "1 ? f : r;\n"
+                                           "}");
+            CHECK(exp.getType()
+                  == PointerType::create(
+                      false, false, false,
+                      FunctionType::create(
+                          PrimitiveType::createVoid(false, false),
+                          {{ArrayType::create(false, false, false, false, PrimitiveType::createFloat(false, false), 5),
+                            ""}},
+                          false, false)));
+        }
+    }
+    SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
+                  " r ? 5 : 3;\n"
+                  "}",
+                  ProducesError(FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? 5 : (int*)3;\n"
+                  "}",
+                  ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? *(void*)5 : 3;\n"
+                  "}",
+                  ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_VOID));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? (int*)5 : 3;\n"
+                  "}",
+                  ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? (int*)5 : (float*)3;\n"
+                  "}",
+                  ProducesError(POINTER_TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES));
+    SEMA_PRODUCES("void foo(_Bool r,struct R* i,struct F* f) {\n"
+                  " r ? *i : *f;\n"
+                  "}",
+                  ProducesError(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES));
+}

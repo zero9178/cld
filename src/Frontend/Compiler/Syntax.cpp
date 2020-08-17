@@ -511,11 +511,13 @@ const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::LogicalAndE
 
 cld::Syntax::ConditionalExpression::ConditionalExpression(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, LogicalOrExpression&& logicalOrExpression,
-    std::unique_ptr<Expression>&& optionalExpression,
-    std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression)
+    const cld::Lexer::CToken* questionMark, std::unique_ptr<Expression>&& optionalExpression,
+    const cld::Lexer::CToken* colon, std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression)
     : Node(begin, end),
       m_logicalOrExpression(std::make_unique<LogicalOrExpression>(std::move(logicalOrExpression))),
+      m_optionalQuestionMark(questionMark),
       m_optionalExpression(std::move(optionalExpression)),
+      m_optionalColon(colon),
       m_optionalConditionalExpression(std::move(optionalConditionalExpression))
 {
 }
@@ -525,9 +527,19 @@ const cld::Syntax::LogicalOrExpression& cld::Syntax::ConditionalExpression::getL
     return *m_logicalOrExpression;
 }
 
+const cld::Lexer::CToken* cld::Syntax::ConditionalExpression::getOptionalQuestionMark() const
+{
+    return m_optionalQuestionMark;
+}
+
 const cld::Syntax::Expression* cld::Syntax::ConditionalExpression::getOptionalExpression() const
 {
     return m_optionalExpression.get();
+}
+
+const cld::Lexer::CToken* cld::Syntax::ConditionalExpression::getOptionalColon() const
+{
+    return m_optionalColon;
 }
 
 const cld::Syntax::ConditionalExpression* cld::Syntax::ConditionalExpression::getOptionalConditionalExpression() const

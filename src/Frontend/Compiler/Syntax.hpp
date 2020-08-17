@@ -874,20 +874,28 @@ public:
 class ConditionalExpression final : public Node
 {
     std::unique_ptr<LogicalOrExpression> m_logicalOrExpression;
+    const Lexer::CToken* m_optionalQuestionMark;
     std::unique_ptr<Expression> m_optionalExpression;
+    const Lexer::CToken* m_optionalColon;
     std::unique_ptr<ConditionalExpression> m_optionalConditionalExpression;
 
 public:
     ConditionalExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                           LogicalOrExpression&& logicalOrExpression,
+                          const Lexer::CToken* optionalQuestionMark = nullptr,
                           std::unique_ptr<Expression>&& optionalExpression = nullptr,
+                          const Lexer::CToken* optionalColon = nullptr,
                           std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression = nullptr);
 
     [[nodiscard]] const LogicalOrExpression& getLogicalOrExpression() const;
 
-    [[nodiscard]] const Expression* getOptionalExpression() const;
+    [[nodiscard]] const Lexer::CToken* CLD_NULLABLE getOptionalQuestionMark() const;
 
-    [[nodiscard]] const ConditionalExpression* getOptionalConditionalExpression() const;
+    [[nodiscard]] const ConditionalExpression* CLD_NULLABLE getOptionalConditionalExpression() const;
+
+    [[nodiscard]] const Lexer::CToken* CLD_NULLABLE getOptionalColon() const;
+
+    [[nodiscard]] const Expression* CLD_NULLABLE getOptionalExpression() const;
 };
 
 /**

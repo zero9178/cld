@@ -528,6 +528,7 @@ std::optional<cld::Syntax::ConditionalExpression>
         begin++;
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
+        const auto* colon = begin;
         if (!expect(Lexer::TokenType::Colon, begin, end, context, [&] {
                 return Notes::TO_MATCH_N_HERE.args(*questionMarkpos, context.getSourceInterface(), *questionMarkpos);
             }))
@@ -539,10 +540,10 @@ std::optional<cld::Syntax::ConditionalExpression>
         {
             return {};
         }
-        return ConditionalExpression(start, begin, std::move(*logicalOrExpression), std::move(optionalExpression),
-                                     optionalConditional ?
-                                         std::make_unique<ConditionalExpression>(std::move(*optionalConditional)) :
-                                         std::unique_ptr<ConditionalExpression>{});
+        return ConditionalExpression(
+            start, begin, std::move(*logicalOrExpression), questionMarkpos, std::move(optionalExpression), colon,
+            optionalConditional ? std::make_unique<ConditionalExpression>(std::move(*optionalConditional)) :
+                                  std::unique_ptr<ConditionalExpression>{});
     }
     if (!logicalOrExpression)
     {

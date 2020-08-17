@@ -2,26 +2,20 @@
 
 #include "ErrorMessages.hpp"
 
-namespace
-{
-cld::Semantics::Type removeQualifiers(cld::Semantics::Type type)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::removeQualifiers(Type type)
 {
     if (type.isConst() || type.isVolatile()
-        || (std::holds_alternative<cld::Semantics::PointerType>(type.get())
-            && cld::get<cld::Semantics::PointerType>(type.get()).isRestricted()))
+        || (std::holds_alternative<PointerType>(type.get()) && cld::get<PointerType>(type.get()).isRestricted()))
     {
-        if (!std::holds_alternative<cld::Semantics::PointerType>(type.get())
-            || !cld::get<cld::Semantics::PointerType>(type.get()).isRestricted())
+        if (!std::holds_alternative<PointerType>(type.get()) || !cld::get<PointerType>(type.get()).isRestricted())
         {
-            return cld::Semantics::Type(false, false, std::move(type).get());
+            return Type(false, false, std::move(type).get());
         }
-        return cld::Semantics::PointerType::create(false, false, false,
-                                                   cld::get<cld::Semantics::PointerType>(type.get()).getElementType());
+        return PointerType::create(false, false, false,
+                                   cld::get<cld::Semantics::PointerType>(type.get()).getElementType());
     }
     return type;
 }
-
-} // namespace
 
 llvm::ArrayRef<cld::Semantics::Field>
     cld::Semantics::SemanticAnalysis::getFields(const cld::Semantics::Type& recordType) const
@@ -346,10 +340,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return {};
     }
-    if (!std::holds_alternative<StructType>(structOrUnion.getType().get())
-        && !std::holds_alternative<UnionType>(structOrUnion.getType().get())
-        && !std::holds_alternative<AnonymousStructType>(structOrUnion.getType().get())
-        && !std::holds_alternative<AnonymousUnionType>(structOrUnion.getType().get()))
+    if (!isRecord(structOrUnion.getType()))
     {
         log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR.args(
             structOrUnion, m_sourceInterface, structOrUnion));
@@ -385,10 +376,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return {};
     }
     auto& structOrUnion = cld::get<PointerType>(structOrUnionPtr.getType().get()).getElementType();
-    if (!std::holds_alternative<StructType>(structOrUnion.get())
-        && !std::holds_alternative<UnionType>(structOrUnion.get())
-        && !std::holds_alternative<AnonymousStructType>(structOrUnion.get())
-        && !std::holds_alternative<AnonymousUnionType>(structOrUnion.get()))
+    if (!isRecord(structOrUnion))
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
             structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
@@ -770,10 +758,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     for (auto& [kind, token, rhs] : node.getOptionalTerms())
     {
         auto rhsValue = visit(rhs);
-        if (std::holds_alternative<PrimitiveType>(value.getType().get())
-            && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+        if (isArithmetic(value.getType()) && isArithmetic(rhsValue.getType()))
         {
             arithmeticConversion(value, rhsValue);
+        }
+        else
+        {
+            value = lvalueConversion(std::move(value));
+            rhsValue = lvalueConversion(std::move(rhsValue));
         }
         bool errors = false;
         if (!value.isUndefined() && !isScalar(value.getType()))
@@ -973,12 +965,17 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             arithmeticConversion(value, rhsValue);
         }
+        else
+        {
+            value = lvalueConversion(std::move(value));
+            rhsValue = lvalueConversion(std::move(rhsValue));
+        }
         if (!value.isUndefined() && !isScalar(value.getType()))
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 value, m_sourceInterface, *token, value));
         }
-        else if (!value.isUndefined() && isArithmetic(value.getType()))
+        else if (isArithmetic(value.getType()))
         {
             if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
             {
@@ -1061,12 +1058,17 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             arithmeticConversion(value, rhsValue);
         }
+        else
+        {
+            value = lvalueConversion(std::move(value));
+            rhsValue = lvalueConversion(std::move(rhsValue));
+        }
         if (!value.isUndefined() && !isScalar(value.getType()))
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 value, m_sourceInterface, *token, value));
         }
-        else if (!value.isUndefined() && isArithmetic(value.getType()))
+        else if (isArithmetic(value.getType()))
         {
             if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
             {
@@ -1226,10 +1228,101 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::ConditionalExpression& node)
 {
     auto condition = visit(node.getLogicalOrExpression());
-    if (!node.getOptionalConditionalExpression() && !node.getOptionalExpression())
+    if (!node.getOptionalConditionalExpression() && !node.getOptionalExpression() && !node.getOptionalQuestionMark()
+        && !node.getOptionalColon())
     {
         return condition;
     }
+    if (!condition.isUndefined() && !isScalar(condition.getType()))
+    {
+        log(Errors::Semantics::FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+            condition, m_sourceInterface, condition, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
+    }
+    auto second = visit(*node.getOptionalExpression());
+    auto third = visit(*node.getOptionalConditionalExpression());
+    if (isArithmetic(second.getType()) && isArithmetic(third.getType()))
+    {
+        arithmeticConversion(second, third);
+    }
+    else
+    {
+        second = lvalueConversion(std::move(second));
+        third = lvalueConversion(std::move(third));
+    }
+    Type resultType;
+    // TODO: Null pointer constant
+    if (isArithmetic(second.getType()))
+    {
+        if (!third.isUndefined() && !isArithmetic(third.getType()))
+        {
+            log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE.args(
+                third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
+        }
+        resultType = second.getType();
+    }
+    else if (isVoid(second.getType()))
+    {
+        if (!third.isUndefined() && !isVoid(third.getType()))
+        {
+            log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_VOID.args(
+                third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
+        }
+        resultType = second.getType();
+    }
+    else if (std::holds_alternative<PointerType>(second.getType().get()))
+    {
+        if (!third.isUndefined() && !std::holds_alternative<PointerType>(third.getType().get()))
+        {
+            log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE.args(
+                third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
+        }
+        else if (!third.isUndefined())
+        {
+            auto& secondElementType = cld::get<PointerType>(second.getType().get()).getElementType();
+            auto& thirdElementType = cld::get<PointerType>(third.getType().get()).getElementType();
+            auto secondWithoutQualifier = removeQualifiers(secondElementType);
+            auto thirdWithoutQualifier = removeQualifiers(thirdElementType);
+            if (!isVoid(secondWithoutQualifier) && !isVoid(thirdWithoutQualifier)
+                && !typesAreCompatible(secondWithoutQualifier, thirdWithoutQualifier))
+            {
+                log(Errors::Semantics::POINTER_TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES.args(
+                    *node.getOptionalQuestionMark(), m_sourceInterface, *node.getOptionalQuestionMark(), second,
+                    *node.getOptionalColon(), third));
+            }
+            else if (isVoid(secondWithoutQualifier) || isVoid(thirdWithoutQualifier))
+            {
+                resultType = PointerType::create(
+                    false, false, false,
+                    PrimitiveType::createVoid(secondElementType.isConst() || thirdElementType.isConst(),
+                                              secondElementType.isVolatile() || thirdElementType.isVolatile()));
+            }
+            else
+            {
+                auto composite = compositeType(secondWithoutQualifier, thirdWithoutQualifier);
+                resultType = PointerType::create(false, false, false,
+                                                 Type(secondElementType.isConst() || thirdElementType.isConst(),
+                                                      secondElementType.isVolatile() || thirdElementType.isVolatile(),
+                                                      std::move(composite).get()));
+            }
+        }
+    }
+    else if (isRecord(second.getType()) && !third.isUndefined())
+    {
+        if (!typesAreCompatible(second.getType(), third.getType()))
+        {
+            log(Errors::Semantics::TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES.args(
+                *node.getOptionalQuestionMark(), m_sourceInterface, *node.getOptionalQuestionMark(), second,
+                *node.getOptionalColon(), third));
+        }
+        else
+        {
+            resultType = second.getType();
+        }
+    }
+    return Expression(std::move(resultType), ValueCategory::Rvalue,
+                      Conditional(std::make_unique<Expression>(std::move(condition)), node.getOptionalQuestionMark(),
+                                  std::make_unique<Expression>(std::move(second)), node.getOptionalColon(),
+                                  std::make_unique<Expression>(std::move(third))));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Expression expression)

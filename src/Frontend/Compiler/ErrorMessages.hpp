@@ -326,6 +326,29 @@ CREATE_ERROR(CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot subtract po
 CREATE_ERROR(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot compare pointers of incompatible types",
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
+CREATE_ERROR(FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "First operand of conditional expression must be an arithmetic or pointer type", AnnotateExpr<0>,
+             PointAt<1>, PointAt<2>);
+
+CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE,
+             "Expected third operand of conditional expression to be an arithmetic type", AnnotateExpr<0>, PointAt<1>,
+             PointAt<2>);
+
+CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_VOID,
+             "Expected third operand of conditional expression to be void", AnnotateExpr<0>, PointAt<1>, PointAt<2>);
+
+CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE,
+             "Expected third operand of conditional expression to be a pointer type", AnnotateExpr<0>, PointAt<1>,
+             PointAt<2>);
+
+CREATE_ERROR(POINTER_TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES,
+             "Pointer types in conditional expression must be of compatible types", PointAt<0>, AnnotateExpr<1>,
+             PointAt<2>, AnnotateExpr<3>);
+
+CREATE_ERROR(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES,
+             "Types in conditional expression must be of compatible types", PointAt<0>, AnnotateExpr<1>, PointAt<2>,
+             AnnotateExpr<3>);
+
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Annotate<0, 1>);

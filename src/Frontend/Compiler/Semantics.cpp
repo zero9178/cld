@@ -468,7 +468,7 @@ std::size_t cld::Semantics::UnionType::getAlignOf(const SemanticAnalysis& analys
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
     auto* primitive = std::get_if<PrimitiveType>(&type.get());
-    if (!primitive)
+    if (!primitive || type.isConst() || type.isVolatile())
     {
         return false;
     }
@@ -495,6 +495,13 @@ bool cld::Semantics::isArithmetic(const cld::Semantics::Type& type)
 bool cld::Semantics::isScalar(const cld::Semantics::Type& type)
 {
     return isArithmetic(type) || std::holds_alternative<PointerType>(type.get());
+}
+
+bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<StructType>(type.get()) || std::holds_alternative<UnionType>(type.get())
+           || std::holds_alternative<AnonymousStructType>(type.get())
+           || std::holds_alternative<AnonymousUnionType>(type.get());
 }
 
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
@@ -625,10 +632,9 @@ bool cld::Semantics::Field::operator!=(const cld::Semantics::Field& rhs) const
 
 namespace
 {
-using namespace cld::Semantics;
-
-std::string typeToString(const Type& arg)
+std::string typeToString(const cld::Semantics::Type& arg)
 {
+    using namespace cld::Semantics;
     if (arg.isTypedef())
     {
         return cld::to_string(arg.getName());
@@ -900,37 +906,37 @@ std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'
     return CustomFormat<U'f', U'u', U'l', U'l'>{}(arg.getType());
 }
 
-cld::Lexer::CTokenIterator Conversion::begin() const
+cld::Lexer::CTokenIterator cld::Semantics::Conversion::begin() const
 {
     return m_expression->begin();
 }
 
-cld::Lexer::CTokenIterator Conversion::end() const
+cld::Lexer::CTokenIterator cld::Semantics::Conversion::end() const
 {
     return m_expression->end();
 }
 
-cld::Lexer::CTokenIterator Cast::end() const
+cld::Lexer::CTokenIterator cld::Semantics::Cast::end() const
 {
     return m_expression->end();
 }
 
-cld::Lexer::CTokenIterator MemberAccess::begin() const
+cld::Lexer::CTokenIterator cld::Semantics::MemberAccess::begin() const
 {
     return m_recordExpr->begin();
 }
 
-cld::Lexer::CTokenIterator BinaryOperator::begin() const
+cld::Lexer::CTokenIterator cld::Semantics::BinaryOperator::begin() const
 {
     return m_leftOperand->begin();
 }
 
-cld::Lexer::CTokenIterator BinaryOperator::end() const
+cld::Lexer::CTokenIterator cld::Semantics::BinaryOperator::end() const
 {
     return m_rightOperand->end();
 }
 
-cld::Lexer::CTokenIterator UnaryOperator::begin() const
+cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::begin() const
 {
     switch (m_kind)
     {
@@ -940,7 +946,7 @@ cld::Lexer::CTokenIterator UnaryOperator::begin() const
     }
 }
 
-cld::Lexer::CTokenIterator UnaryOperator::end() const
+cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::end() const
 {
     switch (m_kind)
     {
@@ -950,14 +956,24 @@ cld::Lexer::CTokenIterator UnaryOperator::end() const
     }
 }
 
-cld::Lexer::CTokenIterator SizeofOperator::end() const
+cld::Lexer::CTokenIterator cld::Semantics::SizeofOperator::end() const
 {
     return cld::match(
         m_variant, [](const std::unique_ptr<Expression>& expression) { return expression->end(); },
         [](const TypeVariant& typeVariant) { return typeVariant.closeParentheses + 1; });
 }
 
-cld::Lexer::CTokenIterator SubscriptOperator::begin() const
+cld::Lexer::CTokenIterator cld::Semantics::SubscriptOperator::begin() const
 {
     return m_leftExpr->begin();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::Conditional::begin() const
+{
+    return m_boolExpression->begin();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::Conditional::end() const
+{
+    return m_boolExpression->end();
 }

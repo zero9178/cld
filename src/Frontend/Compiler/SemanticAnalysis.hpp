@@ -173,6 +173,8 @@ class SemanticAnalysis final
 
     static Type lvalueConversion(Type type);
 
+    static Type removeQualifiers(Type type);
+
     Expression integerPromotion(Expression expression) const;
 
     void arithmeticConversion(Expression& lhs, Expression& rhs) const;

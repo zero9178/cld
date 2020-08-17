@@ -1027,6 +1027,56 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
+class Conditional
+{
+    std::unique_ptr<Expression> m_boolExpression;
+    Lexer::CTokenIterator m_questionMark;
+    std::unique_ptr<Expression> m_trueExpression;
+    Lexer::CTokenIterator m_colon;
+    std::unique_ptr<Expression> m_falseExpression;
+
+public:
+    Conditional(std::unique_ptr<Expression> boolExpression, Lexer::CTokenIterator questionMark,
+                std::unique_ptr<Expression> trueExpression, Lexer::CTokenIterator colon,
+                std::unique_ptr<Expression> falseExpression)
+        : m_boolExpression(std::move(boolExpression)),
+          m_questionMark(questionMark),
+          m_trueExpression(std::move(trueExpression)),
+          m_colon(colon),
+          m_falseExpression(std::move(falseExpression))
+    {
+    }
+
+    [[nodiscard]] const Expression& getBoolExpression() const
+    {
+        return *m_boolExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getQuestionMark() const
+    {
+        return m_questionMark;
+    }
+
+    [[nodiscard]] const Expression& getTrueExpression() const
+    {
+        return *m_trueExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getColon() const
+    {
+        return m_colon;
+    }
+
+    [[nodiscard]] const Expression& getFalseExpression() const
+    {
+        return *m_falseExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
 enum class ValueCategory
 {
     Lvalue,
@@ -1040,7 +1090,7 @@ class Expression final
 
 public:
     using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, BinaryOperator,
-                                 Cast, UnaryOperator, SizeofOperator, SubscriptOperator>;
+                                 Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional>;
 
 private:
     Variant m_expression;
@@ -1425,6 +1475,8 @@ bool isInteger(const Type& type);
 bool isArithmetic(const Type& type);
 
 bool isScalar(const Type& type);
+
+bool isRecord(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag
