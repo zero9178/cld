@@ -1754,7 +1754,10 @@ std::optional<cld::Syntax::InitializerList>
                 auto constant = parseConditionalExpression(
                     begin, end,
                     context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
-                designation.emplace_back(std::move(constant));
+                if (constant)
+                {
+                    designation.emplace_back(std::move(*constant));
+                }
                 if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
                         return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                     }))
@@ -1910,11 +1913,11 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                     context.skipUntil(begin, end, firstStatementSet);
                 }
                 auto statement = parseStatement(begin, end, context);
-                if (!statement)
+                if (!statement || !expression)
                 {
                     return {};
                 }
-                return Statement(CaseStatement(start, begin, std::move(expression),
+                return Statement(CaseStatement(start, begin, std::move(*expression),
                                                std::make_unique<Statement>(std::move(*statement))));
             }
             case Lexer::TokenType::GotoKeyword:

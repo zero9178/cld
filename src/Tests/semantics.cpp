@@ -2364,3 +2364,401 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                       ProducesNoErrors());
     }
 }
+
+TEST_CASE("Semantics shift expression", "[semantics]")
+{
+    SECTION("Left")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5uLL << 1;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LeftShift);
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5.0 << 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'<<'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5 << 1.0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'<<'"));
+    }
+    SECTION("Right")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5uLL >> 1;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::RightShift);
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5.0 >> 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'>>'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5 >> 1.0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'>>'"));
+    }
+}
+
+TEST_CASE("Semantics relational expression", "[semantics]")
+{
+    SECTION("<")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 < 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LessThan);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r < 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'<'"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 < r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<'"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 0 < r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<'"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r < 0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'<'"));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " r < (int*)5;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " (int*)5 < r;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f < r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+    }
+    SECTION(">")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 > 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::GreaterThan);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r > 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'>'"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 > r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>'"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 0 > r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>'"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r > 0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'>'"));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " r > (int*)5;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " (int*)5 > r;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f > r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+    }
+    SECTION("<=")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 <= 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LessOrEqual);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r <= 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'<='"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 <= r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 0 <= r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'<='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r <= 0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'<='"));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " r <= (int*)5;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " (int*)5 <= r;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f <= r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+    }
+    SECTION(">=")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 >= 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::GreaterOrEqual);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r >= 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'>='"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 >= r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 0 >= r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'>='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r >= 0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'>='"));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " r >= (int*)5;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " (int*)5 >= r;\n"
+                      "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f >= r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+    }
+}
+
+TEST_CASE("Semantics equal expressions", "[semantics]")
+{
+    SECTION("==")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 == 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::Equal);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r == 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'=='"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 == r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'=='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 5 == r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'=='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r == 5;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'=='"));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f == r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(int (*r)(void),int (*f)(void)) {\n"
+                      " f == r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int *r,void *f) {\n"
+                      " f == r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int *r,void *f) {\n"
+                      " r == f;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void *r,void *f) {\n"
+                      " f == r;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+    SECTION("!=")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 != 3;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::NotEqual);
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " r != 0;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'!='"));
+        SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
+                      " 0 != r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'!='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " 5 != r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'!='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r != 5;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "'!='"));
+        SEMA_PRODUCES("void foo(int *r,float *f) {\n"
+                      " f != r;\n"
+                      "}",
+                      ProducesError(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(int (*r)(void),int (*f)(void)) {\n"
+                      " f != r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int *r,void *f) {\n"
+                      " f != r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int *r,void *f) {\n"
+                      " r != f;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void *r,void *f) {\n"
+                      " f != r;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+}
+
+TEST_CASE("Semantics bit operators", "[semantics]")
+{
+    SECTION("&")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 & 1uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitAnd);
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5.0 & 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'&'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5 & 1.0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'&'"));
+    }
+    SECTION("|")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 | 1uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitOr);
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5.0 | 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'|'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5 | 1.0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'|'"));
+    }
+    SECTION("^")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 ^ 1uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitXor);
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5.0 ^ 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'^'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      " 5 ^ 1.0;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'^'"));
+    }
+}
+
+TEST_CASE("Semantics logic operators", "[semantics]")
+{
+    SECTION("&&")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 && 1uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LogicAnd);
+        SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
+                      " r && 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'&&'"));
+        SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
+                      " 5 && r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'&&'"));
+        SEMA_PRODUCES("void foo(int f[5]) {\n"
+                      " f && 0;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+    SECTION("||")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       " 5 || 1uLL;\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
+        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LogicOr);
+        SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
+                      " r || 1;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'||'"));
+        SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
+                      " 5 || r;\n"
+                      "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "'||'"));
+        SEMA_PRODUCES("void foo(int f[5]) {\n"
+                      " f || 0;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+}

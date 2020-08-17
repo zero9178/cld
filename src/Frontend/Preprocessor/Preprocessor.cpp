@@ -965,7 +965,7 @@ class Preprocessor final : private cld::PPSourceInterface
         const auto* begin = std::as_const(ctokens).data();
         auto context = cld::Parser::Context(*this, m_reporter, true);
         auto tree = cld::Parser::parseConditionalExpression(begin, ctokens.data() + ctokens.size(), context);
-        if (context.getCurrentErrorCount() != 0)
+        if (context.getCurrentErrorCount() != 0 || !tree)
         {
             m_errorsOccurred = true;
             return {};
@@ -988,7 +988,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 log(message);
             });
-        auto value = evaluator.visit(tree);
+        auto value = evaluator.visit(*tree);
         if (errorsOccurred)
         {
             return {};

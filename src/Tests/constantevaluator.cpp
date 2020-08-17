@@ -27,17 +27,18 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
     const auto* ref = std::as_const(ctokens).data().data();
     auto parsing = cld::Parser::parseConditionalExpression(ref, ctokens.data().data() + ctokens.data().size(), context);
     UNSCOPED_INFO(ss.str());
-    REQUIRE((ss.str().empty()));
+    REQUIRE_THAT(ss.str(), ProducesNoErrors());
+    REQUIRE(parsing);
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     cld::Semantics::ConstantEvaluator evaluator(
         ctokens, {}, &analysis, [&ss](const cld::Message& message) { ss << message; }, mode);
-    auto ret = evaluator.visit(parsing);
+    auto ret = evaluator.visit(*parsing);
     auto string = ss.str();
     if (!string.empty())
     {
         cld::Semantics::ConstantEvaluator(
             ctokens, {}, &analysis, [](const cld::Message& message) { llvm::errs() << message << '\n'; }, mode)
-            .visit(parsing);
+            .visit(*parsing);
     }
     return {ret, string};
 }

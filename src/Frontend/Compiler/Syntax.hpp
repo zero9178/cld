@@ -583,7 +583,7 @@ public:
     using Variant = std::variant<UnaryExpression, CastVariant>;
 
 private:
-    Variant m_variant;
+    std::unique_ptr<Variant> m_variant;
 
 public:
     CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Variant&& variant);
@@ -602,7 +602,7 @@ public:
     /**
      * <Term::BinaryDotOperator>
      */
-    enum class BinaryDotOperator
+    enum BinaryDotOperator
     {
         BinaryMultiply, ///<<TokenType::Multiplication>
         BinaryDivide,   ///<<TokenType::Division>
@@ -639,7 +639,7 @@ public:
     /**
      * <AdditiveExpression::BinaryDashOperator>
      */
-    enum class BinaryDashOperator
+    enum BinaryDashOperator
     {
         BinaryPlus, ///<<TokenType::Addition>
         BinaryMinus ///<<TokenType::Negation>
@@ -675,23 +675,29 @@ public:
     /**
      * <ShiftExpression::ShiftOperator>
      */
-    enum class ShiftOperator
+    enum ShiftOperator
     {
         Right, ///<<TokenType::ShiftRight>
         Left   ///<<TokenType::ShiftLeft>
     };
 
+    struct Operand
+    {
+        ShiftOperator shiftOperator;
+        Lexer::CTokenIterator operatorToken;
+        AdditiveExpression additiveExpression;
+    };
+
 private:
-    std::vector<std::pair<ShiftOperator, AdditiveExpression>> m_optionalAdditiveExpressions;
+    std::vector<Operand> m_optionalAdditiveExpressions;
 
 public:
     ShiftExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, AdditiveExpression&& additiveExpression,
-                    std::vector<std::pair<ShiftOperator, AdditiveExpression>>&& optionalAdditiveExpressions);
+                    std::vector<Operand>&& optionalAdditiveExpressions);
 
     [[nodiscard]] const AdditiveExpression& getAdditiveExpression() const;
 
-    [[nodiscard]] const std::vector<std::pair<ShiftOperator, AdditiveExpression>>&
-        getOptionalAdditiveExpressions() const;
+    [[nodiscard]] const std::vector<Operand>& getOptionalAdditiveExpressions() const;
 };
 
 /**
@@ -705,7 +711,7 @@ public:
     /**
      * <RelationalExpression::RelationalOperator>
      */
-    enum class RelationalOperator
+    enum RelationalOperator
     {
         LessThan,          ///<<TokenType::LessThan>
         LessThanOrEqual,   ///< TokenType::LessThanOrEqual>
@@ -713,17 +719,23 @@ public:
         GreaterThanOrEqual ///< TokenType::GreaterThanOrEqual>
     };
 
+    struct Operand
+    {
+        RelationalOperator relationalOperator;
+        Lexer::CTokenIterator operatorToken;
+        ShiftExpression shiftExpression;
+    };
+
 private:
-    std::vector<std::pair<RelationalOperator, ShiftExpression>> m_optionalRelationalExpressions;
+    std::vector<Operand> m_optionalRelationalExpressions;
 
 public:
     RelationalExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ShiftExpression&& shiftExpression,
-                         std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions);
+                         std::vector<Operand>&& optionalRelationalExpressions);
 
     [[nodiscard]] const ShiftExpression& getShiftExpression() const;
 
-    [[nodiscard]] const std::vector<std::pair<RelationalOperator, ShiftExpression>>&
-        getOptionalShiftExpressions() const;
+    [[nodiscard]] const std::vector<Operand>& getOptionalShiftExpressions() const;
 };
 
 /**
@@ -737,24 +749,30 @@ public:
     /**
      * <EqualityExpression::EqualityOperator>
      */
-    enum class EqualityOperator
+    enum EqualityOperator
     {
         Equal,   ///<<TokenType::Equal>
         NotEqual ///< TokenType::NotEqual>
     };
 
+    struct Operator
+    {
+        EqualityOperator equalityOperator;
+        Lexer::CTokenIterator operatorToken;
+        RelationalExpression relationalExpression;
+    };
+
 private:
-    std::vector<std::pair<EqualityOperator, RelationalExpression>> m_optionalRelationalExpressions;
+    std::vector<Operator> m_optionalRelationalExpressions;
 
 public:
     EqualityExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                        RelationalExpression&& relationalExpression,
-                       std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions);
+                       std::vector<Operator>&& optionalRelationalExpressions);
 
     [[nodiscard]] const RelationalExpression& getRelationalExpression() const;
 
-    [[nodiscard]] const std::vector<std::pair<EqualityOperator, RelationalExpression>>&
-        getOptionalRelationalExpressions() const;
+    [[nodiscard]] const std::vector<Operator>& getOptionalRelationalExpressions() const;
 };
 
 /**
@@ -762,13 +780,17 @@ public:
  */
 class BitAndExpression final : public Node
 {
-    std::vector<EqualityExpression> m_equalityExpressions;
+    EqualityExpression m_equalityExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, EqualityExpression>> m_optionalEqualityExpressions;
 
 public:
-    BitAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                     std::vector<EqualityExpression>&& equalityExpressions);
+    BitAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, EqualityExpression&& equalityExpression,
+                     std::vector<std::pair<Lexer::CTokenIterator, EqualityExpression>>&& optionalEqualityExpressions);
 
-    [[nodiscard]] const std::vector<EqualityExpression>& getEqualityExpressions() const;
+    [[nodiscard]] const EqualityExpression& getEqualityExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, EqualityExpression>>&
+        getOptionalEqualityExpressions() const;
 };
 
 /**
@@ -776,13 +798,17 @@ public:
  */
 class BitXorExpression final : public Node
 {
-    std::vector<BitAndExpression> m_bitAndExpressions;
+    BitAndExpression m_bitAndExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, BitAndExpression>> m_optionalBitAndExpressions;
 
 public:
-    BitXorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                     std::vector<BitAndExpression>&& bitAndExpressions);
+    BitXorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitAndExpression&& bitAndExpression,
+                     std::vector<std::pair<Lexer::CTokenIterator, BitAndExpression>>&& optionalBitAndExpressions);
 
-    [[nodiscard]] const std::vector<BitAndExpression>& getBitAndExpressions() const;
+    [[nodiscard]] const BitAndExpression& getBitAndExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, BitAndExpression>>&
+        getOptionalBitAndExpressions() const;
 };
 
 /**
@@ -790,13 +816,17 @@ public:
  */
 class BitOrExpression final : public Node
 {
-    std::vector<BitXorExpression> m_bitXorExpressions;
+    BitXorExpression m_bitXorExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, BitXorExpression>> m_optionalBitXorExpressions;
 
 public:
-    BitOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                    std::vector<BitXorExpression>&& bitXorExpressions);
+    BitOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitXorExpression&& bitXorExpression,
+                    std::vector<std::pair<Lexer::CTokenIterator, BitXorExpression>>&& optionalBitXorExpressions);
 
-    [[nodiscard]] const std::vector<BitXorExpression>& getBitXorExpressions() const;
+    [[nodiscard]] const BitXorExpression& getBitXorExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, BitXorExpression>>&
+        getOptionalBitXorExpressions() const;
 };
 
 /**
@@ -804,13 +834,17 @@ public:
  */
 class LogicalAndExpression final : public Node
 {
-    std::vector<BitOrExpression> m_bitOrExpressions;
+    BitOrExpression m_bitOrExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, BitOrExpression>> m_optionalBitOrExpressions;
 
 public:
-    LogicalAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                         std::vector<BitOrExpression>&& equalityExpressions);
+    LogicalAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitOrExpression&& bitOrExpression,
+                         std::vector<std::pair<Lexer::CTokenIterator, BitOrExpression>>&& optionalBitOrExpressions);
 
-    [[nodiscard]] const std::vector<BitOrExpression>& getBitOrExpressions() const;
+    [[nodiscard]] const BitOrExpression& getBitOrExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, BitOrExpression>>&
+        getOptionalBitOrExpressions() const;
 };
 
 /**
@@ -818,13 +852,17 @@ public:
  */
 class LogicalOrExpression final : public Node
 {
-    std::vector<LogicalAndExpression> m_andExpressions;
+    LogicalAndExpression m_andExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, LogicalAndExpression>> m_optionalAndExpressions;
 
 public:
-    LogicalOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                        std::vector<LogicalAndExpression>&& andExpressions);
+    LogicalOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, LogicalAndExpression&& andExpression,
+                        std::vector<std::pair<Lexer::CTokenIterator, LogicalAndExpression>>&& optionalAndExpressions);
 
-    [[nodiscard]] const std::vector<LogicalAndExpression>& getAndExpressions() const;
+    [[nodiscard]] const LogicalAndExpression& getAndExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, LogicalAndExpression>>&
+        getOptionalAndExpressions() const;
 };
 
 /**
@@ -835,7 +873,7 @@ public:
  */
 class ConditionalExpression final : public Node
 {
-    LogicalOrExpression m_logicalOrExpression;
+    std::unique_ptr<LogicalOrExpression> m_logicalOrExpression;
     std::unique_ptr<Expression> m_optionalExpression;
     std::unique_ptr<ConditionalExpression> m_optionalConditionalExpression;
 

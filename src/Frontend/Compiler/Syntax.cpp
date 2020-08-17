@@ -233,14 +233,14 @@ const cld::Syntax::UnaryExpressionSizeOf::variant& cld::Syntax::UnaryExpressionS
 }
 
 cld::Syntax::CastExpression::CastExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                            cld::Syntax::CastExpression::Variant&& variant)
-    : Node(begin, end), m_variant(std::move(variant))
+                                            CastExpression::Variant&& variant)
+    : Node(begin, end), m_variant(std::make_unique<CastExpression::Variant>(std::move(variant)))
 {
 }
 
 const cld::Syntax::CastExpression::Variant& cld::Syntax::CastExpression::getVariant() const
 {
-    return m_variant;
+    return *m_variant;
 }
 
 cld::Syntax::Term::Term(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
@@ -278,10 +278,9 @@ const std::vector<cld::Syntax::AdditiveExpression::Operand>& cld::Syntax::Additi
     return m_optionalTerms;
 }
 
-cld::Syntax::ShiftExpression::ShiftExpression(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::AdditiveExpression&& additiveExpression,
-    std::vector<std::pair<cld::Syntax::ShiftExpression::ShiftOperator, cld::Syntax::AdditiveExpression>>&&
-        optionalAdditiveExpressions)
+cld::Syntax::ShiftExpression::ShiftExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                              cld::Syntax::AdditiveExpression&& additiveExpression,
+                                              std::vector<Operand>&& optionalAdditiveExpressions)
     : Node(begin, end),
       m_additiveExpression(std::move(additiveExpression)),
       m_optionalAdditiveExpressions(std::move(optionalAdditiveExpressions))
@@ -424,15 +423,15 @@ const cld::Syntax::Expression& cld::Syntax::FootWhileStatement::getExpression() 
     return m_expression;
 }
 
-const std::vector<std::pair<cld::Syntax::ShiftExpression::ShiftOperator, cld::Syntax::AdditiveExpression>>&
+const std::vector<cld::Syntax::ShiftExpression::Operand>&
     cld::Syntax::ShiftExpression::getOptionalAdditiveExpressions() const
 {
     return m_optionalAdditiveExpressions;
 }
 
-cld::Syntax::RelationalExpression::RelationalExpression(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ShiftExpression&& shiftExpression,
-    std::vector<std::pair<RelationalOperator, ShiftExpression>>&& optionalRelationalExpressions)
+cld::Syntax::RelationalExpression::RelationalExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                        ShiftExpression&& shiftExpression,
+                                                        std::vector<Operand>&& optionalRelationalExpressions)
     : Node(begin, end),
       m_shiftExpression(std::move(shiftExpression)),
       m_optionalRelationalExpressions(std::move(optionalRelationalExpressions))
@@ -444,15 +443,15 @@ const cld::Syntax::ShiftExpression& cld::Syntax::RelationalExpression::getShiftE
     return m_shiftExpression;
 }
 
-const std::vector<std::pair<cld::Syntax::RelationalExpression::RelationalOperator, cld::Syntax::ShiftExpression>>&
+const std::vector<cld::Syntax::RelationalExpression::Operand>&
     cld::Syntax::RelationalExpression::getOptionalShiftExpressions() const
 {
     return m_optionalRelationalExpressions;
 }
 
-cld::Syntax::EqualityExpression::EqualityExpression(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, RelationalExpression&& relationalExpression,
-    std::vector<std::pair<EqualityOperator, RelationalExpression>>&& optionalRelationalExpressions)
+cld::Syntax::EqualityExpression::EqualityExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                    RelationalExpression&& relationalExpression,
+                                                    std::vector<Operator>&& optionalRelationalExpressions)
     : Node(begin, end),
       m_relationalExpression(std::move(relationalExpression)),
       m_optionalRelationalExpressions(std::move(optionalRelationalExpressions))
@@ -464,33 +463,50 @@ const cld::Syntax::RelationalExpression& cld::Syntax::EqualityExpression::getRel
     return m_relationalExpression;
 }
 
-const std::vector<std::pair<cld::Syntax::EqualityExpression::EqualityOperator, cld::Syntax::RelationalExpression>>&
+const std::vector<cld::Syntax::EqualityExpression::Operator>&
     cld::Syntax::EqualityExpression::getOptionalRelationalExpressions() const
 {
     return m_optionalRelationalExpressions;
 }
 
-cld::Syntax::LogicalAndExpression::LogicalAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                        std::vector<BitOrExpression>&& equalityExpressions)
-    : Node(begin, end), m_bitOrExpressions(std::move(equalityExpressions))
-{
-    CLD_ASSERT(!m_bitOrExpressions.empty());
-}
-
-const std::vector<cld::Syntax::BitOrExpression>& cld::Syntax::LogicalAndExpression::getBitOrExpressions() const
-{
-    return m_bitOrExpressions;
-}
-
-cld::Syntax::LogicalOrExpression::LogicalOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                      std::vector<LogicalAndExpression>&& andExpressions)
-    : Node(begin, end), m_andExpressions(std::move(andExpressions))
+cld::Syntax::LogicalAndExpression::LogicalAndExpression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitOrExpression&& bitOrExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, BitOrExpression>>&& optionalBitOrExpressions)
+    : Node(begin, end),
+      m_bitOrExpression(std::move(bitOrExpression)),
+      m_optionalBitOrExpressions(std::move(optionalBitOrExpressions))
 {
 }
 
-const std::vector<cld::Syntax::LogicalAndExpression>& cld::Syntax::LogicalOrExpression::getAndExpressions() const
+const cld::Syntax::BitOrExpression& cld::Syntax::LogicalAndExpression::getBitOrExpression() const
 {
-    return m_andExpressions;
+    return m_bitOrExpression;
+}
+
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::BitOrExpression>>&
+    cld::Syntax::LogicalAndExpression::getOptionalBitOrExpressions() const
+{
+    return m_optionalBitOrExpressions;
+}
+
+cld::Syntax::LogicalOrExpression::LogicalOrExpression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, LogicalAndExpression&& andExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, LogicalAndExpression>>&& optionalAndExpressions)
+    : Node(begin, end),
+      m_andExpression(std::move(andExpression)),
+      m_optionalAndExpressions(std::move(optionalAndExpressions))
+{
+}
+
+const cld::Syntax::LogicalAndExpression& cld::Syntax::LogicalOrExpression::getAndExpression() const
+{
+    return m_andExpression;
+}
+
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::LogicalAndExpression>>&
+    cld::Syntax::LogicalOrExpression::getOptionalAndExpressions() const
+{
+    return m_optionalAndExpressions;
 }
 
 cld::Syntax::ConditionalExpression::ConditionalExpression(
@@ -498,7 +514,7 @@ cld::Syntax::ConditionalExpression::ConditionalExpression(
     std::unique_ptr<Expression>&& optionalExpression,
     std::unique_ptr<ConditionalExpression>&& optionalConditionalExpression)
     : Node(begin, end),
-      m_logicalOrExpression(std::move(logicalOrExpression)),
+      m_logicalOrExpression(std::make_unique<LogicalOrExpression>(std::move(logicalOrExpression))),
       m_optionalExpression(std::move(optionalExpression)),
       m_optionalConditionalExpression(std::move(optionalConditionalExpression))
 {
@@ -506,7 +522,7 @@ cld::Syntax::ConditionalExpression::ConditionalExpression(
 
 const cld::Syntax::LogicalOrExpression& cld::Syntax::ConditionalExpression::getLogicalOrExpression() const
 {
-    return m_logicalOrExpression;
+    return *m_logicalOrExpression;
 }
 
 const cld::Syntax::Expression* cld::Syntax::ConditionalExpression::getOptionalExpression() const
@@ -524,37 +540,64 @@ const cld::Syntax::Statement& cld::Syntax::ForStatement::getStatement() const
     return *m_statement;
 }
 
-cld::Syntax::BitAndExpression::BitAndExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                std::vector<EqualityExpression>&& equalityExpressions)
-    : Node(begin, end), m_equalityExpressions(std::move(equalityExpressions))
+cld::Syntax::BitAndExpression::BitAndExpression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, EqualityExpression&& equalityExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, EqualityExpression>>&& optionalEqualityExpressions)
+    : Node(begin, end),
+      m_equalityExpression(std::move(equalityExpression)),
+      m_optionalEqualityExpressions(std::move(optionalEqualityExpressions))
 {
 }
 
-const std::vector<cld::Syntax::EqualityExpression>& cld::Syntax::BitAndExpression::getEqualityExpressions() const
+const cld::Syntax::EqualityExpression& cld::Syntax::BitAndExpression::getEqualityExpression() const
 {
-    return m_equalityExpressions;
+    return m_equalityExpression;
 }
 
-cld::Syntax::BitXorExpression::BitXorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                std::vector<BitAndExpression>&& bitAndExpressions)
-    : Node(begin, end), m_bitAndExpressions(std::move(bitAndExpressions))
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::EqualityExpression>>&
+    cld::Syntax::BitAndExpression::getOptionalEqualityExpressions() const
+{
+    return m_optionalEqualityExpressions;
+}
+
+cld::Syntax::BitXorExpression::BitXorExpression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitAndExpression&& bitAndExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, BitAndExpression>>&& optionalBitAndExpressions)
+    : Node(begin, end),
+      m_bitAndExpression(std::move(bitAndExpression)),
+      m_optionalBitAndExpressions(std::move(optionalBitAndExpressions))
 {
 }
 
-const std::vector<cld::Syntax::BitAndExpression>& cld::Syntax::BitXorExpression::getBitAndExpressions() const
+const cld::Syntax::BitAndExpression& cld::Syntax::BitXorExpression::getBitAndExpression() const
 {
-    return m_bitAndExpressions;
+    return m_bitAndExpression;
 }
 
-cld::Syntax::BitOrExpression::BitOrExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                              std::vector<BitXorExpression>&& bitXorExpressions)
-    : Node(begin, end), m_bitXorExpressions(std::move(bitXorExpressions))
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::BitAndExpression>>&
+    cld::Syntax::BitXorExpression::getOptionalBitAndExpressions() const
+{
+    return m_optionalBitAndExpressions;
+}
+
+cld::Syntax::BitOrExpression::BitOrExpression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, BitXorExpression&& bitXorExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, BitXorExpression>>&& bitXorExpressions)
+    : Node(begin, end),
+      m_bitXorExpression(std::move(bitXorExpression)),
+      m_optionalBitXorExpressions(std::move(bitXorExpressions))
 {
 }
 
-const std::vector<cld::Syntax::BitXorExpression>& cld::Syntax::BitOrExpression::getBitXorExpressions() const
+const cld::Syntax::BitXorExpression& cld::Syntax::BitOrExpression::getBitXorExpression() const
 {
-    return m_bitXorExpressions;
+    return m_bitXorExpression;
+}
+
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::BitXorExpression>>&
+    cld::Syntax::BitOrExpression::getOptionalBitXorExpressions() const
+{
+    return m_optionalBitXorExpressions;
 }
 
 const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionFunctionCall::getPostFixExpression() const

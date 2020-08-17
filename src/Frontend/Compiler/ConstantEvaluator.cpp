@@ -412,7 +412,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::ShiftExpression& node)
 {
     auto value = visit(node.getAdditiveExpression());
-    for (auto& [op, exp] : node.getOptionalAdditiveExpressions())
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getAdditiveExpression().end() - 1;
+    for (auto& [op, token, exp] : node.getOptionalAdditiveExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
@@ -434,8 +435,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
         if (!value.isInteger() || !other.isInteger())
         {
             log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                *(exp.begin() - 1), m_sourceInterface, *(exp.begin() - 1), value.getType(), other.getType(),
-                std::forward_as_tuple(*node.begin(), *(exp.begin() - 2)), exp));
+                *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
             return {};
         }
         switch (op)
@@ -447,134 +448,140 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 value.shiftRightAssign(other, m_sourceInterface.getLanguageOptions());
                 break;
         }
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitAndExpression& node)
 {
-    auto value = visit(node.getEqualityExpressions()[0]);
-    for (auto& iter : llvm::ArrayRef(node.getEqualityExpressions()).drop_front())
+    auto value = visit(node.getEqualityExpression());
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getEqualityExpression().end() - 1;
+    for (auto& [token, exp] : node.getOptionalEqualityExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                node.getEqualityExpressions()[0], m_sourceInterface, node.getEqualityExpressions()[0],
-                value.getType()));
+                node.getEqualityExpression(), m_sourceInterface, node.getEqualityExpression(), value.getType()));
             return {};
         }
-        auto other = visit(iter);
+        auto other = visit(exp);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(iter, m_sourceInterface,
-                                                                                              iter, other.getType()));
+            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                              exp, other.getType()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
             log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                *(iter.begin() - 1), m_sourceInterface, *(iter.begin() - 1), value.getType(), other.getType(),
-                std::forward_as_tuple(*node.begin(), *(iter.begin() - 2)), iter));
+                *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
             return {};
         }
         value.bitAndAssign(other, m_sourceInterface.getLanguageOptions());
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitXorExpression& node)
 {
-    auto value = visit(node.getBitAndExpressions()[0]);
-    for (auto& iter : llvm::ArrayRef(node.getBitAndExpressions()).drop_front())
+    auto value = visit(node.getBitAndExpression());
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getBitAndExpression().end() - 1;
+    for (auto& [token, exp] : node.getOptionalBitAndExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                node.getBitAndExpressions()[0], m_sourceInterface, node.getBitAndExpressions()[0], value.getType()));
+                node.getBitAndExpression(), m_sourceInterface, node.getBitAndExpression(), value.getType()));
             return {};
         }
-        auto other = visit(iter);
+        auto other = visit(exp);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(iter, m_sourceInterface,
-                                                                                              iter, other.getType()));
+            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                              exp, other.getType()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
             log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                *(iter.begin() - 1), m_sourceInterface, *(iter.begin() - 1), value.getType(), other.getType(),
-                std::forward_as_tuple(*node.begin(), *(iter.begin() - 2)), iter));
+                *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
             return {};
         }
         value.bitXorAssign(other, m_sourceInterface.getLanguageOptions());
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::BitOrExpression& node)
 {
-    auto value = visit(node.getBitXorExpressions()[0]);
-    for (auto& iter : llvm::ArrayRef(node.getBitXorExpressions()).drop_front())
+    auto value = visit(node.getBitXorExpression());
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getBitXorExpression().end() - 1;
+    for (auto& [token, exp] : node.getOptionalBitXorExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                node.getBitXorExpressions()[0], m_sourceInterface, node.getBitXorExpressions()[0], value.getType()));
+                node.getBitXorExpression(), m_sourceInterface, node.getBitXorExpression(), value.getType()));
             return {};
         }
-        auto other = visit(iter);
+        auto other = visit(exp);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(iter, m_sourceInterface,
-                                                                                              iter, other.getType()));
+            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                              exp, other.getType()));
             return {};
         }
         if (!value.isInteger() || !other.isInteger())
         {
             log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                *(iter.begin() - 1), m_sourceInterface, *(iter.begin() - 1), value.getType(), other.getType(),
-                std::forward_as_tuple(*node.begin(), *(iter.begin() - 2)), iter));
+                *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
             return {};
         }
         value.bitOrAssign(other, m_sourceInterface.getLanguageOptions());
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::LogicalAndExpression& node)
 {
-    auto value = visit(node.getBitOrExpressions()[0]);
-    for (auto& iter : llvm::ArrayRef(node.getBitOrExpressions()).drop_front())
+    auto value = visit(node.getBitOrExpression());
+    for (auto& [token, exp] : node.getOptionalBitOrExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                node.getBitOrExpressions()[0], m_sourceInterface, node.getBitOrExpressions()[0], value.getType()));
+                node.getBitOrExpression(), m_sourceInterface, node.getBitOrExpression(), value.getType()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool(m_sourceInterface.getLanguageOptions());
-        auto other = visit(iter);
+        auto other = visit(exp);
         if (other.isUndefined() || value.isUndefined())
         {
             continue;
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(iter, m_sourceInterface,
-                                                                                              iter, other.getType()));
+            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                              exp, other.getType()));
             return {};
         }
         if (!value && !value.isUndefined())
@@ -588,25 +595,25 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::LogicalOrExpression& node)
 {
-    auto value = visit(node.getAndExpressions()[0]);
-    for (auto& iter : llvm::ArrayRef(node.getAndExpressions()).drop_front())
+    auto value = visit(node.getAndExpression());
+    for (auto& [token, exp] : node.getOptionalAndExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
             log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                node.getAndExpressions()[0], m_sourceInterface, node.getAndExpressions()[0], value.getType()));
+                node.getAndExpression(), m_sourceInterface, node.getAndExpression(), value.getType()));
             return {};
         }
         value = value.isUndefined() ? value : value.toBool(m_sourceInterface.getLanguageOptions());
-        auto other = visit(iter);
+        auto other = visit(exp);
         if (other.isUndefined() || other.isUndefined())
         {
             continue;
         }
         if (!other.isInteger() && m_mode == Integer)
         {
-            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(iter, m_sourceInterface,
-                                                                                              iter, other.getType()));
+            log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                              exp, other.getType()));
             return {};
         }
         if (value && !value.isUndefined())
@@ -653,7 +660,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::RelationalExpression& node)
 {
     auto value = visit(node.getShiftExpression());
-    for (auto& [op, exp] : node.getOptionalShiftExpressions())
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getShiftExpression().end() - 1;
+    for (auto& [op, token, exp] : node.getOptionalShiftExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
@@ -678,8 +686,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 != cld::get<PointerType>(other.getType().get()).getElementType().get())
             {
                 log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                    *(exp.begin() - 1), m_sourceInterface, *(exp.begin() - 1), value.getType(), other.getType(),
-                    std::forward_as_tuple(*node.begin(), *(exp.begin() - 2)), exp));
+                    *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                    std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
                 return {};
             }
         }
@@ -706,6 +714,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             }
             break;
         }
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }
@@ -713,7 +722,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
 cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld::Syntax::EqualityExpression& node)
 {
     auto value = visit(node.getRelationalExpression());
-    for (auto& [op, exp] : node.getOptionalRelationalExpressions())
+    Lexer::CTokenIterator lhsInclusiveEnd = node.getRelationalExpression().end() - 1;
+    for (auto& [op, token, exp] : node.getOptionalRelationalExpressions())
     {
         if (!value.isUndefined() && !value.isInteger() && m_mode == Integer)
         {
@@ -740,8 +750,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 && !isVoid(cld::get<PointerType>(other.getType().get()).getElementType()))
             {
                 log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                    *(exp.begin() - 1), m_sourceInterface, *(exp.begin() - 1), value.getType(), other.getType(),
-                    std::forward_as_tuple(*node.begin(), *(exp.begin() - 2)), exp));
+                    *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                    std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
                 return {};
             }
         }
@@ -750,8 +760,8 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             if (!value.isInteger() && !other.isInteger())
             {
                 log(Errors::Semantics::CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N.args(
-                    *(exp.begin() - 1), m_sourceInterface, *(exp.begin() - 1), value.getType(), other.getType(),
-                    std::forward_as_tuple(*node.begin(), *(exp.begin() - 2)), exp));
+                    *token, m_sourceInterface, *token, value.getType(), other.getType(),
+                    std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd), exp));
                 return {};
             }
             else
@@ -759,7 +769,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
                 auto& null = value.isInteger() ? value : other;
                 if (null.toUInt() != 0)
                 {
-                    auto loc = value.isInteger() ? std::forward_as_tuple(*node.begin(), *(exp.begin() - 2)) :
+                    auto loc = value.isInteger() ? std::forward_as_tuple(*node.begin(), *lhsInclusiveEnd) :
                                                    std::forward_as_tuple(*exp.begin(), *(exp.end() - 1));
                     log(Errors::Semantics::INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER.args(
                         loc, m_sourceInterface, loc));
@@ -780,6 +790,7 @@ cld::Semantics::ConstRetType cld::Semantics::ConstantEvaluator::visit(const cld:
             }
             break;
         }
+        lhsInclusiveEnd = exp.end() - 1;
     }
     return value;
 }

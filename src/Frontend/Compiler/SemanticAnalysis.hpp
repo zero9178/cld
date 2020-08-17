@@ -187,6 +187,12 @@ class SemanticAnalysis final
 
     Expression checkIncrementAndDecrement(UnaryOperator::Kind kind, Expression&& value, Lexer::CTokenIterator opToken);
 
+    Expression doBitOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
+                              Expression&& rhs);
+
+    Expression doLogicOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
+                                Expression&& rhs);
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs())
         : m_sourceInterface(sourceInterface), m_reporter(reporter)

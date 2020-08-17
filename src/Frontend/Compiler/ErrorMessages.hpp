@@ -311,6 +311,9 @@ CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE,
 CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
              "Right operand of operator %0 must be an arithmetic or pointer type", PointAt<0>, AnnotateExpr<1>);
 
+CREATE_ERROR(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_A_POINTER_TYPE, "Right operand of operator %0 must be a pointer type",
+             PointAt<0>, AnnotateExpr<1>);
+
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
              "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
 
@@ -318,6 +321,9 @@ CREATE_ERROR(CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE, "Cannot subtract poin
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
 CREATE_ERROR(CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot subtract pointers of incompatible types",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot compare pointers of incompatible types",
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);

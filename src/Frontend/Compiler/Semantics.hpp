@@ -887,7 +887,20 @@ public:
         Subtraction,
         Multiply,
         Divide,
-        Modulo
+        Modulo,
+        LeftShift,
+        RightShift,
+        LessThan,
+        GreaterThan,
+        LessOrEqual,
+        GreaterOrEqual,
+        Equal,
+        NotEqual,
+        BitOr,
+        BitAnd,
+        BitXor,
+        LogicAnd,
+        LogicOr
     };
 
 private:

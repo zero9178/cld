@@ -48,38 +48,48 @@ std::optional<cld::Syntax::AssignmentExpression>
     {
         auto token = begin->getTokenType();
         begin++;
-        list.emplace_back(
-            [token]() -> AssignmentExpression::AssignOperator {
-                switch (token)
-                {
-                    case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
-                    case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
-                    case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
-                    case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
-                    case Lexer::TokenType::MultiplyAssign: return AssignmentExpression::AssignOperator::MultiplyAssign;
-                    case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
-                    case Lexer::TokenType::ShiftLeftAssign:
-                        return AssignmentExpression::AssignOperator::LeftShiftAssign;
-                    case Lexer::TokenType::ShiftRightAssign:
-                        return AssignmentExpression::AssignOperator::RightShiftAssign;
-                    case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
-                    case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
-                    case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
-                    default: CLD_UNREACHABLE;
-                }
-            }(),
-            parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet)));
+        auto conditional = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
+        if (conditional)
+        {
+            list.emplace_back(
+                [token]() -> AssignmentExpression::AssignOperator {
+                    switch (token)
+                    {
+                        case Lexer::TokenType::Assignment: return AssignmentExpression::AssignOperator::NoOperator;
+                        case Lexer::TokenType::PlusAssign: return AssignmentExpression::AssignOperator::PlusAssign;
+                        case Lexer::TokenType::MinusAssign: return AssignmentExpression::AssignOperator::MinusAssign;
+                        case Lexer::TokenType::DivideAssign: return AssignmentExpression::AssignOperator::DivideAssign;
+                        case Lexer::TokenType::MultiplyAssign:
+                            return AssignmentExpression::AssignOperator::MultiplyAssign;
+                        case Lexer::TokenType::ModuloAssign: return AssignmentExpression::AssignOperator::ModuloAssign;
+                        case Lexer::TokenType::ShiftLeftAssign:
+                            return AssignmentExpression::AssignOperator::LeftShiftAssign;
+                        case Lexer::TokenType::ShiftRightAssign:
+                            return AssignmentExpression::AssignOperator::RightShiftAssign;
+                        case Lexer::TokenType::BitAndAssign: return AssignmentExpression::AssignOperator::BitAndAssign;
+                        case Lexer::TokenType::BitOrAssign: return AssignmentExpression::AssignOperator::BitOrAssign;
+                        case Lexer::TokenType::BitXorAssign: return AssignmentExpression::AssignOperator::BitXorAssign;
+                        default: CLD_UNREACHABLE;
+                    }
+                }(),
+                std::move(*conditional));
+        }
     }
 
-    return AssignmentExpression(start, begin, std::move(result), std::move(list));
+    if (!result)
+    {
+        return {};
+    }
+    return AssignmentExpression(start, begin, std::move(*result), std::move(list));
 }
 
 namespace
 {
 using StateVariant =
     std::variant<std::monostate, std::optional<Term>, std::optional<AdditiveExpression>, std::optional<ShiftExpression>,
-                 std::optional<RelationalExpression>, std::optional<EqualityExpression>, BitAndExpression,
-                 BitXorExpression, BitOrExpression, LogicalAndExpression, LogicalOrExpression>;
+                 std::optional<RelationalExpression>, std::optional<EqualityExpression>,
+                 std::optional<BitAndExpression>, std::optional<BitXorExpression>, std::optional<BitOrExpression>,
+                 std::optional<LogicalAndExpression>, std::optional<LogicalOrExpression>>;
 
 enum class EndState : std::uint8_t
 {
@@ -106,35 +116,35 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
         {
             case EndState::LogicalOr:
                 result |= cld::Parser::Context::fromTokenTypes(cld::Lexer::TokenType::LogicOr);
-                if (std::holds_alternative<LogicalOrExpression>(state))
+                if (std::holds_alternative<std::optional<LogicalOrExpression>>(state))
                 {
                     return result;
                 }
                 [[fallthrough]];
             case EndState::LogicalAnd:
                 result |= cld::Parser::Context::fromTokenTypes(cld::Lexer::TokenType::LogicAnd);
-                if (std::holds_alternative<LogicalAndExpression>(state))
+                if (std::holds_alternative<std::optional<LogicalAndExpression>>(state))
                 {
                     return result;
                 }
                 [[fallthrough]];
             case EndState::BitOr:
                 result |= cld::Parser::Context::fromTokenTypes(cld::Lexer::TokenType::BitOr);
-                if (std::holds_alternative<BitOrExpression>(state))
+                if (std::holds_alternative<std::optional<BitOrExpression>>(state))
                 {
                     return result;
                 }
                 [[fallthrough]];
             case EndState::BitXor:
                 result |= cld::Parser::Context::fromTokenTypes(cld::Lexer::TokenType::BitXor);
-                if (std::holds_alternative<BitXorExpression>(state))
+                if (std::holds_alternative<std::optional<BitXorExpression>>(state))
                 {
                     return result;
                 }
                 [[fallthrough]];
             case EndState::BitAnd:
                 result |= cld::Parser::Context::fromTokenTypes(cld::Lexer::TokenType::Ampersand);
-                if (std::holds_alternative<BitAndExpression>(state))
+                if (std::holds_alternative<std::optional<BitAndExpression>>(state))
                 {
                     return result;
                 }
@@ -187,11 +197,11 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             case EndState::Shift: return !std::holds_alternative<std::optional<ShiftExpression>>(state);
             case EndState::Relational: return !std::holds_alternative<std::optional<RelationalExpression>>(state);
             case EndState::Equality: return !std::holds_alternative<std::optional<EqualityExpression>>(state);
-            case EndState::BitAnd: return !std::holds_alternative<BitAndExpression>(state);
-            case EndState::BitXor: return !std::holds_alternative<BitXorExpression>(state);
-            case EndState::BitOr: return !std::holds_alternative<BitOrExpression>(state);
-            case EndState::LogicalAnd: return !std::holds_alternative<LogicalAndExpression>(state);
-            case EndState::LogicalOr: return !std::holds_alternative<LogicalOrExpression>(state);
+            case EndState::BitAnd: return !std::holds_alternative<std::optional<BitAndExpression>>(state);
+            case EndState::BitXor: return !std::holds_alternative<std::optional<BitXorExpression>>(state);
+            case EndState::BitOr: return !std::holds_alternative<std::optional<BitOrExpression>>(state);
+            case EndState::LogicalAnd: return !std::holds_alternative<std::optional<LogicalAndExpression>>(state);
+            case EndState::LogicalOr: return !std::holds_alternative<std::optional<LogicalOrExpression>>(state);
         }
         return false;
     }())
@@ -275,20 +285,20 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             {
                 auto& result = cld::get<std::optional<AdditiveExpression>>(state);
 
-                std::vector<std::pair<ShiftExpression::ShiftOperator, AdditiveExpression>> list;
+                std::vector<ShiftExpression::Operand> list;
                 while (begin != end
                        && (begin->getTokenType() == cld::Lexer::TokenType::ShiftRight
                            || begin->getTokenType() == cld::Lexer::TokenType::ShiftLeft))
                 {
-                    auto token = begin->getTokenType();
+                    const auto* token = begin;
                     begin++;
                     auto newAdd = parseAdditiveExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newAdd)
                     {
-                        list.emplace_back(token == cld::Lexer::TokenType::ShiftRight ?
-                                              ShiftExpression::ShiftOperator::Right :
-                                              ShiftExpression::ShiftOperator::Left,
-                                          std::move(*newAdd));
+                        list.push_back({token->getTokenType() == cld::Lexer::TokenType::ShiftRight ?
+                                            ShiftExpression::Right :
+                                            ShiftExpression::Left,
+                                        token, std::move(*newAdd)});
                     }
                 }
 
@@ -306,34 +316,33 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             {
                 auto& result = cld::get<std::optional<ShiftExpression>>(state);
 
-                std::vector<std::pair<RelationalExpression::RelationalOperator, ShiftExpression>> list;
+                std::vector<RelationalExpression::Operand> list;
                 while (begin != end
                        && (begin->getTokenType() == cld::Lexer::TokenType::LessThan
                            || begin->getTokenType() == cld::Lexer::TokenType::LessThanOrEqual
                            || begin->getTokenType() == cld::Lexer::TokenType::GreaterThan
                            || begin->getTokenType() == cld::Lexer::TokenType::GreaterThanOrEqual))
                 {
-                    auto token = begin->getTokenType();
+                    const auto* token = begin;
                     begin++;
                     auto newShift = parseShiftExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newShift)
                     {
-                        list.emplace_back(
-                            [token]() -> RelationalExpression::RelationalOperator {
-                                switch (token)
-                                {
-                                    case cld::Lexer::TokenType::LessThan:
-                                        return RelationalExpression::RelationalOperator::LessThan;
-                                    case cld::Lexer::TokenType::LessThanOrEqual:
-                                        return RelationalExpression::RelationalOperator::LessThanOrEqual;
-                                    case cld::Lexer::TokenType::GreaterThan:
-                                        return RelationalExpression::RelationalOperator::GreaterThan;
-                                    case cld::Lexer::TokenType::GreaterThanOrEqual:
-                                        return RelationalExpression::RelationalOperator::GreaterThanOrEqual;
-                                    default: CLD_UNREACHABLE;
-                                }
-                            }(),
-                            std::move(*newShift));
+                        list.push_back({[token]() -> RelationalExpression::RelationalOperator {
+                                            switch (token->getTokenType())
+                                            {
+                                                case cld::Lexer::TokenType::LessThan:
+                                                    return RelationalExpression::RelationalOperator::LessThan;
+                                                case cld::Lexer::TokenType::LessThanOrEqual:
+                                                    return RelationalExpression::RelationalOperator::LessThanOrEqual;
+                                                case cld::Lexer::TokenType::GreaterThan:
+                                                    return RelationalExpression::RelationalOperator::GreaterThan;
+                                                case cld::Lexer::TokenType::GreaterThanOrEqual:
+                                                    return RelationalExpression::RelationalOperator::GreaterThanOrEqual;
+                                                default: CLD_UNREACHABLE;
+                                            }
+                                        }(),
+                                        token, std::move(*newShift)});
                     }
                 }
 
@@ -351,20 +360,20 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             {
                 auto& result = cld::get<std::optional<RelationalExpression>>(state);
 
-                std::vector<std::pair<EqualityExpression::EqualityOperator, RelationalExpression>> list;
+                std::vector<EqualityExpression::Operator> list;
                 while (begin != end
                        && (begin->getTokenType() == cld::Lexer::TokenType::Equal
                            || begin->getTokenType() == cld::Lexer::TokenType::NotEqual))
                 {
-                    auto token = begin->getTokenType();
+                    const auto* token = begin;
                     begin++;
                     auto newRelational = parseRelationalExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newRelational)
                     {
-                        list.emplace_back(token == cld::Lexer::TokenType::Equal ?
-                                              EqualityExpression::EqualityOperator::Equal :
-                                              EqualityExpression::EqualityOperator::NotEqual,
-                                          std::move(*newRelational));
+                        list.push_back({token->getTokenType() == cld::Lexer::TokenType::Equal ?
+                                            EqualityExpression::EqualityOperator::Equal :
+                                            EqualityExpression::EqualityOperator::NotEqual,
+                                        token, std::move(*newRelational)});
                     }
                 }
 
@@ -381,74 +390,120 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             case cld::getIndex<std::optional<EqualityExpression>>(state):
             {
                 auto& result = cld::get<std::optional<EqualityExpression>>(state);
-
-                std::vector<EqualityExpression> list;
-                if (result)
-                {
-                    list.push_back(std::move(*result));
-                }
+                std::vector<std::pair<cld::Lexer::CTokenIterator, EqualityExpression>> list;
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::Ampersand)
                 {
-                    begin++;
+                    const auto* token = begin++;
                     auto newEqual = parseEqualityExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newEqual)
                     {
-                        list.push_back(std::move(*newEqual));
+                        list.emplace_back(token, std::move(*newEqual));
                     }
                 }
 
-                state = BitAndExpression(start, begin, std::move(list));
+                if (!result)
+                {
+                    state = std::optional<BitAndExpression>{};
+                }
+                else
+                {
+                    state = BitAndExpression(start, begin, std::move(*result), std::move(list));
+                }
                 break;
             }
-            case cld::getIndex<BitAndExpression>(state):
+            case cld::getIndex<std::optional<BitAndExpression>>(state):
             {
-                std::vector<BitAndExpression> list;
-                list.push_back(std::move(cld::get<BitAndExpression>(state)));
+                auto& result = cld::get<std::optional<BitAndExpression>>(state);
+                std::vector<std::pair<cld::Lexer::CTokenIterator, BitAndExpression>> list;
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::BitXor)
                 {
-                    begin++;
-                    list.push_back(parseBitAndExpression(begin, end, context.withRecoveryTokens(firstSet())));
+                    const auto* token = begin++;
+                    auto bitAnd = parseBitAndExpression(begin, end, context.withRecoveryTokens(firstSet()));
+                    if (bitAnd)
+                    {
+                        list.emplace_back(token, std::move(*bitAnd));
+                    }
                 }
 
-                state = BitXorExpression(start, begin, std::move(list));
+                if (!result)
+                {
+                    state = std::optional<BitXorExpression>{};
+                }
+                else
+                {
+                    state = BitXorExpression(start, begin, std::move(*result), std::move(list));
+                }
                 break;
             }
-            case cld::getIndex<BitXorExpression>(state):
+            case cld::getIndex<std::optional<BitXorExpression>>(state):
             {
-                std::vector<BitXorExpression> list;
-                list.push_back(std::move(cld::get<BitXorExpression>(state)));
+                auto& result = cld::get<std::optional<BitXorExpression>>(state);
+                std::vector<std::pair<cld::Lexer::CTokenIterator, BitXorExpression>> list;
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::BitOr)
                 {
-                    begin++;
-                    list.push_back(parseBitXorExpression(begin, end, context.withRecoveryTokens(firstSet())));
+                    const auto* token = begin++;
+                    auto bitXor = parseBitXorExpression(begin, end, context.withRecoveryTokens(firstSet()));
+                    if (bitXor)
+                    {
+                        list.emplace_back(token, std::move(*bitXor));
+                    }
                 }
-                state = BitOrExpression(start, begin, std::move(list));
+                if (!result)
+                {
+                    state = std::optional<BitOrExpression>{};
+                }
+                else
+                {
+                    state = BitOrExpression(start, begin, std::move(*result), std::move(list));
+                }
                 break;
             }
-            case cld::getIndex<BitOrExpression>(state):
+            case cld::getIndex<std::optional<BitOrExpression>>(state):
             {
-                std::vector<BitOrExpression> list;
-                list.push_back(std::move(cld::get<BitOrExpression>(state)));
+                auto& result = cld::get<std::optional<BitOrExpression>>(state);
+                std::vector<std::pair<cld::Lexer::CTokenIterator, BitOrExpression>> list;
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::LogicAnd)
                 {
-                    begin++;
-                    list.push_back(parseBitOrExpression(begin, end, context.withRecoveryTokens(firstSet())));
+                    const auto* token = begin++;
+                    auto bitOr = parseBitOrExpression(begin, end, context.withRecoveryTokens(firstSet()));
+                    if (bitOr)
+                    {
+                        list.emplace_back(token, std::move(*bitOr));
+                    }
                 }
 
-                state = LogicalAndExpression(start, begin, std::move(list));
+                if (!result)
+                {
+                    state = std::optional<LogicalAndExpression>{};
+                }
+                else
+                {
+                    state = LogicalAndExpression(start, begin, std::move(*result), std::move(list));
+                }
                 break;
             }
-            case cld::getIndex<LogicalAndExpression>(state):
+            case cld::getIndex<std::optional<LogicalAndExpression>>(state):
             {
-                std::vector<LogicalAndExpression> list;
-                list.push_back(std::move(cld::get<LogicalAndExpression>(state)));
+                auto& result = cld::get<std::optional<LogicalAndExpression>>(state);
+                std::vector<std::pair<cld::Lexer::CTokenIterator, LogicalAndExpression>> list;
                 while (begin != end && begin->getTokenType() == cld::Lexer::TokenType::LogicOr)
                 {
-                    begin++;
-                    list.push_back(parseLogicalAndExpression(begin, end, context));
+                    const auto* token = begin++;
+                    auto logicAnd = parseLogicalAndExpression(begin, end, context);
+                    if (logicAnd)
+                    {
+                        list.emplace_back(token, std::move(*logicAnd));
+                    }
                 }
 
-                state = LogicalOrExpression(start, begin, std::move(list));
+                if (!result)
+                {
+                    state = std::optional<LogicalOrExpression>{};
+                }
+                else
+                {
+                    state = LogicalOrExpression(start, begin, std::move(*result), std::move(list));
+                }
                 break;
             }
             default: break;
@@ -460,11 +515,11 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
 
 } // namespace
 
-cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer::CTokenIterator& begin,
-                                                                           Lexer::CTokenIterator end, Context& context)
+std::optional<cld::Syntax::ConditionalExpression>
+    cld::Parser::parseConditionalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     const auto* start = begin;
-    auto logicalOrExpression = cld::get<LogicalOrExpression>(
+    auto logicalOrExpression = cld::get<std::optional<LogicalOrExpression>>(
         parseBinaryOperators(EndState::LogicalOr, begin, end,
                              context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::QuestionMark))));
     if (begin != end && begin->getTokenType() == Lexer::TokenType::QuestionMark)
@@ -479,41 +534,52 @@ cld::Syntax::ConditionalExpression cld::Parser::parseConditionalExpression(Lexer
         {
             context.skipUntil(begin, end, firstExpressionSet);
         }
-        return ConditionalExpression(
-            start, begin, std::move(logicalOrExpression), std::move(optionalExpression),
-            std::make_unique<ConditionalExpression>(parseConditionalExpression(begin, end, context)));
+        auto optionalConditional = parseConditionalExpression(begin, end, context);
+        if (!logicalOrExpression)
+        {
+            return {};
+        }
+        return ConditionalExpression(start, begin, std::move(*logicalOrExpression), std::move(optionalExpression),
+                                     optionalConditional ?
+                                         std::make_unique<ConditionalExpression>(std::move(*optionalConditional)) :
+                                         std::unique_ptr<ConditionalExpression>{});
     }
-    return ConditionalExpression(start, begin, std::move(logicalOrExpression));
+    if (!logicalOrExpression)
+    {
+        return {};
+    }
+    return ConditionalExpression(start, begin, std::move(*logicalOrExpression));
 }
 
-cld::Syntax::LogicalOrExpression cld::Parser::parseLogicalOrExpression(Lexer::CTokenIterator& begin,
-                                                                       Lexer::CTokenIterator end, Context& context)
+std::optional<cld::Syntax::LogicalOrExpression>
+    cld::Parser::parseLogicalOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    return cld::get<LogicalOrExpression>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
+    return cld::get<std::optional<LogicalOrExpression>>(parseBinaryOperators(EndState::LogicalOr, begin, end, context));
 }
 
-cld::Syntax::LogicalAndExpression cld::Parser::parseLogicalAndExpression(Lexer::CTokenIterator& begin,
-                                                                         Lexer::CTokenIterator end, Context& context)
+std::optional<cld::Syntax::LogicalAndExpression>
+    cld::Parser::parseLogicalAndExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    return cld::get<LogicalAndExpression>(parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
+    return cld::get<std::optional<LogicalAndExpression>>(
+        parseBinaryOperators(EndState::LogicalAnd, begin, end, context));
 }
 
-cld::Syntax::BitOrExpression cld::Parser::parseBitOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
-                                                               Context& context)
+std::optional<cld::Syntax::BitOrExpression>
+    cld::Parser::parseBitOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    return cld::get<BitOrExpression>(parseBinaryOperators(EndState::BitOr, begin, end, context));
+    return cld::get<std::optional<BitOrExpression>>(parseBinaryOperators(EndState::BitOr, begin, end, context));
 }
 
-cld::Syntax::BitXorExpression cld::Parser::parseBitXorExpression(Lexer::CTokenIterator& begin,
-                                                                 Lexer::CTokenIterator end, Context& context)
+std::optional<cld::Syntax::BitXorExpression>
+    cld::Parser::parseBitXorExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    return cld::get<BitXorExpression>(parseBinaryOperators(EndState::BitXor, begin, end, context));
+    return cld::get<std::optional<BitXorExpression>>(parseBinaryOperators(EndState::BitXor, begin, end, context));
 }
 
-cld::Syntax::BitAndExpression cld::Parser::parseBitAndExpression(Lexer::CTokenIterator& begin,
-                                                                 Lexer::CTokenIterator end, Context& context)
+std::optional<cld::Syntax::BitAndExpression>
+    cld::Parser::parseBitAndExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
-    return cld::get<BitAndExpression>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
+    return cld::get<std::optional<BitAndExpression>>(parseBinaryOperators(EndState::BitAnd, begin, end, context));
 }
 
 std::optional<cld::Syntax::EqualityExpression>
