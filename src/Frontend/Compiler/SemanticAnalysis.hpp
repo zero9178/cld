@@ -187,7 +187,8 @@ class SemanticAnalysis final
                                                                     const Syntax::PostFixExpression& postFixExpr,
                                                                     const Lexer::CToken& identifier);
 
-    Expression checkIncrementAndDecrement(UnaryOperator::Kind kind, Expression&& value, Lexer::CTokenIterator opToken);
+    Expression checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind, Expression&& value,
+                                          Lexer::CTokenIterator opToken);
 
     Expression doBitOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
                               Expression&& rhs);

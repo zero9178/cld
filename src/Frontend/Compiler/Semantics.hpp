@@ -15,6 +15,7 @@ class Message;
 namespace Syntax
 {
 class Declarator;
+class Node;
 } // namespace Syntax
 
 } // namespace cld
@@ -1089,14 +1090,17 @@ class Expression final
     ValueCategory m_valueCategory;
 
 public:
-    using Variant = std::variant<std::monostate, Constant, DeclarationRead, Conversion, MemberAccess, BinaryOperator,
-                                 Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional>;
+    using Variant =
+        std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
+                     MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional>;
 
 private:
     Variant m_expression;
 
 public:
-    Expression() = default;
+    explicit Expression(const Syntax::Node& node);
+
+    Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end) : m_expression(std::pair{begin, end}) {}
 
     Expression(Type type, ValueCategory valueCategory, Variant expression)
         : m_type(std::move(type)), m_valueCategory(valueCategory), m_expression(std::move(expression))
@@ -1138,20 +1142,20 @@ public:
 
     [[nodiscard]] bool isUndefined() const
     {
-        return std::holds_alternative<std::monostate>(m_expression);
+        return std::holds_alternative<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>>(m_expression);
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const
     {
         return cld::match(
-            m_expression, [](std::monostate) -> Lexer::CTokenIterator { CLD_UNREACHABLE; },
+            m_expression, [](std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator> pair) { return pair.first; },
             [](const auto& value) { return value.begin(); });
     }
 
     [[nodiscard]] Lexer::CTokenIterator end() const
     {
         return cld::match(
-            m_expression, [](std::monostate) -> Lexer::CTokenIterator { CLD_UNREACHABLE; },
+            m_expression, [](std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator> pair) { return pair.second; },
             [](const auto& value) { return value.end(); });
     }
 };

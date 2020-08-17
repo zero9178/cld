@@ -9,6 +9,7 @@
 #include "ErrorMessages.hpp"
 #include "SemanticAnalysis.hpp"
 #include "SemanticUtil.hpp"
+#include "Syntax.hpp"
 
 cld::Semantics::Type cld::Semantics::getPtrdiffT(const LanguageOptions& options)
 {
@@ -977,3 +978,5 @@ cld::Lexer::CTokenIterator cld::Semantics::Conditional::end() const
 {
     return m_boolExpression->end();
 }
+
+cld::Semantics::Expression::Expression(const cld::Syntax::Node& node) : Expression(node.begin(), node.end()) {}
