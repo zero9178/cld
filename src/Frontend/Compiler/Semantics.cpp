@@ -384,23 +384,6 @@ bool cld::Semantics::AbstractArrayType::operator!=(const cld::Semantics::Abstrac
     return !(rhs == *this);
 }
 
-std::string_view cld::Semantics::declaratorToName(const cld::Syntax::Declarator& declarator)
-{
-    return matchWithSelf(
-        declarator.getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> std::string_view {
-            return name.getIdentifierLoc()->getText();
-        },
-        [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> std::string_view {
-            return cld::match(declarator.getDeclarator().getDirectDeclarator(),
-                              [&self](auto&& value) -> std::string_view { return self(value); });
-        },
-        [](auto&& self, auto&& value) -> std::string_view {
-            return cld::match(value.getDirectDeclarator(),
-                              [&self](auto&& value) -> std::string_view { return self(value); });
-        });
-}
-
 cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::Declarator& declarator)
 {
     return matchWithSelf(
@@ -1009,4 +992,14 @@ cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::begin() const
 cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::end() const
 {
     return m_lastExpression->end();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CallExpression::begin() const
+{
+    return m_functionExpression->begin();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
+{
+    return m_closeParentheses + 1;
 }

@@ -386,16 +386,24 @@ public:
 class PostFixExpressionFunctionCall final : public Node
 {
     std::unique_ptr<PostFixExpression> m_postFixExpression;
+    Lexer::CTokenIterator m_openParentheses;
     std::vector<std::unique_ptr<AssignmentExpression>> m_optionalAssignmentExpressions;
+    Lexer::CTokenIterator m_closeParentheses;
 
 public:
     PostFixExpressionFunctionCall(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                   std::unique_ptr<PostFixExpression>&& postFixExpression,
-                                  std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmentExpressions);
+                                  Lexer::CTokenIterator openParentheses,
+                                  std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmentExpressions,
+                                  Lexer::CTokenIterator closeParentheses);
 
     [[nodiscard]] const PostFixExpression& getPostFixExpression() const;
 
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
+
     [[nodiscard]] const std::vector<std::unique_ptr<AssignmentExpression>>& getOptionalAssignmentExpressions() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const;
 };
 
 /**

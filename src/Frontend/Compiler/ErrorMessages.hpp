@@ -384,6 +384,43 @@ CREATE_ERROR(CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER, "Cannot assign void
 CREATE_ERROR(CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER, "Cannot assign function pointer to void pointer",
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
+CREATE_ERROR(CANNOT_CALL_NON_FUNCTION_TYPE, "Cannot call non function type", AnnotateExpr<0>, PointAt<1>, PointAt<2>);
+
+CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N,
+             "Not enough arguments for function call. Expected %0 got %1", AnnotateExpr<2>);
+
+CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N,
+             "Not enough arguments for calling function %0. Expected %1 got %2", Underline<0>);
+
+CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_AT_LEAST_N_GOT_N,
+             "Not enough arguments for function call. Expected at least %0 got %1", AnnotateExpr<2>);
+
+CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N,
+             "Not enough arguments for calling function %0. Expected at least %1 got %2", Underline<0>);
+
+CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N,
+             "Too many arguments for function call. Expected %0 got %1", AnnotateExpr<2>, Underline<3>);
+
+CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N,
+             "Too many arguments for calling function %0. Expected %1 got %2", Underline<0>, Underline<3>);
+
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE, "Expected argument %0 to be an arithmetic type",
+             AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Expected argument %0  to be an arithmetic or pointer type", AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE, "Expected argument %0  to be a pointer type", AnnotateExpr<1>);
+
+CREATE_ERROR(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N,
+             "Cannot pass incompatible type to argument %0 of type %full1", AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_ARGUMENT,
+             "Cannot pass void pointer to function pointer argument", AnnotateExpr<0>);
+
+CREATE_ERROR(CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_ARGUMENT,
+             "Cannot assign function pointer to void pointer argument", AnnotateExpr<0>);
+
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
 
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF, "Function type not allowed in 'sizeof'", Annotate<0, 1>);

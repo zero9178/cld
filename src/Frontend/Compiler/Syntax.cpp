@@ -159,12 +159,15 @@ cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionArrow::getIdentifier() 
 }
 
 cld::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<cld::Syntax::PostFixExpression>&& postFixExpression,
-    std::vector<std::unique_ptr<cld::Syntax::AssignmentExpression>>&& optionalAssignmentExpressions)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
+    Lexer::CTokenIterator openParentheses,
+    std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmentExpressions,
+    Lexer::CTokenIterator closeParentheses)
     : Node(begin, end),
       m_postFixExpression(std::move(postFixExpression)),
-      m_optionalAssignmentExpressions(std::move(optionalAssignmentExpressions))
+      m_openParentheses(openParentheses),
+      m_optionalAssignmentExpressions(std::move(optionalAssignmentExpressions)),
+      m_closeParentheses(closeParentheses)
 {
 }
 
@@ -610,6 +613,16 @@ const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::BitXorExpre
     cld::Syntax::BitOrExpression::getOptionalBitXorExpressions() const
 {
     return m_optionalBitXorExpressions;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionFunctionCall::getOpenParentheses() const
+{
+    return m_openParentheses;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionFunctionCall::getCloseParentheses() const
+{
+    return m_closeParentheses;
 }
 
 const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionFunctionCall::getPostFixExpression() const

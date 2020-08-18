@@ -143,7 +143,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             }
             auto paramType = ft.getArguments()[i].first;
             auto& ptr = parameterDeclarations.emplace_back(
-                std::make_unique<Declaration>(std::move(paramType), Linkage::None, lifetime, loc->getText()));
+                std::make_unique<Declaration>(std::move(paramType), Linkage::None, lifetime, loc));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -183,33 +183,32 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     continue;
                 }
-                auto name = declaratorToName(*decl);
-                auto result = parameterNameToType.find(name);
+                const auto* loc = declaratorToLoc(*decl);
+                auto result = parameterNameToType.find(loc->getText());
                 if (result == parameterNameToType.end())
                 {
                     continue;
                 }
                 auto& ptr = parameterDeclarations.emplace_back(
-                    std::make_unique<Declaration>(result->second, Linkage::None, lifetime, name));
-                const auto* loc = declaratorToLoc(*decl);
-                getCurrentScope().declarations.insert({name, DeclarationInScope{loc, ptr.get()}});
+                    std::make_unique<Declaration>(result->second, Linkage::None, lifetime, loc));
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
                 // Don't check for duplicates again. We already did that when processing the identifier list
             }
         }
     }
 
-    auto name = declaratorToName(node.getDeclarator());
+    const auto* loc = declaratorToLoc(node.getDeclarator());
     std::vector<TranslationUnit::Variant> result;
     auto& ptr = cld::get<std::unique_ptr<FunctionDefinition>>(result.emplace_back(std::make_unique<FunctionDefinition>(
-        std::move(type), name, std::move(parameterDeclarations),
+        std::move(type), loc, std::move(parameterDeclarations),
         storageClassSpecifier ?
             (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ? Linkage::Internal :
                                                                                               Linkage::External) :
             Linkage::External,
         CompoundStatement({}))));
-    auto* loc = declaratorToLoc(node.getDeclarator());
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
-    auto [prev, notRedefinition] = m_scopes[0].declarations.insert({name, DeclarationInScope{loc, ptr.get()}});
+    auto [prev, notRedefinition] =
+        m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
     if (!notRedefinition)
     {
         if (!std::holds_alternative<const Declaration*>(prev->second.declared)
@@ -299,7 +298,6 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     for (auto& [declarator, initializer] : node.getInitDeclarators())
     {
         const auto* loc = declaratorToLoc(*declarator);
-        auto name = declaratorToName(*declarator);
         auto result = declaratorsToType(node.getDeclarationSpecifiers(), *declarator);
         if (auto* functionType = std::get_if<FunctionType>(&result.get());
             functionType
@@ -317,9 +315,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 linkage = Linkage::Internal;
             }
             Lifetime lifetime = Lifetime::Static;
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, name);
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
             auto [prev, notRedefinition] =
-                getCurrentScope().declarations.insert({name, DeclarationInScope{loc, declaration.get()}});
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
             {
                 if (std::holds_alternative<ConstRetType>(prev->second.declared)
@@ -339,7 +337,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, name);
+                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, loc);
                     prev->second.declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -487,9 +485,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             if (storageClassSpecifier
                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
             {
-                result.setName(name);
+                result.setName(loc->getText());
                 auto [prev, noRedefinition] =
-                    getCurrentScope().declarations.insert({name, DeclarationInScope{loc, result}});
+                    getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
                 if (!noRedefinition
                     && (!std::holds_alternative<Type>(prev->second.declared)
                         || !typesAreCompatible(result, cld::get<Type>(prev->second.declared))))
@@ -500,9 +498,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 }
                 continue;
             }
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, name);
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
             auto [prev, notRedefinition] =
-                getCurrentScope().declarations.insert({name, DeclarationInScope{loc, declaration.get()}});
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
             {
                 if (!std::holds_alternative<const Declaration*>(prev->second.declared)
@@ -745,7 +743,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         std::string_view name;
         if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
         {
-            name = declaratorToName(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
+            name = declaratorToLoc(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator))->getText();
         }
         // Not transforming array types to pointers here as we might still want to use that information
         // to warn callers.
@@ -951,16 +949,15 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                                     .args(*init, m_sourceInterface, *init));
                         }
                         auto paramType = declaratorsToType(iter.getDeclarationSpecifiers(), *decl);
-                        auto name = declaratorToName(*decl);
                         const auto* loc = declaratorToLoc(*decl);
-                        auto result = paramNames.find(name);
+                        auto result = paramNames.find(loc->getText());
                         if (result == paramNames.end())
                         {
                             log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_NOT_BELONGING_TO_ANY_PARAMETER.args(
                                 *loc, m_sourceInterface, *loc, identifiers.getIdentifiers()));
                             continue;
                         }
-                        auto& element = seenParameters[name];
+                        auto& element = seenParameters[loc->getText()];
                         if (element != nullptr)
                         {
                             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
@@ -1342,7 +1339,7 @@ cld::Semantics::Type
                     }
                     value = result->toUInt();
                 }
-                std::string_view fieldName = declarator ? declaratorToName(*declarator) : "";
+                std::string_view fieldName = declarator ? declaratorToLoc(*declarator)->getText() : "";
                 fields.push_back({std::make_shared<Type>(std::move(type)), fieldName, value});
             }
         }

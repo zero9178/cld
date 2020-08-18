@@ -644,7 +644,219 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         MemberAccess(std::make_unique<Expression>(std::move(structOrUnionPtr)), index, node.getIdentifier()));
 }
 
-cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node) {}
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
+{
+    auto function = lvalueConversion(visit(node.getPostFixExpression()));
+    if (!function.isUndefined()
+        && (!std::holds_alternative<PointerType>(function.getType().get())
+            || !std::holds_alternative<FunctionType>(
+                cld::get<PointerType>(function.getType().get()).getElementType().get())))
+    {
+        log(Errors::Semantics::CANNOT_CALL_NON_FUNCTION_TYPE.args(
+            function, m_sourceInterface, function, *node.getOpenParentheses(), *node.getCloseParentheses()));
+        for (auto& iter : node.getOptionalAssignmentExpressions())
+        {
+            CLD_ASSERT(iter);
+            visit(*iter);
+        }
+        return Expression(node);
+    }
+    auto& ft = cld::get<FunctionType>(cld::get<PointerType>(function.getType().get()).getElementType().get());
+    std::vector<Expression> arguments;
+    if (ft.isKandR())
+    {
+        for (auto& iter : node.getOptionalAssignmentExpressions())
+        {
+            CLD_ASSERT(iter);
+            arguments.push_back(defaultArgumentPromotion(visit(*iter)));
+        }
+    }
+    else
+    {
+        auto callsFunction = [&] {
+            if (!std::holds_alternative<Conversion>(function.get()))
+            {
+                return false;
+            }
+            auto& conversion = cld::get<Conversion>(function.get());
+            if (conversion.getKind() != Conversion::LValue)
+            {
+                return false;
+            }
+            if (!std::holds_alternative<DeclarationRead>(conversion.getExpression().get()))
+            {
+                return false;
+            }
+            auto& decl = cld::get<DeclarationRead>(conversion.getExpression().get());
+            return cld::match(
+                decl.getDeclRead(), [](const FunctionDefinition*) { return true; },
+                [](const Declaration* declaration) {
+                    return std::holds_alternative<FunctionType>(declaration->getType().get());
+                });
+        }();
+        auto& argumentTypes = ft.getArguments();
+        if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())
+        {
+            if (!ft.isLastVararg())
+            {
+                if (callsFunction)
+                {
+                    auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                        decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                        node.getOptionalAssignmentExpressions().size()));
+                }
+                else
+                {
+                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
+                        function, m_sourceInterface, argumentTypes.size(),
+                        node.getOptionalAssignmentExpressions().size(), function));
+                }
+            }
+            else
+            {
+                if (callsFunction)
+                {
+                    auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
+                        decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                        node.getOptionalAssignmentExpressions().size()));
+                }
+                else
+                {
+                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_AT_LEAST_N_GOT_N.args(
+                        function, m_sourceInterface, argumentTypes.size(),
+                        node.getOptionalAssignmentExpressions().size(), function));
+                }
+            }
+        }
+        else if (!ft.isLastVararg() && node.getOptionalAssignmentExpressions().size() > argumentTypes.size())
+        {
+            if (callsFunction)
+            {
+                auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                    decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                    node.getOptionalAssignmentExpressions().size(),
+                    llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+            }
+            else
+            {
+                log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
+                    function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
+                    function,
+                    llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+            }
+        }
+        else
+        {
+            std::size_t i = 0;
+            for (; i < argumentTypes.size(); i++)
+            {
+                auto paramType = removeQualifiers(adjustParameterType(argumentTypes[i].first));
+                if (paramType.isUndefined())
+                {
+                    visit(*node.getOptionalAssignmentExpressions()[i]);
+                    arguments.emplace_back(*node.getOptionalAssignmentExpressions()[i]);
+                    continue;
+                }
+                auto expression = lvalueConversion(visit(*node.getOptionalAssignmentExpressions()[i]));
+                if (expression.isUndefined())
+                {
+                    arguments.push_back(std::move(expression));
+                    continue;
+                }
+                if (isArithmetic(paramType))
+                {
+                    if (!isBool(paramType))
+                    {
+                        if (!isArithmetic(expression.getType()))
+                        {
+                            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(
+                                expression, m_sourceInterface, i + 1, expression));
+                        }
+                    }
+                    else
+                    {
+                        if (!isScalar(expression.getType()))
+                        {
+                            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                                expression, m_sourceInterface, i + 1, expression));
+                        }
+                    }
+                }
+                else if (isRecord(paramType))
+                {
+                    if (!typesAreCompatible(paramType, expression.getType()))
+                    {
+                        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
+                            expression, m_sourceInterface, i + 1, paramType, expression));
+                    }
+                }
+                else if (std::holds_alternative<PointerType>(paramType.get()))
+                {
+                    // TODO: Null pointer constant
+                    if (!std::holds_alternative<PointerType>(expression.getType().get()))
+                    {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE.args(
+                            expression, m_sourceInterface, i + 1, expression));
+                    }
+                    else
+                    {
+                        auto& paramElementType = cld::get<PointerType>(paramType.get()).getElementType();
+                        auto& expElementType = cld::get<PointerType>(expression.getType().get()).getElementType();
+                        if (isVoid(removeQualifiers(paramElementType)) != isVoid(removeQualifiers(expElementType)))
+                        {
+                            bool paramIsVoid = isVoid(removeQualifiers(paramElementType));
+                            auto& nonVoidType = paramIsVoid ? expElementType : paramElementType;
+                            if (std::holds_alternative<FunctionType>(nonVoidType.get()))
+                            {
+                                if (paramIsVoid)
+                                {
+                                    log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_ARGUMENT.args(
+                                        expression, m_sourceInterface, expression));
+                                }
+                                else
+                                {
+                                    log(Errors::Semantics::CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_ARGUMENT.args(
+                                        expression, m_sourceInterface, expression));
+                                }
+                            }
+                            if ((!paramElementType.isConst() && expElementType.isConst())
+                                || (!paramElementType.isVolatile() && expElementType.isVolatile()))
+                            {
+                                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
+                                    expression, m_sourceInterface, i + 1, paramType, expression));
+                            }
+                        }
+                        else if (!typesAreCompatible(removeQualifiers(paramElementType),
+                                                     removeQualifiers(expElementType)))
+                        {
+                            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
+                                expression, m_sourceInterface, i + 1, paramType, expression));
+                        }
+                        else if ((!paramElementType.isConst() && expElementType.isConst())
+                                 || (!paramElementType.isVolatile() && expElementType.isVolatile()))
+                        {
+                            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
+                                expression, m_sourceInterface, i + 1, paramType, expression));
+                        }
+                    }
+                }
+                arguments.push_back(std::move(expression));
+            }
+            for (; i < node.getOptionalAssignmentExpressions().size(); i++)
+            {
+                arguments.push_back(defaultArgumentPromotion(visit(*node.getOptionalAssignmentExpressions()[i])));
+            }
+        }
+    }
+
+    auto type = ft.getReturnType();
+    return Expression(std::move(type), ValueCategory::Rvalue,
+                      CallExpression(std::make_unique<Expression>(std::move(function)), node.getOpenParentheses(),
+                                     std::move(arguments), node.getCloseParentheses()));
+}
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::checkIncrementAndDecrement(const Syntax::Node& node,
                                                                                         UnaryOperator::Kind kind,
@@ -1623,6 +1835,24 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type typ
         return type;
     }
     return Type(false, false, type.get());
+}
+
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(Expression expression) const
+{
+    expression = integerPromotion(std::move(expression));
+    if (!std::holds_alternative<PrimitiveType>(expression.getType().get()))
+    {
+        return expression;
+    }
+    auto& prim = cld::get<PrimitiveType>(expression.getType().get());
+    if (prim.getKind() != PrimitiveType::Kind::Float)
+    {
+        return expression;
+    }
+    auto newType = PrimitiveType::createDouble(false, false);
+    return Expression(
+        newType, ValueCategory::Rvalue,
+        Conversion(newType, Conversion::DefaultArgumentPromotion, std::make_unique<Expression>(std::move(expression))));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression expression) const

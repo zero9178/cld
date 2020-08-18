@@ -396,7 +396,14 @@ private:
         else if constexpr (IsIterable<U>{})
         {
             using ValueType = typename std::iterator_traits<decltype(std::begin(std::declval<U>()))>::value_type;
-            return locationConstraintCheck<std::remove_pointer_t<ValueType>>();
+            if constexpr (IsSmartPtr<ValueType>{})
+            {
+                return locationConstraintCheck<typename ValueType::element_type>();
+            }
+            else
+            {
+                return locationConstraintCheck<std::remove_pointer_t<ValueType>>();
+            }
         }
         else
         {

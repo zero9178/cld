@@ -699,6 +699,11 @@ public:
     {
     }
 
+    [[nodiscard]] Lexer::CTokenIterator getIdentifierToken() const
+    {
+        return m_identifierToken;
+    }
+
     [[nodiscard]] Variant getDeclRead() const
     {
         return m_declRead;
@@ -722,7 +727,8 @@ public:
     {
         LValue,
         IntegerPromotion,
-        ArithmeticConversion
+        ArithmeticConversion,
+        DefaultArgumentPromotion,
     };
 
 private:
@@ -1144,8 +1150,8 @@ class CommaExpression final
     std::unique_ptr<Expression> m_lastExpression;
 
 public:
-    CommaExpression(std::vector<Expression>&& commaExpression, std::unique_ptr<Expression>&& lastExpression)
-        : m_commaExpressions(std::move(commaExpression)), m_lastExpression(std::move(lastExpression))
+    CommaExpression(std::vector<Expression>&& commaExpressions, std::unique_ptr<Expression>&& lastExpression)
+        : m_commaExpressions(std::move(commaExpressions)), m_lastExpression(std::move(lastExpression))
     {
         CLD_ASSERT(m_commaExpressions.size() >= 1);
     }
@@ -1158,6 +1164,48 @@ public:
     [[nodiscard]] const Expression& getLastExpression() const
     {
         return *m_lastExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
+class CallExpression final
+{
+    std::unique_ptr<Expression> m_functionExpression;
+    Lexer::CTokenIterator m_openParentheses;
+    std::vector<Expression> m_argumentExpressions;
+    Lexer::CTokenIterator m_closeParentheses;
+
+public:
+    CallExpression(std::unique_ptr<Expression>&& functionExpression, Lexer::CTokenIterator openParentheses,
+                   std::vector<Expression>&& argumentExpressions, Lexer::CTokenIterator closeParentheses)
+        : m_functionExpression(std::move(functionExpression)),
+          m_openParentheses(openParentheses),
+          m_argumentExpressions(std::move(argumentExpressions)),
+          m_closeParentheses(closeParentheses)
+    {
+    }
+
+    [[nodiscard]] const Expression& getFunctionExpression() const
+    {
+        return *m_functionExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const
+    {
+        return m_openParentheses;
+    }
+
+    [[nodiscard]] const std::vector<Expression>& getArgumentExpressions() const
+    {
+        return m_argumentExpressions;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
+    {
+        return m_closeParentheses;
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const;
@@ -1179,7 +1227,7 @@ class Expression final
 public:
     using Variant = std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead,
                                  Conversion, MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator,
-                                 SubscriptOperator, Conditional, Assignment, CommaExpression>;
+                                 SubscriptOperator, Conditional, Assignment, CommaExpression, CallExpression>;
 
 private:
     Variant m_expression;
@@ -1266,16 +1314,16 @@ class Declaration final
     Type m_type;
     Linkage m_linkage;
     Lifetime m_lifetime;
-    std::string_view m_name;
+    Lexer::CTokenIterator m_nameToken;
     // std::optional<Expression> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, std::string_view name/*,
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken/*,
                 std::optional<Expression> initializer = {}*/)
         : m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
-          m_name(name)/*,
+          m_nameToken(nameToken)/*,
           m_initializer(std::move(initializer))*/
     {
     }
@@ -1295,9 +1343,9 @@ public:
         return m_lifetime;
     }
 
-    [[nodiscard]] std::string_view getName() const
+    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
-        return m_name;
+        return m_nameToken;
     }
 };
 
@@ -1483,26 +1531,26 @@ public:
 class FunctionDefinition final
 {
     Type m_type;
-    std::string_view m_name;
+    Lexer::CTokenIterator m_nameToken;
     std::vector<std::unique_ptr<Declaration>> m_parameterDeclarations;
     Linkage m_linkage;
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(Type type, std::string_view name,
+    FunctionDefinition(Type type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
                        CompoundStatement compoundStatement)
         : m_type(std::move(type)),
-          m_name(name),
+          m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
           m_compoundStatement(std::move(compoundStatement))
     {
     }
 
-    [[nodiscard]] std::string_view getName() const
+    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
-        return m_name;
+        return m_nameToken;
     }
 
     [[nodiscard]] const Type& getType() const
@@ -1552,8 +1600,6 @@ public:
         return m_globals;
     }
 };
-
-std::string_view declaratorToName(const cld::Syntax::Declarator& declarator);
 
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 

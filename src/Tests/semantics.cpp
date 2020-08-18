@@ -60,7 +60,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-            CHECK(decl->getName() == "i");
+            CHECK(decl->getNameToken()->getText() == "i");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
@@ -70,7 +70,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-            CHECK(decl->getName() == "f");
+            CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
@@ -284,7 +284,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "d");
+            CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native()));
             CHECK(decl->getType().isTypedef());
@@ -298,7 +298,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "d");
+            CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
         }
@@ -397,7 +397,7 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "i");
+            CHECK(decl->getNameToken()->getText() == "i");
             CHECK(decl->getType() == type);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
@@ -432,7 +432,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "f");
+            CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
                       false, false, false,
@@ -459,7 +459,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-                CHECK(decl->getName() == "f");
+                CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
                                                              cld::Semantics::PrimitiveType::createInt(
@@ -485,7 +485,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-                CHECK(decl->getName() == "f");
+                CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
                                                              cld::Semantics::PrimitiveType::createInt(
@@ -517,7 +517,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "f");
+            CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
                       isConst, isVolatile, isRestrict,
@@ -545,7 +545,7 @@ TEST_CASE("Semantics array declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "f");
+            CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
                       false, false, false, false,
@@ -559,7 +559,7 @@ TEST_CASE("Semantics array declarations", "[semantics]")
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
             auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getName() == "f");
+            CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
                       false, false, false, false,
@@ -607,7 +607,7 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-        CHECK(decl->getName() == "f");
+        CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
                   cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
@@ -643,7 +643,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-        CHECK(decl->getName() == "a");
+        CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().get()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getName() == "A");
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getScopeOrId() == 0);
@@ -655,7 +655,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-        CHECK(decl->getName() == "a");
+        CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().get()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getName() == "A");
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getScopeOrId() == 0);
@@ -667,7 +667,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-        CHECK(decl->getName() == "a");
+        CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().get()));
         auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().get());
         CHECK(anon.getFields().size() == 3);
@@ -689,7 +689,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-        CHECK(decl->getName() == "a");
+        CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().get()));
         auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().get());
         CHECK(anon.getFields().size() == 3);
@@ -1236,7 +1236,7 @@ TEST_CASE("Semantics composite type", "[semantics]")
         REQUIRE(translationUnit.getGlobals().size() == 2);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
-        CHECK(decl->getName() == "f");
+        CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
                   cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
@@ -3145,4 +3145,152 @@ TEST_CASE("Semantics comma expression", "[semantics]")
                   "(5,i) = 3;\n"
                   "}",
                   ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'='"));
+}
+
+TEST_CASE("Semantics function call expression", "[semantics]")
+{
+    SECTION("K & R")
+    {
+        auto& exp = generateExpression("double bar();\n"
+                                       "\n"
+                                       "void foo(unsigned short i) {\n"
+                                       "bar(5.0f,i);\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<CallExpression>(exp.get()));
+        auto& call = cld::get<CallExpression>(exp.get());
+        REQUIRE(call.getArgumentExpressions().size() == 2);
+        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[0].get()));
+        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[0].get()).getKind()
+              == Conversion::DefaultArgumentPromotion);
+        CHECK(call.getArgumentExpressions()[0].getType() == PrimitiveType::createDouble(false, false));
+        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[1].get()));
+        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[1].get()).getKind() == Conversion::IntegerPromotion);
+        CHECK(call.getArgumentExpressions()[1].getType()
+              == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+    }
+    SECTION("Prototyped")
+    {
+        auto& exp = generateExpression("double bar(float,unsigned short);\n"
+                                       "\n"
+                                       "void foo(unsigned short i) {\n"
+                                       "bar(5.0f,i);\n"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<CallExpression>(exp.get()));
+        auto& call = cld::get<CallExpression>(exp.get());
+        REQUIRE(call.getArgumentExpressions().size() == 2);
+        CHECK(call.getArgumentExpressions()[0].getType() == PrimitiveType::createFloat(false, false));
+        CHECK(call.getArgumentExpressions()[1].getType()
+              == PrimitiveType::createUnsignedShort(false, false, cld::LanguageOptions::native()));
+    }
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  " i();\n"
+                  "}",
+                  ProducesError(CANNOT_CALL_NON_FUNCTION_TYPE));
+    SEMA_PRODUCES("void bar(int i);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar();\n"
+                  "}",
+                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N, "'bar'", 1, 0));
+    SEMA_PRODUCES("void foo(void (*bar)(int)) {\n"
+                  " bar();\n"
+                  "}",
+                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N, 1, 0));
+    SEMA_PRODUCES("void bar(int i,...);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar();\n"
+                  "}",
+                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N, "'bar'", 1, 0));
+    SEMA_PRODUCES("void foo(void (*bar)(int,...)) {\n"
+                  " bar();\n"
+                  "}",
+                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_AT_LEAST_N_GOT_N, 1, 0));
+    SEMA_PRODUCES("void bar(void);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar(3,5,3);\n"
+                  "}",
+                  ProducesError(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N, "'bar'", 0, 3));
+    SEMA_PRODUCES("void foo(void (*bar)(void)) {\n"
+                  " bar(3,5,3);\n"
+                  "}",
+                  ProducesError(TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N, 0, 3));
+    SEMA_PRODUCES("void bar(_Bool);\n"
+                  "void foo(void) {\n"
+                  " struct { int i; } r;\n"
+                  " bar(r);\n"
+                  "}",
+                  ProducesError(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE, 1));
+    SEMA_PRODUCES("void bar(_Bool);\n"
+                  "void foo(int* r) {\n"
+                  " bar(r);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void bar(int);\n"
+                  "void foo(int* r) {\n"
+                  " bar(r);\n"
+                  "}",
+                  ProducesError(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE, 1));
+    SEMA_PRODUCES("struct R;\n"
+                  "\n"
+                  "void bar(struct R);\n"
+                  "\n"
+                  "void foo(voi) {\n"
+                  " struct { int i; } r;\n"
+                  " bar(r);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'struct R'"));
+    SEMA_PRODUCES("void bar(int *);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar(5);\n"
+                  "}",
+                  ProducesError(EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE, 1));
+    SEMA_PRODUCES("void bar(int*);\n"
+                  "\n"
+                  "void foo(float* f) {\n"
+                  " bar(f);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'int*'"));
+    SEMA_PRODUCES("void bar(int*);\n"
+                  "\n"
+                  "void foo(const int* f) {\n"
+                  " bar(f);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'int*'"));
+    SEMA_PRODUCES("void bar(void*);\n"
+                  "\n"
+                  "void foo(const float* f) {\n"
+                  " bar(f);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'void*'"));
+    SEMA_PRODUCES("void bar(void*);\n"
+                  "\n"
+                  "void foo(void (*f)(int)) {\n"
+                  " bar(f);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_ARGUMENT));
+    SEMA_PRODUCES("void bar(void (*)(int));\n"
+                  "\n"
+                  "void foo(void *f) {\n"
+                  " bar(f);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_ARGUMENT));
+    SEMA_PRODUCES("void bar();\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  "bar(5,3,43,4,3,4);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void bar(int,...);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  "bar(5,3,43,4,3,4);\n"
+                  "}",
+                  ProducesNoErrors());
 }

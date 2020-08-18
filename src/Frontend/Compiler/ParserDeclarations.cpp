@@ -251,9 +251,9 @@ std::optional<cld::Syntax::ExternalDeclaration>
                     continue;
                 }
                 auto& decl = cld::get<std::unique_ptr<Declarator>>(iter.declarator);
-                auto result = Semantics::declaratorToName(*decl);
-                context.addToScope(result, {start, begin, Semantics::declaratorToLoc(*decl)});
-                addedByParameters.insert(result);
+                const auto* loc = Semantics::declaratorToLoc(*decl);
+                context.addToScope(loc->getText(), {start, begin, loc});
+                addedByParameters.insert(loc->getText());
             }
         }
         auto compoundStatement = parseCompoundStatement(begin, end, context, false);
@@ -263,7 +263,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
         {
             return {};
         }
-        context.addToScope(Semantics::declaratorToName(*declarator),
+        context.addToScope(Semantics::declaratorToLoc(*declarator)->getText(),
                            {start, compoundStatement->begin(), Semantics::declaratorToLoc(*declarator)});
         return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
                                   std::move(declarations), std::move(*compoundStatement));
@@ -272,8 +272,8 @@ std::optional<cld::Syntax::ExternalDeclaration>
     std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
     if (!isTypedef && declarator)
     {
-        context.addToScope(Semantics::declaratorToName(*declarator),
-                           {start, begin, Semantics::declaratorToLoc(*declarator)});
+        const auto* loc = Semantics::declaratorToLoc(*declarator);
+        context.addToScope(loc->getText(), {start, begin, loc});
     }
     if (begin->getTokenType() == Lexer::TokenType::Assignment)
     {
@@ -305,8 +305,8 @@ std::optional<cld::Syntax::ExternalDeclaration>
                                 Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
         if (!isTypedef && declarator)
         {
-            context.addToScope(Semantics::declaratorToName(*declarator),
-                               {start, begin, Semantics::declaratorToLoc(*declarator)});
+            const auto* loc = Semantics::declaratorToLoc(*declarator);
+            context.addToScope(loc->getText(), {start, begin, loc});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
@@ -342,8 +342,8 @@ std::optional<cld::Syntax::ExternalDeclaration>
     {
         for (auto& [initDeclarator, init] : initDeclarators)
         {
-            context.addTypedef(Semantics::declaratorToName(*initDeclarator),
-                               {start, begin, Semantics::declaratorToLoc(*initDeclarator)});
+            const auto* loc = Semantics::declaratorToLoc(*initDeclarator);
+            context.addTypedef(loc->getText(), {start, begin, loc});
         }
     }
 
@@ -405,8 +405,8 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
                                 Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Assignment)));
         if (!isTypedef && declarator)
         {
-            context.addToScope(Semantics::declaratorToName(*declarator),
-                               {start, begin, Semantics::declaratorToLoc(*declarator)});
+            const auto* loc = Semantics::declaratorToLoc(*declarator);
+            context.addToScope(loc->getText(), {start, begin, loc});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
@@ -435,7 +435,7 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
 
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
-        auto* loc = context.getLocationOf(Semantics::declaratorToName(*initDeclarators[0].first));
+        auto* loc = context.getLocationOf(Semantics::declaratorToLoc(*initDeclarators[0].first)->getText());
         if (loc)
         {
             if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
@@ -469,8 +469,8 @@ std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTo
     {
         for (auto& [declator, init] : initDeclarators)
         {
-            context.addTypedef(Semantics::declaratorToName(*declator),
-                               {start, begin, Semantics::declaratorToLoc(*declator)});
+            const auto* loc = Semantics::declaratorToLoc(*declator);
+            context.addTypedef(loc->getText(), {start, begin, loc});
         }
     }
 

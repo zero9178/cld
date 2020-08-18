@@ -708,6 +708,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                 }
             }
 
+            auto closeParentheses = begin;
             if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
                     return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                 }))
@@ -716,8 +717,8 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             }
             if (current)
             {
-                current = std::make_unique<PostFixExpression>(
-                    PostFixExpressionFunctionCall(start, begin, std::move(current), std::move(nonCommaExpressions)));
+                current = std::make_unique<PostFixExpression>(PostFixExpressionFunctionCall(
+                    start, begin, std::move(current), openPpos, std::move(nonCommaExpressions), closeParentheses));
             }
         }
         else if (begin->getTokenType() == cld::Lexer::TokenType::OpenSquareBracket)
