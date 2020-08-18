@@ -846,7 +846,8 @@ class Preprocessor final : private cld::PPSourceInterface
         return Macro{identifierPos, std::move(argumentList), ellipse, {curr, end}};
     }
 
-    std::optional<bool> evaluateExpression(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
+    std::optional<bool> evaluateExpression(cld::Lexer::PPTokenIterator ifToken,
+                                           llvm::ArrayRef<cld::Lexer::PPToken> tokens)
     {
         std::vector<cld::Lexer::PPToken> result;
         macroSubstitute(
@@ -961,6 +962,26 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 default: break;
             }
+        }
+        if (ctokens.empty())
+        {
+            if (ifToken->getValue() == "if")
+            {
+                CLD_ASSERT(!tokens.empty());
+                log(cld::Errors::PP::EXPECTED_AN_EXPRESSION_AFTER_IF.args(tokens, *this, tokens));
+            }
+            else
+            {
+                if (tokens.empty())
+                {
+                    log(cld::Errors::PP::EXPECTED_AN_EXPRESSION_AFTER_ELIF.args(*ifToken, *this, *ifToken));
+                }
+                else
+                {
+                    log(cld::Errors::PP::EXPECTED_AN_EXPRESSION_AFTER_ELIF_2.args(tokens, *this, tokens));
+                }
+            }
+            return {};
         }
         const auto* begin = std::as_const(ctokens).data();
         auto context = cld::Parser::Context(*this, m_reporter, true);
@@ -1184,7 +1205,7 @@ public:
                 return m_defines.count(ifDefTag.identifier) != 0;
             },
             [&](llvm::ArrayRef<cld::Lexer::PPToken> tokens) -> std::optional<bool> {
-                return evaluateExpression(tokens);
+                return evaluateExpression(ifSection.ifGroup.ifsToken, tokens);
             });
         if (!included)
         {
@@ -1200,7 +1221,7 @@ public:
         }
         for (auto& iter : ifSection.elifGroups)
         {
-            included = evaluateExpression(iter.constantExpression);
+            included = evaluateExpression(iter.elifToken, iter.constantExpression);
             if (!included)
             {
                 return;

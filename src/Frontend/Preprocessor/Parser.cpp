@@ -285,14 +285,9 @@ cld::PP::ElseGroup cld::PP::parseElseGroup(Lexer::PPTokenIterator& begin, Lexer:
 cld::PP::ElIfGroup cld::PP::parseElIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context)
 {
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier && begin->getValue() == "elif");
-    begin++;
+    const auto* elifToken = begin++;
     const auto* eol = findNewline(begin, end);
     auto vector = llvm::ArrayRef(begin, eol);
-    if (vector.empty())
-    {
-        context.log(Errors::Parser::EXPECTED_TOKENS_AFTER_N.args(diag::after(*(begin - 1)),
-                                                                 context.getSourceInterface(), *(begin - 1)));
-    }
     begin = eol;
     expect(Lexer::TokenType::Newline, begin, end, context);
     if (begin == end
@@ -301,11 +296,11 @@ cld::PP::ElIfGroup cld::PP::parseElIfGroup(Lexer::PPTokenIterator& begin, Lexer:
             && ((begin + 1)->getValue() == "elif" || (begin + 1)->getValue() == "else"
                 || (begin + 1)->getValue() == "endif")))
     {
-        return ElIfGroup{std::move(vector), {}};
+        return ElIfGroup{elifToken, std::move(vector), {}};
     }
 
     auto group = std::make_unique<Group>(parseGroup(begin, end, context, true));
-    return ElIfGroup{std::move(vector), std::move(group)};
+    return ElIfGroup{elifToken, std::move(vector), std::move(group)};
 }
 
 cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context)
@@ -313,6 +308,7 @@ cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPT
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier);
     IfGroup::variant variant;
     auto value = begin->getValue();
+    const auto* ifsToken = begin;
     if (value == "if")
     {
         begin++;
@@ -368,9 +364,9 @@ cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPT
             && ((begin + 1)->getValue() == "elif" || (begin + 1)->getValue() == "else"
                 || (begin + 1)->getValue() == "endif")))
     {
-        return IfGroup{std::move(variant), {}};
+        return IfGroup{ifsToken, std::move(variant), {}};
     }
 
     auto group = std::make_unique<Group>(parseGroup(begin, end, context, true));
-    return IfGroup{std::move(variant), std::move(group)};
+    return IfGroup{ifsToken, std::move(variant), std::move(group)};
 }

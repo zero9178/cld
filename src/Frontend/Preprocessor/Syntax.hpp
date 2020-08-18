@@ -28,6 +28,7 @@ struct IfGroup final
         std::string_view identifier;
     };
     using variant = std::variant<IfnDefTag, IfDefTag, llvm::ArrayRef<Lexer::PPToken>>;
+    Lexer::PPTokenIterator ifsToken;
     variant ifs;
     std::unique_ptr<Group> optionalGroup;
 };
@@ -37,6 +38,7 @@ struct IfGroup final
  */
 struct ElIfGroup final
 {
+    Lexer::PPTokenIterator elifToken;
     llvm::ArrayRef<Lexer::PPToken> constantExpression;
     std::unique_ptr<Group> optionalGroup;
 };

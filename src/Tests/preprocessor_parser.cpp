@@ -259,8 +259,6 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "1");
-        functionProduces(parseIfSection, "#if 0\n#elif\n5\n#endif\n", 1,
-                         ProducesError(EXPECTED_TOKENS_AFTER_N, "'elif'"));
     }
     SECTION("Else")
     {

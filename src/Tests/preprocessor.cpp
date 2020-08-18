@@ -1385,6 +1385,24 @@ TEST_CASE("PP conditional inclusion", "[PP]")
                             "RESULT",
                             ProducesWarning(MACRO_EXPANSION_PRODUCING_DEFINED_IS_NOT_PORTABLE));
         }
+        PP_OUTPUTS_WITH("#define BAR\n"
+                        "#if BAR\n"
+                        "\n"
+                        "#endif\n",
+                        ProducesError(EXPECTED_AN_EXPRESSION_AFTER_IF));
+        PP_OUTPUTS_WITH("#if 0\n"
+                        "\n"
+                        "#elif\n"
+                        "\n"
+                        "#endif\n",
+                        ProducesError(EXPECTED_AN_EXPRESSION_AFTER_ELIF));
+        PP_OUTPUTS_WITH("#define BAR\n"
+                        "#if 0\n"
+                        "\n"
+                        "#elif BAR\n"
+                        "\n"
+                        "#endif\n",
+                        ProducesError(EXPECTED_AN_EXPRESSION_AFTER_ELIF_2));
     }
 }
 

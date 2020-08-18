@@ -599,6 +599,12 @@ CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE, "Expected a <FILENAME> or \"FILE
 
 CREATE_ERROR(EXPECTED_A_FILENAME_AFTER_INCLUDE_2, "Expected a <FILENAME> or \"FILENAME\" after #include", Underline<0>);
 
+CREATE_ERROR(EXPECTED_AN_EXPRESSION_AFTER_IF, "Expected an expression after #if", Underline<0>);
+
+CREATE_ERROR(EXPECTED_AN_EXPRESSION_AFTER_ELIF, "Expected an expression after #elif", InsertAfter<0>);
+
+CREATE_ERROR(EXPECTED_AN_EXPRESSION_AFTER_ELIF_2, "Expected an expression after #elif", Underline<0>);
+
 CREATE_ERROR(EXTRA_TOKENS_AFTER_INCLUDE, "Extra tokens after '#include'", Underline<0>);
 
 CREATE_ERROR(FILE_NOT_FOUND, "'%0' file not found", Underline<1>);
