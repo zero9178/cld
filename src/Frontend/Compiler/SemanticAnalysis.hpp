@@ -179,6 +179,8 @@ class SemanticAnalysis final
 
     void arithmeticConversion(Expression& lhs, Expression& rhs) const;
 
+    void arithmeticConversion(Type& lhs, Expression& rhs) const;
+
     llvm::ArrayRef<Field> getFields(const Type& recordType) const;
 
     bool isBitfieldAccess(const Expression& expression) const;

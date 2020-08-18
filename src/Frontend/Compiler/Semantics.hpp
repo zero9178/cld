@@ -1028,7 +1028,7 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class Conditional
+class Conditional final
 {
     std::unique_ptr<Expression> m_boolExpression;
     Lexer::CTokenIterator m_questionMark;
@@ -1138,6 +1138,33 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
+class CommaExpression final
+{
+    std::vector<Expression> m_commaExpressions;
+    std::unique_ptr<Expression> m_lastExpression;
+
+public:
+    CommaExpression(std::vector<Expression>&& commaExpression, std::unique_ptr<Expression>&& lastExpression)
+        : m_commaExpressions(std::move(commaExpression)), m_lastExpression(std::move(lastExpression))
+    {
+        CLD_ASSERT(m_commaExpressions.size() >= 1);
+    }
+
+    [[nodiscard]] const std::vector<Expression>& getCommaExpressions() const
+    {
+        return m_commaExpressions;
+    }
+
+    [[nodiscard]] const Expression& getLastExpression() const
+    {
+        return *m_lastExpression;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
 enum class ValueCategory
 {
     Lvalue,
@@ -1152,7 +1179,7 @@ class Expression final
 public:
     using Variant = std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead,
                                  Conversion, MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator,
-                                 SubscriptOperator, Conditional, Assignment>;
+                                 SubscriptOperator, Conditional, Assignment, CommaExpression>;
 
 private:
     Variant m_expression;

@@ -35,7 +35,7 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
 }
 
 #define SEMA_PRODUCES(source, matcher)               \
-    [](std::string input) {                          \
+    [&](std::string input) {                         \
         auto text = generateSemantics(input).second; \
         CHECK_THAT(text, matcher);                   \
         llvm::errs() << text;                        \
@@ -2845,7 +2845,8 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(std::holds_alternative<Assignment>(exp.get()));
+        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
+        CHECK(cld::get<Assignment>(exp.get()).getKind() == Assignment::Simple);
         SEMA_PRODUCES("void foo(void) {\n"
                       "5 = 3;\n"
                       "}",
@@ -2947,4 +2948,201 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                       "}",
                       ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
     }
+    SECTION("Plus and Minus")
+    {
+        auto operand = GENERATE(as<std::string>(), "+=", "-=");
+        auto& exp = generateExpression("void foo(volatile int i) {\n"
+                                       "i "
+                                       + operand
+                                       + " 5;\n"
+                                         "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
+        CHECK(cld::get<Assignment>(exp.get()).getKind() == (operand == "-=" ? Assignment::Minus : Assignment::Plus));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "5 " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(const int i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("struct R {\n"
+                      "const int i;\n"
+                      "};\n"
+                      "\n"
+                      "void foo(struct R i,struct R f) {\n"
+                      "i " + operand
+                          + " f;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES(
+            "void foo(int i) {\n"
+            "i " + operand
+                + " (int*)3;\n"
+                  "}",
+            ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i " + operand
+                          + " 3.0;\n"
+                            "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int (*i)(void)) {\n"
+                      "i " + operand
+                          + " 1;\n"
+                            "}",
+                      ProducesError(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC));
+        SEMA_PRODUCES("void foo(struct R *i) {\n"
+                      "i " + operand
+                          + " 1;\n"
+                            "}",
+                      ProducesError(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "'struct R'"));
+    }
+    SECTION("Divide and Multiply")
+    {
+        auto operand = GENERATE(as<std::string>(), "*=", "/=");
+        auto& exp = generateExpression("void foo(volatile int i) {\n"
+                                       "i "
+                                       + operand
+                                       + " 5;\n"
+                                         "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
+        CHECK(cld::get<Assignment>(exp.get()).getKind()
+              == (operand == "*=" ? Assignment::Multiply : Assignment::Divide));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "5 " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(const int i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("struct R {\n"
+                      "const int i;\n"
+                      "};\n"
+                      "\n"
+                      "void foo(struct R i,struct R f) {\n"
+                      "i " + operand
+                          + " f;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'")
+                          && ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'")
+                          && ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      "i " + operand
+                          + " (int*)3;\n"
+                            "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i " + operand
+                          + " 3.0;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE, "'" + operand + "'"));
+    }
+    SECTION("Modulo,Shift and Bit")
+    {
+        auto operand = GENERATE(as<std::string>(), "%=", "<<=", ">>=", "&=", "|=", "^=");
+        auto& exp = generateExpression("void foo(volatile int i) {\n"
+                                       "i "
+                                       + operand
+                                       + " 5;\n"
+                                         "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
+        CHECK(cld::get<Assignment>(exp.get()).getKind() == [&operand] {
+            if (operand == "%=")
+            {
+                return Assignment::Modulo;
+            }
+            if (operand == "<<=")
+            {
+                return Assignment::LeftShift;
+            }
+            if (operand == ">>=")
+            {
+                return Assignment::RightShift;
+            }
+            if (operand == "&=")
+            {
+                return Assignment::BitAnd;
+            }
+            if (operand == "|=")
+            {
+                return Assignment::BitOr;
+            }
+            if (operand == "^=")
+            {
+                return Assignment::BitXor;
+            }
+            CLD_UNREACHABLE;
+        }());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "5 " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(const int i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'"));
+        SEMA_PRODUCES("struct R {\n"
+                      "const int i;\n"
+                      "};\n"
+                      "\n"
+                      "void foo(struct R i,struct R f) {\n"
+                      "i " + operand
+                          + " f;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'" + operand + "'")
+                          && ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'" + operand + "'")
+                          && ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      "i " + operand
+                          + " (int*)3;\n"
+                            "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i " + operand
+                          + " 3;\n"
+                            "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'" + operand + "'"));
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      "i " + operand
+                          + " 3.0;\n"
+                            "}",
+                      ProducesError(RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'" + operand + "'"));
+    }
+}
+
+TEST_CASE("Semantics comma expression", "[semantics]")
+{
+    auto& exp = generateExpression("void foo(void) {\n"
+                                   "5.0,3;\n"
+                                   "}");
+    CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+    CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+    CHECK(std::holds_alternative<CommaExpression>(exp.get()));
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "(5,i) = 3;\n"
+                  "}",
+                  ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST, "'='"));
 }

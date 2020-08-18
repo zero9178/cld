@@ -62,11 +62,19 @@ bool cld::Semantics::SemanticAnalysis::isBitfieldAccess(const Expression& expres
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
 {
+    if (node.getAssignmentExpressions().size() == 1)
+    {
+        return visit(node.getAssignmentExpressions().back());
+    }
+    std::vector<Expression> expressions;
     for (auto& iter : llvm::ArrayRef(node.getAssignmentExpressions()).drop_back())
     {
-        visit(iter);
+        expressions.push_back(visit(iter));
     }
-    return visit(node.getAssignmentExpressions().back());
+    auto last = lvalueConversion(visit(node.getAssignmentExpressions().back()));
+    auto type = last.getType();
+    return Expression(std::move(type), ValueCategory::Rvalue,
+                      CommaExpression(std::move(expressions), std::make_unique<Expression>(std::move(last))));
 }
 
 bool cld::Semantics::SemanticAnalysis::isModifiableLValue(const cld::Semantics::Expression& expression) const
@@ -205,23 +213,119 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                         }
                     }
                 }
-                auto type = removeQualifiers(lhsValue.getType());
-                rhsValue = Expression(std::move(type), ValueCategory::Rvalue,
-                                      Assignment(std::make_unique<Expression>(std::move(lhsValue)), Assignment::Simple,
-                                                 token, std::make_unique<Expression>(std::move(rhsValue))));
                 break;
             }
             case Syntax::AssignmentExpression::PlusAssign:
             case Syntax::AssignmentExpression::MinusAssign:
+            {
+                if (!lhsValue.isUndefined() && !isScalar(lhsValue.getType()))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                        lhsValue, m_sourceInterface, *token, lhsValue));
+                }
+                if (std::holds_alternative<PointerType>(lhsValue.getType().get()))
+                {
+                    auto& elementType = cld::get<PointerType>(lhsValue.getType().get()).getElementType();
+                    if (std::holds_alternative<FunctionType>(elementType.get()))
+                    {
+                        log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
+                            lhsValue, m_sourceInterface, lhsValue));
+                    }
+                    else if (!isCompleteType(elementType))
+                    {
+                        log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
+                            lhsValue, m_sourceInterface, elementType, lhsValue, lhsValue.getType()));
+                    }
+                    if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                    {
+                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue));
+                    }
+                }
+                else if (isArithmetic(lhsValue.getType()))
+                {
+                    if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+                    {
+                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue));
+                    }
+                }
+                break;
+            }
+                // Doing a simple check is redundant in compound assignments. Either we had a diagnostic saying that at
+                // least one operand does not fit the constraints and we don't want further noise or
+                // they're both arithmetic types and we already know they can only be compatible
             case Syntax::AssignmentExpression::DivideAssign:
             case Syntax::AssignmentExpression::MultiplyAssign:
+            {
+                auto lhsType = lhsValue.getType();
+                if (isArithmetic(lhsType) && isArithmetic(rhsValue.getType()))
+                {
+                    arithmeticConversion(lhsType, rhsValue);
+                }
+                if (!lhsType.isUndefined() && !isArithmetic(lhsType))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
+                        lhsValue, m_sourceInterface, *token, lhsValue));
+                }
+                if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                }
+                break;
+            }
             case Syntax::AssignmentExpression::ModuloAssign:
             case Syntax::AssignmentExpression::LeftShiftAssign:
             case Syntax::AssignmentExpression::RightShiftAssign:
             case Syntax::AssignmentExpression::BitAndAssign:
             case Syntax::AssignmentExpression::BitOrAssign:
-            case Syntax::AssignmentExpression::BitXorAssign: break;
+            case Syntax::AssignmentExpression::BitXorAssign:
+            {
+                // Originally this would be an arithmetic conversion for the bit operators and modulo. The main point of
+                // the arithmetic conversion is to figure out the right result type of the expression. This is redundant
+                // here as the resulting type of the assignment is always the left operand and only integer types are
+                // allowed. If floating point types were allowed we'd have to do the conversion for that
+                auto lhsType = integerPromotion(lhsValue.getType());
+                if (!lhsType.isUndefined() && !isInteger(lhsType))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        lhsValue, m_sourceInterface, *token, lhsValue));
+                }
+                rhsValue = integerPromotion(std::move(rhsValue));
+                if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                }
+                break;
+            }
         }
+        auto type = removeQualifiers(lhsValue.getType());
+        rhsValue = Expression(std::move(type), ValueCategory::Rvalue,
+                              Assignment(
+                                  std::make_unique<Expression>(std::move(lhsValue)),
+                                  [kind = kind] {
+                                      switch (kind)
+                                      {
+                                          case Syntax::AssignmentExpression::NoOperator: return Assignment::Simple;
+                                          case Syntax::AssignmentExpression::PlusAssign: return Assignment::Plus;
+                                          case Syntax::AssignmentExpression::MinusAssign: return Assignment::Minus;
+                                          case Syntax::AssignmentExpression::DivideAssign: return Assignment::Divide;
+                                          case Syntax::AssignmentExpression::MultiplyAssign:
+                                              return Assignment::Multiply;
+                                          case Syntax::AssignmentExpression::ModuloAssign: return Assignment::Modulo;
+                                          case Syntax::AssignmentExpression::LeftShiftAssign:
+                                              return Assignment::LeftShift;
+                                          case Syntax::AssignmentExpression::RightShiftAssign:
+                                              return Assignment::RightShift;
+                                          case Syntax::AssignmentExpression::BitAndAssign: return Assignment::BitAnd;
+                                          case Syntax::AssignmentExpression::BitOrAssign: return Assignment::BitOr;
+                                          case Syntax::AssignmentExpression::BitXorAssign: return Assignment::BitXor;
+                                      }
+                                      CLD_UNREACHABLE;
+                                  }(),
+                                  token, std::make_unique<Expression>(std::move(rhsValue))));
     }
     return rhsValue;
 }
@@ -1540,8 +1644,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
         Conversion(newType, Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
 }
 
-void cld::Semantics::SemanticAnalysis::arithmeticConversion(cld::Semantics::Expression& lhs,
-                                                            cld::Semantics::Expression& rhs) const
+void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Expression& rhs) const
 {
     lhs = integerPromotion(std::move(lhs));
     rhs = integerPromotion(std::move(rhs));
@@ -1583,6 +1686,51 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(cld::Semantics::Expr
     }
     lhs = Expression(type, ValueCategory::Rvalue,
                      Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(lhs))));
+    rhs = Expression(type, ValueCategory::Rvalue,
+                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
+}
+
+void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expression& rhs) const
+{
+    lhs = integerPromotion(std::move(lhs));
+    rhs = integerPromotion(std::move(rhs));
+    if (!isArithmetic(lhs) || !isArithmetic(rhs.getType()))
+    {
+        return;
+    }
+    if (lhs == rhs.getType())
+    {
+        return;
+    }
+    auto& lhsPrim = cld::get<PrimitiveType>(lhs.get());
+    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().get());
+    Type type;
+    if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
+    {
+        auto [floating, biggest] = std::max(std::pair(lhsPrim.isFloatingPoint(), lhsPrim.getKind()),
+                                            std::pair(rhsPrim.isFloatingPoint(), rhsPrim.getKind()));
+        (void)floating;
+        switch (biggest)
+        {
+            case PrimitiveType::Kind::Float: type = PrimitiveType::createFloat(false, false); break;
+            case PrimitiveType::Kind::Double: type = PrimitiveType::createDouble(false, false); break;
+            case PrimitiveType::Kind::LongDouble:
+                type = PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
+                break;
+            default: CLD_UNREACHABLE;
+        }
+    }
+    else if (rhsPrim.isSigned() == lhsPrim.isSigned() || rhsPrim.getBitCount() != lhsPrim.getBitCount())
+    {
+        auto [bits, sign, lhsType] = std::max(std::tuple(lhsPrim.getBitCount(), lhsPrim.isSigned(), true),
+                                              std::tuple(rhsPrim.getBitCount(), rhsPrim.isSigned(), false));
+        type = lhsType ? lhs : rhs.getType();
+    }
+    else
+    {
+        type = !lhsPrim.isSigned() ? lhs : rhs.getType();
+    }
+    lhs = type;
     rhs = Expression(type, ValueCategory::Rvalue,
                      Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }

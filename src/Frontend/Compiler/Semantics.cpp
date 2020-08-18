@@ -1000,3 +1000,13 @@ cld::Lexer::CTokenIterator cld::Semantics::Conditional::end() const
 }
 
 cld::Semantics::Expression::Expression(const cld::Syntax::Node& node) : Expression(node.begin(), node.end()) {}
+
+cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::begin() const
+{
+    return m_commaExpressions[0].begin();
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::end() const
+{
+    return m_lastExpression->end();
+}

@@ -1485,7 +1485,7 @@ public:
         log(cld::Errors::PP::ERROR_ENCOUNTERED.args(*errorTag.errorToken, *this, errorTag.tokens));
     }
 
-    void visit(const cld::PP::ControlLine::PragmaTag& pragmaTag) {}
+    void visit(const cld::PP::ControlLine::PragmaTag&) {}
 
     void visit(cld::Lexer::PPTokenIterator undef)
     {
