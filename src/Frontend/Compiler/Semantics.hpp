@@ -731,20 +731,11 @@ public:
     };
 
 private:
-    Type m_newType;
     Kind m_kind;
     std::unique_ptr<Expression> m_expression;
 
 public:
-    Conversion(Type newType, Kind kind, std::unique_ptr<Expression> expression)
-        : m_newType(std::move(newType)), m_kind(kind), m_expression(std::move(expression))
-    {
-    }
-
-    [[nodiscard]] const Type& getNewType() const
-    {
-        return m_newType;
-    }
+    Conversion(Kind kind, std::unique_ptr<Expression> expression) : m_kind(kind), m_expression(std::move(expression)) {}
 
     [[nodiscard]] Kind getKind() const
     {

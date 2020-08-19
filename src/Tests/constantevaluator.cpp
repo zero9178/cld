@@ -14,7 +14,7 @@ using namespace cld::Warnings::Semantics;
 namespace
 {
 std::pair<cld::Semantics::ConstValue, std::string>
-    evaluateConstantExpression(const std::string& expression,
+    evaluateConstantExpression(std::string_view expression,
                                const cld::LanguageOptions& options = cld::LanguageOptions::native(),
                                cld::Semantics::SemanticAnalysis::Mode mode = cld::Semantics::SemanticAnalysis::Integer)
 {
@@ -45,13 +45,93 @@ std::pair<cld::Semantics::ConstValue, std::string>
     }
     return {*ret, ss.str()};
 }
+
+std::pair<cld::Semantics::ConstValue, std::string>
+    evaluateProgram(std::string_view source, const cld::LanguageOptions& options = cld::LanguageOptions::native(),
+                    cld::Semantics::SemanticAnalysis::Mode mode = cld::Semantics::SemanticAnalysis::Integer)
+{
+    std::string storage;
+    llvm::raw_string_ostream ss(storage);
+    cld::PPSourceObject tokens;
+    bool errors = false;
+    tokens = cld::Lexer::tokenize(source, options, &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    static cld::CSourceObject ctokens;
+    ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    auto parsing = cld::Parser::buildTree(ctokens, &ss);
+    UNSCOPED_INFO(storage);
+    REQUIRE(parsing.second);
+    cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
+    auto translationUnit = analysis.visit(parsing.first);
+    REQUIRE_THAT(ss.str(), ProducesNoErrors());
+    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+        translationUnit.getGlobals().back()));
+    auto& funcDef = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals().back());
+    REQUIRE(
+        std::holds_alternative<cld::Semantics::Statement>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = cld::get<cld::Semantics::Statement>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(std::holds_alternative<cld::Semantics::ExpressionStatement>(statement));
+    auto& expr = cld::get<cld::Semantics::ExpressionStatement>(statement).getExpression();
+    REQUIRE(expr);
+    auto ret = analysis.evaluateConstantExpression(*expr, mode);
+    if (!ret)
+    {
+        for (auto& iter : ret.error())
+        {
+            ss << iter;
+            llvm::errs() << iter;
+        }
+        ret = cld::Semantics::ConstValue{};
+    }
+    return {*ret, ss.str()};
+}
 } // namespace
 
 #define INT_EVAL_PRODUCES(text, matcher)                    \
     [&](std::string source) {                               \
         auto [_, str] = evaluateConstantExpression(source); \
         CHECK_THAT(str, matcher);                           \
-    }(text);
+    }(text)
+
+#define ARITH_EVAL_PRODUCES(text, matcher)                                                        \
+    [&](std::string source) {                                                                     \
+        auto [_, str] = evaluateConstantExpression(source, cld::LanguageOptions::native(),        \
+                                                   cld::Semantics::SemanticAnalysis::Arithmetic); \
+        CHECK_THAT(str, matcher);                                                                 \
+    }(text)
+
+#define INIT_EVAL_PRODUCES(text, matcher)                                                             \
+    [&](std::string source) {                                                                         \
+        auto [_, str] = evaluateConstantExpression(source, cld::LanguageOptions::native(),            \
+                                                   cld::Semantics::SemanticAnalysis::Initialization); \
+        CHECK_THAT(str, matcher);                                                                     \
+    }(text)
+
+#define INT_EVAL_PROG_PRODUCES(text, matcher)    \
+    [&](std::string source) {                    \
+        auto [_, str] = evaluateProgram(source); \
+        CHECK_THAT(str, matcher);                \
+    }(text)
+
+#define ARITH_EVAL_PROG_PRODUCES(text, matcher)                                                                    \
+    [&](std::string source) {                                                                                      \
+        auto [_, str] =                                                                                            \
+            evaluateProgram(source, cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Arithmetic); \
+        CHECK_THAT(str, matcher);                                                                                  \
+    }(text)
+
+#define INIT_EVAL_PROG_PRODUCES(text, matcher)                                                                         \
+    [&](std::string source) {                                                                                          \
+        auto [_, str] =                                                                                                \
+            evaluateProgram(source, cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Initialization); \
+        CHECK_THAT(str, matcher);                                                                                      \
+    }(text)
 
 TEST_CASE("Const eval Primary expression", "[constEval]")
 {
@@ -180,10 +260,7 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
 {
     SECTION("Function call")
     {
-        auto [value, error] = evaluateConstantExpression("((void(*)(void))5)()", cld::LanguageOptions::native(),
-                                                         cld::Semantics::SemanticAnalysis::Arithmetic);
-        CHECK(value.isUndefined());
-        CHECK_THAT(error, ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+        INT_EVAL_PRODUCES("((void(*)(void))5)()", ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
     SECTION("Initializer")
     {
@@ -514,16 +591,13 @@ TEST_CASE("Const eval cast expression", "[constEval]")
     {
         SECTION("Integer constant expressions")
         {
-            auto [value, error] = evaluateConstantExpression("(void*)0");
-            CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION));
+            INT_EVAL_PRODUCES("(void*)0",
+                              ProducesError(CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION));
         }
         SECTION("Arithmetic constant expressions")
         {
-            auto [value, error] = evaluateConstantExpression("(void*)0", cld::LanguageOptions::native(),
-                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
-            CHECK(value.isUndefined());
-            CHECK_THAT(error, ProducesError(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION));
+            ARITH_EVAL_PRODUCES("(void*)0",
+                                ProducesError(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION));
         }
         SECTION("Initializer constant expressions")
         {
@@ -1402,7 +1476,89 @@ TEST_CASE("Const eval equal", "[constEval]")
 
 TEST_CASE("Const eval expression", "[constEval]")
 {
-    auto [value, error] = evaluateConstantExpression("(.55 , 3)");
-    CHECK(value.isUndefined());
-    CHECK_THAT(error, ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "','"));
+    INT_EVAL_PRODUCES("(.55 , 3)", ProducesError(N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "','"));
+}
+
+TEST_CASE("Const eval initialization", "[constEval]")
+{
+    SECTION("Ampersand")
+    {
+        SECTION("Lvalue")
+        {
+            auto [value, error] =
+                evaluateProgram("int i;\n"
+                                "void foo(void) {\n"
+                                "&i;\n"
+                                "}",
+                                cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Initialization);
+            REQUIRE_THAT(error, ProducesNoErrors());
+            CHECK(std::holds_alternative<cld::Semantics::AddressConstant>(value.getValue()));
+        }
+        SECTION("Following dereference")
+        {
+            auto [value, error] = evaluateProgram("void foo(void) {\n"
+                                                  "&*((int*)5 + 3);\n"
+                                                  "}",
+                                                  x64linux, cld::Semantics::SemanticAnalysis::Initialization);
+            REQUIRE_THAT(error, ProducesNoErrors());
+            REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
+            CHECK(cld::get<cld::Semantics::VoidStar>(value.getValue()).address == 17);
+        }
+        SECTION("Following subscript")
+        {
+            auto [value, error] = evaluateProgram("void foo(void) {\n"
+                                                  "&((int*)5)[3];\n"
+                                                  "}",
+                                                  x64linux, cld::Semantics::SemanticAnalysis::Initialization);
+            REQUIRE_THAT(error, ProducesNoErrors());
+            REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
+            CHECK(cld::get<cld::Semantics::VoidStar>(value.getValue()).address == 17);
+        }
+    }
+    SECTION("Lvalue conversion")
+    {
+        SECTION("Function")
+        {
+            auto [value, error] =
+                evaluateProgram("int i(void);\n"
+                                "void foo(void) {\n"
+                                "i;\n"
+                                "}",
+                                cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Initialization);
+            REQUIRE_THAT(error, ProducesNoErrors());
+            CHECK(std::holds_alternative<cld::Semantics::AddressConstant>(value.getValue()));
+        }
+        SECTION("Array")
+        {
+            auto [value, error] =
+                evaluateProgram("int i[5];\n"
+                                "void foo(void) {\n"
+                                "i + 1;\n"
+                                "}",
+                                cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Initialization);
+            REQUIRE_THAT(error, ProducesNoErrors());
+            CHECK(std::holds_alternative<cld::Semantics::AddressConstant>(value.getValue()));
+        }
+        INIT_EVAL_PROG_PRODUCES("int i;\n"
+                                "void foo(void) {\n"
+                                "i + 1;\n"
+                                "}",
+                                ProducesError(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+    }
+    //    SECTION("Member access")
+    //    {
+    //        auto [value, error] =
+    //            evaluateProgram("struct R {\n"
+    //                            "float r,f,t;\n"
+    //                            "int m;\n"
+    //                            "};\n"
+    //                            "\n"
+    //                            "void foo(void) {\n"
+    //                            "(char*)&(*((struct R*)0)).m - (char*)0;\n"
+    //                            "}",
+    //                            x64linux, cld::Semantics::SemanticAnalysis::Initialization);
+    //        REQUIRE_THAT(error, ProducesNoErrors());
+    //        CHECK(std::holds_alternative<llvm::APSInt>(value.getValue()));
+    //        CHECK(cld::get<llvm::APSInt>(value.getValue()) == 12);
+    //    }
 }

@@ -18,10 +18,14 @@ struct VoidStar final
     std::uint32_t elementSize;
 };
 
+struct AddressConstant
+{
+};
+
 class ConstValue final
 {
 public:
-    using ValueType = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, VoidStar>;
+    using ValueType = std::variant<std::monostate, llvm::APSInt, llvm::APFloat, VoidStar, AddressConstant>;
 
 private:
     ValueType m_value;

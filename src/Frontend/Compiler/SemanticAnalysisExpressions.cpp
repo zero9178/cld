@@ -1917,15 +1917,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
         auto elementType = std::holds_alternative<ArrayType>(expression.getType().get()) ?
                                cld::get<ArrayType>(expression.getType().get()).getType() :
                                cld::get<ValArrayType>(expression.getType().get()).getType();
-        return Expression(
-            PointerType::create(false, false, false, elementType), ValueCategory::Rvalue,
-            Conversion(elementType, Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
+        auto newType = PointerType::create(false, false, false, std::move(elementType));
+        return Expression(std::move(newType), ValueCategory::Rvalue,
+                          Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
     if (std::holds_alternative<FunctionType>(expression.getType().get()))
     {
         auto newType = PointerType::create(false, false, false, expression.getType());
-        return Expression(newType, ValueCategory::Rvalue,
-                          Conversion(newType, Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
+        return Expression(std::move(newType), ValueCategory::Rvalue,
+                          Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (expression.getValueCategory() != ValueCategory::Lvalue && !expression.getType().isVolatile()
@@ -1936,8 +1936,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
         return expression;
     }
     auto newType = Type(false, false, expression.getType().get());
-    return Expression(newType, ValueCategory::Rvalue,
-                      Conversion(newType, Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
+    return Expression(std::move(newType), ValueCategory::Rvalue,
+                      Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type type)
@@ -1973,10 +1973,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentProm
     {
         return expression;
     }
-    auto newType = PrimitiveType::createDouble(false, false);
     return Expression(
-        newType, ValueCategory::Rvalue,
-        Conversion(newType, Conversion::DefaultArgumentPromotion, std::make_unique<Expression>(std::move(expression))));
+        PrimitiveType::createDouble(false, false), ValueCategory::Rvalue,
+        Conversion(Conversion::DefaultArgumentPromotion, std::make_unique<Expression>(std::move(expression))));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression expression) const
@@ -1992,10 +1991,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
     {
         return expression;
     }
-    auto newType = PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
-    return Expression(
-        newType, ValueCategory::Rvalue,
-        Conversion(newType, Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
+    return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                      ValueCategory::Rvalue,
+                      Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
 }
 
 void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Expression& rhs) const
@@ -2039,9 +2037,9 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Exp
         type = !lhsPrim.isSigned() ? lhs.getType() : rhs.getType();
     }
     lhs = Expression(type, ValueCategory::Rvalue,
-                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(lhs))));
+                     Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(lhs))));
     rhs = Expression(type, ValueCategory::Rvalue,
-                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
+                     Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }
 
 void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expression& rhs) const
@@ -2085,6 +2083,6 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expressio
         type = !lhsPrim.isSigned() ? lhs : rhs.getType();
     }
     lhs = type;
-    rhs = Expression(type, ValueCategory::Rvalue,
-                     Conversion(type, Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
+    rhs = Expression(std::move(type), ValueCategory::Rvalue,
+                     Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }

@@ -2475,10 +2475,17 @@ cld::Semantics::ConstValue
             }
             return evaluate(commaExpression.getLastExpression(), mode, logger);
         },
-        [&](const DeclarationRead& declarationRead) -> ConstValue {
-            logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                declarationRead, m_sourceInterface, declarationRead));
-            return {};
+        [&](const DeclarationRead& declRead) -> ConstValue {
+            if (mode != Initialization
+                || cld::match(
+                    declRead.getDeclRead(), [](const FunctionDefinition*) { return false; },
+                    [](const Declaration* declaration) { return declaration->getLifetime() != Lifetime::Static; }))
+            {
+                logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                    declRead, m_sourceInterface, declRead));
+                return {};
+            }
+            return {AddressConstant{}};
         },
         [&](const Conversion& conversion) -> ConstValue {
             auto exp = evaluate(conversion.getExpression(), mode, logger);
@@ -2486,7 +2493,19 @@ cld::Semantics::ConstValue
             {
                 return exp;
             }
-            return exp.castTo(conversion.getNewType(), this, m_sourceInterface.getLanguageOptions());
+            if (conversion.getKind() == Conversion::LValue)
+            {
+                if (mode == Initialization
+                    && (isArray(conversion.getExpression().getType())
+                        || std::holds_alternative<FunctionType>(conversion.getExpression().getType().get())))
+                {
+                    return {AddressConstant{}};
+                }
+                logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                    conversion.getExpression(), m_sourceInterface, conversion.getExpression()));
+                return {};
+            }
+            return exp.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
         },
         [&](const BinaryOperator& binaryOperator) -> ConstValue {
             auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
@@ -2628,6 +2647,28 @@ cld::Semantics::ConstValue
             return ret;
         },
         [&](const UnaryOperator& unaryOperator) -> ConstValue {
+            if (unaryOperator.getKind() == UnaryOperator::AddressOf)
+            {
+                if (std::holds_alternative<UnaryOperator>(unaryOperator.getOperand().get()))
+                {
+                    auto& innerUnary = cld::get<UnaryOperator>(unaryOperator.getOperand().get());
+                    if (innerUnary.getKind() == UnaryOperator::Dereference)
+                    {
+                        return evaluate(innerUnary.getOperand(), mode, logger);
+                    }
+                }
+                else if (std::holds_alternative<SubscriptOperator>(unaryOperator.getOperand().get()))
+                {
+                    auto& subScript = cld::get<SubscriptOperator>(unaryOperator.getOperand().get());
+                    auto lhs = evaluate(subScript.getLeftExpression(), mode, logger);
+                    auto rhs = evaluate(subScript.getRightExpression(), mode, logger);
+                    if (lhs.isUndefined() || rhs.isUndefined())
+                    {
+                        return {};
+                    }
+                    return lhs.plus(rhs, m_sourceInterface.getLanguageOptions());
+                }
+            }
             auto op = evaluate(unaryOperator.getOperand(), mode, logger);
             if (!typeCheck(unaryOperator.getOperand(), op))
             {
@@ -2636,11 +2677,13 @@ cld::Semantics::ConstValue
             switch (unaryOperator.getKind())
             {
                 case UnaryOperator::AddressOf:
-                    // TODO:
-                    break;
+                    if (mode == Initialization)
+                    {
+                        return {AddressConstant{}};
+                    }
+                    [[fallthrough]]; // Although not fully correct it's practically not allowed due to yielding or using
+                                     // pointer types. Therefore we fall through to give diagnostic
                 case UnaryOperator::Dereference:
-                    // TODO:
-                    break;
                 case UnaryOperator::PostDecrement:
                 case UnaryOperator::PreIncrement:
                 case UnaryOperator::PreDecrement:
@@ -2665,8 +2708,17 @@ cld::Semantics::ConstValue
             // TODO:
             CLD_UNREACHABLE;
         },
-        [&](const SubscriptOperator&) -> ConstValue {
-            // TODO:
+        [&](const SubscriptOperator& subscriptOperator) -> ConstValue {
+            auto lhs = evaluate(subscriptOperator.getLeftExpression(), mode, logger);
+            if (!typeCheck(subscriptOperator.getLeftExpression(), lhs))
+            {
+                return {};
+            }
+            auto rhs = evaluate(subscriptOperator.getRightExpression(), mode, logger);
+            if (!typeCheck(subscriptOperator.getRightExpression(), rhs))
+            {
+                return {};
+            }
             CLD_UNREACHABLE;
         },
         [&](const Conditional& conditional) -> ConstValue {
@@ -2706,5 +2758,8 @@ cld::Semantics::ConstValue
                                                                                             call));
             return {};
         },
-        [](const auto&) -> ConstValue { return {}; });
+        [&](const MemberAccess& memberAccess) -> ConstValue {
+            auto exp = evaluate(memberAccess.getRecordExpression(), mode, logger);
+            return {};
+        });
 }

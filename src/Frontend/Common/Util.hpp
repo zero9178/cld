@@ -99,7 +99,7 @@
 namespace cld
 {
 template <typename T, typename Variant>
-decltype(auto) get(Variant&& variant) noexcept
+constexpr decltype(auto) get(Variant&& variant) noexcept
 {
     CLD_ASSERT(!variant.valueless_by_exception() && std::holds_alternative<T>(variant));
     auto* value = std::get_if<T>(&variant);
@@ -115,7 +115,7 @@ decltype(auto) get(Variant&& variant) noexcept
 }
 
 template <std::size_t i, typename Variant>
-decltype(auto) get(Variant&& variant) noexcept
+constexpr decltype(auto) get(Variant&& variant) noexcept
 {
     CLD_ASSERT(!variant.valueless_by_exception() && variant.index() == i);
     auto* value = std::get_if<i>(&variant);
@@ -144,7 +144,7 @@ template <typename G>
 struct Y
 {
     template <typename... X>
-    decltype(auto) operator()(X&&... x) const&
+    constexpr decltype(auto) operator()(X&&... x) const&
     {
         return g(*this, std::forward<X>(x)...);
     }
@@ -185,7 +185,8 @@ template <typename G, class T>
 YWithRet(G, Identity<T>) -> YWithRet<G, T>;
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 0 || i > 12)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant,
+                                   std::enable_if_t<(i == 0 || i > 12)>* = nullptr)
 {
     if (variant.index() == i)
     {
@@ -202,7 +203,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 1)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 1)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -213,7 +214,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 2)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 2)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -225,7 +226,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 3)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 3)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -238,7 +239,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 4)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 4)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -252,7 +253,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 5)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 5)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -267,7 +268,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 6)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 6)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -283,7 +284,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 7)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 7)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -300,7 +301,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 8)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 8)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -318,7 +319,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 9)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 9)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -337,7 +338,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 10)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 10)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -357,7 +358,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 11)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 11)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -378,7 +379,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <std::size_t i, class Callable, class Variant>
-decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 12)>* = nullptr)
+constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_t<(i == 12)>* = nullptr)
 {
     switch (variant.index())
     {
@@ -400,7 +401,7 @@ decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::enable_if_
 }
 
 template <class Callable, class Variant>
-decltype(auto) visit(Callable&& callable, Variant&& variant)
+constexpr decltype(auto) visit(Callable&& callable, Variant&& variant)
 {
     return visitImpl<std::variant_size_v<std::decay_t<Variant>> - 1>(std::forward<Callable>(callable),
                                                                      std::forward<Variant>(variant));
@@ -408,29 +409,29 @@ decltype(auto) visit(Callable&& callable, Variant&& variant)
 } // namespace detail
 
 template <typename Variant, typename... Matchers>
-decltype(auto) match(Variant&& variant, Matchers&&... matchers)
+constexpr decltype(auto) match(Variant&& variant, Matchers&&... matchers)
 {
     return detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
 
 template <class Ret, typename Variant, typename... Matchers>
-Ret match(Variant&& variant, Matchers&&... matchers)
+constexpr Ret match(Variant&& variant, Matchers&&... matchers)
 {
-    static_assert(std::is_void_v<Ret>,"Only explicit return type of void allowed");
+    static_assert(std::is_void_v<Ret>, "Only explicit return type of void allowed");
     detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
 
 template <typename Variant, typename... Matchers>
-decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
+constexpr decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
     return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
                          std::forward<Variant>(variant));
 }
 
 template <class Ret, typename Variant, typename... Matchers>
-Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
+constexpr Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
-    static_assert(std::is_void_v<Ret>,"Only explicit return type of void allowed");
+    static_assert(std::is_void_v<Ret>, "Only explicit return type of void allowed");
     detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
                   std::forward<Variant>(variant));
 }

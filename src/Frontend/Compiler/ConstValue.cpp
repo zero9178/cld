@@ -14,7 +14,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::negate(const LanguageOpti
 {
     return match(
         getValue(), [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
-        [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [](llvm::APFloat floating) -> ConstValue {
             floating.changeSign();
             return {floating};
@@ -32,7 +32,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::logicalNegate(const Langu
         [&options](VoidStar address) -> ConstValue {
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false)};
         },
-        [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [this](AddressConstant) -> ConstValue { return *this; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [&options](const llvm::APFloat& floating) -> ConstValue {
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, floating.isZero()), false)};
         },
@@ -46,6 +46,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitwiseNegate(const Langu
     return match(
         m_value, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [](llvm::APSInt integer) -> ConstValue {
             integer.flipAllBits();
             return {integer};
@@ -62,6 +63,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
     }
     return match(
         m_value, [](std::monostate) -> ConstValue { return {}; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&](VoidStar address) -> ConstValue {
             return match(
                 type.get(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
@@ -200,6 +202,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::multiply(const cld::Seman
         [&rhs](const llvm::APFloat& floating) -> ConstValue {
             return {floating * cld::get<llvm::APFloat>(rhs.getValue())};
         },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.smul_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
@@ -217,6 +220,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::divide(const cld::Semanti
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs](const llvm::APFloat& floating) -> ConstValue {
             return {floating / cld::get<llvm::APFloat>(rhs.getValue())};
         },
@@ -237,6 +241,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::modulo(const cld::Semanti
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs](const llvm::APSInt& integer) -> ConstValue {
             auto apsInt = integer.isSigned() ? integer.srem(cld::get<llvm::APSInt>(rhs.getValue())) :
@@ -250,6 +255,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::plus(const cld::Semantics
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [this](AddressConstant) -> ConstValue { return *this; },
         [&rhs](VoidStar address) -> ConstValue {
             CLD_ASSERT(address.elementSize > 0);
             auto& integer = cld::get<llvm::APSInt>(rhs.getValue());
@@ -297,6 +303,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [this](AddressConstant) -> ConstValue { return *this; },
         [&rhs, &options](VoidStar address) -> ConstValue {
             CLD_ASSERT(address.elementSize > 0);
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
@@ -343,6 +350,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::shiftLeft(const cld::Sema
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.sshl_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
@@ -361,6 +369,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::shiftRight(const cld::Sem
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
             auto rhsInteger = cld::get<llvm::APSInt>(rhs.getValue());
             if (issues && (rhsInteger.isSignBitSet() || rhsInteger.getZExtValue() >= integer.getBitWidth()))
@@ -377,6 +386,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitAnd(const cld::Semanti
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs](const llvm::APSInt& integer) -> ConstValue {
             return {integer & cld::get<llvm::APSInt>(rhs.getValue())};
         });
@@ -388,6 +398,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitXor(const cld::Semanti
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs](const llvm::APSInt& integer) -> ConstValue {
             return {integer ^ cld::get<llvm::APSInt>(rhs.getValue())};
         });
@@ -399,6 +410,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitOr(const cld::Semantic
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
+        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&rhs](const llvm::APSInt& integer) -> ConstValue {
             return {integer | cld::get<llvm::APSInt>(rhs.getValue())};
         });
@@ -410,7 +422,7 @@ cld::Semantics::ConstValue::operator bool() const
         m_value, [](VoidStar address) -> bool { return address.address != 0; },
         [](const llvm::APFloat& floating) -> bool { return floating.isNonZero(); },
         [](const llvm::APSInt& integer) -> bool { return !integer.isNullValue(); },
-        [](std::monostate) -> bool { CLD_UNREACHABLE; });
+        [](std::monostate) -> bool { CLD_UNREACHABLE; }, [](AddressConstant) -> bool { return true; });
 }
 
 bool cld::Semantics::ConstValue::isUndefined() const
@@ -431,7 +443,8 @@ std::int64_t cld::Semantics::ConstValue::toInt() const
             return static_cast<std::int64_t>(floating.convertToDouble());
         },
         [](const llvm::APSInt& integer) -> std::int64_t { return integer.getSExtValue(); },
-        [](std::monostate) -> std::int64_t { CLD_UNREACHABLE; });
+        [](std::monostate) -> std::int64_t { CLD_UNREACHABLE; },
+        [](AddressConstant) -> std::int64_t { CLD_UNREACHABLE; });
 }
 
 std::uint64_t cld::Semantics::ConstValue::toUInt() const
@@ -442,7 +455,8 @@ std::uint64_t cld::Semantics::ConstValue::toUInt() const
             return static_cast<std::uint64_t>(floating.convertToDouble());
         },
         [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
-        [](std::monostate) -> std::uint64_t { CLD_UNREACHABLE; });
+        [](std::monostate) -> std::uint64_t { CLD_UNREACHABLE; },
+        [](AddressConstant) -> std::uint64_t { CLD_UNREACHABLE; });
 }
 
 std::string cld::Semantics::ConstValue::toString() const
@@ -459,7 +473,8 @@ std::string cld::Semantics::ConstValue::toString() const
             integer.toString(result);
             return result.str();
         },
-        [](std::monostate) -> std::string { CLD_UNREACHABLE; });
+        [](std::monostate) -> std::string { return "<undefined>"; },
+        [](AddressConstant) -> std::string { return "<address>"; });
 }
 
 cld::Semantics::ConstValue cld::Semantics::ConstValue::lessThan(const cld::Semantics::ConstValue& rhs,
@@ -467,6 +482,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::lessThan(const cld::Seman
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [this](AddressConstant) -> ConstValue { return *this; },
         [&rhs, &options](VoidStar address) -> ConstValue {
             return {llvm::APSInt(
                 llvm::APInt(options.sizeOfInt * 8, address.address < cld::get<VoidStar>(rhs.getValue()).address),
@@ -505,6 +521,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::equal(const cld::Semantic
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [this](AddressConstant) -> ConstValue { return *this; },
         [&rhs, &options](VoidStar address) -> ConstValue {
             if (std::holds_alternative<llvm::APSInt>(rhs.getValue()))
             {
